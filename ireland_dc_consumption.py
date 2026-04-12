@@ -10,6 +10,19 @@ def read_demand_csv(filepath: str) -> pd.DataFrame:
     return df[["IE_MW", "NI_MW"]]
 
 
+def read_eirgrid_excel(filepath: str) -> pd.DataFrame:
+    df = pd.read_excel(filepath, engine='openpyxl')
+    required = {'DateTime', 'GMT Offset', 'IE Demand', 'NI Demand'}
+    if not required.issubset(df.columns):
+        raise ValueError(f"Missing columns: {required - set(df.columns)}")
+    df['DateTime_UTC'] = pd.to_datetime(
+        df.apply(lambda r: r['DateTime'] - pd.Timedelta(hours=float(r['GMT Offset'])), axis=1),
+        utc=True
+    )
+    df = df.set_index('DateTime_UTC')
+    return df.rename(columns={'IE Demand': 'IE_MW', 'NI Demand': 'NI_MW'})[['IE_MW', 'NI_MW']]
+
+
 def compute_daily_demand(df: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFrame:
     df_filtered = df.loc[start_date:end_date]
     daily = (df_filtered * 0.25).resample('D').sum()
@@ -33,14 +46,14 @@ def plot(daily: pd.DataFrame, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file', required=True, help='CSV from download_eirgrid.py')
+    parser.add_argument('--file', required=True, help='EirGrid Excel file or CSV from download_eirgrid.py')
     parser.add_argument('--start', default='2026-01-01')
     parser.add_argument('--end', default='2026-12-31')
     parser.add_argument('--csv', help='Save daily totals to CSV')
     parser.add_argument('--plot', help='Save plot to PNG path')
     args = parser.parse_args()
 
-    df = read_demand_csv(args.file)
+    df = read_eirgrid_excel(args.file) if args.file.endswith('.xlsx') else read_demand_csv(args.file)
     daily = compute_daily_demand(df, args.start, args.end)
 
     if args.csv:

@@ -7,43 +7,81 @@ API: https://www.smartgriddashboard.com/DashboardService.svc/data
      &datefrom=01-Jan-2026+00%3A00&dateto=01-Feb-2026+21%3A59
 """
 import argparse
-from datetime import date, timedelta
-from calendar import monthrange
+import time
+from datetime import date
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import pandas as pd
 
 
 BASE = "https://www.smartgriddashboard.com/DashboardService.svc/data"
 FMT  = "%d-%b-%Y"   # e.g. 01-Jan-2026
 
+CHUNK_DAYS = 7
 
-def fetch_month(region: str, year: int, month: int) -> list[dict]:
-    start = date(year, month, 1)
-    last  = monthrange(year, month)[1]
-    end   = date(year, month, last)
+
+def make_session() -> requests.Session:
+    retry = Retry(
+        total=8,
+        backoff_factor=2,
+        status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    s = requests.Session()
+    s.mount("https://", HTTPAdapter(max_retries=retry))
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.smartgriddashboard.com/",
+    })
+    return s
+
+
+def init_session(s: requests.Session):
+    """Hit the dashboard homepage to establish cookies before API calls."""
+    s.get("https://www.smartgriddashboard.com/", timeout=30)
+
+
+SESSION = make_session()
+init_session(SESSION)
+
+
+def fetch_window(region: str, start: date, end: date, retries: int = 5) -> list[dict]:
     params = {
         "area":     "demandactual",
         "region":   region,
         "datefrom": start.strftime(FMT) + "+00%3A00",
-        "dateto":   end.strftime(FMT)   + "+21%3A59",
+        "dateto":   end.strftime(FMT)   + "+23%3A59",
     }
     url = BASE + "?" + "&".join(f"{k}={v}" for k, v in params.items())
-    r = requests.get(url, timeout=30)
+    for attempt in range(retries):
+        r = SESSION.get(url, timeout=60)
+        if r.status_code == 403:
+            wait = 5 * (attempt + 1)
+            print(f"403 rate-limited, re-init session and wait {wait}s")
+            time.sleep(wait)
+            init_session(SESSION)
+            continue
+        r.raise_for_status()
+        return r.json().get("Rows", [])
     r.raise_for_status()
-    return r.json().get("Rows", [])
 
 
 def fetch_range(region: str, start: date, end: date) -> pd.DataFrame:
+    from datetime import timedelta
     rows = []
-    y, m = start.year, start.month
-    while date(y, m, 1) <= end:
-        print(f"  {region} {y}-{m:02d} ... ", end="", flush=True)
-        chunk = fetch_month(region, y, m)
+    cursor = start
+    while cursor <= end:
+        chunk_end = min(cursor + timedelta(days=CHUNK_DAYS - 1), end)
+        print(f"  {region} {cursor} -> {chunk_end} ... ", end="", flush=True)
+        chunk = fetch_window(region, cursor, chunk_end)
         rows.extend(chunk)
         print(f"{len(chunk)} rows")
-        m += 1
-        if m > 12:
-            m, y = 1, y + 1
+        time.sleep(2)
+        cursor = chunk_end + timedelta(days=1)
 
     df = pd.DataFrame(rows)
     # typical columns: EffectiveTime, Value, (FieldName / Region)
