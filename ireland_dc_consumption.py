@@ -3,20 +3,11 @@ import argparse
 import matplotlib.pyplot as plt
 
 
-def read_eirgrid_qtr_hourly(filepath: str) -> pd.DataFrame:
-    df = pd.read_excel(filepath, engine='openpyxl')
-
-    required_cols = {'DateTime', 'GMT Offset', 'IE Demand', 'NI Demand'}
-    if not required_cols.issubset(df.columns):
-        raise ValueError(f"Missing columns: {required_cols - set(df.columns)}")
-
-    def to_utc(row):
-        return row['DateTime'] - pd.Timedelta(hours=float(row['GMT Offset']))
-
-    df['DateTime_UTC'] = pd.to_datetime(df.apply(to_utc, axis=1), utc=True)
-    df = df.set_index('DateTime_UTC')
-    df = df.rename(columns={'IE Demand': 'IE_MW', 'NI Demand': 'NI_MW'})
-    return df[['IE_MW', 'NI_MW']]
+def read_demand_csv(filepath: str) -> pd.DataFrame:
+    df = pd.read_csv(filepath, index_col="DateTime_UTC", parse_dates=True)
+    if not {"IE_MW", "NI_MW"}.issubset(df.columns):
+        raise ValueError(f"CSV missing IE_MW or NI_MW columns")
+    return df[["IE_MW", "NI_MW"]]
 
 
 def compute_daily_demand(df: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFrame:
@@ -42,14 +33,14 @@ def plot(daily: pd.DataFrame, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file', required=True, help='EirGrid quarter-hourly Excel file')
+    parser.add_argument('--file', required=True, help='CSV from download_eirgrid.py')
     parser.add_argument('--start', default='2026-01-01')
     parser.add_argument('--end', default='2026-12-31')
     parser.add_argument('--csv', help='Save daily totals to CSV')
     parser.add_argument('--plot', help='Save plot to PNG path')
     args = parser.parse_args()
 
-    df = read_eirgrid_qtr_hourly(args.file)
+    df = read_demand_csv(args.file)
     daily = compute_daily_demand(df, args.start, args.end)
 
     if args.csv:
