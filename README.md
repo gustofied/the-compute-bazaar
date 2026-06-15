@@ -1,1 +1,1 @@
-Artefacts from tinkering with compute markets.
+The bazaar and the artefacts from tinkering with compute markets.
