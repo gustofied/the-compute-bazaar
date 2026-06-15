@@ -115,7 +115,8 @@ def demand_spike_zoom(ax, df):
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file", default="/Users/adams/Downloads/System-Data-Qtr-Hourly-2026-v2.xlsx")
+    parser.add_argument("--file", required=True, help="EirGrid quarter-hourly Excel export")
+    parser.add_argument("--out", default="ie_grid_dashboard.png", help="Output PNG path")
     args = parser.parse_args()
 
     df = load(args.file)
@@ -131,8 +132,8 @@ def main():
     demand_spike_zoom(  fig.add_subplot(gs[2, 1]), df)
 
     fig.suptitle("Ireland grid — load balancing patterns Jan–Feb 2026", fontsize=14, fontweight="bold", y=1.01)
-    plt.savefig("ie_grid_dashboard.png", dpi=160, bbox_inches="tight")
-    print("Saved ie_grid_dashboard.png")
+    plt.savefig(args.out, dpi=160, bbox_inches="tight")
+    print(f"Saved {args.out}")
 
 
 if __name__ == "__main__":

@@ -93,6 +93,11 @@ def compute_kde(LON, LAT, bw=0.6):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out", default="ireland_compute_map.png", help="Output PNG path")
+    args = parser.parse_args()
+
     LON, LAT = make_grid()
     mask = ireland_mask(LON, LAT)
     Z = compute_kde(LON, LAT)
@@ -167,8 +172,8 @@ def main():
     ax.tick_params(labelsize=8)
 
     plt.tight_layout()
-    plt.savefig("ireland_compute_map.png", dpi=180, bbox_inches="tight")
-    print("Saved ireland_compute_map.png")
+    plt.savefig(args.out, dpi=180, bbox_inches="tight")
+    print(f"Saved {args.out}")
 
 
 if __name__ == "__main__":

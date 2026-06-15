@@ -1,12 +1,26 @@
 [project]
-name = "gpuo"
+name = "the-compute-bazaar"
 version = "0.1.0"
 description = "Artefacts from tinkering with compute markets"
+readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "matplotlib>=3.10.8",
+    "numpy>=2.3.5",
     "openpyxl>=3.1.5",
     "pandas>=3.0.2",
     "requests>=2.33.1",
     "scipy>=1.17.1",
 ]
+
+[project.scripts]
+download-eirgrid = "the_compute_bazaar.tangents.download_eirgrid:main"
+ie-dc-consumption = "the_compute_bazaar.tangents.ireland_dc_consumption:main"
+ie-dc-share = "the_compute_bazaar.tangents.ie_dc_share:main"
+ie-flow-map = "the_compute_bazaar.tangents.ie_flow_map:main"
+ie-grid-dashboard = "the_compute_bazaar.tangents.ie_grid_dashboard:main"
+ireland-compute-map = "the_compute_bazaar.tangents.ireland_compute_map:main"
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"

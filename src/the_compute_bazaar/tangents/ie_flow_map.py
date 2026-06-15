@@ -247,7 +247,8 @@ def wind_price_panel(ax, df):
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file", default="/Users/adams/Downloads/System-Data-Qtr-Hourly-2026-v2.xlsx")
+    parser.add_argument("--file", required=True, help="EirGrid quarter-hourly Excel export")
+    parser.add_argument("--out", default="ie_flow_map.png", help="Output PNG path")
     args = parser.parse_args()
 
     df = load_eirgrid(args.file)
@@ -264,8 +265,8 @@ def main():
         "Ireland compute grid — asset flows, price spikes, and the wind–gas–price mechanism",
         fontsize=13, fontweight="bold", y=1.005
     )
-    plt.savefig("ie_flow_map.png", dpi=160, bbox_inches="tight")
-    print("Saved ie_flow_map.png")
+    plt.savefig(args.out, dpi=160, bbox_inches="tight")
+    print(f"Saved {args.out}")
 
 
 if __name__ == "__main__":

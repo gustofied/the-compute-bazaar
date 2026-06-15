@@ -45,6 +45,11 @@ EVENTS = [
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out", default="ie_dc_share.png", help="Output PNG path")
+    args = parser.parse_args()
+
     fig = plt.figure(figsize=(13, 6))
     gs  = gridspec.GridSpec(1, 2, width_ratios=[1.6, 1], wspace=0.38)
     ax1 = fig.add_subplot(gs[0])
@@ -114,8 +119,8 @@ def main():
     )
 
     plt.tight_layout()
-    plt.savefig("ie_dc_share.png", dpi=180, bbox_inches="tight")
-    print("Saved ie_dc_share.png")
+    plt.savefig(args.out, dpi=180, bbox_inches="tight")
+    print(f"Saved {args.out}")
 
 
 if __name__ == "__main__":

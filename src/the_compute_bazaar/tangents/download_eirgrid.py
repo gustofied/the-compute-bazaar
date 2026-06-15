@@ -45,11 +45,13 @@ def init_session(s: requests.Session):
     s.get("https://www.smartgriddashboard.com/", timeout=30)
 
 
-SESSION = make_session()
-init_session(SESSION)
-
-
-def fetch_window(region: str, start: date, end: date, retries: int = 5) -> list[dict]:
+def fetch_window(
+    session: requests.Session,
+    region: str,
+    start: date,
+    end: date,
+    retries: int = 5,
+) -> list[dict]:
     params = {
         "area":     "demandactual",
         "region":   region,
@@ -58,26 +60,31 @@ def fetch_window(region: str, start: date, end: date, retries: int = 5) -> list[
     }
     url = BASE + "?" + "&".join(f"{k}={v}" for k, v in params.items())
     for attempt in range(retries):
-        r = SESSION.get(url, timeout=60)
+        r = session.get(url, timeout=60)
         if r.status_code == 403:
             wait = 5 * (attempt + 1)
             print(f"403 rate-limited, re-init session and wait {wait}s")
             time.sleep(wait)
-            init_session(SESSION)
+            init_session(session)
             continue
         r.raise_for_status()
         return r.json().get("Rows", [])
     r.raise_for_status()
 
 
-def fetch_range(region: str, start: date, end: date) -> pd.DataFrame:
+def fetch_range(
+    session: requests.Session,
+    region: str,
+    start: date,
+    end: date,
+) -> pd.DataFrame:
     from datetime import timedelta
     rows = []
     cursor = start
     while cursor <= end:
         chunk_end = min(cursor + timedelta(days=CHUNK_DAYS - 1), end)
         print(f"  {region} {cursor} -> {chunk_end} ... ", end="", flush=True)
-        chunk = fetch_window(region, cursor, chunk_end)
+        chunk = fetch_window(session, region, cursor, chunk_end)
         rows.extend(chunk)
         print(f"{len(chunk)} rows")
         time.sleep(2)
@@ -99,11 +106,13 @@ def main():
 
     start = date.fromisoformat(args.start)
     end   = date.fromisoformat(args.end)
+    session = make_session()
+    init_session(session)
 
     print("Fetching ROI demand...")
-    roi = fetch_range("ROI", start, end)
+    roi = fetch_range(session, "ROI", start, end)
     print("Fetching NI demand...")
-    ni  = fetch_range("NI",  start, end)
+    ni  = fetch_range(session, "NI",  start, end)
 
     df = roi.join(ni, how="outer").rename(columns={"ROI": "IE_MW", "NI": "NI_MW"})
     df.to_csv(args.out)
