@@ -1,0 +1,111 @@
+"""Storage helpers for local files and S3 object paths."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterable, Mapping
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+from .schemas import GpuOffer, to_jsonable
+
+
+def write_json(uri: str, value: Any) -> str:
+    data = json.dumps(to_jsonable(value), indent=2, sort_keys=True).encode("utf-8")
+    return write_bytes(uri, data, content_type="application/json")
+
+
+def write_jsonl(uri: str, rows: Iterable[Any]) -> str:
+    payload = b"\n".join(
+        json.dumps(to_jsonable(row), sort_keys=True).encode("utf-8") for row in rows
+    )
+    if payload:
+        payload += b"\n"
+    return write_bytes(uri, payload, content_type="application/x-ndjson")
+
+
+def write_bytes(uri: str, data: bytes, *, content_type: str | None = None) -> str:
+    if uri.startswith("s3://"):
+        parsed = urlparse(uri)
+        bucket = parsed.netloc
+        key = parsed.path.lstrip("/")
+        try:
+            import boto3
+        except ImportError as exc:
+            raise RuntimeError("Writing s3:// paths requires the 'platform' extra: uv sync --extra platform") from exc
+
+        kwargs: dict[str, Any] = {"Bucket": bucket, "Key": key, "Body": data}
+        if content_type:
+            kwargs["ContentType"] = content_type
+        boto3.client("s3").put_object(**kwargs)
+        return uri
+
+    path = Path(uri)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return str(path)
+
+
+def write_offers_parquet(uri: str, offers: Iterable[GpuOffer]) -> str:
+    rows = [offer.to_dict() for offer in offers]
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError as exc:
+        raise RuntimeError("Writing Parquet requires the 'platform' extra: uv sync --extra platform") from exc
+
+    table = pa.Table.from_pylist(rows)
+    if uri.startswith("s3://"):
+        try:
+            import pyarrow.fs as pafs
+        except ImportError as exc:
+            raise RuntimeError("Writing Parquet to S3 requires pyarrow filesystem support") from exc
+
+        parsed = urlparse(uri)
+        filesystem = pafs.S3FileSystem()
+        with filesystem.open_output_stream(f"{parsed.netloc}/{parsed.path.lstrip('/')}") as sink:
+            pq.write_table(table, sink)
+        return uri
+
+    path = Path(uri)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(table, path)
+    return str(path)
+
+
+def date_partition(root: str, *, provider: str, observed_date: str, run_id: str, filename: str) -> str:
+    return "/".join(
+        [
+            root.rstrip("/"),
+            f"provider={provider}",
+            f"date={observed_date}",
+            f"run_id={run_id}",
+            filename,
+        ]
+    )
+
+
+def table_partition(
+    root: str,
+    *,
+    table: str,
+    observed_date: str,
+    provider: str | None,
+    run_id: str,
+    filename: str,
+) -> str:
+    parts = [
+        root.rstrip("/"),
+        table,
+        f"date={observed_date}",
+    ]
+    if provider:
+        parts.append(f"provider={provider}")
+    parts.extend([f"run_id={run_id}", filename])
+    return "/".join(parts)
+
+
+def rows_from_dicts(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [dict(row) for row in rows]
+
