@@ -7,12 +7,25 @@ import json
 import os
 from typing import Any
 
-from .datafusion import DEFAULT_BENCHMARK_SQL, query_parquet
-from .pipeline import ingest_vast
+from .automq import check_cluster, kafka_bootstrap_servers_from_env, kafka_config_from_env
+from .checks import run_stage1_checks
+from .datafusion import DEFAULT_BENCHMARK_SQL, query_parquet, query_price_index
+from .gold import (
+    build_gold_market_tables,
+    export_gold_dashboard_snapshot,
+    query_gold_listings,
+    query_gold_price_index,
+    query_gold_provider_comparison,
+    read_latest_gold_manifest,
+)
+from .manifest import read_latest_manifest
+from .pipeline import ingest_lium, ingest_vast
 from .schemas import to_jsonable
 
 
 def main() -> None:
+    _load_local_env()
+
     parser = argparse.ArgumentParser(prog="gpu-prices")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -22,11 +35,25 @@ def main() -> None:
     ingest.add_argument("--query", help="Vast query string or JSON object")
     ingest.add_argument("--raw-root", default=os.getenv("COMPUTE_BAZAAR_RAW_ROOT", "data/raw"))
     ingest.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
-    ingest.add_argument("--automq-bootstrap-servers", default=os.getenv("AUTOMQ_BOOTSTRAP_SERVERS"))
+    ingest.add_argument("--automq-bootstrap-servers", default=kafka_bootstrap_servers_from_env())
     ingest.add_argument("--topic-prefix", default=os.getenv("COMPUTE_BAZAAR_TOPIC_PREFIX", "gpu"))
     ingest.add_argument("--run-id")
     ingest.add_argument("--trace-id")
     ingest.add_argument("--dry-run", action="store_true", help="Skip AutoMQ and keep publishing in memory")
+
+    ingest_lium_parser = subparsers.add_parser("ingest-lium", help="Fetch Lium executors and publish/store them")
+    ingest_lium_parser.add_argument("--api-key", default=os.getenv("LIUM_API_KEY"))
+    ingest_lium_parser.add_argument("--api-base")
+    ingest_lium_parser.add_argument("--query", help="Lium query JSON object")
+    ingest_lium_parser.add_argument("--page", type=int)
+    ingest_lium_parser.add_argument("--size", type=int, default=200)
+    ingest_lium_parser.add_argument("--raw-root", default=os.getenv("COMPUTE_BAZAAR_RAW_ROOT", "data/raw"))
+    ingest_lium_parser.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    ingest_lium_parser.add_argument("--automq-bootstrap-servers", default=kafka_bootstrap_servers_from_env())
+    ingest_lium_parser.add_argument("--topic-prefix", default=os.getenv("COMPUTE_BAZAAR_TOPIC_PREFIX", "gpu"))
+    ingest_lium_parser.add_argument("--run-id")
+    ingest_lium_parser.add_argument("--trace-id")
+    ingest_lium_parser.add_argument("--dry-run", action="store_true", help="Skip AutoMQ and keep publishing in memory")
 
     query = subparsers.add_parser("query", help="Run DataFusion SQL over a Parquet dataset")
     query.add_argument("--parquet", required=True)
@@ -35,6 +62,76 @@ def main() -> None:
 
     benchmark = subparsers.add_parser("benchmark", help="Run the default GPU benchmark query")
     benchmark.add_argument("--parquet", required=True)
+
+    latest_manifest = subparsers.add_parser("latest-manifest", help="Print the latest GPU offer manifest")
+    latest_manifest.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    latest_manifest.add_argument("--provider", default="vast")
+
+    latest_index = subparsers.add_parser("latest-index", help="Run the Stage 1 price index over latest offers")
+    latest_index.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    latest_index.add_argument("--provider", default="vast")
+    latest_index.add_argument("--limit", type=int, default=25)
+
+    build_gold = subparsers.add_parser("build-gold", help="Build gold market tables from latest silver offers")
+    build_gold.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    build_gold.add_argument("--provider", default="vast")
+    build_gold.add_argument("--providers", help="Comma-separated provider scope, e.g. vast,lium")
+    build_gold.add_argument("--run-id")
+
+    latest_gold_manifest = subparsers.add_parser("latest-gold-manifest", help="Print the latest gold manifest")
+    latest_gold_manifest.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+
+    gold_index = subparsers.add_parser("gold-index", help="Query the latest gold price index table")
+    gold_index.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    gold_index.add_argument("--limit", type=int, default=25)
+
+    gold_listings = subparsers.add_parser("gold-listings", help="Query the latest gold listing table")
+    gold_listings.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    gold_listings.add_argument("--gpu-model")
+    gold_listings.add_argument("--limit", type=int, default=25)
+
+    gold_provider_comparison = subparsers.add_parser(
+        "gold-provider-comparison",
+        help="Compare provider floors from the latest gold listing table",
+    )
+    gold_provider_comparison.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    gold_provider_comparison.add_argument("--gpu-model")
+    gold_provider_comparison.add_argument("--limit", type=int, default=50)
+
+    export_gold_dashboard = subparsers.add_parser(
+        "export-gold-dashboard",
+        help="Export gold query snapshots as JSON for static D3/blog consumers",
+    )
+    export_gold_dashboard.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    export_gold_dashboard.add_argument("--output-root", default="data/dashboard/compute-bazaar")
+    export_gold_dashboard.add_argument("--limit", type=int, default=100)
+
+    automq_check = subparsers.add_parser("automq-check", help="Verify AutoMQ/Kafka connectivity")
+    automq_check.add_argument("--bootstrap-servers", default=kafka_bootstrap_servers_from_env())
+
+    stage1_check = subparsers.add_parser("stage1-check", help="Verify Stage 1 ingestion/query/orchestration health")
+    stage1_check.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    stage1_check.add_argument("--provider", default="vast")
+    stage1_check.add_argument("--windmill-base-url", default=os.getenv("WINDMILL_BASE_URL"))
+    stage1_check.add_argument(
+        "--windmill-token",
+        default=os.getenv("WINDMILL_TOKEN") or _read_optional_secret_file(".secrets/windmill-bootstrap-token.txt"),
+    )
+    stage1_check.add_argument("--windmill-workspace", default=os.getenv("WINDMILL_WORKSPACE", "compute-bazaar"))
+    stage1_check.add_argument(
+        "--check-automq",
+        action="store_true",
+        help="Also verify private AutoMQ connectivity; run this from a VPC-connected worker",
+    )
+    stage1_check.add_argument(
+        "--require-ingest-env",
+        action="store_true",
+        help="Fail if provider/Kafka ingest secrets are not present in the local environment",
+    )
+    stage1_check.add_argument(
+        "--windmill-schedule-path",
+        default=os.getenv("WINDMILL_SCHEDULE_PATH", "f/compute-bazaar/vast_hourly_hourly"),
+    )
 
     args = parser.parse_args()
 
@@ -45,6 +142,29 @@ def main() -> None:
             raw_root=args.raw_root,
             lake_root=args.lake_root,
             automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
+            api_base=args.api_base,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "ingest-lium":
+        query = _parse_query_object(args.query) or {}
+        if args.page is not None:
+            query["page"] = args.page
+        if args.size is not None:
+            query["size"] = args.size
+        result = ingest_lium(
+            api_key=args.api_key,
+            query=query,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
             topic_prefix=args.topic_prefix,
             dry_run=args.dry_run,
             run_id=args.run_id,
@@ -59,6 +179,74 @@ def main() -> None:
         _print_json(rows)
         return
 
+    if args.command == "latest-manifest":
+        _print_json(read_latest_manifest(args.lake_root, provider=args.provider))
+        return
+
+    if args.command == "latest-index":
+        manifest = read_latest_manifest(args.lake_root, provider=args.provider)
+        normalized_ref = manifest.get("normalized_ref")
+        if not normalized_ref:
+            raise SystemExit("Latest manifest has no normalized_ref")
+        rows = query_price_index(parquet_uri=str(normalized_ref), limit=args.limit)
+        _print_json({"manifest": manifest, "rows": rows})
+        return
+
+    if args.command == "build-gold":
+        result = build_gold_market_tables(
+            lake_root=args.lake_root,
+            provider=args.provider,
+            providers=_parse_csv(args.providers),
+            run_id=args.run_id,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "latest-gold-manifest":
+        _print_json(read_latest_gold_manifest(args.lake_root))
+        return
+
+    if args.command == "gold-index":
+        _print_json(query_gold_price_index(lake_root=args.lake_root, limit=args.limit))
+        return
+
+    if args.command == "gold-listings":
+        _print_json(query_gold_listings(lake_root=args.lake_root, gpu_model=args.gpu_model, limit=args.limit))
+        return
+
+    if args.command == "gold-provider-comparison":
+        _print_json(
+            query_gold_provider_comparison(
+                lake_root=args.lake_root,
+                gpu_model=args.gpu_model,
+                limit=args.limit,
+            )
+        )
+        return
+
+    if args.command == "export-gold-dashboard":
+        _print_json(
+            export_gold_dashboard_snapshot(
+                lake_root=args.lake_root,
+                output_root=args.output_root,
+                limit=args.limit,
+            )
+        )
+        return
+
+    if args.command == "automq-check":
+        if not args.bootstrap_servers:
+            raise SystemExit(
+                "Missing --bootstrap-servers, COMPUTE_BAZAAR_KAFKA_BOOTSTRAP_SERVERS, "
+                "or AUTOMQ_BOOTSTRAP_SERVERS"
+            )
+        topics = check_cluster(
+            bootstrap_servers=args.bootstrap_servers,
+            config=kafka_config_from_env(),
+        )
+        _print_json({"connected": True, "topics": topics})
+        return
+
     if args.command == "benchmark":
         rows = query_parquet(
             parquet_uri=args.parquet,
@@ -66,6 +254,21 @@ def main() -> None:
             sql=DEFAULT_BENCHMARK_SQL,
         )
         _print_json(rows)
+        return
+
+    if args.command == "stage1-check":
+        _print_json(
+            run_stage1_checks(
+                lake_root=args.lake_root,
+                provider=args.provider,
+                check_automq=args.check_automq,
+                require_ingest_env=args.require_ingest_env,
+                windmill_base_url=args.windmill_base_url,
+                windmill_token=args.windmill_token,
+                windmill_workspace=args.windmill_workspace,
+                windmill_schedule_path=args.windmill_schedule_path,
+            )
+        )
         return
 
 
@@ -80,10 +283,50 @@ def _parse_query(value: str | None) -> str | dict[str, Any] | None:
     return stripped
 
 
+def _parse_query_object(value: str | None) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    parsed = _parse_query(value)
+    if parsed is None:
+        return None
+    if not isinstance(parsed, dict):
+        raise SystemExit("--query must be a JSON object for this provider")
+    return parsed
+
+
+def _parse_csv(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    values = [part.strip() for part in value.split(",") if part.strip()]
+    return values or None
+
+
 def _print_json(value: Any) -> None:
     print(json.dumps(to_jsonable(value), indent=2, sort_keys=True))
 
 
+def _load_local_env(path: str = ".env") -> None:
+    """Load simple KEY=VALUE lines from a local .env file without overriding shell env."""
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+def _read_optional_secret_file(path: str) -> str | None:
+    if not os.path.exists(path):
+        return None
+    value = open(path, encoding="utf-8").read().strip()
+    return value or None
+
+
 if __name__ == "__main__":
     main()
-

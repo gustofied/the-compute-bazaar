@@ -70,7 +70,7 @@ GPU_RULES: list[GpuRule] = [
 
 
 def canonical_gpu_model(gpu_name: str, gpu_ram_mb: float | int | None = None) -> str | None:
-    normalized = " ".join(gpu_name.replace("_", " ").upper().split())
+    normalized = _normalize_gpu_name(gpu_name)
     matches = [
         canonical
         for predicate, vram_gb, canonical in GPU_RULES
@@ -80,3 +80,14 @@ def canonical_gpu_model(gpu_name: str, gpu_ram_mb: float | int | None = None) ->
         return None
     return matches[-1]
 
+
+def _normalize_gpu_name(gpu_name: str) -> str:
+    normalized = " ".join(
+        gpu_name.replace("_", " ")
+        .replace("-", " ")
+        .upper()
+        .replace("NVIDIA", "")
+        .replace("GEFORCE", "")
+        .split()
+    )
+    return normalized

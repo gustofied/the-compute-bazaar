@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The Compute Bazaar | Market Notebook</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&amp;display=swap">
+    <link rel="stylesheet" href="./story.css">
+  </head>
+  <body>
+    <header>
+      <div class="header-left">
+        <h1><a href="#">Adam Sioud</a></h1>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="#">About</a></li>
+          <li><a href="#">Mosaics &amp; Essays</a></li>
+          <li><a href="#" class="active">Exemplars</a></li>
+          <li><a href="#">Projects</a></li>
+        </ul>
+      </nav>
+    </header>
+
+    <main>
+      <span class="memo-label">Exemplars</span>
+      <article class="editorial">
+        <div class="memo-head">
+          <h2>The Compute Bazaar: Tinkering with Compute Markets</h2>
+          <div class="memo-sub">Prototype notebook · live-ish market snapshots</div>
+        </div>
+
+        <section class="market-hero" aria-label="Compute Bazaar market summary">
+          <div>
+            <p class="kicker">Market Data Layer</p>
+            <h3>From scattered GPU listings to a small public price tape.</h3>
+            <p>
+              Provider APIs are sampled into bronze evidence, normalized into silver offers, and
+              curated into gold tables for comparisons, indexes, dashboards, and eventually agents.
+            </p>
+          </div>
+          <div class="market-stats" id="market-stats">
+            <div><span class="stat-value">...</span><span class="stat-label">providers</span></div>
+            <div><span class="stat-value">...</span><span class="stat-label">market listings</span></div>
+            <div><span class="stat-value">...</span><span class="stat-label">index products</span></div>
+          </div>
+        </section>
+
+        <p class="source-note" id="source-note">
+          Reading local JSON snapshots. Add <code>?data=https://example.com/compute-bazaar</code>
+          to point the same page at S3 or CloudFront JSON later.
+        </p>
+
+        <p class="lede">
+          The first version of this market is intentionally humble. It does not yet pretend to be an
+          exchange. It is a measuring instrument: a way to look at GPU capacity as a living price
+          surface rather than a set of isolated product pages.
+        </p>
+
+        <div class="toc">
+          <a href="#s-layers"><span class="toc-num">I</span>The Layers</a>
+          <a href="#s-index"><span class="toc-num">II</span>The Index</a>
+          <a href="#s-comparison"><span class="toc-num">III</span>The Bazaar Table</a>
+          <a href="#s-futures"><span class="toc-num">IV</span>Futures</a>
+        </div>
+
+        <h3 id="s-layers"><span class="num">I</span>&nbsp;The Layers</h3>
+        <p>
+          The data lake has three shelves. Bronze keeps raw provider evidence. Silver turns each
+          provider into a shared offer schema. Gold builds the product-facing facts: listings,
+          provider floors, index values, and the constituents supporting those values.
+        </p>
+
+        <div class="layer-map">
+          <div><strong>bronze</strong><span>raw provider responses</span></div>
+          <div><strong>silver</strong><span>normalized GPU offers</span></div>
+          <div><strong>gold</strong><span>query-ready market facts</span></div>
+          <div><strong>D3</strong><span>public story and dashboard</span></div>
+        </div>
+
+        <hr class="sep">
+
+        <h3 id="s-index"><span class="num">II</span>&nbsp;The Index</h3>
+        <p>
+          A first index can be almost brutally simple: for each GPU product, find the executable
+          floor in dollars per GPU-hour. The goal is not final methodology. The goal is a reliable
+          path from raw observation to an auditable number.
+        </p>
+
+        <figure class="viz-block">
+          <figcaption>
+            <span>Gold table</span>
+            <strong>Floor price by GPU product</strong>
+          </figcaption>
+          <div id="floor-chart" class="chart" role="img" aria-label="GPU floor price chart"></div>
+        </figure>
+
+        <hr class="sep">
+
+        <h3 id="s-comparison"><span class="num">III</span>&nbsp;The Bazaar Table</h3>
+        <p>
+          The table below is the first two-provider comparison: available offers only, grouped by
+          GPU product and provider. It is still small, but it already lets the market ask sharper
+          questions than a single listing page can.
+        </p>
+
+        <div class="table-wrap">
+          <table id="provider-table">
+            <thead>
+              <tr>
+                <th>GPU</th>
+                <th>Provider</th>
+                <th>Floor / GPU hr</th>
+                <th>Listings</th>
+                <th>Countries</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <hr class="sep">
+
+        <h3 id="s-futures"><span class="num">IV</span>&nbsp;Futures</h3>
+        <p>
+          The public essay should start with static JSON snapshots because static pages are robust,
+          cheap, and safe. Later, a small backend can consume AutoMQ and expose a narrow live feed
+          without putting broker credentials in the browser.
+        </p>
+
+        <figure class="viz-block compact">
+          <figcaption>
+            <span>Current snapshot</span>
+            <strong>Fresh listings sample</strong>
+          </figcaption>
+          <div id="listing-strip" class="listing-strip"></div>
+        </figure>
+
+        <section class="colophon">
+          <p>
+            Prototype copied from the AdamSioud editorial shape and wired to Compute Bazaar gold
+            snapshots. Move into the personal-site repo once the narrative and charts settle.
+          </p>
+        </section>
+      </article>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="./story.js"></script>
+  </body>
+</html>

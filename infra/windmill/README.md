@@ -1,0 +1,184 @@
+# Windmill GPU Price Ingestion
+
+This is the near-term orchestration path for provider pulls.
+
+## Why Windmill Now
+
+Use Windmill for the hourly provider jobs because it gives us scheduling, run history,
+manual reruns, logs, and simple operator controls without introducing a durable workflow
+engine too early. Temporal can wait until we have multi-step agent/control-flow work that
+needs durable state, retries across many activities, and human/agent approvals.
+
+## Network Shape
+
+The AutoMQ endpoint is private:
+
+```text
+*.automq.private:9102
+```
+
+That means the Windmill worker that runs the producer must be inside the AWS VPC, or otherwise
+connected to it through VPN/private networking. Windmill Cloud can still be the control plane if
+the executing worker is in the VPC. A public worker outside the VPC will fail DNS resolution.
+
+## Worker Image
+
+Build this image from the repository root:
+
+```sh
+docker build -f infra/windmill/Dockerfile -t compute-bazaar-gpu-prices:latest .
+```
+
+The `.dockerignore` file excludes `.env`, `.secrets`, local notes, data, and git metadata from the
+build context.
+
+For Windmill jobs, there are two good shapes:
+
+1. For this dev EC2 stack, use a custom Windmill worker image with this package baked in. That lets
+   `infra/windmill/vast_hourly.py` run as a normal Windmill Python script.
+2. Later, use the official `# sandbox <image>` flow once the provider image is in a registry the VPC
+   worker can pull from. That keeps job execution daemonless: no Docker socket, no Docker-in-Docker
+   sidecar, and no host filesystem escape route.
+
+## Self-Hosted Dev Windmill
+
+The current dev deployment runs on the AutoMQ runtime EC2 host because that host is already inside
+the VPC and can resolve the private AutoMQ broker DNS names.
+
+Files for the repeatable shape are in `infra/windmill/self-host/`:
+
+```text
+self-host/.env.example
+self-host/Caddyfile
+self-host/Dockerfile.worker
+self-host/docker-compose.yml
+```
+
+On the EC2 host, the live files sit under `/opt/windmill`. The UI is bound to localhost on the
+host, so do not open a public security-group port for it. Tunnel from your laptop instead:
+
+```sh
+ssh -i .secrets/compute-bazaar-automq-runtime.pem \
+  -L 8081:127.0.0.1:8081 \
+  ec2-user@51.44.12.211
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8081
+```
+
+Complete the first login/sign-up flow in the UI, then rotate any bootstrap password immediately.
+
+Useful host checks:
+
+```sh
+cd /opt/windmill
+sudo docker compose ps
+curl -sS http://127.0.0.1:8081/api/health/status
+```
+
+## Required Environment
+
+Set these as Windmill variables/secrets or worker environment variables:
+
+```text
+AWS_REGION=eu-west-3
+AWS_DEFAULT_REGION=eu-west-3
+COMPUTE_BAZAAR_RAW_ROOT=s3://YOUR_BUCKET/raw
+COMPUTE_BAZAAR_LAKE_ROOT=s3://YOUR_BUCKET/lake
+COMPUTE_BAZAAR_KAFKA_BOOTSTRAP_SERVERS=...
+COMPUTE_BAZAAR_KAFKA_SECURITY_PROTOCOL=SASL_PLAINTEXT
+COMPUTE_BAZAAR_KAFKA_SASL_MECHANISM=SCRAM-SHA-256
+COMPUTE_BAZAAR_KAFKA_USERNAME=...
+COMPUTE_BAZAAR_KAFKA_PASSWORD=...
+VAST_API_KEY=...
+LIUM_API_KEY=...
+```
+
+Prefer an AWS IAM role attached to the worker compute. Do not put AWS access keys in Windmill
+unless there is no alternative.
+
+For ECS-hosted Windmill workers, Windmill documents that AWS credential/region environment
+variables need to be whitelisted so scripts can use AWS APIs:
+
+```text
+AWS_EXECUTION_ENV,AWS_CONTAINER_CREDENTIALS_RELATIVE_URI,AWS_DEFAULT_REGION,AWS_REGION
+```
+
+## Windmill Script
+
+Use `infra/windmill/vast_hourly.py` and `infra/windmill/lium_hourly.py` as the script bodies. In
+the dev worker image they shell out to the baked project CLI:
+
+```text
+/opt/compute-bazaar/.venv/bin/gpu-prices ingest-vast
+/opt/compute-bazaar/.venv/bin/gpu-prices ingest-lium
+```
+
+Recommended schedule:
+
+```text
+0 0 * * * *
+```
+
+That is hourly in Windmill's six-field cron format. Start hourly until we understand Vast API limits
+and cost/noise. We can tighten to every 15 minutes later if the market data is useful enough.
+
+Suggested schedule args, using Windmill variables/secrets:
+
+```json
+{
+  "api_key": "$var:f/compute-bazaar/vast_api_key",
+  "raw_root": "$var:f/compute-bazaar/raw_root",
+  "lake_root": "$var:f/compute-bazaar/lake_root",
+  "automq_bootstrap_servers": "$var:f/compute-bazaar/kafka_bootstrap_servers",
+  "kafka_security_protocol": "SASL_PLAINTEXT",
+  "kafka_sasl_mechanism": "SCRAM-SHA-256",
+  "kafka_username": "$var:f/compute-bazaar/kafka_username",
+  "kafka_password": "$var:f/compute-bazaar/kafka_password",
+  "aws_region": "eu-west-3",
+  "topic_prefix": "gpu",
+  "dry_run": false
+}
+```
+
+Lium uses the same Kafka/S3 args, with `api_key` pointing at `$var:f/compute-bazaar/lium_api_key`
+and optional `size`, usually `200`.
+
+After first login, create a Windmill API token and run the bootstrap helper over the SSH tunnel:
+
+```sh
+export WINDMILL_TOKEN=...
+export WINDMILL_WORKSPACE=compute-bazaar
+uv run python infra/windmill/bootstrap_vast_schedule.py
+```
+
+The helper reads the required provider/Kafka/S3 values from your local environment, creates them as
+Windmill variables/secrets, creates `f/compute-bazaar/vast_hourly`, and adds the hourly schedule.
+
+## Smoke Command
+
+Inside a VPC-connected worker image, this is the equivalent command:
+
+```sh
+gpu-prices ingest-vast
+gpu-prices ingest-lium --size 200
+```
+
+From your laptop, use the SSH tunnel and local token to prove the Stage 1 surface:
+
+```sh
+WINDMILL_BASE_URL=http://127.0.0.1:8081 uv run gpu-prices stage1-check
+```
+
+From the VPC worker, add the private Kafka check:
+
+```sh
+gpu-prices stage1-check --check-automq --require-ingest-env
+```
+
+The current dev worker runs with `DISABLE_NSJAIL=true` so it can use the baked project virtualenv
+at `/opt/compute-bazaar`. Tighten that before production by moving the worker image to a registry
+and using Windmill's normal sandbox image flow.

@@ -10,6 +10,12 @@ This is a `uv` project. Install the locked environment with:
 uv sync
 ```
 
+Run the focused test suite with:
+
+```sh
+uv run python -m unittest discover -s tests
+```
+
 Run scripts through the project entry points:
 
 ```sh
@@ -66,30 +72,108 @@ uv run openalex-papers \
 The market-data path is designed around:
 
 ```text
-Provider APIs -> AutoMQ events -> S3 raw evidence -> Parquet lake -> DataFusion SQL
+Provider APIs -> AutoMQ events -> S3 bronze/silver/gold lake -> DataFusion SQL
 ```
 
 Windmill can call the package entry points for schedules, manual runs, approvals, and agent workflows.
+The current Windmill worker setup lives in `infra/windmill/`; run the worker inside the AWS VPC
+because the AutoMQ endpoint is private DNS.
+
+Keep real secrets in `.env`, `.secrets/`, or Windmill secrets only. The public `.env.example`
+shows variable names without shipping credentials.
 
 Ingest Vast offers:
 
 ```sh
 export VAST_API_KEY=...
-export AUTOMQ_BOOTSTRAP_SERVERS=localhost:9092
+export LIUM_API_KEY=...
+export COMPUTE_BAZAAR_KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+export COMPUTE_BAZAAR_KAFKA_SECURITY_PROTOCOL=SASL_PLAINTEXT
+export COMPUTE_BAZAAR_KAFKA_SASL_MECHANISM=SCRAM-SHA-256
+export COMPUTE_BAZAAR_KAFKA_USERNAME=...
+export COMPUTE_BAZAAR_KAFKA_PASSWORD=...
+export AWS_PROFILE=compute-bazaar
+export AWS_REGION=YOUR_AWS_REGION
 
 uv run gpu-prices ingest-vast \
-  --raw-root s3://compute-bazaar/raw \
-  --lake-root s3://compute-bazaar/lake
+  --raw-root s3://YOUR_BUCKET/raw \
+  --lake-root s3://YOUR_BUCKET/lake
 ```
 
-For a local dry run without AutoMQ:
+Ingest Lium executors:
+
+```sh
+uv run gpu-prices ingest-lium --size 200
+```
+
+For a local dry run without AutoMQ or S3:
 
 ```sh
 uv run gpu-prices ingest-vast --dry-run --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-lium --dry-run --raw-root data/raw --lake-root data/lake
 ```
 
-Run a benchmark query over normalized Parquet:
+Inspect the latest successful run and compute a first price index:
 
 ```sh
-uv run gpu-prices benchmark --parquet data/lake/silver/gpu_offers/date=YYYY-MM-DD/provider=vast/run_id=RUN/offers.parquet
+uv run gpu-prices latest-manifest
+uv run gpu-prices latest-index --limit 10
+```
+
+Build the first gold query tables from latest silver offers:
+
+```sh
+uv run gpu-prices build-gold
+uv run gpu-prices build-gold --providers vast,lium
+uv run gpu-prices latest-gold-manifest
+uv run gpu-prices gold-index --limit 10
+uv run gpu-prices gold-provider-comparison --limit 20
+uv run gpu-prices export-gold-dashboard --limit 100
+```
+
+The provider comparison and price-index commands filter to available offers. The listing table keeps
+the broader evidence rows so we can inspect provider state without polluting market-floor outputs.
+
+The lake layers are:
+
+```text
+bronze/raw evidence        exact provider responses for audit and replay
+silver/gpu_offers          normalized provider offers in one schema
+gold/fact_gpu_listings     query-ready market listings
+gold/fact_price_index_*    index values and constituents
+gold/dim_*                 GPU, provider, and region dimensions
+```
+
+`export-gold-dashboard` writes public-safe JSON snapshots under `data/dashboard/compute-bazaar/`.
+Those files are intended for D3 prototypes in the static Compute Bazaar essay before we add a
+proper API or live feed.
+
+The first static essay prototype lives at:
+
+```text
+prototypes/compute-bazaar/feeling_the_compute.html
+```
+
+Serve the repository root locally and open that page so browser `fetch()` can read the JSON files:
+
+```sh
+python3 -m http.server 8765
+```
+
+Then open `http://127.0.0.1:8765/prototypes/compute-bazaar/feeling_the_compute.html`.
+The same page can point at S3/CloudFront JSON later with
+`?data=https://YOUR_PUBLIC_HOST/compute-bazaar`.
+
+Run the Stage 1 check from your laptop. This checks the latest S3 manifest, DataFusion index,
+and Windmill schedule when `WINDMILL_BASE_URL` points at an SSH tunnel:
+
+```sh
+WINDMILL_BASE_URL=http://127.0.0.1:8081 uv run gpu-prices stage1-check
+```
+
+AutoMQ brokers use private VPC DNS, so the Kafka connectivity check must run from a VPC-connected
+host or worker:
+
+```sh
+gpu-prices stage1-check --check-automq --require-ingest-env
 ```

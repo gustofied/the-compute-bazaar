@@ -1,0 +1,14 @@
+FROM ghcr.io/windmill-labs/windmill:main
+
+WORKDIR /opt/compute-bazaar
+
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python
+
+COPY README.md pyproject.toml uv.lock ./
+COPY src ./src
+
+RUN uv python install 3.13 \
+    && uv venv /opt/compute-bazaar/.venv --python 3.13 \
+    && uv pip install --python /opt/compute-bazaar/.venv/bin/python --no-cache .
+
+ENV PYTHON_PATH=/opt/compute-bazaar/.venv/bin/python

@@ -9,6 +9,8 @@ build/
 dist/
 *.egg-info/
 .env
+.secrets/
+notes/
 data/
 
 # Generated analysis artefacts

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,10 @@ from .schemas import GpuOffer, to_jsonable
 def write_json(uri: str, value: Any) -> str:
     data = json.dumps(to_jsonable(value), indent=2, sort_keys=True).encode("utf-8")
     return write_bytes(uri, data, content_type="application/json")
+
+
+def read_json(uri: str) -> Any:
+    return json.loads(read_bytes(uri).decode("utf-8"))
 
 
 def write_jsonl(uri: str, rows: Iterable[Any]) -> str:
@@ -47,15 +52,33 @@ def write_bytes(uri: str, data: bytes, *, content_type: str | None = None) -> st
     return str(path)
 
 
+def read_bytes(uri: str) -> bytes:
+    if uri.startswith("s3://"):
+        parsed = urlparse(uri)
+        try:
+            import boto3
+        except ImportError as exc:
+            raise RuntimeError("Reading s3:// paths requires the 'platform' extra: uv sync --extra platform") from exc
+
+        response = boto3.client("s3").get_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
+        return response["Body"].read()
+
+    return Path(uri).read_bytes()
+
+
 def write_offers_parquet(uri: str, offers: Iterable[GpuOffer]) -> str:
-    rows = [offer.to_dict() for offer in offers]
+    return write_parquet_rows(uri, [offer.to_dict() for offer in offers])
+
+
+def write_parquet_rows(uri: str, rows: Iterable[Mapping[str, Any]]) -> str:
+    materialized = [_normalize_parquet_value(dict(row)) for row in rows]
     try:
         import pyarrow as pa
         import pyarrow.parquet as pq
     except ImportError as exc:
         raise RuntimeError("Writing Parquet requires the 'platform' extra: uv sync --extra platform") from exc
 
-    table = pa.Table.from_pylist(rows)
+    table = pa.Table.from_pylist(materialized)
     if uri.startswith("s3://"):
         try:
             import pyarrow.fs as pafs
@@ -63,7 +86,8 @@ def write_offers_parquet(uri: str, offers: Iterable[GpuOffer]) -> str:
             raise RuntimeError("Writing Parquet to S3 requires pyarrow filesystem support") from exc
 
         parsed = urlparse(uri)
-        filesystem = pafs.S3FileSystem()
+        region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+        filesystem = pafs.S3FileSystem(region=region) if region else pafs.S3FileSystem()
         with filesystem.open_output_stream(f"{parsed.netloc}/{parsed.path.lstrip('/')}") as sink:
             pq.write_table(table, sink)
         return uri
@@ -109,3 +133,12 @@ def table_partition(
 def rows_from_dicts(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
+
+def _normalize_parquet_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        if not value:
+            return None
+        return {str(key): _normalize_parquet_value(child) for key, child in value.items()}
+    if isinstance(value, list):
+        return [_normalize_parquet_value(child) for child in value]
+    return value

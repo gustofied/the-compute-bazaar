@@ -1,0 +1,71 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: windmill
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d windmill"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  windmill_server:
+    image: ${WM_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      MODE: server
+      BASE_URL: ${BASE_URL}
+      SUPERADMIN_SECRET: ${SUPERADMIN_SECRET}
+      SILENCE_HEALTH_LOGS: ${SILENCE_HEALTH_LOGS:-true}
+    expose:
+      - "8000"
+
+  windmill_worker:
+    image: ${WM_WORKER_IMAGE}
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    privileged: true
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      MODE: worker
+      WORKER_GROUP: default
+      AWS_REGION: ${AWS_REGION}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      PYTHON_PATH: /opt/compute-bazaar/.venv/bin/python
+      ENABLE_UNSHARE_PID: "true"
+      DISABLE_NSJAIL: "true"
+      SILENCE_HEALTH_LOGS: ${SILENCE_HEALTH_LOGS:-true}
+    volumes:
+      - worker_dependency_cache:/tmp/windmill/cache
+      - worker_logs:/tmp/windmill/logs
+
+  caddy:
+    image: ghcr.io/windmill-labs/caddy-l4:latest
+    restart: unless-stopped
+    depends_on:
+      - windmill_server
+    environment:
+      BASE_URL: ${BASE_URL}
+      ADDRESS: ${ADDRESS}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    ports:
+      - "127.0.0.1:8081:80"
+
+volumes:
+  db_data:
+  worker_dependency_cache:
+  worker_logs:
+  caddy_data:
