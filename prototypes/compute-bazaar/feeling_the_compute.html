@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>The Compute Bazaar | Market Notebook</title>
+    <title>Adam Sioud | The Compute Bazaar</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&amp;display=swap">
     <link rel="stylesheet" href="./story.css">
   </head>
@@ -15,6 +15,7 @@
       <nav>
         <ul>
           <li><a href="#">About</a></li>
+          <li><a href="#">Art</a></li>
           <li><a href="#">Mosaics &amp; Essays</a></li>
           <li><a href="#" class="active">Exemplars</a></li>
           <li><a href="#">Projects</a></li>
@@ -27,48 +28,58 @@
       <article class="editorial">
         <div class="memo-head">
           <h2>The Compute Bazaar: Tinkering with Compute Markets</h2>
-          <div class="memo-sub">Prototype notebook · live-ish market snapshots</div>
+          <div class="memo-sub">17 June 2026 · local dashboard notebook</div>
         </div>
 
-        <section class="market-hero" aria-label="Compute Bazaar market summary">
-          <div>
-            <p class="kicker">Market Data Layer</p>
-            <h3>From scattered GPU listings to a small public price tape.</h3>
-            <p>
-              Provider APIs are sampled into bronze evidence, normalized into silver offers, and
-              curated into gold tables for comparisons, indexes, dashboards, and eventually agents.
-            </p>
+        <figure class="hero-banner compute-logo-banner" aria-label="Compute Bazaar data-flow dashboard">
+          <span class="compute-logo-stamp" aria-hidden="true"></span>
+          <div class="compute-logo">
+            <div class="compute-logo-stage" aria-hidden="true">
+              <div class="compute-panel"><span>01</span><strong>Providers</strong><em>Vast · Lium</em></div>
+              <div class="compute-panel"><span>02</span><strong>AutoMQ</strong><em>event tape</em></div>
+              <div class="compute-panel"><span>03</span><strong>S3 Lake</strong><em>bronze · silver · gold</em></div>
+              <div class="compute-panel"><span>04</span><strong>DataFusion</strong><em>market SQL</em></div>
+              <div class="compute-panel"><span>05</span><strong>D3</strong><em>public notebook</em></div>
+            </div>
+            <div class="compute-logo-title">THE COMPUTE BAZAAR</div>
           </div>
           <div class="market-stats" id="market-stats">
             <div><span class="stat-value">...</span><span class="stat-label">providers</span></div>
             <div><span class="stat-value">...</span><span class="stat-label">market listings</span></div>
             <div><span class="stat-value">...</span><span class="stat-label">index products</span></div>
           </div>
-        </section>
+        </figure>
 
         <p class="source-note" id="source-note">
           Reading local JSON snapshots. Add <code>?data=https://example.com/compute-bazaar</code>
           to point the same page at S3 or CloudFront JSON later.
         </p>
 
+        <p class="build-note">
+          This local page is the working interface for the project. The same file should later move
+          into the AdamSioud exemplar flow, with the static JSON source swapped for a public S3 or
+          CloudFront prefix.
+        </p>
+
         <p class="lede">
-          The first version of this market is intentionally humble. It does not yet pretend to be an
-          exchange. It is a measuring instrument: a way to look at GPU capacity as a living price
-          surface rather than a set of isolated product pages.
+          Compute is not scarce in one clean place. It is scattered through provider APIs, regional
+          machines, private terms, spot-like availability, and vague promises of performance. The
+          first Compute Bazaar is therefore not an exchange. It is a measuring instrument: a small
+          public price tape for watching GPU capacity become legible.
         </p>
 
         <div class="toc">
-          <a href="#s-layers"><span class="toc-num">I</span>The Layers</a>
-          <a href="#s-index"><span class="toc-num">II</span>The Index</a>
-          <a href="#s-comparison"><span class="toc-num">III</span>The Bazaar Table</a>
-          <a href="#s-futures"><span class="toc-num">IV</span>Futures</a>
+          <a href="#s-substrate"><span class="toc-num">I</span>The Substrate</a>
+          <a href="#s-markets"><span class="toc-num">II</span>The Markets</a>
+          <a href="#s-tinkering"><span class="toc-num">III</span>Tinkering</a>
+          <a href="#s-frictions"><span class="toc-num">IV</span>Frictions and Futures</a>
         </div>
 
-        <h3 id="s-layers"><span class="num">I</span>&nbsp;The Layers</h3>
+        <h3 id="s-substrate"><span class="num">I</span>&nbsp;The Substrate</h3>
         <p>
-          The data lake has three shelves. Bronze keeps raw provider evidence. Silver turns each
-          provider into a shared offer schema. Gold builds the product-facing facts: listings,
-          provider floors, index values, and the constituents supporting those values.
+          The substrate is boring on purpose. Bronze keeps raw provider evidence. Silver turns each
+          provider into one shared offer schema. Gold builds product-facing facts: listings,
+          provider floors, index values, regions, and the constituents supporting those values.
         </p>
 
         <div class="layer-map">
@@ -80,11 +91,11 @@
 
         <hr class="sep">
 
-        <h3 id="s-index"><span class="num">II</span>&nbsp;The Index</h3>
+        <h3 id="s-markets"><span class="num">II</span>&nbsp;The Markets</h3>
         <p>
-          A first index can be almost brutally simple: for each GPU product, find the executable
-          floor in dollars per GPU-hour. The goal is not final methodology. The goal is a reliable
-          path from raw observation to an auditable number.
+          The first market view is deliberately simple: for each GPU product, find the available
+          floor in dollars per GPU-hour. The point is not a final methodology. The point is a
+          reliable path from raw observation to an auditable number.
         </p>
 
         <figure class="viz-block">
@@ -97,7 +108,7 @@
 
         <hr class="sep">
 
-        <h3 id="s-comparison"><span class="num">III</span>&nbsp;The Bazaar Table</h3>
+        <h3 id="s-tinkering"><span class="num">III</span>&nbsp;Tinkering</h3>
         <p>
           The table below is the first two-provider comparison: available offers only, grouped by
           GPU product and provider. It is still small, but it already lets the market ask sharper
@@ -121,7 +132,7 @@
 
         <hr class="sep">
 
-        <h3 id="s-futures"><span class="num">IV</span>&nbsp;Futures</h3>
+        <h3 id="s-frictions"><span class="num">IV</span>&nbsp;Frictions and Futures</h3>
         <p>
           The public essay should start with static JSON snapshots because static pages are robust,
           cheap, and safe. Later, a small backend can consume AutoMQ and expose a narrow live feed
@@ -138,8 +149,8 @@
 
         <section class="colophon">
           <p>
-            Prototype copied from the AdamSioud editorial shape and wired to Compute Bazaar gold
-            snapshots. Move into the personal-site repo once the narrative and charts settle.
+            Local dashboard first, AdamSioud exemplar page later. The browser reads public-safe gold
+            snapshots; private provider keys and AutoMQ credentials stay behind the worker boundary.
           </p>
         </section>
       </article>

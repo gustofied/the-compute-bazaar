@@ -53,6 +53,10 @@ class GpuNormalizationTests(unittest.TestCase):
             "RTXPro6000B_96GB",
         )
         self.assertEqual(canonical_gpu_model("GeForce RTX 4090", 24576), "RTX4090_24GB")
+        self.assertEqual(
+            canonical_gpu_model("NVIDIA RTX 6000 Ada Generation", 49152),
+            "RTX6000Ada_48GB",
+        )
 
 
 class GoldQueryTests(unittest.TestCase):

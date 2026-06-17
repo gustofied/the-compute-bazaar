@@ -26,7 +26,10 @@ the executing worker is in the VPC. A public worker outside the VPC will fail DN
 Build this image from the repository root:
 
 ```sh
-docker build -f infra/windmill/Dockerfile -t compute-bazaar-gpu-prices:latest .
+docker build \
+  -f infra/windmill/self-host/Dockerfile.worker \
+  -t compute-bazaar-windmill-worker:2026-06-17 \
+  .
 ```
 
 The `.dockerignore` file excludes `.env`, `.secrets`, local notes, data, and git metadata from the
@@ -60,7 +63,7 @@ host, so do not open a public security-group port for it. Tunnel from your lapto
 ```sh
 ssh -i .secrets/compute-bazaar-automq-runtime.pem \
   -L 8081:127.0.0.1:8081 \
-  ec2-user@51.44.12.211
+  ec2-user@HOST
 ```
 
 Then open:
@@ -77,6 +80,28 @@ Useful host checks:
 cd /opt/windmill
 sudo docker compose ps
 curl -sS http://127.0.0.1:8081/api/health/status
+```
+
+To refresh the baked project CLI on the dev EC2 host, sync a secret-free build context to the
+host, rebuild the worker image, and recreate only the worker service:
+
+```sh
+rsync -az --delete \
+  --exclude '.git' \
+  --exclude '.venv' \
+  --exclude '.env' \
+  --exclude '.secrets' \
+  --exclude 'notes' \
+  --exclude 'data' \
+  ./ ec2-user@HOST:/home/ec2-user/compute-bazaar-worker-build/
+
+ssh ec2-user@HOST '
+  cd /home/ec2-user/compute-bazaar-worker-build &&
+  sudo docker build -f infra/windmill/self-host/Dockerfile.worker \
+    -t compute-bazaar-windmill-worker:2026-06-17 . &&
+  cd /opt/windmill &&
+  sudo docker compose up -d --force-recreate windmill_worker
+'
 ```
 
 ## Required Environment
@@ -152,11 +177,25 @@ After first login, create a Windmill API token and run the bootstrap helper over
 ```sh
 export WINDMILL_TOKEN=...
 export WINDMILL_WORKSPACE=compute-bazaar
-uv run python infra/windmill/bootstrap_vast_schedule.py
+uv run python infra/windmill/bootstrap_provider_schedule.py --provider vast
+uv run python infra/windmill/bootstrap_provider_schedule.py --provider lium
 ```
 
 The helper reads the required provider/Kafka/S3 values from your local environment, creates them as
-Windmill variables/secrets, creates `f/compute-bazaar/vast_hourly`, and adds the hourly schedule.
+Windmill variables/secrets, creates the provider script, and adds the hourly schedule.
+
+Run a manual smoke through the same VPC worker path:
+
+```sh
+uv run python infra/windmill/bootstrap_provider_schedule.py \
+  --provider lium \
+  --run-now \
+  --wait \
+  --run-id windmill-lium-stage1-smoke-YYYYMMDD
+```
+
+The success marker is a manifest with `publish_mode: kafka`, nonzero `published_events`, and no
+unexpected `unknown_gpu_names`.
 
 ## Smoke Command
 

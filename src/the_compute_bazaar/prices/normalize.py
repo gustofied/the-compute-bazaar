@@ -46,7 +46,7 @@ GPU_RULES: list[GpuRule] = [
     (lambda n: n == "RTX 5070", 12, "RTX5070_12GB"),
     (lambda n: n == "RTX 5080", 16, "RTX5080_16GB"),
     (lambda n: n == "RTX 5090", 32, "RTX5090_32GB"),
-    (lambda n: n == "RTX 6000ADA", 48, "RTX6000Ada_48GB"),
+    (lambda n: n == "RTX 6000ADA" or n.startswith("RTX 6000 ADA"), 48, "RTX6000Ada_48GB"),
     (lambda n: n == "RTX A4000", 16, "A4000_16GB"),
     (lambda n: n == "RTX A4500", 20, "A4500_20GB"),
     (lambda n: n == "RTX A5000", 24, "A5000_24GB"),

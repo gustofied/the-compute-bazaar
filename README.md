@@ -154,13 +154,24 @@ The first static essay prototype lives at:
 prototypes/compute-bazaar/feeling_the_compute.html
 ```
 
+Treat that page as the primary local dashboard/interface for the project while the market is still
+forming. It follows the AdamSioud exemplar flow, but reads the local Compute Bazaar gold snapshots.
+
 Serve the repository root locally and open that page so browser `fetch()` can read the JSON files:
 
 ```sh
-python3 -m http.server 8765
+uv run compute-bazaar-dashboard
 ```
 
-Then open `http://127.0.0.1:8765/prototypes/compute-bazaar/feeling_the_compute.html`.
+Then open `http://127.0.0.1:8765/`. The FastAPI server also exposes:
+
+```text
+/dashboard/
+/api/health
+/api/snapshots
+/api/snapshots/latest-index
+```
+
 The same page can point at S3/CloudFront JSON later with
 `?data=https://YOUR_PUBLIC_HOST/compute-bazaar`.
 

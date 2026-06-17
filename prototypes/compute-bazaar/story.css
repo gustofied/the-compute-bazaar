@@ -162,6 +162,15 @@ main {
   margin: 18px 0 10px;
 }
 
+.build-note {
+  color: #aaa;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  line-height: 1.7;
+  margin: 12px 0 1.2rem;
+}
+
 .editorial code {
   background: var(--tone-light);
   border-bottom: 1px solid var(--rule);
@@ -208,22 +217,103 @@ main {
   letter-spacing: 4px;
 }
 
-.market-hero {
+.hero-banner {
+  margin: 8px 0 12px;
+}
+
+.compute-logo-banner {
+  background:
+    linear-gradient(90deg, rgba(26, 26, 26, 0.05) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(26, 26, 26, 0.04) 1px, transparent 1px),
+    var(--tone-light);
+  background-size: 36px 36px;
   border: 0.5px solid #e8e4de;
+  overflow: hidden;
+  padding: 18px;
+  position: relative;
+}
+
+.compute-logo-stamp {
+  border: 1px solid rgba(44, 95, 45, 0.28);
+  color: rgba(44, 95, 45, 0.46);
+  content: "";
+  height: 76px;
+  position: absolute;
+  right: 18px;
+  top: 16px;
+  transform: rotate(6deg);
+  width: 76px;
+}
+
+.compute-logo-stamp::after {
+  content: "STAGE\A 1.5";
+  font-family: var(--mono);
+  font-size: 10px;
+  left: 50%;
+  letter-spacing: 1px;
+  line-height: 1.5;
+  position: absolute;
+  text-align: center;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: pre;
+}
+
+.compute-logo {
+  position: relative;
+  z-index: 1;
+}
+
+.compute-logo-stage {
   display: grid;
-  gap: 24px;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.45fr);
-  margin: 28px 0 14px;
-  padding: 22px;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 18px;
 }
 
-.market-hero h3 {
-  font-size: 1.3rem;
-  margin: 4px 0 8px;
+.compute-panel {
+  background: rgba(253, 252, 250, 0.76);
+  border: 0.5px solid rgba(26, 26, 26, 0.12);
+  min-height: 112px;
+  padding: 11px;
 }
 
-.market-hero p {
-  margin-bottom: 0;
+.compute-panel span {
+  color: #aaa;
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  margin-bottom: 24px;
+}
+
+.compute-panel strong {
+  color: var(--ink);
+  display: block;
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: normal;
+}
+
+.compute-panel em {
+  color: #777;
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1.45;
+  margin-top: 8px;
+}
+
+.compute-logo-title {
+  border-top: 1.5px solid var(--ink);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: clamp(28px, 5vw, 56px);
+  font-weight: normal;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  padding-top: 14px;
+  text-align: center;
 }
 
 .kicker,
@@ -257,11 +347,13 @@ main {
 
 .market-stats {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  margin-top: 18px;
 }
 
 .market-stats div {
-  background: var(--tone-light);
+  background: rgba(253, 252, 250, 0.82);
   border-bottom: 1px solid var(--rule);
   padding: 12px 14px;
 }
@@ -455,9 +547,19 @@ td:nth-child(5) {
     font-size: 1.15rem;
   }
 
-  .market-hero,
-  .layer-map {
+  .layer-map,
+  .compute-logo-stage,
+  .market-stats {
     grid-template-columns: 1fr;
+  }
+
+  .compute-logo-banner {
+    padding: 14px;
+  }
+
+  .compute-logo-title {
+    font-size: 28px;
+    line-height: 1.08;
   }
 
   .editorial h3 {
