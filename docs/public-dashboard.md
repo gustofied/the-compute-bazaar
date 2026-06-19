@@ -79,6 +79,25 @@ only to `dashboard/compute-bazaar/*`. A starter bucket policy is in:
 infra/aws/dashboard-cloudfront-bucket-policy.example.json
 ```
 
+The repeatable Terraform setup lives in:
+
+```text
+infra/aws/public-dashboard/
+```
+
+It creates a CloudFront distribution with an Origin Access Control and maps the distribution root
+to the S3 dashboard prefix. That means the public base URL serves files directly:
+
+```text
+https://DISTRIBUTION.cloudfront.net/manifest.json
+https://DISTRIBUTION.cloudfront.net/latest-index.json
+```
+
+The Terraform stack can output the bucket policy statement without applying it. Keep
+`manage_bucket_policy = false` when the bucket policy is already managed by hand, then merge the
+`bucket_policy_json` output manually. Set it to `true` only when Terraform should own the whole
+bucket policy.
+
 ## CORS
 
 The browser needs CORS for `GET` and `HEAD` on the dashboard JSON prefix. A starter CORS document is
@@ -97,3 +116,18 @@ aws s3api put-bucket-cors \
 The hourly job overwrites stable filenames. Use short cache lifetimes at first, for example 60-300
 seconds, until the feed is boring. Later we can add immutable run-id snapshots as well as latest
 pointers.
+
+## AdamSioud Page
+
+The page reads the local proxy by default:
+
+```html
+data-market-data-base="/api/dashboard-snapshots"
+```
+
+For the published site, replace that value with the Terraform `dashboard_data_base_url`, or preview
+without editing HTML:
+
+```text
+https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html?data=https://DISTRIBUTION.cloudfront.net
+```

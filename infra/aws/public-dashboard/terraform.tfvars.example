@@ -1,0 +1,13 @@
+aws_region            = "eu-west-3"
+dashboard_bucket_name = "YOUR_BUCKET"
+dashboard_prefix      = "dashboard/compute-bazaar"
+
+allowed_origins = [
+  "https://www.adamsioud.com",
+  "https://adamsioud.com",
+  "http://127.0.0.1:8777",
+]
+
+# Leave this false if the S3 bucket policy already has hand-managed statements.
+# Terraform will still output bucket_policy_json so you can merge the statement manually.
+manage_bucket_policy = false

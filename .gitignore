@@ -13,6 +13,13 @@ dist/
 notes/
 data/
 
+# Terraform local state
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+terraform.tfvars.json
+
 # Generated analysis artefacts
 *.png
 *.csv
