@@ -9,7 +9,7 @@ from typing import Any
 from .datafusion import query_parquet, query_tables
 from .manifest import read_latest_manifest
 from .schemas import to_jsonable, utc_now
-from .storage import read_json, table_partition, write_json, write_parquet_rows
+from .storage import list_refs, read_json, table_partition, write_json, write_parquet_rows
 
 
 GOLD_MANIFEST_TABLE = "gold_market"
@@ -195,6 +195,29 @@ def read_latest_gold_manifest(lake_root: str) -> dict[str, Any]:
     return dict(read_json(latest_gold_manifest_ref(lake_root)))
 
 
+def list_gold_manifests(lake_root: str, *, limit: int = 48) -> list[dict[str, Any]]:
+    refs = [
+        ref
+        for ref in list_refs(gold_manifest_prefix(lake_root), suffix=".json")
+        if "/run_id=" in ref or "/run_id%3D" in ref
+    ]
+    manifests: list[dict[str, Any]] = []
+    for ref in refs:
+        try:
+            manifest = dict(read_json(ref))
+        except Exception:  # noqa: BLE001 - one bad manifest should not hide the usable history.
+            continue
+        if manifest.get("table_refs", {}).get("fact_price_index_values"):
+            manifests.append(manifest)
+
+    manifests.sort(key=lambda row: str(row.get("observed_at") or ""), reverse=True)
+    return manifests[: max(1, int(limit))]
+
+
+def gold_manifest_prefix(lake_root: str) -> str:
+    return "/".join([lake_root.rstrip("/"), "_manifests", GOLD_MANIFEST_TABLE])
+
+
 def query_gold_price_index(*, lake_root: str, limit: int | None = None) -> dict[str, Any]:
     manifest = read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"]["fact_price_index_values"]
@@ -209,6 +232,63 @@ order by floor_usd_gpu_hr asc, offer_count desc
         sql=_with_limit(sql, limit),
     )
     return {"manifest": manifest, "rows": rows}
+
+
+def query_gold_index_history(
+    *,
+    lake_root: str,
+    history_limit: int = 48,
+    gpu_models: list[str] | None = None,
+) -> dict[str, Any]:
+    manifests = list_gold_manifests(lake_root, limit=history_limit)
+    filters = ""
+    if gpu_models:
+        values = ", ".join(_sql_literal(model) for model in gpu_models)
+        filters = f"where gpu_model in ({values})"
+
+    rows: list[dict[str, Any]] = []
+    for manifest in reversed(manifests):
+        table_ref = manifest["table_refs"]["fact_price_index_values"]
+        sql = f"""
+select
+  index_symbol,
+  gpu_product_id,
+  gpu_model,
+  methodology_version,
+  floor_usd_gpu_hr,
+  simple_mean_usd_gpu_hr,
+  cheapest_offer_usd_hr,
+  offer_count,
+  provider_count,
+  country_count,
+  latest_observed_at,
+  calculated_at
+from fact_price_index_values
+{filters}
+order by gpu_model, floor_usd_gpu_hr asc
+"""
+        for row in query_parquet(
+            parquet_uri=table_ref,
+            table_name="fact_price_index_values",
+            sql=sql,
+        ):
+            rows.append(
+                {
+                    **row,
+                    "gold_run_id": manifest.get("run_id"),
+                    "gold_observed_at": manifest.get("observed_at"),
+                    "gold_observed_date": manifest.get("observed_date"),
+                    "provider_scope": manifest.get("provider_scope"),
+                    "source_run_ids": manifest.get("source_run_ids"),
+                }
+            )
+
+    rows.sort(key=lambda row: (str(row.get("gold_observed_at") or ""), str(row.get("gpu_model") or "")))
+    return {
+        "manifest": read_latest_gold_manifest(lake_root),
+        "history_manifest_count": len(manifests),
+        "rows": rows,
+    }
 
 
 def query_gold_provider_comparison(
@@ -365,6 +445,8 @@ def export_gold_dashboard_snapshot(
         dashboard_output_root=output_root,
     )
     index = query_gold_price_index(lake_root=lake_root, limit=limit)["rows"]
+    index_history_payload = query_gold_index_history(lake_root=lake_root, history_limit=48)
+    index_history = index_history_payload["rows"]
     provider_comparison = query_gold_provider_comparison(lake_root=lake_root, limit=limit)["rows"]
     listings = query_gold_listings(lake_root=lake_root, limit=limit)["rows"]
     warnings = []
@@ -381,6 +463,7 @@ def export_gold_dashboard_snapshot(
         "latest_index": "/".join([output_root.rstrip("/"), "latest-index.json"]),
         "index_constituents": "/".join([output_root.rstrip("/"), "index-constituents.json"]),
         "index_quality": "/".join([output_root.rstrip("/"), "index-quality.json"]),
+        "index_history": "/".join([output_root.rstrip("/"), "index-history.json"]),
         "provider_comparison": "/".join([output_root.rstrip("/"), "provider-comparison.json"]),
         "listings_sample": "/".join([output_root.rstrip("/"), "listings-sample.json"]),
     }
@@ -395,6 +478,15 @@ def export_gold_dashboard_snapshot(
         {"manifest": public_manifest, "rows": index_quality},
     )
     write_json(
+        output_refs["index_history"],
+        {
+            "manifest": public_manifest,
+            "history_manifest_count": index_history_payload["history_manifest_count"],
+            "row_count": len(index_history),
+            "rows": index_history,
+        },
+    )
+    write_json(
         output_refs["provider_comparison"],
         {"manifest": public_manifest, "rows": provider_comparison},
     )
@@ -406,6 +498,7 @@ def export_gold_dashboard_snapshot(
             "latest_index": len(index),
             "index_constituents": len(constituents),
             "index_quality": len(index_quality),
+            "index_history": len(index_history),
             "provider_comparison": len(provider_comparison),
             "listings_sample": len(listings),
         },

@@ -14,6 +14,13 @@ from ..schemas import GpuOffer
 
 
 DEFAULT_VAST_API_BASE = "https://console.vast.ai/api/v0"
+DEFAULT_VAST_MARKET_QUERY: dict[str, Any] = {
+    "limit": 500,
+    "type": "on-demand",
+    "rentable": {"eq": True},
+    "rented": {"eq": False},
+    "order": [["dph_total", "asc"]],
+}
 
 
 class VastClient:
@@ -33,9 +40,22 @@ class VastClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
+        if query is None:
+            query = DEFAULT_VAST_MARKET_QUERY
+
+        if isinstance(query, Mapping):
+            response = self.session.post(
+                f"{self.api_base}/bundles/",
+                json=dict(query),
+                headers={**headers, "Content-Type": "application/json"},
+                timeout=60,
+            )
+            response.raise_for_status()
+            return response.json()
+
         params: dict[str, str] = {}
         if query:
-            params["q"] = query if isinstance(query, str) else json.dumps(query, separators=(",", ":"))
+            params["q"] = query
 
         response = self.session.get(
             f"{self.api_base}/bundles/",
@@ -45,6 +65,10 @@ class VastClient:
         )
         response.raise_for_status()
         return response.json()
+
+
+def default_market_query() -> dict[str, Any]:
+    return json.loads(json.dumps(DEFAULT_VAST_MARKET_QUERY))
 
 
 def extract_offers(payload: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
@@ -192,4 +216,3 @@ def _bool_or_none(value: Any) -> bool | None:
         if lowered in {"false", "no", "0"}:
             return False
     return None
-

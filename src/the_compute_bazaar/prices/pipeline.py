@@ -11,7 +11,7 @@ from .automq import DryRunPublisher, KafkaPublisher, Publisher, kafka_config_fro
 from .events import make_event, new_run_id, sha256_json
 from .manifest import write_run_manifest
 from .providers.lium import LiumClient, normalize_executors
-from .providers.vast import VastClient, extract_offers, normalize_offers
+from .providers.vast import VastClient, default_market_query, extract_offers, normalize_offers
 from .schemas import ProviderSnapshot, utc_now
 from .storage import date_partition, table_partition, write_json, write_offers_parquet
 
@@ -65,7 +65,8 @@ def ingest_vast(
     observed_date = observed_at.date().isoformat()
 
     client = VastClient(api_key=api_key or os.getenv("VAST_API_KEY"), **({"api_base": api_base} if api_base else {}))
-    payload = client.search_bundles(query=query)
+    effective_query = query if query is not None else default_market_query()
+    payload = client.search_bundles(query=effective_query)
     raw_payload_hash = sha256_json(payload)
     offers = extract_offers(payload)
 
@@ -104,7 +105,7 @@ def ingest_vast(
         raw_ref=raw_ref,
         payload_hash=raw_payload_hash,
         offer_count=len(offers),
-        query={"q": query} if query else {},
+        query=effective_query if isinstance(effective_query, dict) else {"q": effective_query},
     )
     snapshot_event = make_event(
         event_type="gpu.provider_snapshot.v1",

@@ -62,6 +62,9 @@ host, so do not open a public security-group port for it. Tunnel from your lapto
 
 ```sh
 ssh -i .secrets/compute-bazaar-automq-runtime.pem \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
   -L 8081:127.0.0.1:8081 \
   ec2-user@HOST
 ```
@@ -71,6 +74,16 @@ Then open:
 ```text
 http://127.0.0.1:8081
 ```
+
+If the laptop is on mobile/5G, the public IP can drift and the security group will stop allowing
+the tunnel. Refresh the current `/32` before opening the tunnel:
+
+```sh
+uv run python infra/aws/refresh_runtime_access.py --profile YOUR_AWS_PROFILE
+```
+
+Add `--dry-run` to preview, and add `--prune-stale` after this helper has created older managed
+rules that should be removed.
 
 Complete the first login/sign-up flow in the UI, then rotate any bootstrap password immediately.
 

@@ -26,6 +26,7 @@ async function loadAndRenderDashboard(dataBase, sourceNote) {
       marketRun,
       marketHistory,
       indexPayload,
+      indexHistoryPayload,
       indexQualityPayload,
       constituentPayload,
       comparisonPayload,
@@ -35,6 +36,7 @@ async function loadAndRenderDashboard(dataBase, sourceNote) {
       loadOptionalJson(`${dataBase}/market-run.json`),
       loadOptionalJson(`${dataBase}/market-history.json`),
       loadJson(`${dataBase}/latest-index.json`),
+      loadOptionalJson(`${dataBase}/index-history.json`),
       loadOptionalJson(`${dataBase}/index-quality.json`),
       loadOptionalJson(`${dataBase}/index-constituents.json`),
       loadJson(`${dataBase}/provider-comparison.json`),
@@ -46,6 +48,7 @@ async function loadAndRenderDashboard(dataBase, sourceNote) {
     renderOps(marketRun, manifest);
     renderQuality(marketRun, indexQualityPayload?.rows || []);
     renderFloorChart(indexPayload.rows || []);
+    renderIndexHistoryChart(indexHistoryPayload?.rows || []);
     renderConstituentTable(constituentPayload?.rows || []);
     renderProviderTable(comparisonPayload.rows || []);
     renderHistoryTable(marketHistory?.rows || []);
@@ -348,6 +351,133 @@ function renderFloorChart(rows) {
     .attr("y", (row) => y(row.gpu_model) + y.bandwidth() / 2)
     .attr("dy", "0.32em")
     .text((row) => `$${formatPrice(row.floor_usd_gpu_hr)}`);
+}
+
+function renderIndexHistoryChart(rows) {
+  const container = d3.select("#index-history-chart");
+  container.selectAll("*").remove();
+
+  const points = rows
+    .map((row) => {
+      const observedAt = row.gold_observed_at || row.latest_observed_at || row.calculated_at;
+      const observed = new Date(observedAt);
+      const price = Number(row.floor_usd_gpu_hr);
+      return {
+        gpu_model: String(row.gpu_model || "unknown"),
+        observed,
+        price,
+        offer_count: Number(row.offer_count || 0),
+      };
+    })
+    .filter((row) => row.gpu_model && Number.isFinite(row.price) && row.price > 0)
+    .filter((row) => !Number.isNaN(row.observed.getTime()));
+
+  const series = selectHistorySeries(points);
+  if (!series.length) {
+    container
+      .append("p")
+      .text("Waiting for at least two market runs before drawing an index history line.");
+    return;
+  }
+
+  const plottedPoints = series.flatMap((entry) => entry.values);
+  const width = Math.max(680, container.node().clientWidth || 680);
+  const height = 330;
+  const margin = { top: 16, right: 148, bottom: 38, left: 66 };
+
+  let [minDate, maxDate] = d3.extent(plottedPoints, (row) => row.observed);
+  if (!minDate || !maxDate) return;
+  if (minDate.getTime() === maxDate.getTime()) {
+    minDate = new Date(minDate.getTime() - 60 * 60 * 1000);
+    maxDate = new Date(maxDate.getTime() + 60 * 60 * 1000);
+  }
+
+  const x = d3.scaleTime().domain([minDate, maxDate]).range([margin.left, width - margin.right]);
+  const y = d3
+    .scaleLinear()
+    .domain([0, d3.max(plottedPoints, (row) => row.price) || 1])
+    .nice()
+    .range([height - margin.bottom, margin.top]);
+  const color = d3.scaleOrdinal(series.map((entry) => entry.gpu_model), d3.schemeTableau10);
+
+  const svg = container
+    .append("svg")
+    .attr("viewBox", `0 0 ${width} ${height}`)
+    .attr("width", "100%")
+    .attr("height", height);
+
+  svg
+    .append("g")
+    .attr("transform", `translate(0,${height - margin.bottom})`)
+    .call(d3.axisBottom(x).ticks(4).tickSizeOuter(0))
+    .call((g) => g.select(".domain").attr("stroke", "#ddd"))
+    .call((g) => g.selectAll(".tick line").attr("stroke", "#eee"))
+    .call((g) => g.selectAll("text").attr("class", "axis-label"));
+
+  svg
+    .append("g")
+    .attr("transform", `translate(${margin.left},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickFormat((value) => `$${formatPrice(value)}`))
+    .call((g) => g.select(".domain").attr("stroke", "#ddd"))
+    .call((g) => g.selectAll(".tick line").attr("stroke", "#eee"))
+    .call((g) => g.selectAll("text").attr("class", "axis-label"));
+
+  const line = d3
+    .line()
+    .x((row) => x(row.observed))
+    .y((row) => y(row.price));
+
+  const group = svg
+    .append("g")
+    .selectAll("g")
+    .data(series)
+    .join("g");
+
+  group
+    .append("path")
+    .attr("class", "history-line")
+    .attr("d", (entry) => line(entry.values))
+    .attr("stroke", (entry) => color(entry.gpu_model));
+
+  group
+    .selectAll("circle")
+    .data((entry) => entry.values.map((value) => ({ ...value, gpu_model: entry.gpu_model })))
+    .join("circle")
+    .attr("class", "history-dot")
+    .attr("cx", (row) => x(row.observed))
+    .attr("cy", (row) => y(row.price))
+    .attr("r", 3)
+    .attr("fill", (row) => color(row.gpu_model));
+
+  group
+    .append("text")
+    .attr("class", "line-label")
+    .attr("x", width - margin.right + 12)
+    .attr("y", (entry) => y(entry.values.at(-1).price))
+    .attr("dy", "0.32em")
+    .attr("fill", (entry) => color(entry.gpu_model))
+    .text((entry) => entry.gpu_model);
+}
+
+function selectHistorySeries(points) {
+  const priority = ["H100_80GB", "H200_141GB", "B200_180GB", "B300_288GB", "RTX4090_24GB", "RTX5090_32GB"];
+  const priorityRank = new Map(priority.map((name, index) => [name, index]));
+  const grouped = Array.from(d3.group(points, (row) => row.gpu_model), ([gpu_model, values]) => ({
+    gpu_model,
+    values: values.sort((a, b) => d3.ascending(a.observed, b.observed)),
+  }))
+    .filter((entry) => entry.values.length >= 2)
+    .sort((a, b) => {
+      const aRank = priorityRank.has(a.gpu_model) ? priorityRank.get(a.gpu_model) : Number.POSITIVE_INFINITY;
+      const bRank = priorityRank.has(b.gpu_model) ? priorityRank.get(b.gpu_model) : Number.POSITIVE_INFINITY;
+      return (
+        d3.ascending(aRank, bRank) ||
+        d3.descending(a.values.length, b.values.length) ||
+        d3.ascending(a.gpu_model, b.gpu_model)
+      );
+    });
+
+  return grouped.slice(0, 5);
 }
 
 function renderConstituentTable(rows) {

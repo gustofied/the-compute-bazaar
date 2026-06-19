@@ -136,6 +136,7 @@ Build combined gold tables from latest provider silver manifests:
 uv run gpu-prices build-gold --providers vast,lium
 uv run gpu-prices latest-gold-manifest
 uv run gpu-prices gold-index --limit 10
+uv run gpu-prices gold-index-history --history-limit 24
 uv run gpu-prices gold-index-quality --limit 20
 uv run gpu-prices gold-index-constituents --limit 50
 uv run gpu-prices gold-provider-comparison --limit 20
@@ -183,6 +184,7 @@ Useful endpoints:
 /api/dashboard-snapshots/latest-index.json
 /api/snapshots/latest-index
 /api/snapshots/market-history
+/api/snapshots/index-history
 /api/snapshots/index-quality
 /api/snapshots/index-constituents
 ```
@@ -242,6 +244,13 @@ label is `gold avg floor`, calculated from `latest-index.json` product floor val
 dashboard remains the draft surface; AdamSioud should receive only composed, publication-ready
 signals.
 
+If the laptop is on mobile/5G and the Windmill tunnel stops connecting, refresh the dev runtime
+security-group ingress for the current `/32`:
+
+```sh
+uv run python infra/aws/refresh_runtime_access.py --profile YOUR_AWS_PROFILE
+```
+
 ## Stage Check
 
 From a laptop with the Windmill SSH tunnel:
@@ -266,5 +275,5 @@ gpu-prices stage1-check --check-automq --require-ingest-env
 - The dev Windmill worker is a baked EC2 Docker image. Tighten this with a
   registry-built worker image, narrower IAM, and production Windmill sandboxing
   before exposing it beyond the current private setup.
-- Public dashboard JSON has a documented S3/CloudFront path, but the distribution/CORS setup still
-  needs to be applied before the AdamSioud blog page can fetch it directly.
+- Public dashboard JSON is available through the CloudFront stack; keep the cache short while the
+  hourly feed is young and add immutable run snapshots once we need audit-grade public history.

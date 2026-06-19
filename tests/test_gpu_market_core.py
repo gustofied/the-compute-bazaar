@@ -8,12 +8,14 @@ from pathlib import Path
 from the_compute_bazaar.prices.gold import (
     build_gold_market_tables,
     query_gold_index_constituents,
+    query_gold_index_history,
     query_gold_listings,
     query_gold_provider_comparison,
 )
 from the_compute_bazaar.prices.market_run import list_market_runs, read_latest_market_run, write_market_run_manifest
 from the_compute_bazaar.prices.normalize import canonical_gpu_model
 from the_compute_bazaar.prices.providers.lium import LiumClient, normalize_executor
+from the_compute_bazaar.prices.providers.vast import VastClient, default_market_query
 from the_compute_bazaar.prices.schemas import GpuOffer
 from the_compute_bazaar.prices.storage import write_json, write_offers_parquet
 
@@ -60,6 +62,12 @@ class GpuNormalizationTests(unittest.TestCase):
             canonical_gpu_model("NVIDIA RTX 6000 Ada Generation", 49152),
             "RTX6000Ada_48GB",
         )
+        self.assertEqual(canonical_gpu_model("NVIDIA A800 PCIe", 81920), "A800_80GB")
+        self.assertEqual(canonical_gpu_model("NVIDIA RTX 4090D", 24576), "RTX4090D_24GB")
+        self.assertEqual(canonical_gpu_model("NVIDIA Tesla T4", 16384), "T4_16GB")
+        self.assertEqual(canonical_gpu_model("NVIDIA RTX A2000", 12288), "A2000_12GB")
+        self.assertEqual(canonical_gpu_model("NVIDIA Quadro P4000", 8192), "QuadroP4000_8GB")
+        self.assertEqual(canonical_gpu_model("NVIDIA Quadro RTX 4000", 8192), "QuadroRTX4000_8GB")
 
     def test_lium_fetch_pages_preserves_raw_pages_and_dedupes_executors(self) -> None:
         session = _FakeSession(
@@ -78,6 +86,20 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertEqual(fetched.raw_payload["executor_count"], 3)
         self.assertEqual(len(fetched.raw_payload["pages"]), 3)
         self.assertEqual([call["params"]["page"] for call in session.calls], [1, 2, 3])
+
+    def test_vast_default_market_query_uses_json_post_search(self) -> None:
+        session = _FakeSession([{"offers": [{"id": 123, "gpu_name": "RTX 4090"}]}])
+        client = VastClient(api_key="test-key", api_base="https://example.test/api/v0", session=session)
+
+        payload = client.search_bundles()
+
+        self.assertEqual(payload, {"offers": [{"id": 123, "gpu_name": "RTX 4090"}]})
+        self.assertEqual(len(session.calls), 1)
+        call = session.calls[0]
+        self.assertEqual(call["method"], "POST")
+        self.assertEqual(call["url"], "https://example.test/api/v0/bundles/")
+        self.assertEqual(call["headers"]["Authorization"], "Bearer test-key")
+        self.assertEqual(call["json"], default_market_query())
 
 
 class GoldQueryTests(unittest.TestCase):
@@ -168,6 +190,54 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual([row["market_run_id"] for row in history], ["market-test"])
         self.assertTrue(manifest_ref.endswith("/_manifests/market_runs/date=2026-06-17/run_id=market-test.json"))
 
+    def test_gold_index_history_reads_recent_gold_manifests(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="vast",
+                run_id="vast-history-1",
+                offers=[_offer(provider="vast", source_offer_id="vast-1", price_usd_hr=0.20)],
+            )
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="lium",
+                run_id="lium-history-1",
+                offers=[_offer(provider="lium", source_offer_id="lium-1", price_usd_hr=0.30)],
+            )
+            build_gold_market_tables(lake_root=lake_root, providers=["vast", "lium"], run_id="gold-history-1")
+
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="vast",
+                run_id="vast-history-2",
+                offers=[_offer(provider="vast", source_offer_id="vast-2", price_usd_hr=0.40)],
+            )
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="lium",
+                run_id="lium-history-2",
+                offers=[_offer(provider="lium", source_offer_id="lium-2", price_usd_hr=0.50)],
+            )
+            build_gold_market_tables(lake_root=lake_root, providers=["vast", "lium"], run_id="gold-history-2")
+
+            history = query_gold_index_history(
+                lake_root=lake_root,
+                history_limit=10,
+                gpu_models=["RTX4090_24GB"],
+            )
+
+        rows = history["rows"]
+        self.assertEqual(history["history_manifest_count"], 2)
+        self.assertEqual({row["gold_run_id"] for row in rows}, {"gold-history-1", "gold-history-2"})
+        self.assertEqual({row["gpu_model"] for row in rows}, {"RTX4090_24GB"})
+        self.assertEqual({row["floor_usd_gpu_hr"] for row in rows}, {0.20, 0.40})
+
 
 def _offer(
     *,
@@ -240,7 +310,22 @@ class _FakeSession:
         headers: dict[str, str],
         timeout: int,
     ) -> "_FakeResponse":
-        self.calls.append({"url": url, "params": dict(params), "headers": dict(headers), "timeout": timeout})
+        self.calls.append(
+            {"method": "GET", "url": url, "params": dict(params), "headers": dict(headers), "timeout": timeout}
+        )
+        return _FakeResponse(self.payloads[len(self.calls) - 1])
+
+    def post(
+        self,
+        url: str,
+        *,
+        json: dict[str, object],
+        headers: dict[str, str],
+        timeout: int,
+    ) -> "_FakeResponse":
+        self.calls.append(
+            {"method": "POST", "url": url, "json": dict(json), "headers": dict(headers), "timeout": timeout}
+        )
         return _FakeResponse(self.payloads[len(self.calls) - 1])
 
 

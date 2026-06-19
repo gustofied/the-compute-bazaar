@@ -25,6 +25,7 @@ SNAPSHOT_FILES = {
     "latest-index": "latest-index.json",
     "index-constituents": "index-constituents.json",
     "index-quality": "index-quality.json",
+    "index-history": "index-history.json",
     "provider-comparison": "provider-comparison.json",
     "listings-sample": "listings-sample.json",
 }

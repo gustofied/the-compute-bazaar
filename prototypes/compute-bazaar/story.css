@@ -580,6 +580,24 @@ main {
   font-size: 9px;
 }
 
+.history-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8px;
+}
+
+.history-dot {
+  stroke: var(--paper);
+  stroke-width: 1.4px;
+}
+
+.line-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2px;
+}
+
 .table-wrap {
   border-top: 0.5px solid var(--rule);
   margin: 22px 0;

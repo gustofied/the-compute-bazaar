@@ -46,6 +46,7 @@ manifest.json
 market-run.json
 market-history.json
 latest-index.json
+index-history.json
 index-quality.json
 index-constituents.json
 provider-comparison.json

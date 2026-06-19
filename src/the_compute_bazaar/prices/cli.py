@@ -110,6 +110,14 @@ def main() -> None:
     gold_index_quality.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
     gold_index_quality.add_argument("--limit", type=int, default=100)
 
+    gold_index_history = subparsers.add_parser(
+        "gold-index-history",
+        help="Query recent gold price index values as a time series",
+    )
+    gold_index_history.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    gold_index_history.add_argument("--history-limit", type=int, default=48)
+    gold_index_history.add_argument("--gpu-models", help="Comma-separated GPU products to include")
+
     gold_listings = subparsers.add_parser("gold-listings", help="Query the latest gold listing table")
     gold_listings.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
     gold_listings.add_argument("--gpu-model")
@@ -276,6 +284,18 @@ def main() -> None:
 
     if args.command == "gold-index-quality":
         _print_json(query_gold_index_quality(lake_root=args.lake_root, limit=args.limit))
+        return
+
+    if args.command == "gold-index-history":
+        from .gold import query_gold_index_history
+
+        _print_json(
+            query_gold_index_history(
+                lake_root=args.lake_root,
+                history_limit=args.history_limit,
+                gpu_models=_parse_csv(args.gpu_models),
+            )
+        )
         return
 
     if args.command == "gold-listings":
