@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from datetime import datetime
+import json
 from typing import Any
 
 import requests
@@ -13,6 +15,12 @@ from ..schemas import GpuOffer
 
 
 DEFAULT_LIUM_API_BASE = "https://lium.io/api"
+
+
+@dataclass(frozen=True)
+class LiumExecutorsFetch:
+    raw_payload: dict[str, Any]
+    executors: list[dict[str, Any]]
 
 
 class LiumClient:
@@ -29,19 +37,93 @@ class LiumClient:
 
     def list_executors(self, query: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         """Return currently available Lium executors."""
+        return self.fetch_executors(query=query).executors
+
+    def fetch_executors(self, query: Mapping[str, Any] | None = None) -> LiumExecutorsFetch:
+        """Return one Lium executor page and preserve the raw provider response."""
         headers = {"Accept": "application/json"}
         if self.api_key:
             headers["X-API-Key"] = self.api_key
 
+        clean_query = {key: value for key, value in (query or {}).items() if value is not None}
         response = self.session.get(
             f"{self.api_base}/executors",
-            params={key: value for key, value in (query or {}).items() if value is not None},
+            params=clean_query,
             headers=headers,
             timeout=60,
         )
         response.raise_for_status()
         payload = response.json()
-        return extract_executors(payload)
+        executors = extract_executors(payload)
+        return LiumExecutorsFetch(
+            raw_payload={
+                "query": clean_query,
+                "payload": payload,
+                "extracted_executor_count": len(executors),
+            },
+            executors=executors,
+        )
+
+    def fetch_executor_pages(
+        self,
+        query: Mapping[str, Any] | None = None,
+        *,
+        paginate: bool = False,
+        max_pages: int = 10,
+    ) -> LiumExecutorsFetch:
+        """Return Lium executors, optionally walking pages until exhausted or unchanged."""
+        base_query = dict(query or {})
+        if not paginate:
+            single_page = self.fetch_executors(query=base_query)
+            return LiumExecutorsFetch(
+                raw_payload={
+                    "mode": "single_page",
+                    "pages": [single_page.raw_payload],
+                    "executors": single_page.executors,
+                    "executor_count": len(single_page.executors),
+                },
+                executors=single_page.executors,
+            )
+
+        page_size = _int_or_none(base_query.get("size")) or 200
+        start_page = _int_or_none(base_query.get("page")) or 1
+        page_limit = max(1, int(max_pages))
+        pages: list[dict[str, Any]] = []
+        executors: list[dict[str, Any]] = []
+        seen_keys: set[str] = set()
+
+        for page in range(start_page, start_page + page_limit):
+            page_query = dict(base_query)
+            page_query["page"] = page
+            page_query["size"] = page_size
+            fetched = self.fetch_executors(query=page_query)
+            rows = fetched.executors
+            pages.append(fetched.raw_payload)
+
+            new_rows = []
+            for row in rows:
+                key = _executor_key(row)
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                new_rows.append(row)
+            executors.extend(new_rows)
+
+            if not rows or not new_rows or len(rows) < page_size:
+                break
+
+        return LiumExecutorsFetch(
+            raw_payload={
+                "mode": "paginated",
+                "page_size": page_size,
+                "start_page": start_page,
+                "max_pages": page_limit,
+                "pages": pages,
+                "executors": executors,
+                "executor_count": len(executors),
+            },
+            executors=executors,
+        )
 
 
 def extract_executors(payload: Any) -> list[dict[str, Any]]:
@@ -229,3 +311,11 @@ def _string_or_none(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _executor_key(row: Mapping[str, Any]) -> str:
+    for key in ("id", "executor_id", "miner_hotkey"):
+        value = row.get(key)
+        if value is not None:
+            return f"{key}:{value}"
+    return json.dumps(row, sort_keys=True, default=str)

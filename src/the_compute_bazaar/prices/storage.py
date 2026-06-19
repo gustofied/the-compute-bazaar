@@ -21,6 +21,40 @@ def read_json(uri: str) -> Any:
     return json.loads(read_bytes(uri).decode("utf-8"))
 
 
+def list_refs(uri_prefix: str, *, suffix: str = "") -> list[str]:
+    """List local or S3 refs under a prefix."""
+    if uri_prefix.startswith("s3://"):
+        parsed = urlparse(uri_prefix.rstrip("/") + "/")
+        try:
+            import boto3
+        except ImportError as exc:
+            raise RuntimeError("Listing s3:// paths requires boto3") from exc
+
+        client = boto3.client("s3")
+        prefix = parsed.path.lstrip("/")
+        refs: list[str] = []
+        continuation_token: str | None = None
+        while True:
+            kwargs: dict[str, Any] = {"Bucket": parsed.netloc, "Prefix": prefix}
+            if continuation_token:
+                kwargs["ContinuationToken"] = continuation_token
+            response = client.list_objects_v2(**kwargs)
+            for row in response.get("Contents", []):
+                key = str(row["Key"])
+                ref = f"s3://{parsed.netloc}/{key}"
+                if not suffix or ref.endswith(suffix):
+                    refs.append(ref)
+            if not response.get("IsTruncated"):
+                return sorted(refs)
+            continuation_token = str(response.get("NextContinuationToken") or "")
+
+    root = Path(uri_prefix)
+    if not root.exists():
+        return []
+    refs = [str(path) for path in root.rglob(f"*{suffix}" if suffix else "*") if path.is_file()]
+    return sorted(refs)
+
+
 def write_jsonl(uri: str, rows: Iterable[Any]) -> str:
     payload = b"\n".join(
         json.dumps(to_jsonable(row), sort_keys=True).encode("utf-8") for row in rows

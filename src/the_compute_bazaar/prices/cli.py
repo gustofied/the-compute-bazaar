@@ -13,12 +13,20 @@ from .datafusion import DEFAULT_BENCHMARK_SQL, query_parquet, query_price_index
 from .gold import (
     build_gold_market_tables,
     export_gold_dashboard_snapshot,
+    query_gold_index_constituents,
+    query_gold_index_quality,
     query_gold_listings,
     query_gold_price_index,
     query_gold_provider_comparison,
     read_latest_gold_manifest,
 )
 from .manifest import read_latest_manifest
+from .market_run import (
+    list_market_runs,
+    read_latest_market_run,
+    run_market_hourly,
+    write_dashboard_market_run_snapshots,
+)
 from .pipeline import ingest_lium, ingest_vast
 from .schemas import to_jsonable
 
@@ -47,6 +55,8 @@ def main() -> None:
     ingest_lium_parser.add_argument("--query", help="Lium query JSON object")
     ingest_lium_parser.add_argument("--page", type=int)
     ingest_lium_parser.add_argument("--size", type=int, default=200)
+    ingest_lium_parser.add_argument("--paginate", action="store_true", help="Fetch Lium pages until exhausted")
+    ingest_lium_parser.add_argument("--max-pages", type=int, default=10)
     ingest_lium_parser.add_argument("--raw-root", default=os.getenv("COMPUTE_BAZAAR_RAW_ROOT", "data/raw"))
     ingest_lium_parser.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
     ingest_lium_parser.add_argument("--automq-bootstrap-servers", default=kafka_bootstrap_servers_from_env())
@@ -85,6 +95,21 @@ def main() -> None:
     gold_index.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
     gold_index.add_argument("--limit", type=int, default=25)
 
+    gold_index_constituents = subparsers.add_parser(
+        "gold-index-constituents",
+        help="Query the latest gold index constituents table",
+    )
+    gold_index_constituents.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    gold_index_constituents.add_argument("--gpu-model")
+    gold_index_constituents.add_argument("--limit", type=int, default=100)
+
+    gold_index_quality = subparsers.add_parser(
+        "gold-index-quality",
+        help="Summarize candidate/included/excluded index constituents by GPU product",
+    )
+    gold_index_quality.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    gold_index_quality.add_argument("--limit", type=int, default=100)
+
     gold_listings = subparsers.add_parser("gold-listings", help="Query the latest gold listing table")
     gold_listings.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
     gold_listings.add_argument("--gpu-model")
@@ -103,8 +128,35 @@ def main() -> None:
         help="Export gold query snapshots as JSON for static D3/blog consumers",
     )
     export_gold_dashboard.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
-    export_gold_dashboard.add_argument("--output-root", default="data/dashboard/compute-bazaar")
+    export_gold_dashboard.add_argument(
+        "--output-root",
+        default=os.getenv("COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT", "data/dashboard/compute-bazaar"),
+    )
     export_gold_dashboard.add_argument("--limit", type=int, default=100)
+
+    market_hourly = subparsers.add_parser("market-hourly", help="Run provider ingest, gold build, dashboard export")
+    market_hourly.add_argument("--raw-root", default=os.getenv("COMPUTE_BAZAAR_RAW_ROOT", "data/raw"))
+    market_hourly.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    market_hourly.add_argument(
+        "--dashboard-output-root",
+        default=os.getenv("COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT", "data/dashboard/compute-bazaar"),
+    )
+    market_hourly.add_argument("--providers", default="vast,lium")
+    market_hourly.add_argument("--automq-bootstrap-servers", default=kafka_bootstrap_servers_from_env())
+    market_hourly.add_argument("--topic-prefix", default=os.getenv("COMPUTE_BAZAAR_TOPIC_PREFIX", "gpu"))
+    market_hourly.add_argument("--run-id")
+    market_hourly.add_argument("--dashboard-limit", type=int, default=100)
+    market_hourly.add_argument("--lium-size", type=int, default=200)
+    market_hourly.add_argument("--lium-max-pages", type=int, default=10)
+    market_hourly.add_argument("--no-lium-pagination", action="store_true")
+    market_hourly.add_argument("--dry-run", action="store_true", help="Skip AutoMQ publishing")
+
+    latest_market_run = subparsers.add_parser("latest-market-run", help="Print the latest market run manifest")
+    latest_market_run.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+
+    market_runs = subparsers.add_parser("market-runs", help="List recent market run manifests")
+    market_runs.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    market_runs.add_argument("--limit", type=int, default=24)
 
     automq_check = subparsers.add_parser("automq-check", help="Verify AutoMQ/Kafka connectivity")
     automq_check.add_argument("--bootstrap-servers", default=kafka_bootstrap_servers_from_env())
@@ -130,7 +182,7 @@ def main() -> None:
     )
     stage1_check.add_argument(
         "--windmill-schedule-path",
-        default=os.getenv("WINDMILL_SCHEDULE_PATH", "f/compute-bazaar/vast_hourly_hourly"),
+        default=os.getenv("WINDMILL_SCHEDULE_PATH", "f/compute-bazaar/market_hourly_hourly"),
     )
 
     args = parser.parse_args()
@@ -170,6 +222,8 @@ def main() -> None:
             run_id=args.run_id,
             trace_id=args.trace_id,
             api_base=args.api_base,
+            paginate=args.paginate,
+            max_pages=args.max_pages,
         )
         _print_json(result.to_dict())
         return
@@ -210,6 +264,20 @@ def main() -> None:
         _print_json(query_gold_price_index(lake_root=args.lake_root, limit=args.limit))
         return
 
+    if args.command == "gold-index-constituents":
+        _print_json(
+            query_gold_index_constituents(
+                lake_root=args.lake_root,
+                gpu_model=args.gpu_model,
+                limit=args.limit,
+            )
+        )
+        return
+
+    if args.command == "gold-index-quality":
+        _print_json(query_gold_index_quality(lake_root=args.lake_root, limit=args.limit))
+        return
+
     if args.command == "gold-listings":
         _print_json(query_gold_listings(lake_root=args.lake_root, gpu_model=args.gpu_model, limit=args.limit))
         return
@@ -225,13 +293,45 @@ def main() -> None:
         return
 
     if args.command == "export-gold-dashboard":
-        _print_json(
-            export_gold_dashboard_snapshot(
-                lake_root=args.lake_root,
-                output_root=args.output_root,
-                limit=args.limit,
-            )
+        result = export_gold_dashboard_snapshot(
+            lake_root=args.lake_root,
+            output_root=args.output_root,
+            limit=args.limit,
         )
+        try:
+            market_refs = write_dashboard_market_run_snapshots(lake_root=args.lake_root, output_root=args.output_root)
+        except FileNotFoundError:
+            market_refs = {}
+        result["output_refs"].update(market_refs)
+        _print_json(result)
+        return
+
+    if args.command == "market-hourly":
+        _print_json(
+            run_market_hourly(
+                raw_root=args.raw_root,
+                lake_root=args.lake_root,
+                dashboard_output_root=args.dashboard_output_root,
+                providers=_parse_csv(args.providers) or ["vast", "lium"],
+                automq_bootstrap_servers=args.automq_bootstrap_servers,
+                automq_config=kafka_config_from_env(),
+                topic_prefix=args.topic_prefix,
+                run_id=args.run_id,
+                dashboard_limit=args.dashboard_limit,
+                lium_size=args.lium_size,
+                lium_paginate=not args.no_lium_pagination,
+                lium_max_pages=args.lium_max_pages,
+                dry_run=args.dry_run,
+            ).to_dict()
+        )
+        return
+
+    if args.command == "latest-market-run":
+        _print_json(read_latest_market_run(args.lake_root))
+        return
+
+    if args.command == "market-runs":
+        _print_json({"rows": list_market_runs(args.lake_root, limit=args.limit)})
         return
 
     if args.command == "automq-check":

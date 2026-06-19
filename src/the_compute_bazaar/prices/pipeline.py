@@ -173,6 +173,8 @@ def ingest_lium(
     run_id: str | None = None,
     trace_id: str | None = None,
     api_base: str | None = None,
+    paginate: bool = False,
+    max_pages: int = 10,
 ) -> IngestResult:
     provider = "lium"
     run_id = run_id or new_run_id(provider)
@@ -181,8 +183,9 @@ def ingest_lium(
     observed_date = observed_at.date().isoformat()
 
     client = LiumClient(api_key=api_key or os.getenv("LIUM_API_KEY"), **({"api_base": api_base} if api_base else {}))
-    executors = client.list_executors(query=query)
-    raw_payload_hash = sha256_json(executors)
+    fetched = client.fetch_executor_pages(query=query, paginate=paginate, max_pages=max_pages)
+    executors = fetched.executors
+    raw_payload_hash = sha256_json(fetched.raw_payload)
 
     raw_ref = date_partition(
         raw_root,
@@ -191,7 +194,7 @@ def ingest_lium(
         run_id=run_id,
         filename="executors.json",
     )
-    write_json(raw_ref, executors)
+    write_json(raw_ref, fetched.raw_payload)
 
     normalized, unknown_gpu_names = normalize_executors(executors, observed_at=observed_at, raw_ref=raw_ref)
     normalized_ref: str | None = None
@@ -219,7 +222,7 @@ def ingest_lium(
         raw_ref=raw_ref,
         payload_hash=raw_payload_hash,
         offer_count=len(executors),
-        query=query or {},
+        query={**(query or {}), "paginate": paginate, "max_pages": max_pages if paginate else None},
     )
     snapshot_event = make_event(
         event_type="gpu.provider_snapshot.v1",

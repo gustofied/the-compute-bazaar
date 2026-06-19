@@ -7,10 +7,13 @@ from pathlib import Path
 
 from the_compute_bazaar.prices.gold import (
     build_gold_market_tables,
+    query_gold_index_constituents,
+    query_gold_listings,
     query_gold_provider_comparison,
 )
+from the_compute_bazaar.prices.market_run import list_market_runs, read_latest_market_run, write_market_run_manifest
 from the_compute_bazaar.prices.normalize import canonical_gpu_model
-from the_compute_bazaar.prices.providers.lium import normalize_executor
+from the_compute_bazaar.prices.providers.lium import LiumClient, normalize_executor
 from the_compute_bazaar.prices.schemas import GpuOffer
 from the_compute_bazaar.prices.storage import write_json, write_offers_parquet
 
@@ -58,6 +61,24 @@ class GpuNormalizationTests(unittest.TestCase):
             "RTX6000Ada_48GB",
         )
 
+    def test_lium_fetch_pages_preserves_raw_pages_and_dedupes_executors(self) -> None:
+        session = _FakeSession(
+            [
+                {"data": [{"id": "exec-a"}, {"id": "exec-b"}]},
+                {"data": [{"id": "exec-b"}, {"id": "exec-c"}]},
+                {"data": []},
+            ]
+        )
+        client = LiumClient(api_key="test-key", api_base="https://example.test/api", session=session)
+
+        fetched = client.fetch_executor_pages(query={"size": 2}, paginate=True, max_pages=4)
+
+        self.assertEqual([row["id"] for row in fetched.executors], ["exec-a", "exec-b", "exec-c"])
+        self.assertEqual(fetched.raw_payload["mode"], "paginated")
+        self.assertEqual(fetched.raw_payload["executor_count"], 3)
+        self.assertEqual(len(fetched.raw_payload["pages"]), 3)
+        self.assertEqual([call["params"]["page"] for call in session.calls], [1, 2, 3])
+
 
 class GoldQueryTests(unittest.TestCase):
     def test_provider_comparison_uses_available_offers_only(self) -> None:
@@ -95,12 +116,57 @@ class GoldQueryTests(unittest.TestCase):
                 gpu_model="RTX4090_24GB",
                 limit=10,
             )
+            constituents = query_gold_index_constituents(
+                lake_root=lake_root,
+                gpu_model="RTX4090_24GB",
+                limit=10,
+            )
+            listings = query_gold_listings(
+                lake_root=lake_root,
+                gpu_model="RTX4090_24GB",
+                limit=10,
+            )
 
         rows = sorted(result["rows"], key=lambda row: row["provider"])
         self.assertEqual([row["provider"] for row in rows], ["lium", "vast"])
         self.assertEqual(rows[0]["floor_usd_gpu_hr"], 0.30)
         self.assertEqual(rows[1]["floor_usd_gpu_hr"], 0.20)
         self.assertEqual(rows[1]["listing_count"], 1)
+        excluded = [row for row in constituents["rows"] if row["listing_id"] == "vast:vast-unavailable"]
+        self.assertEqual(len(excluded), 1)
+        self.assertFalse(excluded[0]["included"])
+        self.assertEqual(excluded[0]["exclusion_reason"], "not_available")
+        available_listing = [row for row in listings["rows"] if row["listing_id"] == "vast:vast-available"]
+        self.assertEqual(len(available_listing), 1)
+        self.assertEqual(available_listing[0]["price_usd_instance_hr"], 0.20)
+        self.assertEqual(available_listing[0]["price_usd_gpu_hr"], 0.20)
+        self.assertTrue(available_listing[0]["has_raw_evidence"])
+        self.assertEqual(available_listing[0]["source_run_id"], "vast:vast-test,lium:lium-test")
+
+    def test_market_run_manifest_writes_latest_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            payload = {
+                "manifest_version": "v1",
+                "table": "market_runs",
+                "market_run_id": "market-test",
+                "status": "success",
+                "checks": {"vast": "ok", "lium": "ok", "gold": "ok"},
+            }
+
+            manifest_ref = write_market_run_manifest(
+                lake_root=lake_root,
+                observed_date="2026-06-17",
+                market_run_id="market-test",
+                payload=payload,
+            )
+            latest = read_latest_market_run(lake_root)
+            history = list_market_runs(lake_root)
+
+        self.assertEqual(latest["market_run_id"], "market-test")
+        self.assertEqual(latest["manifest_ref"], manifest_ref)
+        self.assertEqual([row["market_run_id"] for row in history], ["market-test"])
+        self.assertTrue(manifest_ref.endswith("/_manifests/market_runs/date=2026-06-17/run_id=market-test.json"))
 
 
 def _offer(
@@ -159,6 +225,34 @@ def _write_provider_run(
     write_offers_parquet(normalized_ref, offers)
     write_json(manifest_ref, manifest)
     write_json(latest_ref, manifest)
+
+
+class _FakeSession:
+    def __init__(self, payloads: list[object]) -> None:
+        self.payloads = payloads
+        self.calls: list[dict[str, object]] = []
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: dict[str, object],
+        headers: dict[str, str],
+        timeout: int,
+    ) -> "_FakeResponse":
+        self.calls.append({"url": url, "params": dict(params), "headers": dict(headers), "timeout": timeout})
+        return _FakeResponse(self.payloads[len(self.calls) - 1])
+
+
+class _FakeResponse:
+    def __init__(self, payload: object) -> None:
+        self.payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> object:
+        return self.payload
 
 
 if __name__ == "__main__":

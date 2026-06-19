@@ -11,7 +11,9 @@ from urllib.request import Request, urlopen
 
 from .automq import check_cluster, kafka_bootstrap_servers_from_env, kafka_config_from_env
 from .datafusion import query_price_index
+from .gold import query_gold_price_index, read_latest_gold_manifest
 from .manifest import read_latest_manifest
+from .market_run import read_latest_market_run
 
 
 @dataclass(frozen=True)
@@ -33,11 +35,13 @@ def run_stage1_checks(
     windmill_base_url: str | None = None,
     windmill_token: str | None = None,
     windmill_workspace: str = "compute-bazaar",
-    windmill_schedule_path: str = "f/compute-bazaar/vast_hourly_hourly",
+    windmill_schedule_path: str = "f/compute-bazaar/market_hourly_hourly",
 ) -> dict[str, Any]:
     checks = [
         _check_environment(lake_root=lake_root, require_ingest_env=require_ingest_env),
         _check_latest_manifest_and_index(lake_root=lake_root, provider=provider),
+        _check_latest_gold(lake_root=lake_root),
+        _check_latest_market_run(lake_root=lake_root),
         _check_automq(enabled=check_automq),
         _check_windmill(
             base_url=windmill_base_url,
@@ -104,6 +108,45 @@ def _check_latest_manifest_and_index(*, lake_root: str, provider: str) -> CheckR
         )
     except Exception as exc:  # noqa: BLE001 - stage checks should report all failures as data.
         return CheckResult(name="latest_manifest_and_index", status="fail", detail={"error": str(exc)})
+
+
+def _check_latest_gold(*, lake_root: str) -> CheckResult:
+    try:
+        manifest = read_latest_gold_manifest(lake_root)
+        rows = query_gold_price_index(lake_root=lake_root, limit=10)["rows"]
+        return CheckResult(
+            name="latest_gold",
+            status="ok" if rows else "fail",
+            detail={
+                "manifest": _public_gold_manifest(manifest),
+                "index_rows": len(rows),
+                "top": rows[:5],
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 - stage checks should report all failures as data.
+        return CheckResult(name="latest_gold", status="fail", detail={"error": str(exc)})
+
+
+def _check_latest_market_run(*, lake_root: str) -> CheckResult:
+    try:
+        manifest = read_latest_market_run(lake_root)
+        checks = dict(manifest.get("checks") or {})
+        failing = {
+            name: status
+            for name, status in checks.items()
+            if status not in {"ok", "skipped", "warning"}
+        }
+        status = "ok" if manifest.get("status") in {"success", "warning"} and not failing else "fail"
+        return CheckResult(
+            name="latest_market_run",
+            status=status,
+            detail={
+                "manifest": _public_market_run(manifest),
+                "non_ok_checks": failing,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 - stage checks should report all failures as data.
+        return CheckResult(name="latest_market_run", status="fail", detail={"error": str(exc)})
 
 
 def _check_automq(*, enabled: bool) -> CheckResult:
@@ -193,6 +236,31 @@ def _public_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         "normalized_offer_count": manifest.get("normalized_offer_count"),
         "published_events": manifest.get("published_events"),
         "publish_mode": manifest.get("publish_mode"),
+    }
+
+
+def _public_gold_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "run_id": manifest.get("run_id"),
+        "observed_at": manifest.get("observed_at"),
+        "observed_date": manifest.get("observed_date"),
+        "provider_scope": manifest.get("provider_scope"),
+        "source_run_ids": manifest.get("source_run_ids"),
+        "row_counts": manifest.get("row_counts"),
+    }
+
+
+def _public_market_run(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "market_run_id": manifest.get("market_run_id"),
+        "status": manifest.get("status"),
+        "observed_at": manifest.get("observed_at"),
+        "providers": manifest.get("providers"),
+        "provider_runs": manifest.get("provider_runs"),
+        "gold_run_id": manifest.get("gold_run_id"),
+        "dashboard_export_id": manifest.get("dashboard_export_id"),
+        "row_counts": manifest.get("row_counts"),
+        "checks": manifest.get("checks"),
     }
 
 

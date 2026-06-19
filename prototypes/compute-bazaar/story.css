@@ -345,6 +345,133 @@ main {
   color: #8a3a2a;
 }
 
+.source-note.is-stale {
+  color: #8a6a2a;
+}
+
+.heartbeat {
+  border-bottom: 0.5px solid var(--rule-soft);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1.5fr 0.8fr 1.7fr;
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+}
+
+.heartbeat div {
+  min-width: 0;
+}
+
+.heartbeat span {
+  color: #aaa;
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.heartbeat strong {
+  color: var(--ink-soft);
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: normal;
+  line-height: 1.5;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.ops-strip {
+  border-bottom: 0.5px solid var(--rule-soft);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 1.2rem;
+  padding: 0 0 14px;
+}
+
+.ops-strip div {
+  border-top: 1.5px solid var(--ink);
+  min-width: 0;
+  padding-top: 9px;
+}
+
+.ops-strip span {
+  color: #aaa;
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.ops-strip strong {
+  color: var(--ink);
+  display: block;
+  font-size: 13px;
+  font-weight: normal;
+  line-height: 1.35;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.ops-strip em {
+  color: #777;
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1.45;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.quality-strip {
+  border-bottom: 0.5px solid var(--rule-soft);
+  margin: -2px 0 1.2rem;
+  padding: 0 0 14px;
+}
+
+.quality-strip div {
+  background: rgba(253, 252, 250, 0.72);
+  border-left: 2px solid var(--accent);
+  padding: 10px 12px;
+}
+
+.quality-strip.has-warning div {
+  border-left-color: #8a6a2a;
+}
+
+.quality-strip span {
+  color: #aaa;
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.quality-strip strong {
+  color: var(--ink);
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: normal;
+  margin-top: 5px;
+}
+
+.quality-strip em {
+  color: #777;
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1.55;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+
 .market-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -459,6 +586,10 @@ main {
   overflow-x: auto;
 }
 
+.table-wrap.compact-table {
+  margin: 10px 0 0;
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
@@ -549,6 +680,8 @@ td:nth-child(5) {
 
   .layer-map,
   .compute-logo-stage,
+  .heartbeat,
+  .ops-strip,
   .market-stats {
     grid-template-columns: 1fr;
   }

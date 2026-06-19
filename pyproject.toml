@@ -21,6 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
+compute-bazaar-adamsioud = "the_compute_bazaar.adamsioud:main"
 compute-bazaar-dashboard = "the_compute_bazaar.dashboard:main"
 download-eirgrid = "the_compute_bazaar.tangents.download_eirgrid:main"
 gpu-prices = "the_compute_bazaar.prices.cli:main"

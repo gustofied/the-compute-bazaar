@@ -1,7 +1,7 @@
 # Compute Bazaar Architecture
 
 The platform is a GPU market-data system: provider APIs are sampled, raw evidence is retained,
-offers are normalized, and curated query tables are exposed through DataFusion.
+offers are normalized, and curated query/index tables are exposed through DataFusion.
 
 ```mermaid
 flowchart LR
@@ -11,6 +11,7 @@ flowchart LR
   Windmill --> AutoMQ["AutoMQ / Kafka topics"]
   Windmill --> Bronze["S3 bronze: raw JSON evidence"]
   Windmill --> Silver["S3 silver: normalized provider offers"]
+  Windmill --> MarketRun["S3 manifest: market run heartbeat"]
 
   Silver --> Gold["S3 gold: curated query/index tables"]
   Gold --> DataFusion["DataFusion SQL"]
@@ -19,6 +20,8 @@ flowchart LR
   DataFusion --> CLI["CLI queries"]
   DataFusion --> API["Future API / MCP"]
   DataFusion --> Dashboard["D3 blog/dashboard"]
+  MarketRun --> Dashboard
+  MarketRun --> API
   AutoMQ --> Live["Future live backend / live feed"]
 ```
 
@@ -44,12 +47,61 @@ queries, agents, and index calculations:
 Consumers should mostly read gold. Silver remains useful for debugging, source-level inspection,
 and rebuilding gold when the methodology changes.
 
+## Compute Index
+
+The compute index is a first-class gold product, not just an ad hoc query result.
+
+```text
+silver/gpu_offers
+  -> gold/fact_gpu_listings
+  -> index engine
+  -> gold/fact_price_index_values
+  -> gold/fact_price_index_constituents
+```
+
+For Stage 1, the index should stay simple and honest:
+
+```text
+Compute Bazaar Live Price Index
+Indicative, provider-observed, refreshed hourly
+```
+
+The table `gold.fact_price_index_values` should answer questions like:
+
+- What is the market price for H100 right now?
+- Was it based on Vast, Lium, or both?
+- Is the value a floor, median, p25, or p75?
+- What methodology version created it?
+
+The table `gold.fact_price_index_constituents` keeps candidate rows behind each value:
+
+```text
+index_value_id
+listing_id
+provider_id
+gpu_product_id
+price_per_gpu_hour
+included
+exclusion_reason
+source_run_id
+raw_uri
+normalization_version
+methodology_version
+```
+
+Rows with `included = false` are not part of the published floor/index value. Their
+`exclusion_reason` records why, such as `not_available` or `non_positive_price`.
+
+That makes the index auditable. Every product output should be traceable back to the raw provider
+evidence and the methodology that produced it.
+
 ## Current Stage
 
 Stage 1 is live:
 
-- Windmill pulls Vast on a schedule from inside the AWS VPC.
-- Raw Vast responses are written to S3 bronze.
+- Windmill pulls Vast and Lium from inside the AWS VPC.
+- Raw provider responses are written to S3 bronze. Lium stores a raw pagination envelope so the
+  bronze layer contains page-level provider evidence, not just extracted rows.
 - Normalized offers are written to S3 silver.
 - AutoMQ receives provider snapshot and normalized offer events.
 - DataFusion can query the latest silver manifest and Parquet file.
@@ -58,8 +110,15 @@ Stage 1.5 is now started:
 
 - `gpu-prices build-gold` builds the first gold tables from latest silver.
 - `gpu-prices gold-index` queries `gold.fact_price_index_values`.
+- `gpu-prices gold-index-quality` summarizes included/excluded candidate counts.
+- `gpu-prices gold-index-constituents` exposes index evidence rows.
 - `gpu-prices gold-provider-comparison` queries provider floors from `gold.fact_gpu_listings`.
 - `gpu-prices export-gold-dashboard` writes public-safe JSON snapshots for static D3 sections.
+- `gpu-prices market-hourly` runs the complete provider-to-dashboard heartbeat and writes
+  `gold/_manifests/market_runs/latest.json`.
+
+The Windmill schedule is active. The next operational step is to watch the first few cycles for
+provider/API, Kafka, S3, and data-quality behavior.
 
 ## Second Provider
 
@@ -74,8 +133,9 @@ uv run gpu-prices build-gold --providers vast,lium
 The Lium adapter uses `GET /api/executors` with `X-API-Key` authentication, based on the public
 OpenAPI document at `https://lium.io/api/openapi.json`.
 
-The current Lium smoke run writes S3 bronze/silver and participates in combined gold. The recurring
-Kafka-producing Lium job should run from the VPC Windmill worker, the same as Vast, because the
+The current Lium Windmill path writes S3 bronze/silver, publishes Kafka events, and participates in
+combined gold. Pagination is enabled by default in the Windmill script and bootstrap helper. The
+recurring Kafka-producing Lium job runs from the VPC Windmill worker, the same as Vast, because the
 AutoMQ endpoint is private DNS.
 
 The first provider-comparison query shape is:
@@ -107,7 +167,11 @@ gold tables -> DataFusion query/export -> public JSON snapshot -> D3 in the blog
 The first snapshot files are:
 
 - `manifest.json`
+- `market-run.json`
+- `market-history.json`
 - `latest-index.json`
+- `index-quality.json`
+- `index-constituents.json`
 - `provider-comparison.json`
 - `listings-sample.json`
 

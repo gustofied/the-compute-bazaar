@@ -260,15 +260,24 @@ def query_gold_listings(
     where = f"where {' and '.join(filters)}"
     sql = f"""
 select
+  listing_id,
+  provider_id,
   gpu_model,
+  gpu_product_id,
   provider,
   price_usd_gpu_hr,
-  price_usd_hr,
+  price_usd_instance_hr,
   gpu_count,
+  vram_gb,
   country,
   region,
+  is_spot,
+  is_secure,
   availability_status,
+  freshness_status,
+  has_raw_evidence,
   source_offer_id,
+  source_run_id,
   observed_at
 from fact_gpu_listings
 {where}
@@ -282,6 +291,66 @@ order by price_usd_gpu_hr asc, price_usd_hr asc
     return {"manifest": manifest, "rows": rows}
 
 
+def query_gold_index_constituents(
+    *,
+    lake_root: str,
+    gpu_model: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    manifest = read_latest_gold_manifest(lake_root)
+    table_ref = manifest["table_refs"]["fact_index_constituents"]
+    filters = []
+    if gpu_model:
+        filters.append(f"gpu_model = {_sql_literal(gpu_model)}")
+    where = f"where {' and '.join(filters)}" if filters else ""
+    sql = f"""
+select
+  index_symbol,
+  gpu_model,
+  listing_id,
+  provider,
+  price_usd_gpu_hr,
+  included,
+  exclusion_reason,
+  constituent_rank,
+  is_floor_constituent,
+  observed_at
+from fact_index_constituents
+{where}
+order by gpu_model, included desc, constituent_rank asc, price_usd_gpu_hr asc
+"""
+    rows = query_parquet(
+        parquet_uri=table_ref,
+        table_name="fact_index_constituents",
+        sql=_with_limit(sql, limit),
+    )
+    return {"manifest": manifest, "rows": rows}
+
+
+def query_gold_index_quality(*, lake_root: str, limit: int | None = None) -> dict[str, Any]:
+    manifest = read_latest_gold_manifest(lake_root)
+    table_ref = manifest["table_refs"]["fact_index_constituents"]
+    sql = """
+select
+  gpu_model,
+  count(*) as candidate_count,
+  sum(case when included then 1 else 0 end) as included_count,
+  sum(case when not included then 1 else 0 end) as excluded_count,
+  count(distinct provider) as provider_count,
+  min(case when included then price_usd_gpu_hr else null end) as floor_usd_gpu_hr,
+  max(observed_at) as latest_observed_at
+from fact_index_constituents
+group by gpu_model
+order by included_count desc, candidate_count desc, gpu_model
+"""
+    rows = query_parquet(
+        parquet_uri=table_ref,
+        table_name="fact_index_constituents",
+        sql=_with_limit(sql, limit),
+    )
+    return {"manifest": manifest, "rows": rows}
+
+
 def export_gold_dashboard_snapshot(
     *,
     lake_root: str,
@@ -290,32 +359,58 @@ def export_gold_dashboard_snapshot(
 ) -> dict[str, Any]:
     """Export public JSON snapshots for static D3/blog consumers."""
     manifest = read_latest_gold_manifest(lake_root)
+    public_manifest = _public_gold_manifest(
+        manifest,
+        dashboard_exported_at=utc_now().isoformat(),
+        dashboard_output_root=output_root,
+    )
     index = query_gold_price_index(lake_root=lake_root, limit=limit)["rows"]
     provider_comparison = query_gold_provider_comparison(lake_root=lake_root, limit=limit)["rows"]
     listings = query_gold_listings(lake_root=lake_root, limit=limit)["rows"]
+    warnings = []
+    try:
+        constituents = query_gold_index_constituents(lake_root=lake_root, limit=limit)["rows"]
+        index_quality = query_gold_index_quality(lake_root=lake_root, limit=limit)["rows"]
+    except Exception as exc:  # noqa: BLE001 - old gold tables may not have the quality columns yet.
+        constituents = []
+        index_quality = []
+        warnings.append(f"index constituent export skipped: {exc}")
 
     output_refs = {
         "manifest": "/".join([output_root.rstrip("/"), "manifest.json"]),
         "latest_index": "/".join([output_root.rstrip("/"), "latest-index.json"]),
+        "index_constituents": "/".join([output_root.rstrip("/"), "index-constituents.json"]),
+        "index_quality": "/".join([output_root.rstrip("/"), "index-quality.json"]),
         "provider_comparison": "/".join([output_root.rstrip("/"), "provider-comparison.json"]),
         "listings_sample": "/".join([output_root.rstrip("/"), "listings-sample.json"]),
     }
-    write_json(output_refs["manifest"], _public_gold_manifest(manifest))
-    write_json(output_refs["latest_index"], {"manifest": _public_gold_manifest(manifest), "rows": index})
+    write_json(output_refs["manifest"], public_manifest)
+    write_json(output_refs["latest_index"], {"manifest": public_manifest, "rows": index})
+    write_json(
+        output_refs["index_constituents"],
+        {"manifest": public_manifest, "rows": constituents},
+    )
+    write_json(
+        output_refs["index_quality"],
+        {"manifest": public_manifest, "rows": index_quality},
+    )
     write_json(
         output_refs["provider_comparison"],
-        {"manifest": _public_gold_manifest(manifest), "rows": provider_comparison},
+        {"manifest": public_manifest, "rows": provider_comparison},
     )
-    write_json(output_refs["listings_sample"], {"manifest": _public_gold_manifest(manifest), "rows": listings})
+    write_json(output_refs["listings_sample"], {"manifest": public_manifest, "rows": listings})
 
     return {
         "output_refs": output_refs,
         "row_counts": {
             "latest_index": len(index),
+            "index_constituents": len(constituents),
+            "index_quality": len(index_quality),
             "provider_comparison": len(provider_comparison),
             "listings_sample": len(listings),
         },
         "source_gold_manifest_ref": manifest.get("manifest_ref"),
+        "warnings": warnings,
     }
 
 
@@ -333,6 +428,7 @@ select
   gpu_count,
   vram_gb,
   price_usd_hr,
+  price_usd_hr as price_usd_instance_hr,
   case
     when gpu_count is not null and gpu_count > 0 then price_usd_hr / gpu_count
     else price_usd_hr
@@ -350,6 +446,7 @@ select
   'fresh' as freshness_status,
   observed_at,
   raw_ref,
+  raw_ref is not null as has_raw_evidence,
   {_sql_literal(context["source_run_id"])} as source_run_id,
   {_sql_literal(context["source_manifest_ref"])} as source_manifest_ref,
   {_sql_literal(context["source_normalized_ref"])} as source_normalized_ref,
@@ -475,7 +572,7 @@ order by floor_usd_gpu_hr asc, offer_count desc
 def _fact_index_constituents_sql(context: dict[str, str], silver_source_cte: str) -> str:
     return f"""
 with {silver_source_cte},
-usable_offers as (
+candidate_offers as (
   select
     concat(provider, ':', source_offer_id) as listing_id,
     provider,
@@ -488,18 +585,31 @@ usable_offers as (
     end as price_usd_gpu_hr,
     country,
     region,
+    availability_status,
+    case
+      when price_usd_hr is null or price_usd_hr <= 0 then false
+      when availability_status != 'available' then false
+      else true
+    end as included,
+    case
+      when price_usd_hr is null or price_usd_hr <= 0 then 'non_positive_price'
+      when availability_status != 'available' then 'not_available'
+      else null
+    end as exclusion_reason,
     observed_at
   from silver_gpu_offers
-  where price_usd_hr > 0
-    and availability_status = 'available'
 ),
 ranked as (
   select
     *,
-    row_number() over(partition by gpu_model order by price_usd_gpu_hr asc, price_usd_hr asc) as constituent_rank
-  from usable_offers
+    case
+      when included then row_number() over(partition by gpu_model, included order by price_usd_gpu_hr asc, price_usd_hr asc)
+      else null
+    end as constituent_rank
+  from candidate_offers
 )
 select
+  concat('CBZ-GPU-FLOOR-', gpu_model, ':', {_sql_literal(context["source_run_id"])}) as index_value_id,
   concat('CBZ-GPU-FLOOR-', gpu_model) as index_symbol,
   gpu_model as gpu_product_id,
   gpu_model,
@@ -510,13 +620,18 @@ select
   price_usd_gpu_hr,
   country,
   region,
+  availability_status,
+  included,
+  exclusion_reason,
   observed_at,
   constituent_rank,
-  constituent_rank = 1 as is_floor_constituent,
+  included and constituent_rank = 1 as is_floor_constituent,
   {_sql_literal(context["source_run_id"])} as source_run_id,
+  {_sql_literal(context["source_manifest_ref"])} as source_manifest_ref,
+  {_sql_literal(context["source_normalized_ref"])} as source_normalized_ref,
   {_sql_literal(context["calculated_at"])} as calculated_at
 from ranked
-order by gpu_model, constituent_rank
+order by gpu_model, included desc, constituent_rank asc, price_usd_gpu_hr asc
 """
 
 
@@ -563,7 +678,12 @@ def _with_limit(sql: str, limit: int | None) -> str:
     return f"{sql.rstrip()}\nlimit {int(limit)}"
 
 
-def _public_gold_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+def _public_gold_manifest(
+    manifest: dict[str, Any],
+    *,
+    dashboard_exported_at: str | None = None,
+    dashboard_output_root: str | None = None,
+) -> dict[str, Any]:
     return {
         "manifest_version": manifest.get("manifest_version"),
         "methodology_version": manifest.get("methodology_version"),
@@ -573,4 +693,6 @@ def _public_gold_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         "provider_scope": manifest.get("provider_scope"),
         "row_counts": manifest.get("row_counts"),
         "source_run_ids": manifest.get("source_run_ids"),
+        "dashboard_exported_at": dashboard_exported_at,
+        "dashboard_output_root": dashboard_output_root,
     }

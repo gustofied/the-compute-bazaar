@@ -1,6 +1,7 @@
 (async function bootComputeBazaarStory() {
   const params = new URLSearchParams(window.location.search);
-  const dataBase = (params.get("data") || "../../data/dashboard/compute-bazaar").replace(/\/$/, "");
+  const dataBase = (params.get("data") || defaultDataBase()).replace(/\/$/, "");
+  const refreshMs = parseRefreshMs(params);
 
   const sourceNote = document.getElementById("source-note");
   setSourceNote(sourceNote, `Reading <code>${escapeHtml(dataBase)}</code>.`, "loading");
@@ -10,23 +11,46 @@
     return;
   }
 
+  await loadAndRenderDashboard(dataBase, sourceNote);
+  if (refreshMs > 0) {
+    window.setInterval(() => {
+      loadAndRenderDashboard(dataBase, sourceNote);
+    }, refreshMs);
+  }
+})();
+
+async function loadAndRenderDashboard(dataBase, sourceNote) {
   try {
-    const [manifest, indexPayload, comparisonPayload, listingsPayload] = await Promise.all([
+    const [
+      manifest,
+      marketRun,
+      marketHistory,
+      indexPayload,
+      indexQualityPayload,
+      constituentPayload,
+      comparisonPayload,
+      listingsPayload,
+    ] = await Promise.all([
       loadJson(`${dataBase}/manifest.json`),
+      loadOptionalJson(`${dataBase}/market-run.json`),
+      loadOptionalJson(`${dataBase}/market-history.json`),
       loadJson(`${dataBase}/latest-index.json`),
+      loadOptionalJson(`${dataBase}/index-quality.json`),
+      loadOptionalJson(`${dataBase}/index-constituents.json`),
       loadJson(`${dataBase}/provider-comparison.json`),
       loadJson(`${dataBase}/listings-sample.json`),
     ]);
 
     renderStats(manifest);
+    renderHeartbeat(marketRun, manifest);
+    renderOps(marketRun, manifest);
+    renderQuality(marketRun, indexQualityPayload?.rows || []);
     renderFloorChart(indexPayload.rows || []);
+    renderConstituentTable(constituentPayload?.rows || []);
     renderProviderTable(comparisonPayload.rows || []);
-    renderListingStrip(listingsPayload.rows || []);
-    setSourceNote(
-      sourceNote,
-      `Snapshot <code>${escapeHtml(manifest.run_id || "unknown")}</code> · ${formatDate(manifest.observed_at)} · source <code>${escapeHtml(dataBase)}</code>`,
-      "ok",
-    );
+    renderHistoryTable(marketHistory?.rows || []);
+    renderOfferTable(listingsPayload.rows || []);
+    renderSourceState(sourceNote, manifest, marketRun, dataBase);
   } catch (error) {
     setSourceNote(
       sourceNote,
@@ -34,7 +58,19 @@
       "error",
     );
   }
-})();
+}
+
+function defaultDataBase() {
+  if (window.location.protocol === "file:") return "../../data/dashboard/compute-bazaar";
+  return "/api/dashboard-snapshots";
+}
+
+function parseRefreshMs(params) {
+  const raw = params.get("refreshMs") || params.get("refresh") || "300000";
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric) || numeric < 0) return 300000;
+  return numeric;
+}
 
 async function loadJson(url) {
   const response = await fetch(url, { cache: "no-store" });
@@ -42,6 +78,70 @@ async function loadJson(url) {
     throw new Error(`${response.status} ${response.statusText}`);
   }
   return response.json();
+}
+
+async function loadOptionalJson(url) {
+  const response = await fetch(url, { cache: "no-store" });
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+function renderSourceState(node, manifest, marketRun, dataBase) {
+  const observedAt = marketRun?.observed_at || manifest.observed_at;
+  const exportedAt = manifest.dashboard_exported_at;
+  const observedAge = minutesSince(observedAt);
+  const exportedAge = minutesSince(exportedAt);
+  const stale = Number.isFinite(observedAge) && observedAge > 90;
+  const sourceKind = inferSourceKind(dataBase);
+  const runId = marketRun?.market_run_id || manifest.run_id || "unknown";
+  const ageText = Number.isFinite(observedAge)
+    ? `observed ${formatAgePhrase(observedAge)}`
+    : `observed ${formatDate(observedAt)}`;
+  const syncText = exportedAt
+    ? `exported ${formatAgePhrase(exportedAge)}`
+    : "export timestamp unavailable";
+  const caution = stale
+    ? "This view may be behind the live Windmill/S3 feed; sync or export snapshots to redraw it."
+    : "This view is fresh enough for local inspection.";
+
+  setSourceNote(
+    node,
+    `${escapeHtml(sourceKind)} · <code>${escapeHtml(runId)}</code> · ${escapeHtml(ageText)} · ${escapeHtml(syncText)} · source <code>${escapeHtml(dataBase)}</code><br>${escapeHtml(caution)}`,
+    stale ? "stale" : "ok",
+  );
+}
+
+function inferSourceKind(dataBase) {
+  if (/^https?:\/\//i.test(dataBase)) return "Remote/public JSON feed";
+  if (dataBase === "/api/dashboard-snapshots") return "FastAPI S3/local snapshot proxy";
+  if (/^s3:\/\//i.test(dataBase)) return "S3 JSON feed";
+  return "Local cached JSON snapshot";
+}
+
+function minutesSince(value) {
+  if (!value) return NaN;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return NaN;
+  return Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+}
+
+function formatAge(minutes) {
+  if (!Number.isFinite(minutes)) return "unknown";
+  if (minutes < 2) return "just now";
+  if (minutes < 60) return `${minutes} minutes`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours < 48) return rest ? `${hours}h ${rest}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+function formatAgePhrase(minutes) {
+  const age = formatAge(minutes);
+  return age === "just now" || age === "unknown" ? age : `${age} ago`;
 }
 
 function renderStats(manifest) {
@@ -58,6 +158,116 @@ function renderStats(manifest) {
     .data(stats)
     .join("div")
     .html(([value, label]) => `<span class="stat-value">${value}</span><span class="stat-label">${label}</span>`);
+}
+
+function renderHeartbeat(marketRun, manifest) {
+  const node = d3.select("#market-heartbeat");
+  if (!node.node()) return;
+
+  const checks = marketRun?.checks || {};
+  const checksText = Object.entries(checks)
+    .map(([name, status]) => `${formatProvider(name)} ${status}`)
+    .join(" · ");
+  const rows = [
+    ["Market run", marketRun?.market_run_id || manifest.run_id || "snapshot only"],
+    ["Status", marketRun?.status || "gold snapshot"],
+    ["Checks", checksText || "market heartbeat pending"],
+  ];
+
+  node
+    .selectAll("div")
+    .data(rows)
+    .join("div")
+    .html(([label, value]) => `<span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>`);
+}
+
+function renderOps(marketRun, manifest) {
+  const node = d3.select("#ops-strip");
+  if (!node.node()) return;
+
+  const providers = marketRun?.providers || manifest.provider_scope || [];
+  const rowCounts = marketRun?.row_counts || {};
+  const providerQuality = marketRun?.data_quality?.providers || {};
+  const observedAt = marketRun?.observed_at || manifest.observed_at;
+  const providerSummary =
+    Object.entries(providerQuality)
+      .map(([name, quality]) => {
+        const raw = quality?.raw_offer_count ?? "?";
+        const normalized = quality?.normalized_offer_count ?? "?";
+        return `${formatProvider(name)} ${raw}/${normalized}`;
+      })
+      .join(" · ") || "raw/normalized counts pending";
+
+  const rows = [
+    ["Orchestrator", "Windmill market_hourly", marketRun ? `last run ${formatDate(observedAt)}` : "awaiting market run"],
+    ["Providers", providers.map(formatProvider).join(" · ") || "pending", providerSummary],
+    [
+      "Lake Product",
+      `${rowCounts.listings ?? manifest.row_counts?.fact_gpu_listings ?? 0} listings`,
+      `${rowCounts.index_values ?? manifest.row_counts?.fact_price_index_values ?? 0} index values`,
+    ],
+    ["Surface", "DataFusion gold -> JSON -> D3", "browser reads public-safe snapshots only"],
+  ];
+
+  node
+    .selectAll("div")
+    .data(rows)
+    .join("div")
+    .html(
+      ([label, value, detail]) => `
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        <em>${escapeHtml(detail)}</em>
+      `,
+    );
+}
+
+function renderQuality(marketRun, indexQualityRows) {
+  const node = d3.select("#quality-strip");
+  if (!node.node()) return;
+
+  const checks = marketRun?.checks || {};
+  const badChecks = Object.entries(checks).filter(([, status]) => !["ok", "skipped"].includes(String(status)));
+  const providers = marketRun?.data_quality?.providers || {};
+  const providerWarnings = Object.entries(providers).flatMap(([name, quality]) => {
+    const warnings = [];
+    if ((quality?.unknown_gpu_names || []).length) {
+      warnings.push(`${formatProvider(name)} unknown GPUs ${quality.unknown_gpu_names.length}`);
+    }
+    if (Number(quality?.published_events || 0) <= 0) {
+      warnings.push(`${formatProvider(name)} no Kafka events`);
+    }
+    return warnings;
+  });
+  const excluded = d3.sum(indexQualityRows, (row) => Number(row.excluded_count || 0));
+  const included = d3.sum(indexQualityRows, (row) => Number(row.included_count || 0));
+  const status = badChecks.length || providerWarnings.length ? "watch" : "ok";
+  const details = [
+    ...badChecks.map(([name, check]) => `${formatProvider(name)} ${check}`),
+    ...providerWarnings,
+    `${included} included index candidates`,
+    `${excluded} excluded candidates`,
+  ];
+  const rows = [
+    [
+      "Quality",
+      status === "ok" ? "clean heartbeat" : "needs attention",
+      details.join(" · ") || "waiting for quality snapshot",
+    ],
+  ];
+
+  node
+    .classed("has-warning", status !== "ok")
+    .selectAll("div")
+    .data(rows)
+    .join("div")
+    .html(
+      ([label, value, detail]) => `
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        <em>${escapeHtml(detail)}</em>
+      `,
+    );
 }
 
 function renderFloorChart(rows) {
@@ -140,6 +350,30 @@ function renderFloorChart(rows) {
     .text((row) => `$${formatPrice(row.floor_usd_gpu_hr)}`);
 }
 
+function renderConstituentTable(rows) {
+  const tbody = d3.select("#constituent-table tbody");
+  const data = rows.slice(0, 18);
+
+  if (!data.length) {
+    tbody.html('<tr><td colspan="5" class="empty-cell">No index constituent rows exported yet.</td></tr>');
+    return;
+  }
+
+  tbody
+    .selectAll("tr")
+    .data(data)
+    .join("tr")
+    .html(
+      (row) => `
+        <td>${escapeHtml(row.gpu_model)}</td>
+        <td>${escapeHtml(formatProvider(row.provider))}</td>
+        <td>$${formatPrice(row.price_usd_gpu_hr)}</td>
+        <td>${row.included ? "yes" : "no"}</td>
+        <td>${escapeHtml(row.exclusion_reason || (row.is_floor_constituent ? "floor" : "candidate"))}</td>
+      `,
+    );
+}
+
 function renderProviderTable(rows) {
   const tbody = d3.select("#provider-table tbody");
   const data = rows.slice(0, 24);
@@ -164,24 +398,53 @@ function renderProviderTable(rows) {
     );
 }
 
-function renderListingStrip(rows) {
+function renderHistoryTable(rows) {
+  const tbody = d3.select("#history-table tbody");
   const data = rows.slice(0, 12);
-  const strip = d3.select("#listing-strip");
 
   if (!data.length) {
-    strip.html('<p class="empty-cell">No fresh listing sample available yet.</p>');
+    tbody.html('<tr><td colspan="5" class="empty-cell">No market-run history exported yet.</td></tr>');
     return;
   }
 
-  strip
-    .selectAll(".listing-card")
+  tbody
+    .selectAll("tr")
     .data(data)
-    .join("div")
-    .attr("class", "listing-card")
+    .join("tr")
     .html(
       (row) => `
-        <strong>${escapeHtml(row.gpu_model)} · $${formatPrice(row.price_usd_gpu_hr)}/GPU hr</strong>
-        <span>${escapeHtml(formatProvider(row.provider))} · ${escapeHtml(row.country || "unknown")} · ${escapeHtml(row.region || "unknown")}</span>
+        <td>${escapeHtml(shortRun(row.market_run_id))}</td>
+        <td>${escapeHtml(row.status || "unknown")}</td>
+        <td>${escapeHtml(formatDate(row.observed_at))}</td>
+        <td>${row.row_counts?.listings ?? ""}</td>
+        <td>${row.row_counts?.index_values ?? ""}</td>
+      `,
+    );
+}
+
+function renderOfferTable(rows) {
+  const data = rows.slice(0, 24);
+  const tbody = d3.select("#offer-table tbody");
+
+  if (!data.length) {
+    tbody.html('<tr><td colspan="8" class="empty-cell">No normalized offer rows exported yet.</td></tr>');
+    return;
+  }
+
+  tbody
+    .selectAll("tr")
+    .data(data)
+    .join("tr")
+    .html(
+      (row) => `
+        <td>${escapeHtml(row.gpu_model)}</td>
+        <td>${escapeHtml(formatProvider(row.provider))}</td>
+        <td>$${formatPrice(row.price_usd_gpu_hr)}</td>
+        <td>$${formatPrice(row.price_usd_instance_hr ?? row.price_usd_hr)}</td>
+        <td>${escapeHtml(row.gpu_count ?? "")}</td>
+        <td>${escapeHtml(formatLocation(row.country, row.region))}</td>
+        <td>${escapeHtml(row.availability_status || "unknown")}</td>
+        <td>${row.has_raw_evidence ? "bronze" : "missing"}</td>
       `,
     );
 }
@@ -210,6 +473,11 @@ function formatProvider(value) {
   return text;
 }
 
+function formatLocation(country, region) {
+  const parts = [country, region].filter((part) => part != null && String(part).trim());
+  return parts.length ? parts.join(" · ") : "unknown";
+}
+
 function formatDate(value) {
   if (!value) return "unknown time";
   const date = new Date(value);
@@ -223,9 +491,15 @@ function formatDate(value) {
   });
 }
 
+function shortRun(value) {
+  const text = String(value || "");
+  if (text.length <= 34) return text;
+  return `${text.slice(0, 18)}...${text.slice(-10)}`;
+}
+
 function setSourceNote(node, html, status) {
   if (!node) return;
-  node.classList.remove("is-loading", "is-ok", "is-error");
+  node.classList.remove("is-loading", "is-ok", "is-error", "is-stale");
   node.classList.add(`is-${status}`);
   node.innerHTML = html;
 }

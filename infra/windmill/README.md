@@ -132,10 +132,22 @@ variables need to be whitelisted so scripts can use AWS APIs:
 AWS_EXECUTION_ENV,AWS_CONTAINER_CREDENTIALS_RELATIVE_URI,AWS_DEFAULT_REGION,AWS_REGION
 ```
 
-## Windmill Script
+## Windmill Scripts
 
-Use `infra/windmill/vast_hourly.py` and `infra/windmill/lium_hourly.py` as the script bodies. In
-the dev worker image they shell out to the baked project CLI:
+The main script is `infra/windmill/market_hourly.py`. It runs the complete heartbeat:
+
+```text
+ingest Vast -> ingest Lium -> build gold -> export dashboard JSON -> write market run manifest
+```
+
+In the dev worker image it shells out to the baked project CLI:
+
+```text
+/opt/compute-bazaar/.venv/bin/gpu-prices market-hourly
+```
+
+`infra/windmill/vast_hourly.py` and `infra/windmill/lium_hourly.py` remain useful for provider-only
+debugging. They shell out to:
 
 ```text
 /opt/compute-bazaar/.venv/bin/gpu-prices ingest-vast
@@ -155,9 +167,11 @@ Suggested schedule args, using Windmill variables/secrets:
 
 ```json
 {
-  "api_key": "$var:f/compute-bazaar/vast_api_key",
+  "vast_api_key": "$var:f/compute-bazaar/vast_api_key",
+  "lium_api_key": "$var:f/compute-bazaar/lium_api_key",
   "raw_root": "$var:f/compute-bazaar/raw_root",
   "lake_root": "$var:f/compute-bazaar/lake_root",
+  "dashboard_output_root": "$var:f/compute-bazaar/dashboard_output_root",
   "automq_bootstrap_servers": "$var:f/compute-bazaar/kafka_bootstrap_servers",
   "kafka_security_protocol": "SASL_PLAINTEXT",
   "kafka_sasl_mechanism": "SCRAM-SHA-256",
@@ -165,37 +179,46 @@ Suggested schedule args, using Windmill variables/secrets:
   "kafka_password": "$var:f/compute-bazaar/kafka_password",
   "aws_region": "eu-west-3",
   "topic_prefix": "gpu",
+  "providers": "vast,lium",
+  "lium_size": 200,
+  "lium_max_pages": 10,
+  "lium_paginate": true,
+  "dashboard_limit": 100,
   "dry_run": false
 }
 ```
-
-Lium uses the same Kafka/S3 args, with `api_key` pointing at `$var:f/compute-bazaar/lium_api_key`
-and optional `size`, usually `200`.
 
 After first login, create a Windmill API token and run the bootstrap helper over the SSH tunnel:
 
 ```sh
 export WINDMILL_TOKEN=...
 export WINDMILL_WORKSPACE=compute-bazaar
+uv run python infra/windmill/bootstrap_market_schedule.py
+```
+
+The helper reads the required provider/Kafka/S3 values from your local environment, creates them as
+Windmill variables/secrets, creates the market script, and adds the hourly schedule. It also creates
+`dashboard_output_root`, deriving `s3://.../dashboard/compute-bazaar` from `COMPUTE_BAZAAR_LAKE_ROOT`
+when `COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT` is not set.
+
+Provider-only schedules can still be bootstrapped for debugging:
+
+```sh
 uv run python infra/windmill/bootstrap_provider_schedule.py --provider vast
 uv run python infra/windmill/bootstrap_provider_schedule.py --provider lium
 ```
 
-The helper reads the required provider/Kafka/S3 values from your local environment, creates them as
-Windmill variables/secrets, creates the provider script, and adds the hourly schedule.
-
 Run a manual smoke through the same VPC worker path:
 
 ```sh
-uv run python infra/windmill/bootstrap_provider_schedule.py \
-  --provider lium \
+uv run python infra/windmill/bootstrap_market_schedule.py \
   --run-now \
   --wait \
-  --run-id windmill-lium-stage1-smoke-YYYYMMDD
+  --run-id market-stage1-smoke-YYYYMMDD
 ```
 
-The success marker is a manifest with `publish_mode: kafka`, nonzero `published_events`, and no
-unexpected `unknown_gpu_names`.
+The success marker is a market-run manifest with provider checks, nonzero gold row counts, dashboard
+output refs, and provider manifests with `publish_mode: kafka`.
 
 ## Smoke Command
 
@@ -203,7 +226,8 @@ Inside a VPC-connected worker image, this is the equivalent command:
 
 ```sh
 gpu-prices ingest-vast
-gpu-prices ingest-lium --size 200
+gpu-prices ingest-lium --size 200 --paginate --max-pages 10
+gpu-prices market-hourly
 ```
 
 From your laptop, use the SSH tunnel and local token to prove the Stage 1 surface:

@@ -27,7 +27,7 @@
       <span class="memo-label">Exemplars</span>
       <article class="editorial">
         <div class="memo-head">
-          <h2>The Compute Bazaar: Tinkering with Compute Markets</h2>
+          <h2>The Compute Bazaar: Building Market Memory for GPU Compute</h2>
           <div class="memo-sub">17 June 2026 · local dashboard notebook</div>
         </div>
 
@@ -35,11 +35,11 @@
           <span class="compute-logo-stamp" aria-hidden="true"></span>
           <div class="compute-logo">
             <div class="compute-logo-stage" aria-hidden="true">
-              <div class="compute-panel"><span>01</span><strong>Providers</strong><em>Vast · Lium</em></div>
+              <div class="compute-panel"><span>01</span><strong>Provider Evidence</strong><em>Vast · Lium</em></div>
               <div class="compute-panel"><span>02</span><strong>AutoMQ</strong><em>event tape</em></div>
-              <div class="compute-panel"><span>03</span><strong>S3 Lake</strong><em>bronze · silver · gold</em></div>
+              <div class="compute-panel"><span>03</span><strong>S3 Memory</strong><em>bronze · silver · gold</em></div>
               <div class="compute-panel"><span>04</span><strong>DataFusion</strong><em>market SQL</em></div>
-              <div class="compute-panel"><span>05</span><strong>D3</strong><em>public notebook</em></div>
+              <div class="compute-panel"><span>05</span><strong>Market Surface</strong><em>D3 notebook</em></div>
             </div>
             <div class="compute-logo-title">THE COMPUTE BAZAAR</div>
           </div>
@@ -51,21 +51,68 @@
         </figure>
 
         <p class="source-note" id="source-note">
-          Reading local JSON snapshots. Add <code>?data=https://example.com/compute-bazaar</code>
-          to point the same page at S3 or CloudFront JSON later.
+          Reading the FastAPI snapshot proxy. Add <code>?data=https://example.com/compute-bazaar</code>
+          to point the same page at public S3 or CloudFront JSON later.
         </p>
+
+        <section class="heartbeat" id="market-heartbeat" aria-label="Market run heartbeat">
+          <div>
+            <span>Market run</span>
+            <strong>waiting for snapshot</strong>
+          </div>
+          <div>
+            <span>Status</span>
+            <strong>unknown</strong>
+          </div>
+          <div>
+            <span>Checks</span>
+            <strong>unknown</strong>
+          </div>
+        </section>
+
+        <section class="ops-strip" id="ops-strip" aria-label="Market pipeline status">
+          <div>
+            <span>Orchestrator</span>
+            <strong>Windmill market_hourly</strong>
+            <em>waiting for run</em>
+          </div>
+          <div>
+            <span>Providers</span>
+            <strong>Vast · Lium</strong>
+            <em>bronze evidence pending</em>
+          </div>
+          <div>
+            <span>Lake Product</span>
+            <strong>gold query tables</strong>
+            <em>snapshot pending</em>
+          </div>
+          <div>
+            <span>Surface</span>
+            <strong>D3 JSON notebook</strong>
+            <em>local first, public later</em>
+          </div>
+        </section>
+
+        <section class="quality-strip" id="quality-strip" aria-label="Market data quality">
+          <div>
+            <span>Quality</span>
+            <strong>waiting for checks</strong>
+            <em>provider and index warnings appear here</em>
+          </div>
+        </section>
 
         <p class="build-note">
           This local page is the working interface for the project. The same file should later move
-          into the AdamSioud exemplar flow, with the static JSON source swapped for a public S3 or
-          CloudFront prefix.
+          into the AdamSioud exemplar flow, with the server snapshot proxy swapped for a public S3
+          or CloudFront prefix.
         </p>
 
         <p class="lede">
           Compute is not scarce in one clean place. It is scattered through provider APIs, regional
           machines, private terms, spot-like availability, and vague promises of performance. The
-          first Compute Bazaar is therefore not an exchange. It is a measuring instrument: a small
-          public price tape for watching GPU capacity become legible.
+          first Compute Bazaar is therefore not an exchange. It is market memory: a repeatable way
+          to capture current offers, preserve their evidence, normalize them into comparable
+          GPU-hour objects, and make them queryable.
         </p>
 
         <div class="toc">
@@ -93,17 +140,39 @@
 
         <h3 id="s-markets"><span class="num">II</span>&nbsp;The Markets</h3>
         <p>
-          The first market view is deliberately simple: for each GPU product, find the available
-          floor in dollars per GPU-hour. The point is not a final methodology. The point is a
-          reliable path from raw observation to an auditable number.
+          The first market view is deliberately simple: show current offers in comparable
+          GPU-hour units, then summarize them by GPU product and provider. The point is not a
+          final benchmark methodology. The point is a reliable path from raw observation to an
+          auditable market object.
         </p>
 
         <figure class="viz-block">
           <figcaption>
-            <span>Gold table</span>
-            <strong>Floor price by GPU product</strong>
+            <span>Gold example</span>
+            <strong>Observed floor by GPU product</strong>
           </figcaption>
           <div id="floor-chart" class="chart" role="img" aria-label="GPU floor price chart"></div>
+        </figure>
+
+        <figure class="viz-block compact">
+          <figcaption>
+            <span>Evidence trail</span>
+            <strong>Included and excluded candidate offers</strong>
+          </figcaption>
+          <div class="table-wrap compact-table">
+            <table id="constituent-table">
+              <thead>
+                <tr>
+                  <th>GPU</th>
+                  <th>Provider</th>
+                  <th>Price / GPU hr</th>
+                  <th>Included</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </figure>
 
         <hr class="sep">
@@ -111,8 +180,8 @@
         <h3 id="s-tinkering"><span class="num">III</span>&nbsp;Tinkering</h3>
         <p>
           The table below is the first two-provider comparison: available offers only, grouped by
-          GPU product and provider. It is still small, but it already lets the market ask sharper
-          questions than a single listing page can.
+          GPU product and provider. It is still small, but it already turns scattered listing pages
+          into one market surface.
         </p>
 
         <div class="table-wrap">
@@ -130,21 +199,59 @@
           </table>
         </div>
 
+        <figure class="viz-block compact">
+          <figcaption>
+            <span>Heartbeat history</span>
+            <strong>Recent market runs</strong>
+          </figcaption>
+          <div class="table-wrap compact-table">
+            <table id="history-table">
+              <thead>
+                <tr>
+                  <th>Run</th>
+                  <th>Status</th>
+                  <th>Observed</th>
+                  <th>Listings</th>
+                  <th>Index values</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </figure>
+
         <hr class="sep">
 
         <h3 id="s-frictions"><span class="num">IV</span>&nbsp;Frictions and Futures</h3>
         <p>
           The public essay should start with static JSON snapshots because static pages are robust,
           cheap, and safe. Later, a small backend can consume AutoMQ and expose a narrow live feed
-          without putting broker credentials in the browser.
+          without putting broker credentials in the browser. Benchmarks, RFQs, and agent execution
+          sit on top of this offer memory; they are not the first layer.
         </p>
 
         <figure class="viz-block compact">
           <figcaption>
-            <span>Current snapshot</span>
-            <strong>Fresh listings sample</strong>
+            <span>Current offers</span>
+            <strong>Normalized GPU-hour listings</strong>
           </figcaption>
-          <div id="listing-strip" class="listing-strip"></div>
+          <div class="table-wrap compact-table">
+            <table id="offer-table">
+              <thead>
+                <tr>
+                  <th>GPU</th>
+                  <th>Provider</th>
+                  <th>$/GPU hr</th>
+                  <th>$/Instance hr</th>
+                  <th>GPUs</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th>Evidence</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </figure>
 
         <section class="colophon">

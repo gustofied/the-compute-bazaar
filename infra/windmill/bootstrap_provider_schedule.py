@@ -52,7 +52,7 @@ PROVIDERS = {
         script_file="lium_hourly.py",
         summary="Hourly Lium GPU price ingestion",
         description="Fetches Lium executors, writes raw/S3 Parquet data, and publishes AutoMQ events.",
-        extra_args={"size": 200},
+        extra_args={"size": 200, "paginate": True, "max_pages": 10},
     ),
 }
 
