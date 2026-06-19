@@ -118,7 +118,7 @@ resource "aws_cloudfront_distribution" "dashboard" {
   viewer_certificate {
     acm_certificate_arn            = length(var.cloudfront_aliases) > 0 ? var.acm_certificate_arn : null
     cloudfront_default_certificate = length(var.cloudfront_aliases) == 0
-    minimum_protocol_version       = "TLSv1.2_2021"
+    minimum_protocol_version       = length(var.cloudfront_aliases) > 0 ? "TLSv1.2_2021" : null
     ssl_support_method             = length(var.cloudfront_aliases) > 0 ? "sni-only" : null
   }
 }

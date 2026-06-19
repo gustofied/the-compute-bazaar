@@ -28,6 +28,14 @@ terraform plan
 terraform apply
 ```
 
+Terraform state is stored in the private project bucket:
+
+```text
+s3://compute-bazaar-852794024525-eu-west-3-an/terraform/public-dashboard/terraform.tfstate
+```
+
+The backend uses S3 lockfiles, so re-run `terraform init` after cloning before planning or applying.
+
 If `manage_bucket_policy = false`, Terraform will not replace the bucket policy.
 Use the `bucket_policy_json` output and merge the statement into the existing
 bucket policy, or set `manage_bucket_policy = true` if this stack should own the

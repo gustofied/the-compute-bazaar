@@ -19,6 +19,8 @@ data/
 *.tfstate.*
 terraform.tfvars
 terraform.tfvars.json
+tfplan
+*.tfplan
 
 # Generated analysis artefacts
 *.png
