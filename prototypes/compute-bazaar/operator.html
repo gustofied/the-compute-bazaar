@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compute Bazaar Operator</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&amp;display=swap">
+    <link rel="stylesheet" href="./operator.css">
+  </head>
+  <body>
+    <header>
+      <div>
+        <span class="eyebrow">Curia workbench</span>
+        <h1>Compute Bazaar Operator</h1>
+      </div>
+      <nav>
+        <a href="/dashboard/">Story dashboard</a>
+        <a href="/api/operator/queries">API</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="summary" id="summary">
+        <div>
+          <span>Gold run</span>
+          <strong>loading</strong>
+        </div>
+        <div>
+          <span>Observed</span>
+          <strong>loading</strong>
+        </div>
+        <div>
+          <span>Providers</span>
+          <strong>loading</strong>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <aside>
+          <div class="panel-head">
+            <span>Cataloged DataFusion SQL</span>
+            <button id="refresh-button" type="button">Refresh</button>
+          </div>
+          <div class="query-list" id="query-list"></div>
+
+          <section class="scratch-panel">
+            <div class="panel-head">
+              <span>Scratch SQL</span>
+              <button id="scratch-run-button" type="button">Run</button>
+            </div>
+            <textarea id="scratch-sql" spellcheck="false">select
+  benchmark_family_id,
+  benchmark_symbol,
+  benchmark_usd_gpu_hr,
+  provider_count,
+  included_offer_count
+from fact_benchmark_values
+order by benchmark_family_id</textarea>
+            <p id="scratch-tables">Gold tables loading.</p>
+          </section>
+        </aside>
+
+        <section class="results">
+          <div class="result-head">
+            <div>
+              <span id="result-kicker">Operator view</span>
+              <h2 id="result-title">Choose cataloged SQL</h2>
+              <p id="result-description">Run a curated query over the latest gold tables.</p>
+            </div>
+            <label>
+              Limit
+              <input id="limit-input" type="number" min="1" max="1000" value="100">
+            </label>
+          </div>
+
+          <p class="status" id="status">Waiting for query catalog.</p>
+
+          <div class="table-wrap">
+            <table id="result-table">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <section class="lineage-panel" id="lineage-panel" aria-label="Selected row data trajectory">
+            <div class="panel-head">
+              <span>Data trajectory</span>
+              <button id="lineage-close" type="button">Clear</button>
+            </div>
+            <p class="lineage-empty">Click a row to inspect its path through bronze, silver, Curia, and gold.</p>
+            <div id="lineage-content"></div>
+            <div class="ref-preview" id="ref-preview"></div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script src="./operator.js"></script>
+  </body>
+</html>

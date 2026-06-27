@@ -1,4 +1,4 @@
-"""Build curated gold query tables from normalized GPU offers."""
+"""Build Curia-authored gold market tables from normalized GPU offers."""
 
 from __future__ import annotations
 
@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from .benchmark_queries import (
+    BENCHMARK_FAMILIES,
+    BENCHMARK_METHODOLOGY_VERSION,
+    benchmark_constituents_v0_sql,
+    benchmark_values_v0_sql,
+)
 from .datafusion import query_parquet, query_tables
 from .manifest import read_latest_manifest
 from .schemas import to_jsonable, utc_now
@@ -23,7 +29,16 @@ GOLD_TABLES = {
     "dim_regions": "regions.parquet",
     "fact_price_index_values": "price_index_values.parquet",
     "fact_index_constituents": "index_constituents.parquet",
+    "fact_benchmark_values": "benchmark_values.parquet",
+    "fact_benchmark_constituents": "benchmark_constituents.parquet",
 }
+
+FEATURED_INDEX_PRODUCTS = [
+    {"gpu_model": "H100_80GB", "label": "H100"},
+    {"gpu_model": "H200_141GB", "label": "H200"},
+    {"gpu_model": "B200_180GB", "label": "B200"},
+    {"gpu_model": "B300_288GB", "label": "B300"},
+]
 
 
 @dataclass(frozen=True)
@@ -110,6 +125,17 @@ def build_gold_market_tables(
     }
 
     for table_name, rows in rows_by_table.items():
+        write_parquet_rows(table_refs[table_name], rows)
+
+    benchmark_values, benchmark_constituents = _benchmark_rows_from_listing_ref(
+        table_refs["fact_gpu_listings"],
+        context=query_context,
+    )
+    rows_by_table["fact_benchmark_values"] = benchmark_values
+    rows_by_table["fact_benchmark_constituents"] = benchmark_constituents
+
+    for table_name in ["fact_benchmark_values", "fact_benchmark_constituents"]:
+        rows = rows_by_table[table_name]
         write_parquet_rows(table_refs[table_name], rows)
 
     row_counts = {table_name: len(rows) for table_name, rows in rows_by_table.items()}
@@ -291,6 +317,176 @@ order by gpu_model, floor_usd_gpu_hr asc
     }
 
 
+def query_gold_featured_index(
+    *,
+    lake_root: str,
+    products: list[dict[str, str]] | None = None,
+    history_limit: int = 48,
+) -> dict[str, Any]:
+    """Return a stable frontier GPU floor strip for product/story surfaces."""
+    manifest = read_latest_gold_manifest(lake_root)
+    featured_products = products or FEATURED_INDEX_PRODUCTS
+    gpu_models = [product["gpu_model"] for product in featured_products]
+    values = ", ".join(_sql_literal(model) for model in gpu_models)
+    table_ref = manifest["table_refs"]["fact_price_index_values"]
+    latest_rows = query_parquet(
+        parquet_uri=table_ref,
+        table_name="fact_price_index_values",
+        sql=f"""
+select
+  index_symbol,
+  gpu_product_id,
+  gpu_model,
+  methodology_version,
+  floor_usd_gpu_hr,
+  simple_mean_usd_gpu_hr,
+  cheapest_offer_usd_hr,
+  offer_count,
+  provider_count,
+  country_count,
+  latest_observed_at,
+  calculated_at
+from fact_price_index_values
+where gpu_model in ({values})
+order by gpu_model
+""",
+    )
+    latest_by_model = {str(row.get("gpu_model")): row for row in latest_rows}
+
+    history = query_gold_index_history(
+        lake_root=lake_root,
+        history_limit=history_limit,
+        gpu_models=gpu_models,
+    )
+    last_seen_by_model: dict[str, dict[str, Any]] = {}
+    for row in history["rows"]:
+        gpu_model = str(row.get("gpu_model") or "")
+        if gpu_model:
+            last_seen_by_model[gpu_model] = row
+
+    rows = []
+    for product in featured_products:
+        gpu_model = product["gpu_model"]
+        label = product.get("label") or gpu_model
+        latest = latest_by_model.get(gpu_model)
+        last_seen = last_seen_by_model.get(gpu_model)
+        if latest:
+            rows.append(
+                {
+                    **latest,
+                    "label": label,
+                    "status": "observed_latest",
+                    "is_latest": True,
+                    "gold_run_id": manifest.get("run_id"),
+                    "gold_observed_at": manifest.get("observed_at"),
+                    "gold_observed_date": manifest.get("observed_date"),
+                    "provider_scope": manifest.get("provider_scope"),
+                    "source_run_ids": manifest.get("source_run_ids"),
+                    "last_seen_floor_usd_gpu_hr": latest.get("floor_usd_gpu_hr"),
+                    "last_seen_at": manifest.get("observed_at"),
+                    "last_seen_gold_run_id": manifest.get("run_id"),
+                }
+            )
+            continue
+
+        if last_seen:
+            rows.append(
+                {
+                    **last_seen,
+                    "label": label,
+                    "status": "not_present_latest",
+                    "is_latest": False,
+                    "floor_usd_gpu_hr": None,
+                    "current_gold_run_id": manifest.get("run_id"),
+                    "current_gold_observed_at": manifest.get("observed_at"),
+                    "gold_observed_date": manifest.get("observed_date"),
+                    "last_seen_floor_usd_gpu_hr": last_seen.get("floor_usd_gpu_hr"),
+                    "last_seen_at": last_seen.get("gold_observed_at") or last_seen.get("latest_observed_at"),
+                    "last_seen_gold_run_id": last_seen.get("gold_run_id"),
+                }
+            )
+            continue
+
+        rows.append(
+            {
+                "label": label,
+                "gpu_model": gpu_model,
+                "gpu_product_id": gpu_model,
+                "status": "not_seen",
+                "is_latest": False,
+                "floor_usd_gpu_hr": None,
+                "last_seen_floor_usd_gpu_hr": None,
+                "last_seen_at": None,
+                "gold_run_id": manifest.get("run_id"),
+                "gold_observed_at": manifest.get("observed_at"),
+                "gold_observed_date": manifest.get("observed_date"),
+                "provider_scope": manifest.get("provider_scope"),
+                "source_run_ids": manifest.get("source_run_ids"),
+            }
+        )
+
+    return {
+        "manifest": manifest,
+        "history_manifest_count": history["history_manifest_count"],
+        "products": featured_products,
+        "rows": rows,
+    }
+
+
+def query_gold_benchmark_values(*, lake_root: str, limit: int | None = None) -> dict[str, Any]:
+    manifest = read_latest_gold_manifest(lake_root)
+    table_ref = manifest["table_refs"].get("fact_benchmark_values")
+    if not table_ref:
+        values, _ = _benchmark_rows_from_latest_listings(manifest)
+        return {"manifest": manifest, "rows": values[:limit] if limit else values}
+
+    sql = """
+select *
+from fact_benchmark_values
+order by benchmark_family_id
+"""
+    rows = query_parquet(
+        parquet_uri=table_ref,
+        table_name="fact_benchmark_values",
+        sql=_with_limit(sql, limit),
+    )
+    return {"manifest": manifest, "rows": rows}
+
+
+def query_gold_benchmark_constituents(
+    *,
+    lake_root: str,
+    benchmark_family_id: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    manifest = read_latest_gold_manifest(lake_root)
+    table_ref = manifest["table_refs"].get("fact_benchmark_constituents")
+    if not table_ref:
+        _, constituents = _benchmark_rows_from_latest_listings(manifest)
+        rows = [
+            row
+            for row in constituents
+            if benchmark_family_id is None or row.get("benchmark_family_id") == benchmark_family_id
+        ]
+        return {"manifest": manifest, "rows": rows[:limit] if limit else rows}
+
+    filters = ""
+    if benchmark_family_id:
+        filters = f"where benchmark_family_id = {_sql_literal(benchmark_family_id)}"
+    sql = f"""
+select *
+from fact_benchmark_constituents
+{filters}
+order by benchmark_family_id, included desc, constituent_rank asc, price_usd_gpu_hr asc
+"""
+    rows = query_parquet(
+        parquet_uri=table_ref,
+        table_name="fact_benchmark_constituents",
+        sql=_with_limit(sql, limit),
+    )
+    return {"manifest": manifest, "rows": rows}
+
+
 def query_gold_provider_comparison(
     *,
     lake_root: str,
@@ -445,6 +641,13 @@ def export_gold_dashboard_snapshot(
         dashboard_output_root=output_root,
     )
     index = query_gold_price_index(lake_root=lake_root, limit=limit)["rows"]
+    featured_index_payload = query_gold_featured_index(lake_root=lake_root)
+    featured_index = featured_index_payload["rows"]
+    benchmark_values_payload = query_gold_benchmark_values(lake_root=lake_root)
+    benchmark_values = benchmark_values_payload["rows"]
+    benchmark_constituents = query_gold_benchmark_constituents(lake_root=lake_root, limit=limit)["rows"]
+    public_benchmark_values = [_public_benchmark_value(row) for row in benchmark_values]
+    public_benchmark_constituents = [_public_benchmark_constituent(row) for row in benchmark_constituents]
     index_history_payload = query_gold_index_history(lake_root=lake_root, history_limit=48)
     index_history = index_history_payload["rows"]
     provider_comparison = query_gold_provider_comparison(lake_root=lake_root, limit=limit)["rows"]
@@ -461,14 +664,35 @@ def export_gold_dashboard_snapshot(
     output_refs = {
         "manifest": "/".join([output_root.rstrip("/"), "manifest.json"]),
         "latest_index": "/".join([output_root.rstrip("/"), "latest-index.json"]),
+        "featured_index": "/".join([output_root.rstrip("/"), "featured-index.json"]),
+        "featured_benchmarks": "/".join([output_root.rstrip("/"), "featured-benchmarks.json"]),
         "index_constituents": "/".join([output_root.rstrip("/"), "index-constituents.json"]),
         "index_quality": "/".join([output_root.rstrip("/"), "index-quality.json"]),
         "index_history": "/".join([output_root.rstrip("/"), "index-history.json"]),
+        "benchmark_constituents": "/".join([output_root.rstrip("/"), "benchmark-constituents.json"]),
         "provider_comparison": "/".join([output_root.rstrip("/"), "provider-comparison.json"]),
         "listings_sample": "/".join([output_root.rstrip("/"), "listings-sample.json"]),
     }
     write_json(output_refs["manifest"], public_manifest)
     write_json(output_refs["latest_index"], {"manifest": public_manifest, "rows": index})
+    write_json(
+        output_refs["featured_index"],
+        {
+            "manifest": public_manifest,
+            "history_manifest_count": featured_index_payload["history_manifest_count"],
+            "products": featured_index_payload["products"],
+            "rows": featured_index,
+        },
+    )
+    write_json(
+        output_refs["featured_benchmarks"],
+        {
+            "manifest": public_manifest,
+            "methodology_version": BENCHMARK_METHODOLOGY_VERSION,
+            "families": BENCHMARK_FAMILIES,
+            "rows": public_benchmark_values,
+        },
+    )
     write_json(
         output_refs["index_constituents"],
         {"manifest": public_manifest, "rows": constituents},
@@ -487,6 +711,14 @@ def export_gold_dashboard_snapshot(
         },
     )
     write_json(
+        output_refs["benchmark_constituents"],
+        {
+            "manifest": public_manifest,
+            "methodology_version": BENCHMARK_METHODOLOGY_VERSION,
+            "rows": public_benchmark_constituents,
+        },
+    )
+    write_json(
         output_refs["provider_comparison"],
         {"manifest": public_manifest, "rows": provider_comparison},
     )
@@ -496,9 +728,12 @@ def export_gold_dashboard_snapshot(
         "output_refs": output_refs,
         "row_counts": {
             "latest_index": len(index),
+            "featured_index": len(featured_index),
+            "featured_benchmarks": len(benchmark_values),
             "index_constituents": len(constituents),
             "index_quality": len(index_quality),
             "index_history": len(index_history),
+            "benchmark_constituents": len(benchmark_constituents),
             "provider_comparison": len(provider_comparison),
             "listings_sample": len(listings),
         },
@@ -728,6 +963,43 @@ order by gpu_model, included desc, constituent_rank asc, price_usd_gpu_hr asc
 """
 
 
+def _benchmark_rows_from_latest_listings(
+    manifest: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    table_ref = manifest["table_refs"]["fact_gpu_listings"]
+    context = {
+        "source_run_id": ",".join(
+            f"{name}:{run_id}" for name, run_id in dict(manifest.get("source_run_ids") or {}).items()
+        ),
+        "source_manifest_ref": ",".join(
+            str(value) for value in dict(manifest.get("source_manifest_refs") or {}).values()
+        ),
+        "source_normalized_ref": ",".join(
+            str(value) for value in dict(manifest.get("source_normalized_refs") or {}).values()
+        ),
+        "calculated_at": str(manifest.get("observed_at") or utc_now().isoformat()),
+    }
+    return _benchmark_rows_from_listing_ref(table_ref, context=context)
+
+
+def _benchmark_rows_from_listing_ref(
+    table_ref: str,
+    *,
+    context: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    values = query_parquet(
+        parquet_uri=table_ref,
+        table_name="fact_gpu_listings",
+        sql=benchmark_values_v0_sql(context),
+    )
+    constituents = query_parquet(
+        parquet_uri=table_ref,
+        table_name="fact_gpu_listings",
+        sql=benchmark_constituents_v0_sql(context),
+    )
+    return values, constituents
+
+
 def _observed_date(manifest: dict[str, Any]) -> str:
     observed_at = str(manifest.get("observed_at") or "")
     if observed_at:
@@ -788,4 +1060,75 @@ def _public_gold_manifest(
         "source_run_ids": manifest.get("source_run_ids"),
         "dashboard_exported_at": dashboard_exported_at,
         "dashboard_output_root": dashboard_output_root,
+    }
+
+
+def _public_benchmark_value(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: row.get(key)
+        for key in [
+            "benchmark_value_id",
+            "benchmark_symbol",
+            "benchmark_family_id",
+            "benchmark_label",
+            "gpu_model_prefixes",
+            "methodology_version",
+            "methodology_query_id",
+            "benchmark_usd_gpu_hr",
+            "observed_average_usd_gpu_hr",
+            "floor_usd_gpu_hr",
+            "median_usd_gpu_hr",
+            "simple_mean_usd_gpu_hr",
+            "trimmed_mean_usd_gpu_hr",
+            "p25_usd_gpu_hr",
+            "p75_usd_gpu_hr",
+            "cheapest_offer_usd_hr",
+            "offer_count",
+            "included_offer_count",
+            "provider_count",
+            "gpu_model_count",
+            "country_count",
+            "secure_offer_count",
+            "spot_offer_count",
+            "latest_observed_at",
+            "status",
+            "source_run_id",
+            "calculated_at",
+        ]
+    }
+
+
+def _public_benchmark_constituent(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: row.get(key)
+        for key in [
+            "benchmark_value_id",
+            "benchmark_symbol",
+            "benchmark_family_id",
+            "benchmark_label",
+            "methodology_version",
+            "methodology_query_id",
+            "listing_id",
+            "provider",
+            "source_offer_id",
+            "gpu_model",
+            "gpu_raw_name",
+            "gpu_count",
+            "vram_gb",
+            "price_usd_gpu_hr",
+            "price_usd_instance_hr",
+            "country",
+            "region",
+            "is_spot",
+            "is_secure",
+            "included",
+            "inclusion_reason",
+            "exclusion_reason",
+            "constituent_rank",
+            "is_floor_constituent",
+            "observed_at",
+            "has_raw_evidence",
+            "source_run_id",
+            "calculated_at",
+        ]
     }

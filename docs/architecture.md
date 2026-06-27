@@ -1,7 +1,8 @@
 # Compute Bazaar Architecture
 
 The platform is a GPU market-data system: provider APIs are sampled, raw evidence is retained,
-offers are normalized, and curated query/index tables are exposed through DataFusion.
+offers are normalized, and Curia-authored market products are exposed through DataFusion-backed
+queries, dashboard snapshots, and later API/MCP tools.
 
 ```mermaid
 flowchart LR
@@ -13,13 +14,16 @@ flowchart LR
   Windmill --> Silver["S3 silver: normalized provider offers"]
   Windmill --> MarketRun["S3 manifest: market run heartbeat"]
 
-  Silver --> Gold["S3 gold: curated query/index tables"]
-  Gold --> DataFusion["DataFusion SQL"]
-  Silver --> DataFusion
+  Silver --> Curia["Curia Engine: methodology, quality, transforms"]
+  Curia --> DataFusion["DataFusion SQL engine"]
+  DataFusion --> Curia
+  Curia --> Gold["S3 gold: Curia-authored market objects"]
+  Bronze --> Workspace["Evidence workspace: raw files, notes, investigations"]
+  Workspace --> Curia
 
-  DataFusion --> CLI["CLI queries"]
-  DataFusion --> API["Future API / MCP"]
-  DataFusion --> Dashboard["D3 blog/dashboard"]
+  Gold --> CLI["CLI queries"]
+  Gold --> API["Future API / MCP"]
+  Gold --> Dashboard["D3 blog/dashboard"]
   MarketRun --> Dashboard
   MarketRun --> API
   AutoMQ --> Live["Future live backend / live feed"]
@@ -34,12 +38,18 @@ Silver is normalized provider data. The first silver table is `silver/gpu_offers
 schema across providers: provider, source offer ID, GPU model, GPU count, price, location,
 availability, observation time, and raw reference.
 
-Gold is the query layer. Gold tables are curated models for comparisons, dashboards, APIs, CLI
-queries, agents, and index calculations:
+Curia is the authoring layer. Curia decides which inputs are allowed, which methodology version
+runs, which SQL or non-SQL algorithms execute, which quality rules apply, and what gets written to
+Gold. DataFusion is one compute engine Curia uses for SQL over Parquet lake tables.
+
+Gold is the product truth layer. Gold tables are Curia-authored models for comparisons, dashboards,
+APIs, CLI queries, agents, and index calculations:
 
 - `gold.fact_gpu_listings`
 - `gold.fact_price_index_values`
 - `gold.fact_index_constituents`
+- `gold.fact_benchmark_values`
+- `gold.fact_benchmark_constituents`
 - `gold.dim_gpu_products`
 - `gold.dim_providers`
 - `gold.dim_regions`
@@ -47,14 +57,25 @@ queries, agents, and index calculations:
 Consumers should mostly read gold. Silver remains useful for debugging, source-level inspection,
 and rebuilding gold when the methodology changes.
 
+The rule is:
+
+```text
+Bronze can be messy.
+Silver should be standardized.
+Gold must be authored.
+```
+
+See [curia-engine.md](curia-engine.md) for the Curia boundary.
+
 ## Compute Index
 
 The compute index is a first-class gold product, not just an ad hoc query result.
 
 ```text
 silver/gpu_offers
+  -> Curia Engine
   -> gold/fact_gpu_listings
-  -> index engine
+  -> named DataFusion methodology query
   -> gold/fact_price_index_values
   -> gold/fact_price_index_constituents
 ```
@@ -93,7 +114,42 @@ Rows with `included = false` are not part of the published floor/index value. Th
 `exclusion_reason` records why, such as `not_available` or `non_positive_price`.
 
 That makes the index auditable. Every product output should be traceable back to the raw provider
-evidence and the methodology that produced it.
+evidence, the gold inputs, and the Curia methodology that produced it.
+
+## Benchmark Products
+
+The H100/H200/B200/B300 benchmark strip is also a Curia-authored gold product. The current v0
+methodology is query-defined in DataFusion SQL:
+
+```text
+gold.fact_gpu_listings
+  -> benchmark_frontier_gpu_families_v0
+  -> gold.fact_benchmark_values
+  -> gold.fact_benchmark_constituents
+```
+
+The materialized benchmark tables are the hourly published memory of that query. The query and input
+manifests are the reproducible methodology. This is why benchmark rows carry both
+`methodology_version` and `methodology_query_id`.
+
+The operator workbench uses the same idea for inspection views: named SQL files live under
+`queries/curia/`, with metadata in `queries/curia/catalog.json`. The API and CLI run those SQL files
+through DataFusion rather than embedding the view logic in Python. The same workbench also exposes
+read-only scratch SQL over latest gold `fact_*` and `dim_*` tables. Scratch queries are exploratory;
+useful ones should be promoted into the Curia catalog before they become methodology.
+
+## Workspace / Evidence Layer
+
+The future agent workspace is not Gold. It is where agents and operators can do messy investigation:
+
+- inspect raw S3 evidence
+- grep provider files or docs
+- compare unusual listings
+- write anomaly notes
+- produce candidate labels
+
+Those artifacts can become Gold only after Curia validates and promotes them into a controlled
+label, signal, score, or narrative table.
 
 ## Current Stage
 
@@ -104,7 +160,7 @@ Stage 1 is live:
   bronze layer contains page-level provider evidence, not just extracted rows.
 - Normalized offers are written to S3 silver.
 - AutoMQ receives provider snapshot and normalized offer events.
-- DataFusion can query the latest silver manifest and Parquet file.
+- Curia can use DataFusion to query the latest silver/gold manifests and Parquet files.
 
 Stage 1.5 is now started:
 
@@ -113,6 +169,8 @@ Stage 1.5 is now started:
 - `gpu-prices gold-index-quality` summarizes included/excluded candidate counts.
 - `gpu-prices gold-index-constituents` exposes index evidence rows.
 - `gpu-prices gold-provider-comparison` queries provider floors from `gold.fact_gpu_listings`.
+- `gpu-prices gold-benchmarks` queries the materialized benchmark values.
+- `gpu-prices gold-benchmark-constituents` exposes benchmark evidence rows.
 - `gpu-prices export-gold-dashboard` writes public-safe JSON snapshots for static D3 sections.
 - `gpu-prices market-hourly` runs the complete provider-to-dashboard heartbeat and writes
   `gold/_manifests/market_runs/latest.json`.
@@ -161,7 +219,7 @@ enhancement. The browser should not connect directly to AutoMQ or hold Kafka cre
 The clean public path is:
 
 ```text
-gold tables -> DataFusion query/export -> public JSON snapshot -> D3 in the blog post
+Curia-authored gold tables -> public JSON snapshot -> D3 in the blog post
 ```
 
 The first snapshot files are:

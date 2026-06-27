@@ -1,0 +1,69 @@
+{
+  "catalog_version": "v1",
+  "engine": "datafusion",
+  "queries": [
+    {
+      "query_id": "benchmark_values",
+      "version": "v0",
+      "title": "Benchmark Values",
+      "description": "Curia-authored H100, H200, B200, and B300 observed benchmark values.",
+      "tables": ["fact_benchmark_values"],
+      "sql_path": "benchmark_values_v0.sql",
+      "default_limit": 20
+    },
+    {
+      "query_id": "benchmark_constituents",
+      "version": "v0",
+      "title": "Benchmark Constituents",
+      "description": "Rows behind each frontier benchmark, including inclusion and exclusion state.",
+      "tables": ["fact_benchmark_constituents"],
+      "sql_path": "benchmark_constituents_v0.sql",
+      "default_limit": 100
+    },
+    {
+      "query_id": "frontier_listings",
+      "version": "v0",
+      "title": "Frontier Listings",
+      "description": "Available H100, H200, B200, and B300 listing rows in comparable GPU-hour units.",
+      "tables": ["fact_gpu_listings"],
+      "sql_path": "frontier_listings_v0.sql",
+      "default_limit": 100
+    },
+    {
+      "query_id": "provider_comparison",
+      "version": "v0",
+      "title": "Provider Comparison",
+      "description": "Provider floors and means by GPU product over available listings.",
+      "tables": ["fact_gpu_listings"],
+      "sql_path": "provider_comparison_v0.sql",
+      "default_limit": 100
+    },
+    {
+      "query_id": "excluded_index_candidates",
+      "version": "v0",
+      "title": "Excluded Index Candidates",
+      "description": "Rows Curia kept for audit but excluded from index values.",
+      "tables": ["fact_index_constituents"],
+      "sql_path": "excluded_index_candidates_v0.sql",
+      "default_limit": 100
+    },
+    {
+      "query_id": "gold_table_counts",
+      "version": "v0",
+      "title": "Gold Table Counts",
+      "description": "Quick row-count health check across current gold tables.",
+      "tables": [
+        "fact_gpu_listings",
+        "fact_price_index_values",
+        "fact_index_constituents",
+        "fact_benchmark_values",
+        "fact_benchmark_constituents",
+        "dim_gpu_products",
+        "dim_providers",
+        "dim_regions"
+      ],
+      "sql_path": "gold_table_counts_v0.sql",
+      "default_limit": 20
+    }
+  ]
+}

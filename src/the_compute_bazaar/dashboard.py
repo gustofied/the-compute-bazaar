@@ -7,11 +7,20 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import Body, FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from .prices.operator import (
+    list_operator_queries,
+    preview_operator_ref,
+    read_operator_manifest,
+    run_operator_query,
+    run_operator_sql,
+    trace_operator_row,
+)
 from .prices.storage import list_refs, read_json
 
 
@@ -23,9 +32,12 @@ SNAPSHOT_FILES = {
     "market-run": "market-run.json",
     "market-history": "market-history.json",
     "latest-index": "latest-index.json",
+    "featured-index": "featured-index.json",
+    "featured-benchmarks": "featured-benchmarks.json",
     "index-constituents": "index-constituents.json",
     "index-quality": "index-quality.json",
     "index-history": "index-history.json",
+    "benchmark-constituents": "benchmark-constituents.json",
     "provider-comparison": "provider-comparison.json",
     "listings-sample": "listings-sample.json",
 }
@@ -65,6 +77,18 @@ def create_app(
     def dashboard_asset(path: str) -> FileResponse:
         return _file_response(_safe_child(dashboard_dir, path))
 
+    @app.api_route("/operator", methods=["GET", "HEAD"], include_in_schema=False)
+    def operator_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/operator/")
+
+    @app.api_route("/operator/", methods=["GET", "HEAD"], include_in_schema=False)
+    def operator() -> FileResponse:
+        return _file_response(dashboard_dir / "operator.html")
+
+    @app.api_route("/operator/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+    def operator_asset(path: str) -> FileResponse:
+        return _file_response(_safe_child(dashboard_dir, path))
+
     @app.get("/api/health")
     def health() -> dict[str, Any]:
         return {
@@ -100,6 +124,92 @@ def create_app(
         _no_store(response)
         name = _snapshot_name_for_filename(filename)
         return _read_snapshot(snapshot_dir, name, source=source, s3_prefix=s3_prefix)
+
+    @app.get("/api/operator/manifest")
+    def operator_manifest(response: Response) -> dict[str, Any]:
+        _no_store(response)
+        try:
+            return read_operator_manifest(lake_root=_operator_lake_root())
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/api/operator/queries")
+    def operator_queries(response: Response) -> dict[str, Any]:
+        _no_store(response)
+        return list_operator_queries(lake_root=_operator_lake_root())
+
+    @app.get("/api/operator/queries/{query_id}")
+    def operator_query(
+        query_id: str,
+        response: Response,
+        limit: int | None = None,
+        version: str | None = None,
+    ) -> dict[str, Any]:
+        _no_store(response)
+        try:
+            return run_operator_query(
+                lake_root=_operator_lake_root(),
+                query_id=query_id,
+                version=version,
+                limit=limit,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.post("/api/operator/lineage")
+    def operator_lineage(response: Response, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        _no_store(response)
+        query_id = str(payload.get("query_id") or "")
+        version = str(payload.get("version") or "") or None
+        row = payload.get("row")
+        if not query_id or not isinstance(row, dict):
+            raise HTTPException(status_code=400, detail="Expected JSON body with query_id and row object")
+        try:
+            return trace_operator_row(
+                lake_root=_operator_lake_root(),
+                query_id=query_id,
+                version=version,
+                row=row,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.post("/api/operator/sql")
+    def operator_sql(response: Response, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        _no_store(response)
+        sql = str(payload.get("sql") or "")
+        limit_value = payload.get("limit")
+        limit = int(limit_value) if limit_value is not None and str(limit_value).strip() else None
+        try:
+            return run_operator_sql(
+                lake_root=_operator_lake_root(),
+                sql=sql,
+                limit=limit,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.post("/api/operator/ref-preview")
+    def operator_ref_preview(response: Response, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        _no_store(response)
+        ref = str(payload.get("ref") or "")
+        max_bytes = int(payload.get("max_bytes") or 65536)
+        try:
+            return preview_operator_ref(
+                lake_root=_operator_lake_root(),
+                ref=ref,
+                max_bytes=max_bytes,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return app
 
@@ -151,9 +261,26 @@ def _snapshot_s3_prefix(value: str | None = None) -> str | None:
         or os.getenv("COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT")
         or ""
     ).strip()
-    if not configured.startswith("s3://"):
+    if configured:
+        return configured.rstrip("/") if configured.startswith("s3://") else None
+    return _infer_dashboard_s3_prefix_from_lake(os.getenv("COMPUTE_BAZAAR_LAKE_ROOT") or "")
+
+
+def _infer_dashboard_s3_prefix_from_lake(lake_root: str) -> str | None:
+    if not lake_root.startswith("s3://"):
         return None
-    return configured.rstrip("/")
+    parsed = urlparse(lake_root.rstrip("/"))
+    if not parsed.netloc:
+        return None
+    path_parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if not path_parts or path_parts[-1] != "lake":
+        return None
+    dashboard_parts = [*path_parts[:-1], "dashboard", "compute-bazaar"]
+    return f"s3://{parsed.netloc}/{'/'.join(dashboard_parts)}"
+
+
+def _operator_lake_root() -> str:
+    return os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake")
 
 
 def _available_snapshots(

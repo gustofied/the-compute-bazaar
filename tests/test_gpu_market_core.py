@@ -7,6 +7,10 @@ from pathlib import Path
 
 from the_compute_bazaar.prices.gold import (
     build_gold_market_tables,
+    export_gold_dashboard_snapshot,
+    query_gold_benchmark_constituents,
+    query_gold_benchmark_values,
+    query_gold_featured_index,
     query_gold_index_constituents,
     query_gold_index_history,
     query_gold_listings,
@@ -14,10 +18,17 @@ from the_compute_bazaar.prices.gold import (
 )
 from the_compute_bazaar.prices.market_run import list_market_runs, read_latest_market_run, write_market_run_manifest
 from the_compute_bazaar.prices.normalize import canonical_gpu_model
+from the_compute_bazaar.prices.operator import (
+    list_operator_queries,
+    preview_operator_ref,
+    run_operator_query,
+    run_operator_sql,
+    trace_operator_row,
+)
 from the_compute_bazaar.prices.providers.lium import LiumClient, normalize_executor
 from the_compute_bazaar.prices.providers.vast import VastClient, default_market_query
 from the_compute_bazaar.prices.schemas import GpuOffer
-from the_compute_bazaar.prices.storage import write_json, write_offers_parquet
+from the_compute_bazaar.prices.storage import read_json, write_json, write_offers_parquet
 
 
 OBSERVED_AT = datetime(2026, 6, 17, 12, 0, tzinfo=timezone.utc)
@@ -238,6 +249,250 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual({row["gpu_model"] for row in rows}, {"RTX4090_24GB"})
         self.assertEqual({row["floor_usd_gpu_hr"] for row in rows}, {0.20, 0.40})
 
+    def test_gold_benchmark_values_group_frontier_gpu_families(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            dashboard_root = str(Path(tmpdir) / "dashboard")
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="vast",
+                run_id="vast-benchmark",
+                offers=[
+                    _offer(
+                        provider="vast",
+                        source_offer_id="h100-vast-1",
+                        price_usd_hr=1.00,
+                        gpu_raw_name="NVIDIA H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                    ),
+                    _offer(
+                        provider="vast",
+                        source_offer_id="h100-vast-2",
+                        price_usd_hr=2.00,
+                        gpu_raw_name="NVIDIA H100 PCIe",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                    ),
+                ],
+            )
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="lium",
+                run_id="lium-benchmark",
+                offers=[
+                    _offer(
+                        provider="lium",
+                        source_offer_id="h100-lium-1",
+                        price_usd_hr=3.00,
+                        gpu_raw_name="NVIDIA H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                    ),
+                    _offer(
+                        provider="lium",
+                        source_offer_id="b200-lium-1",
+                        price_usd_hr=12.00,
+                        gpu_raw_name="NVIDIA B200",
+                        gpu_model="B200_180GB",
+                        vram_gb=180,
+                    ),
+                ],
+            )
+
+            build = build_gold_market_tables(lake_root=lake_root, providers=["vast", "lium"], run_id="gold-benchmark")
+            values = query_gold_benchmark_values(lake_root=lake_root)
+            constituents = query_gold_benchmark_constituents(lake_root=lake_root, benchmark_family_id="H100")
+            export = export_gold_dashboard_snapshot(
+                lake_root=lake_root,
+                output_root=dashboard_root,
+                limit=100,
+            )
+            public_benchmarks = read_json(export["output_refs"]["featured_benchmarks"])
+            public_constituents = read_json(export["output_refs"]["benchmark_constituents"])
+
+        rows = {row["benchmark_family_id"]: row for row in values["rows"]}
+        self.assertEqual(build.row_counts["fact_benchmark_values"], 4)
+        self.assertEqual(build.row_counts["fact_benchmark_constituents"], 4)
+        self.assertEqual(rows["H100"]["status"], "observed")
+        self.assertEqual(rows["H100"]["offer_count"], 3)
+        self.assertEqual(rows["H100"]["provider_count"], 2)
+        self.assertEqual(rows["H100"]["floor_usd_gpu_hr"], 1.00)
+        self.assertEqual(rows["H100"]["benchmark_usd_gpu_hr"], 2.00)
+        self.assertEqual(rows["B200"]["benchmark_usd_gpu_hr"], 12.00)
+        self.assertEqual(rows["H200"]["status"], "not_observed")
+        self.assertIsNone(rows["H200"]["benchmark_usd_gpu_hr"])
+        self.assertEqual(len(constituents["rows"]), 3)
+        self.assertTrue(all(row["included"] for row in constituents["rows"]))
+        self.assertIn("featured_benchmarks", export["output_refs"])
+        self.assertIn("benchmark_constituents", export["output_refs"])
+        self.assertEqual(export["row_counts"]["featured_benchmarks"], 4)
+        self.assertEqual(export["row_counts"]["benchmark_constituents"], 4)
+        self.assertNotIn("source_manifest_ref", public_benchmarks["rows"][0])
+        self.assertNotIn("source_normalized_ref", public_benchmarks["rows"][0])
+        self.assertNotIn("raw_ref", public_constituents["rows"][0])
+        self.assertNotIn("source_manifest_ref", public_constituents["rows"][0])
+        self.assertNotIn("source_normalized_ref", public_constituents["rows"][0])
+
+    def test_featured_index_keeps_frontier_gpus_and_last_seen_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            dashboard_root = str(Path(tmpdir) / "dashboard")
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="vast",
+                run_id="vast-frontier-1",
+                offers=[
+                    _offer(
+                        provider="vast",
+                        source_offer_id="h200-old",
+                        price_usd_hr=7.60,
+                        gpu_raw_name="NVIDIA H200",
+                        gpu_model="H200_141GB",
+                        vram_gb=141,
+                    )
+                ],
+            )
+            build_gold_market_tables(lake_root=lake_root, providers=["vast"], run_id="gold-frontier-1")
+
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="vast",
+                run_id="vast-frontier-2",
+                offers=[
+                    _offer(
+                        provider="vast",
+                        source_offer_id="h100-latest",
+                        price_usd_hr=1.25,
+                        gpu_raw_name="NVIDIA H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                    )
+                ],
+            )
+            build_gold_market_tables(lake_root=lake_root, providers=["vast"], run_id="gold-frontier-2")
+
+            featured = query_gold_featured_index(
+                lake_root=lake_root,
+                products=[
+                    {"gpu_model": "H100_80GB", "label": "H100"},
+                    {"gpu_model": "H200_141GB", "label": "H200"},
+                ],
+                history_limit=10,
+            )
+            export = export_gold_dashboard_snapshot(
+                lake_root=lake_root,
+                output_root=dashboard_root,
+                limit=1,
+            )
+
+        rows = {row["gpu_model"]: row for row in featured["rows"]}
+        self.assertEqual(rows["H100_80GB"]["status"], "observed_latest")
+        self.assertTrue(rows["H100_80GB"]["is_latest"])
+        self.assertEqual(rows["H100_80GB"]["floor_usd_gpu_hr"], 1.25)
+        self.assertEqual(rows["H200_141GB"]["status"], "not_present_latest")
+        self.assertFalse(rows["H200_141GB"]["is_latest"])
+        self.assertIsNone(rows["H200_141GB"]["floor_usd_gpu_hr"])
+        self.assertEqual(rows["H200_141GB"]["last_seen_floor_usd_gpu_hr"], 7.60)
+        self.assertIn("featured_index", export["output_refs"])
+        self.assertEqual(export["row_counts"]["featured_index"], 4)
+
+    def test_operator_saved_queries_run_against_latest_gold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="vast",
+                run_id="vast-operator",
+                offers=[
+                    _offer(
+                        provider="vast",
+                        source_offer_id="h100-operator",
+                        price_usd_hr=2.00,
+                        gpu_raw_name="NVIDIA H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                    )
+                ],
+            )
+            build_gold_market_tables(lake_root=lake_root, providers=["vast"], run_id="gold-operator")
+
+            catalog = list_operator_queries(lake_root=lake_root)
+            values = run_operator_query(lake_root=lake_root, query_id="benchmark_values", limit=10)
+            constituents = run_operator_query(lake_root=lake_root, query_id="benchmark_constituents", limit=10)
+            counts = run_operator_query(lake_root=lake_root, query_id="gold_table_counts", limit=20)
+            scratch = run_operator_sql(
+                lake_root=lake_root,
+                sql="""
+                select
+                  benchmark_family_id,
+                  benchmark_usd_gpu_hr
+                from fact_benchmark_values
+                order by benchmark_family_id
+                """,
+                limit=2,
+            )
+            lineage = trace_operator_row(
+                lake_root=lake_root,
+                query_id="benchmark_constituents",
+                row=constituents["rows"][0],
+            )
+            preview = preview_operator_ref(
+                lake_root=lake_root,
+                ref=f"{raw_root}/provider=vast/date=2026-06-17/run_id=vast-operator/offers.json",
+            )
+            sql_preview = preview_operator_ref(
+                lake_root=lake_root,
+                ref="queries/curia/benchmark_constituents_v0.sql",
+            )
+            with self.assertRaises(PermissionError):
+                preview_operator_ref(lake_root=lake_root, ref=f"{raw_root}/not-in-manifest.json")
+            with self.assertRaises(ValueError):
+                run_operator_sql(lake_root=lake_root, sql="drop table fact_gpu_listings")
+            with self.assertRaises(ValueError):
+                run_operator_sql(lake_root=lake_root, sql="select * from fact_gpu_listings; select * from dim_providers")
+            with self.assertRaises(ValueError):
+                run_operator_sql(lake_root=lake_root, sql="select * from read_parquet('s3://bucket/elsewhere')")
+
+        self.assertEqual(catalog["manifest"]["run_id"], "gold-operator")
+        catalog_rows = {query["query_id"]: query for query in catalog["queries"]}
+        self.assertIn("benchmark_values", catalog_rows)
+        self.assertEqual(catalog_rows["benchmark_values"]["version"], "v0")
+        self.assertEqual(catalog_rows["benchmark_values"]["engine"], "datafusion")
+        self.assertEqual(catalog_rows["benchmark_values"]["sql_path"], "queries/curia/benchmark_values_v0.sql")
+        self.assertEqual(len(catalog_rows["benchmark_values"]["query_hash"]), 64)
+        self.assertTrue(all(query["available"] for query in catalog["queries"]))
+        self.assertEqual(values["query"]["sql_path"], "queries/curia/benchmark_values_v0.sql")
+        self.assertEqual(values["query"]["version"], "v0")
+        benchmark_rows = {row["benchmark_family_id"]: row for row in values["rows"]}
+        self.assertEqual(benchmark_rows["H100"]["benchmark_usd_gpu_hr"], 2.00)
+        self.assertEqual(scratch["query"]["query_id"], "scratch_sql")
+        self.assertEqual(scratch["query"]["engine"], "datafusion")
+        self.assertTrue(scratch["query"]["read_only"])
+        self.assertIn("fact_benchmark_values", scratch["query"]["tables"])
+        self.assertEqual(scratch["limit"], 2)
+        self.assertEqual(len(scratch["rows"]), 2)
+        table_counts = {row["table_name"]: row["row_count"] for row in counts["rows"]}
+        self.assertEqual(table_counts["fact_gpu_listings"], 1)
+        self.assertEqual(table_counts["fact_benchmark_values"], 4)
+        self.assertEqual([step["layer"] for step in lineage["trajectory"]], ["bronze", "silver", "curia", "gold"])
+        self.assertEqual(lineage["row_refs"]["provider"], "vast")
+        self.assertEqual(lineage["provider_runs"][0]["raw_ref"], f"{raw_root}/provider=vast/date=2026-06-17/run_id=vast-operator/offers.json")
+        self.assertIn("fact_benchmark_constituents", lineage["gold"]["table_refs"])
+        self.assertEqual(preview["kind"], "json")
+        self.assertEqual(preview["json_summary"]["type"], "array")
+        self.assertEqual(preview["json_summary"]["item_count"], 1)
+        self.assertEqual(sql_preview["kind"], "sql")
+        self.assertIn("fact_benchmark_constituents", sql_preview["text"])
+
 
 def _offer(
     *,
@@ -245,15 +500,18 @@ def _offer(
     source_offer_id: str,
     price_usd_hr: float,
     availability_status: str = "available",
+    gpu_raw_name: str = "RTX 4090",
+    gpu_model: str = "RTX4090_24GB",
+    vram_gb: float = 24,
 ) -> GpuOffer:
     return GpuOffer(
         provider=provider,
         source_offer_id=source_offer_id,
         observed_at=OBSERVED_AT,
-        gpu_raw_name="RTX 4090",
-        gpu_model="RTX4090_24GB",
+        gpu_raw_name=gpu_raw_name,
+        gpu_model=gpu_model,
         gpu_count=1,
-        vram_gb=24,
+        vram_gb=vram_gb,
         price_usd_hr=price_usd_hr,
         country="US",
         region="California",

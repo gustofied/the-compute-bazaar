@@ -13,6 +13,8 @@ from .datafusion import DEFAULT_BENCHMARK_SQL, query_parquet, query_price_index
 from .gold import (
     build_gold_market_tables,
     export_gold_dashboard_snapshot,
+    query_gold_benchmark_constituents,
+    query_gold_benchmark_values,
     query_gold_index_constituents,
     query_gold_index_quality,
     query_gold_listings,
@@ -27,6 +29,7 @@ from .market_run import (
     run_market_hourly,
     write_dashboard_market_run_snapshots,
 )
+from .operator import list_operator_queries, preview_operator_ref, run_operator_query, run_operator_sql
 from .pipeline import ingest_lium, ingest_vast
 from .schemas import to_jsonable
 
@@ -110,6 +113,21 @@ def main() -> None:
     gold_index_quality.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
     gold_index_quality.add_argument("--limit", type=int, default=100)
 
+    gold_benchmarks = subparsers.add_parser(
+        "gold-benchmarks",
+        help="Query the latest H100/H200/B200/B300 observed benchmark values",
+    )
+    gold_benchmarks.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    gold_benchmarks.add_argument("--limit", type=int, default=25)
+
+    gold_benchmark_constituents = subparsers.add_parser(
+        "gold-benchmark-constituents",
+        help="Query listing constituents behind observed benchmark values",
+    )
+    gold_benchmark_constituents.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    gold_benchmark_constituents.add_argument("--benchmark-family-id", choices=["H100", "H200", "B200", "B300"])
+    gold_benchmark_constituents.add_argument("--limit", type=int, default=100)
+
     gold_index_history = subparsers.add_parser(
         "gold-index-history",
         help="Query recent gold price index values as a time series",
@@ -130,6 +148,38 @@ def main() -> None:
     gold_provider_comparison.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
     gold_provider_comparison.add_argument("--gpu-model")
     gold_provider_comparison.add_argument("--limit", type=int, default=50)
+
+    operator_queries = subparsers.add_parser(
+        "operator-queries",
+        help="List cataloged operator/Curia DataFusion SQL queries",
+    )
+    operator_queries.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+
+    operator_query = subparsers.add_parser(
+        "operator-query",
+        help="Run a cataloged operator/Curia DataFusion SQL query",
+    )
+    operator_query.add_argument("query_id")
+    operator_query.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    operator_query.add_argument("--version")
+    operator_query.add_argument("--limit", type=int)
+
+    operator_sql = subparsers.add_parser(
+        "operator-sql",
+        help="Run read-only scratch SQL over latest gold tables through DataFusion",
+    )
+    operator_sql.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    operator_sql.add_argument("--sql", help="Read-only SELECT/WITH SQL to run")
+    operator_sql.add_argument("--sql-file", help="Path to a SQL file to run")
+    operator_sql.add_argument("--limit", type=int, default=100)
+
+    operator_ref_preview = subparsers.add_parser(
+        "operator-ref-preview",
+        help="Preview an allowed ref from the latest operator manifest chain",
+    )
+    operator_ref_preview.add_argument("ref")
+    operator_ref_preview.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    operator_ref_preview.add_argument("--max-bytes", type=int, default=65536)
 
     export_gold_dashboard = subparsers.add_parser(
         "export-gold-dashboard",
@@ -286,6 +336,20 @@ def main() -> None:
         _print_json(query_gold_index_quality(lake_root=args.lake_root, limit=args.limit))
         return
 
+    if args.command == "gold-benchmarks":
+        _print_json(query_gold_benchmark_values(lake_root=args.lake_root, limit=args.limit))
+        return
+
+    if args.command == "gold-benchmark-constituents":
+        _print_json(
+            query_gold_benchmark_constituents(
+                lake_root=args.lake_root,
+                benchmark_family_id=args.benchmark_family_id,
+                limit=args.limit,
+            )
+        )
+        return
+
     if args.command == "gold-index-history":
         from .gold import query_gold_index_history
 
@@ -308,6 +372,39 @@ def main() -> None:
                 lake_root=args.lake_root,
                 gpu_model=args.gpu_model,
                 limit=args.limit,
+            )
+        )
+        return
+
+    if args.command == "operator-queries":
+        _print_json(list_operator_queries(lake_root=args.lake_root))
+        return
+
+    if args.command == "operator-query":
+        _print_json(
+            run_operator_query(
+                lake_root=args.lake_root,
+                query_id=args.query_id,
+                version=args.version,
+                limit=args.limit,
+            )
+        )
+        return
+
+    if args.command == "operator-sql":
+        sql = _read_sql_input(sql=args.sql, sql_file=args.sql_file)
+        try:
+            _print_json(run_operator_sql(lake_root=args.lake_root, sql=sql, limit=args.limit))
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        return
+
+    if args.command == "operator-ref-preview":
+        _print_json(
+            preview_operator_ref(
+                lake_root=args.lake_root,
+                ref=args.ref,
+                max_bytes=args.max_bytes,
             )
         )
         return
@@ -419,6 +516,16 @@ def _parse_csv(value: str | None) -> list[str] | None:
         return None
     values = [part.strip() for part in value.split(",") if part.strip()]
     return values or None
+
+
+def _read_sql_input(*, sql: str | None, sql_file: str | None) -> str:
+    if bool(sql) == bool(sql_file):
+        raise SystemExit("Provide exactly one of --sql or --sql-file")
+    if sql_file:
+        with open(sql_file, encoding="utf-8") as file:
+            return file.read()
+    assert sql is not None
+    return sql
 
 
 def _print_json(value: Any) -> None:

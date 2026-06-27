@@ -1,10 +1,11 @@
 # The Compute Bazaar
 
 The Compute Bazaar is a Stage 1 GPU market-data platform. It ingests provider
-data, preserves raw evidence in S3, normalizes offers into a common schema,
-builds gold query tables for price indexes and provider comparisons, and exposes
-the results through DataFusion, CLI commands, dashboard snapshots, and later
-API/MCP tools for agents.
+data, preserves raw evidence in S3, normalizes offers into a common schema, and
+uses the Curia engine to publish gold market objects for listings, benchmarks,
+price indexes, and provider comparisons. DataFusion is the SQL compute engine
+Curia uses over the lake; Gold is the product truth Curia writes for CLI
+commands, dashboard snapshots, and later API/MCP tools for agents.
 
 ## Architecture
 
@@ -14,8 +15,9 @@ Provider APIs
   -> AutoMQ / Kafka event stream
   -> S3 bronze raw evidence
   -> S3 silver normalized offers
-  -> S3 gold query/index tables
-  -> DataFusion SQL
+  -> Curia engine
+  -> DataFusion SQL methodology queries
+  -> S3 gold market objects
   -> dashboard / CLI / future API / agents
 ```
 
@@ -24,18 +26,21 @@ Layer roles:
 ```text
 bronze/raw evidence        exact provider responses for audit and replay
 silver/gpu_offers          normalized provider offers in one schema
+Curia                      controlled authoring layer for market truth
 gold/fact_gpu_listings     query-ready market listings
 gold/fact_price_index_*    index values and constituents
+gold/fact_benchmark_*      observed H100/H200/B200/B300 benchmark values and constituents
 gold/dim_*                 GPU, provider, and region dimensions
 AutoMQ                     live event tape
-DataFusion                 SQL over lake tables
+DataFusion                 SQL compute engine Curia uses over lake tables
 dashboard                  first product surface
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the platform model and
-[docs/stage1-review.md](docs/stage1-review.md) for the current review boundary.
-See [docs/public-dashboard.md](docs/public-dashboard.md) for the public S3/CloudFront
-dashboard path.
+[docs/curia-engine.md](docs/curia-engine.md) for the Curia/DataFusion/Gold
+boundary. See [docs/stage1-review.md](docs/stage1-review.md) for the current
+review boundary and [docs/public-dashboard.md](docs/public-dashboard.md) for the
+public S3/CloudFront dashboard path.
 
 ## Setup
 
@@ -139,6 +144,8 @@ uv run gpu-prices gold-index --limit 10
 uv run gpu-prices gold-index-history --history-limit 24
 uv run gpu-prices gold-index-quality --limit 20
 uv run gpu-prices gold-index-constituents --limit 50
+uv run gpu-prices gold-benchmarks --limit 10
+uv run gpu-prices gold-benchmark-constituents --benchmark-family-id H100 --limit 50
 uv run gpu-prices gold-provider-comparison --limit 20
 uv run gpu-prices export-gold-dashboard --limit 100
 ```
@@ -148,6 +155,15 @@ The listing table keeps broader evidence rows so provider state can be inspected
 without polluting market-floor outputs.
 The constituents table keeps included and excluded index candidates with an
 `exclusion_reason`, so index values can be explained rather than only displayed.
+The benchmark tables currently publish four observed frontier families: H100,
+H200, B200, and B300. Their v0 benchmark value is a representative observed
+GPU-hour price over available family listings, with the underlying rows kept in
+`fact_benchmark_constituents`. The benchmark methodology is query-defined:
+Python writes `gold.fact_gpu_listings`, then runs named DataFusion SQL from
+`src/the_compute_bazaar/prices/benchmark_queries.py` and materializes the result
+as `gold.fact_benchmark_values` and `gold.fact_benchmark_constituents`. In the
+project language, that is a Curia-authored gold product: DataFusion computes the
+methodology, Curia decides and records what becomes product truth.
 
 ## Dashboard
 
@@ -158,9 +174,12 @@ prototypes/compute-bazaar/feeling_the_compute.html
 ```
 
 It follows the AdamSioud exemplar flow and reads public-safe gold snapshots from
-the local FastAPI snapshot API. By default that API reads S3 when
-`COMPUTE_BAZAAR_DASHBOARD_SOURCE=s3` and `COMPUTE_BAZAAR_DASHBOARD_S3_PREFIX`
-are set, otherwise it falls back to `data/dashboard/compute-bazaar/`.
+the local FastAPI snapshot API. By default that API uses `auto` source mode:
+if `COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT` is an S3 URI it reads that prefix;
+otherwise, if `COMPUTE_BAZAAR_LAKE_ROOT=s3://.../lake`, it infers the sibling
+`s3://.../dashboard/compute-bazaar` prefix. Set
+`COMPUTE_BAZAAR_DASHBOARD_SOURCE=local` only when you intentionally want the
+cached files in `data/dashboard/compute-bazaar/`.
 
 Run the local FastAPI dashboard:
 
@@ -178,15 +197,54 @@ Useful endpoints:
 
 ```text
 /dashboard/
+/operator/
 /api/health
 /api/snapshots
 /api/dashboard-snapshots/manifest.json
 /api/dashboard-snapshots/latest-index.json
+/api/dashboard-snapshots/featured-index.json
+/api/dashboard-snapshots/featured-benchmarks.json
 /api/snapshots/latest-index
 /api/snapshots/market-history
 /api/snapshots/index-history
 /api/snapshots/index-quality
 /api/snapshots/index-constituents
+/api/snapshots/benchmark-constituents
+/api/operator/manifest
+/api/operator/queries
+/api/operator/queries/{query_id}
+/api/operator/lineage
+/api/operator/sql
+/api/operator/ref-preview
+```
+
+The operator workbench at `/operator/` is an internal Curia inspection surface.
+It runs versioned DataFusion SQL from the query catalog in
+`queries/curia/catalog.json` and `queries/curia/*.sql`. Python loads the catalog,
+registers the latest gold Parquet refs, applies a bounded limit, and executes
+the SQL with DataFusion. This keeps benchmark values, constituents, frontier
+listings, provider comparisons, and table counts as inspectable query assets
+instead of hardcoded app views.
+Clicking a row shows its current data trajectory: bronze raw evidence, silver
+normalized refs, the Curia/DataFusion SQL query, and the gold table context.
+Refs in the trajectory can be previewed when they are part of the latest
+manifest chain; Parquet refs stay query-only through DataFusion.
+
+The workbench also has a read-only scratch SQL console. Scratch SQL runs through
+the same DataFusion engine, but it can only query latest gold `fact_*` and
+`dim_*` tables from the current gold manifest. It accepts one `SELECT` or `WITH`
+statement, rejects writes/external file reads, and enforces a bounded limit.
+Useful scratch queries should be promoted into `queries/curia/*.sql` and
+registered in `queries/curia/catalog.json`.
+
+The same cataloged SQL views are available from the CLI:
+
+```sh
+uv run gpu-prices operator-queries
+uv run gpu-prices operator-query benchmark_values --limit 20
+uv run gpu-prices operator-query benchmark_values --version v0 --limit 20
+uv run gpu-prices operator-sql --sql "select * from fact_benchmark_values order by benchmark_family_id" --limit 20
+uv run gpu-prices operator-ref-preview s3://YOUR_BUCKET/raw/provider=vast/.../bundles.json
 ```
 
 The page auto-refreshes its JSON data every five minutes by default. Disable or tune that with:
@@ -240,9 +298,10 @@ http://127.0.0.1:8777/exemplars/compute/feeling_the_compute.html
 
 That server also exposes `/api/dashboard-snapshots/*.json`, so the AdamSioud page can keep its
 static-site shape while syncing small public-safe labels from the latest S3 gold snapshot. The first
-label is `gold avg floor`, calculated from `latest-index.json` product floor values. The prototype
-dashboard remains the draft surface; AdamSioud should receive only composed, publication-ready
-signals.
+publication signal is the H100/H200/B200/B300 observed benchmark strip from
+`featured-benchmarks.json`, with `featured-index.json` as a floor fallback while old snapshots age
+out. The prototype dashboard remains the draft surface; AdamSioud should receive only composed,
+publication-ready signals.
 
 If the laptop is on mobile/5G and the Windmill tunnel stops connecting, refresh the dev runtime
 security-group ingress for the current `/32`:

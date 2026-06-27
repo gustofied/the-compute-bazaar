@@ -1,7 +1,8 @@
 # Stage 1 Review
 
 The Compute Bazaar is now a Stage 1 GPU market-data platform: provider ingestion, event stream,
-S3 bronze/silver/gold lake, DataFusion query layer, and dashboard snapshots.
+S3 bronze/silver/gold lake, Curia-authored market products, DataFusion methodology queries, and
+dashboard snapshots.
 
 Before this stage, the repo was a research workbench with useful scripts and good architecture
 ideas. Now it has a connected platform loop:
@@ -12,8 +13,9 @@ Provider APIs
   -> AutoMQ / Kafka event stream
   -> S3 bronze raw evidence
   -> S3 silver normalized offers
-  -> S3 gold query/index tables
-  -> DataFusion SQL
+  -> Curia engine
+  -> DataFusion SQL methodology queries
+  -> S3 gold market objects
   -> dashboard / CLI / future API / agents
 ```
 
@@ -55,10 +57,10 @@ silver:
   normalized offers, including edge cases and provider-specific messiness
 
 gold/fact_gpu_listings:
-  query-ready listing observations
+  Curia-authored query-ready listing observations
 
 gold/fact_price_index_values:
-  published price outputs
+  published Curia-authored price outputs
 
 gold/fact_price_index_constituents:
   explainability and audit trail for each index value
@@ -69,6 +71,10 @@ gold/dim_gpu_products, gold/dim_providers, gold/dim_regions:
 
 Consumers should mostly read gold. Silver remains useful for debugging and rebuilding gold when
 methodology changes.
+
+DataFusion is not the gold layer. It is the SQL engine Curia uses to compute, test, and reproduce
+market methodology over Parquet/S3 inputs. Gold is the materialized product truth Curia writes after
+that controlled computation.
 
 ## Findings
 
@@ -172,7 +178,7 @@ That is what makes this market infrastructure, not just a dashboard.
 3. Market-run history charts over recent heartbeats
 4. Richer index methodology: median, p25, p75, and exclusion policy versions
 5. Provider coverage and field completeness scoring
-6. MCP/API over gold DataFusion queries
+6. MCP/API over Curia-authored gold tables and DataFusion-backed query tools
 7. Historical time series, not just latest snapshots
 
 The agent layer should come after stable gold tables. Agents should first answer grounded questions:

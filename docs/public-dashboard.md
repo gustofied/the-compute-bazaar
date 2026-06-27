@@ -25,10 +25,14 @@ The hourly Windmill `market_hourly` job writes the same prefix after each succes
 The local FastAPI dashboard serves the page and proxies the selected snapshot source:
 
 ```sh
-COMPUTE_BAZAAR_DASHBOARD_SOURCE=s3 \
-COMPUTE_BAZAAR_DASHBOARD_S3_PREFIX=s3://YOUR_BUCKET/dashboard/compute-bazaar \
-  uv run compute-bazaar-dashboard
+uv run compute-bazaar-dashboard
 ```
+
+In `auto` mode, the server reads `COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT` when it
+is an S3 URI. If that is not set, it infers
+`s3://YOUR_BUCKET/dashboard/compute-bazaar` from
+`COMPUTE_BAZAAR_LAKE_ROOT=s3://YOUR_BUCKET/lake`. Use
+`COMPUTE_BAZAAR_DASHBOARD_SOURCE=local` to force the cached local JSON files.
 
 The browser reads same-origin JSON from:
 
@@ -46,15 +50,21 @@ manifest.json
 market-run.json
 market-history.json
 latest-index.json
+featured-index.json
+featured-benchmarks.json
 index-history.json
 index-quality.json
 index-constituents.json
+benchmark-constituents.json
 provider-comparison.json
 listings-sample.json
 ```
 
 These files are safe for a browser because they contain product/query outputs, counts, checks, and
-public-facing rows. They do not contain provider API keys, Kafka credentials, or private raw S3 refs.
+public-facing rows. `featured-benchmarks.json` is the public strip for the current observed H100,
+H200, B200, and B300 benchmark families. `benchmark-constituents.json` is still public-safe, but it is
+for operator/product inspection rather than the minimal AdamSioud label. These files do not contain
+provider API keys, Kafka credentials, or private raw S3 refs.
 
 ## S3/CloudFront Shape
 
@@ -92,6 +102,7 @@ to the S3 dashboard prefix. That means the public base URL serves files directly
 ```text
 https://DISTRIBUTION.cloudfront.net/manifest.json
 https://DISTRIBUTION.cloudfront.net/latest-index.json
+https://DISTRIBUTION.cloudfront.net/featured-benchmarks.json
 ```
 
 The Terraform stack can output the bucket policy statement without applying it. Keep
@@ -99,10 +110,17 @@ The Terraform stack can output the bucket policy statement without applying it. 
 `bucket_policy_json` output manually. Set it to `true` only when Terraform should own the whole
 bucket policy.
 
+The CloudFront distribution URL itself is safe to expose because it serves only public-safe
+dashboard JSON, not raw provider evidence or lake objects. For a cleaner public surface, attach an
+alias such as `data.adamsioud.com` to the distribution.
+
 ## CORS
 
 The browser needs CORS for `GET` and `HEAD` on the dashboard JSON prefix. A starter CORS document is
 in `infra/aws/dashboard-cors.example.json`.
+
+The Terraform response headers policy allows the public AdamSioud domains plus the local
+development origins used here: `http://127.0.0.1:8777` and `http://127.0.0.1:8801`.
 
 Apply it after replacing the origin with the personal-site origin:
 
