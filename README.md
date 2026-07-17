@@ -7,6 +7,15 @@ price indexes, and provider comparisons. DataFusion is the SQL compute engine
 Curia uses over the lake; Gold is the product truth Curia writes for CLI
 commands, dashboard snapshots, and later API/MCP tools for agents.
 
+## Tinkering With Compute Markets
+
+The market-data spine above is one part of the broader tinkering: provider evidence, normalized
+listings, gold price objects, and public snapshots. This repo can also hold small environment
+experiments for agent-facing compute-market work.
+
+- [Data Center Data Room](data-center-data-room/README.md): an early Prime-targeted section for
+  evals/training around private compute deal rooms, diligence, deal records, and next actions.
+
 ## Architecture
 
 ```text
