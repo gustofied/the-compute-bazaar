@@ -9,12 +9,14 @@ commands, dashboard snapshots, and later API/MCP tools for agents.
 
 ## Tinkering With Compute Markets
 
-The market-data spine above is one part of the broader tinkering: provider evidence, normalized
-listings, gold price objects, and public snapshots. This repo can also hold small environment
-experiments for agent-facing compute-market work.
+A couple of artefacts while tinkering with compute markets:
 
-- [Data Center Data Room](data-center-data-room/README.md): an early Prime-targeted section for
-  evals/training around private compute deal rooms, diligence, deal records, and next actions.
+- [Data Center Data Room](https://github.com/gustofied/the-compute-bazaar/blob/main/data-center-data-room/README.md)
+  ([folder](data-center-data-room/))
+
+  Room for us to talk about it.
+
+More artefacts will come here later.
 
 ## Architecture
 
