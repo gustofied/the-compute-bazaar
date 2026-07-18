@@ -27,7 +27,7 @@ A couple of artefacts while tinkering with compute markets.
   <tr>
     <td width="46%" valign="top">
       <a href="data-center-data-room/README.md">
-        <img src="docs/assets/the-waltz-anders-zorn.jpg" alt="Anders Zorn, The Waltz" width="100%">
+        <img src="docs/assets/data-center-data-room.jpg" alt="Anders Zorn, The Waltz" width="100%">
       </a>
     </td>
     <td>
