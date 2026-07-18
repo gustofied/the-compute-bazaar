@@ -7,14 +7,41 @@ price indexes, and provider comparisons. DataFusion is the SQL compute engine
 Curia uses over the lake; Gold is the product truth Curia writes for CLI
 commands, dashboard snapshots, and later API/MCP tools for agents.
 
-> **Tinkering with compute markets**
->
-> A couple of artefacts while tinkering with compute markets.
->
-> **[Data Center Data Room](data-center-data-room/README.md)**  
-> Room for us to talk about it.
->
-> More artefacts will come here later.
+<p align="center">
+  <a href="#architecture">Architecture</a>
+  &nbsp;·&nbsp;
+  <a href="#dashboard">Dashboard</a>
+  &nbsp;·&nbsp;
+  <a href="#website-submodule">Website</a>
+  &nbsp;·&nbsp;
+  <a href="data-center-data-room/README.md">Data Center Data Room</a>
+  &nbsp;·&nbsp;
+  <a href="#setup">Setup</a>
+</p>
+
+## Tinkering With Compute Markets
+
+A couple of artefacts while tinkering with compute markets.
+
+<table>
+  <tr>
+    <td width="34%">
+      <a href="data-center-data-room/README.md">
+        <img src="docs/assets/data-center-data-room.svg" alt="Data Center Data Room" width="260">
+      </a>
+    </td>
+    <td>
+      <h3><a href="data-center-data-room/README.md">Data Center Data Room</a></h3>
+      <p>
+        An early Prime-targeted section for evals and training around messy private
+        compute/data-center deal rooms: evidence, diligence, deal records, and next actions.
+      </p>
+      <p>Room for us to talk about it.</p>
+    </td>
+  </tr>
+</table>
+
+More artefacts will come here later.
 
 ## Architecture
 

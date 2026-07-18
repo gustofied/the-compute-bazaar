@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" role="img" aria-labelledby="title desc">
+  <title id="title">Data Center Data Room</title>
+  <desc id="desc">A stylized compute deal room with documents, messages, market evidence, and an agent verifier.</desc>
+  <rect width="720" height="420" rx="24" fill="#f7f4ed"/>
+  <rect x="36" y="36" width="648" height="348" rx="18" fill="#fffdf8" stroke="#ded6c9" stroke-width="2"/>
+  <rect x="72" y="80" width="170" height="230" rx="12" fill="#edf6f9" stroke="#9ec5d3" stroke-width="2"/>
+  <rect x="96" y="112" width="122" height="12" rx="6" fill="#477f91"/>
+  <rect x="96" y="146" width="98" height="10" rx="5" fill="#8ab5c2"/>
+  <rect x="96" y="172" width="112" height="10" rx="5" fill="#8ab5c2"/>
+  <rect x="96" y="198" width="78" height="10" rx="5" fill="#8ab5c2"/>
+  <rect x="96" y="238" width="88" height="34" rx="8" fill="#477f91"/>
+  <text x="140" y="260" text-anchor="middle" font-family="monospace" font-size="16" fill="#fffdf8">docs</text>
+  <rect x="274" y="78" width="172" height="102" rx="12" fill="#f5eadf" stroke="#d4a373" stroke-width="2"/>
+  <rect x="300" y="106" width="120" height="10" rx="5" fill="#a06035"/>
+  <rect x="300" y="132" width="90" height="10" rx="5" fill="#c98f64"/>
+  <rect x="274" y="214" width="172" height="98" rx="12" fill="#eef0ff" stroke="#9a9fcc" stroke-width="2"/>
+  <rect x="300" y="242" width="92" height="10" rx="5" fill="#5f6295"/>
+  <rect x="300" y="268" width="120" height="10" rx="5" fill="#969ad0"/>
+  <rect x="480" y="94" width="140" height="190" rx="70" fill="#f0f7ef" stroke="#91b58a" stroke-width="2"/>
+  <circle cx="550" cy="152" r="28" fill="#5f8d58"/>
+  <rect x="518" y="196" width="64" height="52" rx="18" fill="#5f8d58"/>
+  <text x="550" y="318" text-anchor="middle" font-family="monospace" font-size="16" fill="#45643f">agent</text>
+  <path d="M242 195H274" stroke="#b8aea1" stroke-width="3" stroke-linecap="round"/>
+  <path d="M446 129H480" stroke="#b8aea1" stroke-width="3" stroke-linecap="round"/>
+  <path d="M446 263H480" stroke="#b8aea1" stroke-width="3" stroke-linecap="round"/>
+  <path d="M360 180v34" stroke="#b8aea1" stroke-width="3" stroke-linecap="round"/>
+  <text x="360" y="360" text-anchor="middle" font-family="Georgia, serif" font-size="28" fill="#2a2723">Data Center Data Room</text>
+</svg>
