@@ -23,14 +23,14 @@ commands, dashboard snapshots, and later API/MCP tools for agents.
 
 A couple of artefacts while tinkering with compute markets.
 
-<table>
+<table width="100%" cellpadding="0" cellspacing="0">
   <tr>
-    <td width="46%" valign="top">
+    <td width="50%" valign="top" style="padding:0;">
       <a href="data-center-data-room/README.md">
-        <img src="docs/assets/data-center-data-room.jpg" alt="Anders Zorn, The Waltz" width="100%">
+        <img src="docs/assets/data-center-data-room.jpg" alt="Anders Zorn, The Waltz" width="100%" style="display:block; margin:0; border:0;">
       </a>
     </td>
-    <td>
+    <td width="50%" valign="middle" style="padding:18px 22px;">
       <h3><a href="data-center-data-room/README.md">Data Center Data Room</a></h3>
       <p>
         An early Prime-targeted section for evals and training around messy private
