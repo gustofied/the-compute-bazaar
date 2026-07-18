@@ -1,28 +1,112 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" role="img" aria-labelledby="title desc">
   <title id="title">Data Center Data Room</title>
-  <desc id="desc">A stylized compute deal room with documents, messages, market evidence, and an agent verifier.</desc>
-  <rect width="720" height="420" rx="24" fill="#f7f4ed"/>
-  <rect x="36" y="36" width="648" height="348" rx="18" fill="#fffdf8" stroke="#ded6c9" stroke-width="2"/>
-  <rect x="72" y="80" width="170" height="230" rx="12" fill="#edf6f9" stroke="#9ec5d3" stroke-width="2"/>
-  <rect x="96" y="112" width="122" height="12" rx="6" fill="#477f91"/>
-  <rect x="96" y="146" width="98" height="10" rx="5" fill="#8ab5c2"/>
-  <rect x="96" y="172" width="112" height="10" rx="5" fill="#8ab5c2"/>
-  <rect x="96" y="198" width="78" height="10" rx="5" fill="#8ab5c2"/>
-  <rect x="96" y="238" width="88" height="34" rx="8" fill="#477f91"/>
-  <text x="140" y="260" text-anchor="middle" font-family="monospace" font-size="16" fill="#fffdf8">docs</text>
-  <rect x="274" y="78" width="172" height="102" rx="12" fill="#f5eadf" stroke="#d4a373" stroke-width="2"/>
-  <rect x="300" y="106" width="120" height="10" rx="5" fill="#a06035"/>
-  <rect x="300" y="132" width="90" height="10" rx="5" fill="#c98f64"/>
-  <rect x="274" y="214" width="172" height="98" rx="12" fill="#eef0ff" stroke="#9a9fcc" stroke-width="2"/>
-  <rect x="300" y="242" width="92" height="10" rx="5" fill="#5f6295"/>
-  <rect x="300" y="268" width="120" height="10" rx="5" fill="#969ad0"/>
-  <rect x="480" y="94" width="140" height="190" rx="70" fill="#f0f7ef" stroke="#91b58a" stroke-width="2"/>
-  <circle cx="550" cy="152" r="28" fill="#5f8d58"/>
-  <rect x="518" y="196" width="64" height="52" rx="18" fill="#5f8d58"/>
-  <text x="550" y="318" text-anchor="middle" font-family="monospace" font-size="16" fill="#45643f">agent</text>
-  <path d="M242 195H274" stroke="#b8aea1" stroke-width="3" stroke-linecap="round"/>
-  <path d="M446 129H480" stroke="#b8aea1" stroke-width="3" stroke-linecap="round"/>
-  <path d="M446 263H480" stroke="#b8aea1" stroke-width="3" stroke-linecap="round"/>
-  <path d="M360 180v34" stroke="#b8aea1" stroke-width="3" stroke-linecap="round"/>
-  <text x="360" y="360" text-anchor="middle" font-family="Georgia, serif" font-size="28" fill="#2a2723">Data Center Data Room</text>
+  <desc id="desc">A stylized brokered compute deal: data-center racks, documents, market evidence, and a handshake.</desc>
+  <defs>
+    <linearGradient id="paper" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fffdf8"/>
+      <stop offset="1" stop-color="#f1eadf"/>
+    </linearGradient>
+    <linearGradient id="room" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f8f3ea"/>
+      <stop offset="1" stop-color="#e7ded0"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#e9f6f4"/>
+      <stop offset="1" stop-color="#c7e2dd"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#5b5144" flood-opacity=".18"/>
+    </filter>
+  </defs>
+
+  <rect width="960" height="560" rx="30" fill="#efe7da"/>
+  <rect x="16" y="16" width="928" height="528" rx="26" fill="url(#room)" stroke="#d6c8b7" stroke-width="2"/>
+
+  <g opacity=".42">
+    <path d="M36 452 C172 406 232 488 358 440 C484 392 546 416 650 366 C738 324 820 348 924 292" fill="none" stroke="#a7b9b0" stroke-width="4"/>
+    <path d="M54 478 C194 436 278 516 396 468 C516 418 584 450 692 396 C774 354 836 376 914 332" fill="none" stroke="#d0a171" stroke-width="3"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="36" y="46" width="888" height="420" rx="24" fill="#fffaf1" stroke="#d9cbbb" stroke-width="2"/>
+  </g>
+
+  <g>
+    <rect x="70" y="86" width="118" height="284" rx="14" fill="#26323f"/>
+    <rect x="204" y="86" width="118" height="284" rx="14" fill="#26323f"/>
+    <rect x="90" y="112" width="78" height="18" rx="5" fill="#84c7bd"/>
+    <rect x="224" y="112" width="78" height="18" rx="5" fill="#84c7bd"/>
+    <g fill="#496172">
+      <rect x="88" y="154" width="82" height="12" rx="4"/>
+      <rect x="88" y="184" width="82" height="12" rx="4"/>
+      <rect x="88" y="214" width="82" height="12" rx="4"/>
+      <rect x="88" y="244" width="82" height="12" rx="4"/>
+      <rect x="88" y="274" width="82" height="12" rx="4"/>
+      <rect x="222" y="154" width="82" height="12" rx="4"/>
+      <rect x="222" y="184" width="82" height="12" rx="4"/>
+      <rect x="222" y="214" width="82" height="12" rx="4"/>
+      <rect x="222" y="244" width="82" height="12" rx="4"/>
+      <rect x="222" y="274" width="82" height="12" rx="4"/>
+    </g>
+    <g fill="#b6efe4">
+      <circle cx="102" cy="326" r="5"/>
+      <circle cx="122" cy="326" r="5"/>
+      <circle cx="142" cy="326" r="5"/>
+      <circle cx="236" cy="326" r="5"/>
+      <circle cx="256" cy="326" r="5"/>
+      <circle cx="276" cy="326" r="5"/>
+    </g>
+    <text x="196" y="408" text-anchor="middle" font-family="monospace" font-size="20" fill="#465d58">capacity proof</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="358" y="72" width="244" height="144" rx="18" fill="url(#paper)" stroke="#d1bda7" stroke-width="2"/>
+    <rect x="382" y="102" width="148" height="13" rx="6" fill="#835f42"/>
+    <rect x="382" y="136" width="184" height="10" rx="5" fill="#c6a17e"/>
+    <rect x="382" y="160" width="132" height="10" rx="5" fill="#c6a17e"/>
+    <rect x="382" y="184" width="170" height="10" rx="5" fill="#c6a17e"/>
+    <circle cx="558" cy="112" r="18" fill="#d9a441"/>
+    <path d="M548 112 l7 7 l15 -18" fill="none" stroke="#fffaf1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="608" y="78" width="246" height="150" rx="18" fill="url(#screen)" stroke="#8bbab3" stroke-width="2"/>
+    <path d="M636 184 L676 148 L716 164 L754 118 L814 96" fill="none" stroke="#2d7f75" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <g fill="#2d7f75">
+      <circle cx="676" cy="148" r="6"/>
+      <circle cx="716" cy="164" r="6"/>
+      <circle cx="754" cy="118" r="6"/>
+      <circle cx="814" cy="96" r="6"/>
+    </g>
+    <text x="730" y="206" text-anchor="middle" font-family="monospace" font-size="18" fill="#38615d">$ / gpu-hour</text>
+  </g>
+
+  <g>
+    <rect x="364" y="270" width="232" height="118" rx="22" fill="#f0e3d4" stroke="#cbb8a3" stroke-width="2"/>
+    <circle cx="430" cy="306" r="22" fill="#8f6042"/>
+    <circle cx="530" cy="306" r="22" fill="#5b6f8f"/>
+    <rect x="396" y="332" width="70" height="40" rx="18" fill="#8f6042"/>
+    <rect x="494" y="332" width="70" height="40" rx="18" fill="#5b6f8f"/>
+    <path d="M464 336 C480 326 492 326 508 336" fill="none" stroke="#2a2723" stroke-width="7" stroke-linecap="round"/>
+    <path d="M456 342 C474 356 488 356 506 342" fill="none" stroke="#d8a46f" stroke-width="12" stroke-linecap="round"/>
+    <path d="M456 342 C474 356 488 356 506 342" fill="none" stroke="#8b5d3b" stroke-width="4" stroke-linecap="round"/>
+    <text x="480" y="422" text-anchor="middle" font-family="Georgia, serif" font-size="24" fill="#3d3328">brokered deal</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M662 282 h154 a16 16 0 0 1 16 16 v104 a16 16 0 0 1 -16 16 h-154 a16 16 0 0 1 -16 -16 v-104 a16 16 0 0 1 16 -16 z" fill="#fffdf8" stroke="#d4c3b2" stroke-width="2"/>
+    <text x="740" y="320" text-anchor="middle" font-family="monospace" font-size="18" fill="#7c5539">deal memo</text>
+    <rect x="680" y="344" width="122" height="9" rx="4" fill="#c5a88c"/>
+    <rect x="680" y="368" width="96" height="9" rx="4" fill="#c5a88c"/>
+    <rect x="680" y="392" width="132" height="9" rx="4" fill="#c5a88c"/>
+    <path d="M804 314 l18 18 l32 -42" fill="none" stroke="#6c9f58" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g>
+    <path d="M322 226 C354 220 374 208 400 190" fill="none" stroke="#b8ab9a" stroke-width="4" stroke-linecap="round"/>
+    <path d="M604 158 C622 154 632 152 648 150" fill="none" stroke="#b8ab9a" stroke-width="4" stroke-linecap="round"/>
+    <path d="M596 338 C622 344 630 346 646 350" fill="none" stroke="#b8ab9a" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <text x="480" y="512" text-anchor="middle" font-family="Georgia, serif" font-size="34" fill="#2c2924">Data Center Data Room</text>
 </svg>

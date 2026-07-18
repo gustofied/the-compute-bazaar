@@ -25,9 +25,9 @@ A couple of artefacts while tinkering with compute markets.
 
 <table>
   <tr>
-    <td width="34%">
+    <td width="46%" valign="top">
       <a href="data-center-data-room/README.md">
-        <img src="docs/assets/data-center-data-room.svg" alt="Data Center Data Room" width="260">
+        <img src="docs/assets/data-center-data-room.svg" alt="Data Center Data Room" width="100%">
       </a>
     </td>
     <td>
