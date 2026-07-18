@@ -27,7 +27,7 @@ A couple of artefacts while tinkering with compute markets.
   <tr>
     <td width="46%" valign="top">
       <a href="data-center-data-room/README.md">
-        <img src="docs/assets/data-center-data-room.svg" alt="Data Center Data Room" width="100%">
+        <img src="docs/assets/the-waltz-anders-zorn.jpg" alt="Anders Zorn, The Waltz" width="100%">
       </a>
     </td>
     <td>
@@ -37,6 +37,10 @@ A couple of artefacts while tinkering with compute markets.
         compute/data-center deal rooms: evidence, diligence, deal records, and next actions.
       </p>
       <p>Room for us to talk about it.</p>
+      <p>
+        Image: Anders Zorn, <a href="https://www.nga.gov/artworks/11346-waltz"><em>The Waltz</em></a>,
+        1891. National Gallery of Art, public domain.
+      </p>
     </td>
   </tr>
 </table>
