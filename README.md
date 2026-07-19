@@ -28,12 +28,12 @@ A couple of artefacts while tinkering with compute markets.
 <table width="100%" cellpadding="0" cellspacing="0">
   <tr>
     <td width="48%" valign="top" style="padding:0;">
-      <a href="data-center-data-room/README.md">
-        <img src="docs/assets/data-center-data-room.jpg" alt="Anders Zorn, The Waltz" width="100%" style="display:block; margin:0; border:0;">
+      <a href="deal-room/README.md">
+        <img src="docs/assets/deal-room.jpg" alt="Deal room artwork" width="100%" style="display:block; margin:0; border:0;">
       </a>
     </td>
     <td width="52%" valign="middle" style="padding:18px 24px;">
-      <h3><a href="data-center-data-room/README.md">Data Center Data Room</a></h3>
+      <h3><a href="deal-room/README.md">Deal Room</a></h3>
       <p>
         First Deal Room taskset.
       </p>

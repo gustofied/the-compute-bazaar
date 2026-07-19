@@ -1,7 +1,7 @@
-# Data Center Data Room
+# Deal Room
 
-`data-center-data-room` is an early Compute Bazaar section for Prime-style evals and training
-around messy private compute/data-center deal rooms.
+`deal-room` is an early Compute Bazaar Bench taskset for Prime-style evals and training
+around messy private compute deals.
 
 The basic task: give an agent a deal room, then score whether it can turn the evidence into useful
 deal work.
@@ -31,4 +31,3 @@ Build order:
 
 Future implementation can live under this folder, for example as `env/`, once the Prime package
 shape is clear.
-
