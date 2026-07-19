@@ -14,14 +14,14 @@ commands, dashboard snapshots, and later API/MCP tools for agents.
   &nbsp;·&nbsp;
   <a href="#website-submodule">Website</a>
   &nbsp;·&nbsp;
-  <a href="data-center-data-room/README.md">Data Center Data Room</a>
+  <a href="#compute-bazaar-bench">Bench</a>
   &nbsp;·&nbsp;
   <a href="#setup">Setup</a>
 </p>
 
-## Tinkering With Compute Markets
+## Compute Bazaar Bench
 
-A couple of artefacts while tinkering with compute markets.
+A benchmark track for agents operating in opaque compute markets.
 
 <table width="100%" cellpadding="0" cellspacing="0">
   <tr>
@@ -33,10 +33,14 @@ A couple of artefacts while tinkering with compute markets.
     <td width="50%" valign="middle" style="padding:18px 22px;">
       <h3><a href="data-center-data-room/README.md">Data Center Data Room</a></h3>
       <p>
-        An early Prime-targeted section for evals and training around messy private
-        compute/data-center deal rooms: evidence, diligence, deal records, and next actions.
+        First Deal Room taskset: turn broker comms, inventory fragments,
+        data-room docs, and private notes into a clean deal record, diligence
+        gaps, share boundaries, market comps, and next actions.
       </p>
-      <p>Room for us to talk about it.</p>
+      <p>
+        Epilogue and ComputeDesk are the wedge; hedged sourcing, market scouting,
+        and capacity diligence can become later tasksets.
+      </p>
       <p>
         Image: Anders Zorn, <a href="https://www.nga.gov/artworks/11346-waltz"><em>The Waltz</em></a>,
         1891. National Gallery of Art, public domain.
@@ -45,7 +49,7 @@ A couple of artefacts while tinkering with compute markets.
   </tr>
 </table>
 
-More artefacts will come here later.
+More tasksets will come here later.
 
 ## Architecture
 
