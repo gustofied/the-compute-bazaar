@@ -14,42 +14,54 @@ commands, dashboard snapshots, and later API/MCP tools for agents.
   &nbsp;·&nbsp;
   <a href="#website-submodule">Website</a>
   &nbsp;·&nbsp;
-  <a href="#compute-bazaar-bench">Bench</a>
+  <a href="#tinkering-with-compute-markets">Tinkering</a>
   &nbsp;·&nbsp;
   <a href="#setup">Setup</a>
 </p>
 
-## Compute Bazaar Bench
+## Tinkering With Compute Markets
 
-A benchmark track for agents operating in opaque compute markets.
+A small side room for artefacts that explore how opaque compute markets become
+legible to agents.
+
+<p align="center">
+  <strong>Compute Bazaar Bench</strong><br>
+  <em>A benchmark track for agents working through private compute deals,
+  diligence, and market evidence.</em>
+</p>
 
 <table width="100%" cellpadding="0" cellspacing="0">
   <tr>
-    <td width="50%" valign="top" style="padding:0;">
+    <td width="48%" valign="top" style="padding:0;">
       <a href="data-center-data-room/README.md">
         <img src="docs/assets/data-center-data-room.jpg" alt="Anders Zorn, The Waltz" width="100%" style="display:block; margin:0; border:0;">
       </a>
     </td>
-    <td width="50%" valign="middle" style="padding:18px 22px;">
+    <td width="52%" valign="middle" style="padding:18px 24px;">
       <h3><a href="data-center-data-room/README.md">Data Center Data Room</a></h3>
       <p>
-        First Deal Room taskset: turn broker comms, inventory fragments,
-        data-room docs, and private notes into a clean deal record, diligence
-        gaps, share boundaries, market comps, and next actions.
+        <strong>First taskset: Deal Room.</strong> Turn broker comms, inventory
+        fragments, data-room docs, and private notes into a clean deal record,
+        diligence gaps, share boundaries, market comps, and next actions.
       </p>
       <p>
-        Epilogue and ComputeDesk are the wedge; hedged sourcing, market scouting,
-        and capacity diligence can become later tasksets.
+        The wedge is Epilogue and ComputeDesk: private-market deal flow,
+        fragmented evidence, bilateral trust, and the work of making a deal
+        understandable enough to move.
       </p>
       <p>
+        <strong>Later:</strong> hedged sourcing &middot; market scouting &middot;
+        capacity diligence &middot; negotiation and comms.
+      </p>
+      <p><sub>
         Image: Anders Zorn, <a href="https://www.nga.gov/artworks/11346-waltz"><em>The Waltz</em></a>,
         1891. National Gallery of Art, public domain.
-      </p>
+      </sub></p>
     </td>
   </tr>
 </table>
 
-More tasksets will come here later.
+More tasksets and artefacts will come here later.
 
 ## Architecture
 
