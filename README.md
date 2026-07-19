@@ -23,9 +23,7 @@ commands, dashboard snapshots, and later API/MCP tools for agents.
 
 A couple of artefacts while tinkering with compute markets.
 
-<p align="center">
-  <strong>Compute Bazaar Bench</strong>
-</p>
+#### Compute Bazaar Bench
 
 <table width="100%" cellpadding="0" cellspacing="0">
   <tr>
