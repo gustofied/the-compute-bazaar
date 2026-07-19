@@ -40,10 +40,6 @@ A couple of artefacts while tinkering with compute markets.
       <p>
         Room for us to talk about it.
       </p>
-      <p><sub>
-        Image: Anders Zorn, <a href="https://www.nga.gov/artworks/11346-waltz"><em>The Waltz</em></a>,
-        1891. National Gallery of Art, public domain.
-      </sub></p>
     </td>
   </tr>
 </table>
