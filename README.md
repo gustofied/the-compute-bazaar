@@ -21,13 +21,10 @@ commands, dashboard snapshots, and later API/MCP tools for agents.
 
 ## Tinkering With Compute Markets
 
-A small side room for artefacts that explore how opaque compute markets become
-legible to agents.
+A couple of artefacts while tinkering with compute markets.
 
 <p align="center">
-  <strong>Compute Bazaar Bench</strong><br>
-  <em>A benchmark track for agents working through private compute deals,
-  diligence, and market evidence.</em>
+  <strong>Compute Bazaar Bench</strong>
 </p>
 
 <table width="100%" cellpadding="0" cellspacing="0">
@@ -40,18 +37,10 @@ legible to agents.
     <td width="52%" valign="middle" style="padding:18px 24px;">
       <h3><a href="data-center-data-room/README.md">Data Center Data Room</a></h3>
       <p>
-        <strong>First taskset: Deal Room.</strong> Turn broker comms, inventory
-        fragments, data-room docs, and private notes into a clean deal record,
-        diligence gaps, share boundaries, market comps, and next actions.
+        First Deal Room taskset.
       </p>
       <p>
-        The wedge is Epilogue and ComputeDesk: private-market deal flow,
-        fragmented evidence, bilateral trust, and the work of making a deal
-        understandable enough to move.
-      </p>
-      <p>
-        <strong>Later:</strong> hedged sourcing &middot; market scouting &middot;
-        capacity diligence &middot; negotiation and comms.
+        Room for us to talk about it.
       </p>
       <p><sub>
         Image: Anders Zorn, <a href="https://www.nga.gov/artworks/11346-waltz"><em>The Waltz</em></a>,
@@ -61,7 +50,7 @@ legible to agents.
   </tr>
 </table>
 
-More tasksets and artefacts will come here later.
+More artefacts will come here later.
 
 ## Architecture
 
