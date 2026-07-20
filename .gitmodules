@@ -3,3 +3,8 @@
 	url = git@github.com:gustofied/AdamSioud.git
 	branch = main
 	shallow = true
+[submodule "external/instinct-bench"]
+	path = external/instinct-bench
+	url = https://github.com/gustofied/instinct-bench.git
+	branch = main
+	shallow = true
