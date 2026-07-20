@@ -1,6 +1,6 @@
-# Deal Room
+# deal-room
 
-`deal-room` is an early Compute Bazaar Bench taskset for Prime-style evals and training
+`deal-room` is an early `compute-bazaar-bench` taskset for Prime-style evals and training
 around messy private compute deals.
 
 The basic task: give an agent a deal room, then score whether it can turn the evidence into useful

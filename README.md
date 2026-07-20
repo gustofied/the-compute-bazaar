@@ -23,7 +23,7 @@ commands, dashboard snapshots, and later API/MCP tools for agents.
 
 A couple of artefacts while tinkering with compute markets.
 
-#### Compute Bazaar Bench
+#### compute-bazaar-bench
 
 <table width="100%" cellpadding="0" cellspacing="0">
   <tr>
@@ -32,14 +32,14 @@ A couple of artefacts while tinkering with compute markets.
         <img src="docs/assets/deal-room.jpg" alt="Deal room artwork" width="100%" style="display:block; margin:0; border:0;">
       </a>
     </td>
-    <td width="52%" valign="middle" style="padding:18px 24px;">
-      <h3><a href="deal-room/README.md">Deal Room</a></h3>
-      <p>
-        First Deal Room taskset.
-      </p>
-      <p>
-        Room for us to talk about it.
-      </p>
+    <td width="52%" valign="middle" style="padding:14px 22px;">
+      <h3><a href="deal-room/README.md">deal-room</a></h3>
+      <p><small>
+        <strong>compute-bazaar-bench</strong> is a benchmark track for agents making opaque compute-market work legible.
+      </small></p>
+      <p><small>
+        <strong>taskgroup: deal-room</strong> covers messy OTC deal rooms: comms, docs, diligence, and next actions.
+      </small></p>
     </td>
   </tr>
 </table>
