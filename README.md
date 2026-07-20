@@ -33,12 +33,11 @@ A couple of artefacts while tinkering with compute markets.
       </a>
     </td>
     <td width="52%" valign="middle" style="padding:14px 22px;">
-      <h3><a href="deal-room/README.md">deal-room</a></h3>
       <p><small>
         <strong>compute-bazaar-bench</strong> is a benchmark track for agents making opaque compute-market work legible.
       </small></p>
       <p><small>
-        <strong>taskgroup: deal-room</strong> covers messy OTC deal rooms: comms, docs, diligence, and next actions.
+        <strong>taskgroup: <a href="deal-room/README.md">deal-room</a></strong> covers messy OTC deal rooms: comms, docs, diligence, and next actions.
       </small></p>
     </td>
   </tr>
