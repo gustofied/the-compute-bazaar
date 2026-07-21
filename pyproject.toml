@@ -36,3 +36,8 @@ ireland-compute-map = "the_compute_bazaar.tangents.ireland_compute_map:main"
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.uv.workspace]
+members = [
+    "external/instinct-bench",
+]
