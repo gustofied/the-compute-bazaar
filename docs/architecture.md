@@ -8,6 +8,7 @@ queries, dashboard snapshots, and later API/MCP tools.
 flowchart LR
   Vast["Provider API: Vast.ai"] --> Windmill["Windmill scheduled workers"]
   Lium["Provider API: Lium"] --> Windmill
+  Rates["Official published rate cards"] --> Windmill
 
   Windmill --> AutoMQ["AutoMQ / Kafka topics"]
   Windmill --> Bronze["S3 bronze: raw JSON evidence"]
@@ -84,7 +85,7 @@ For Stage 1, the index should stay simple and honest:
 
 ```text
 Compute Bazaar Live Price Index
-Indicative, provider-observed, refreshed hourly
+Indicative, provider-observed plus published-rate context, refreshed hourly
 ```
 
 The table `gold.fact_price_index_values` should answer questions like:
@@ -123,7 +124,7 @@ methodology is query-defined in DataFusion SQL:
 
 ```text
 gold.fact_gpu_listings
-  -> benchmark_frontier_gpu_families_v0
+  -> benchmark_frontier_gpu_families_v1
   -> gold.fact_benchmark_values
   -> gold.fact_benchmark_constituents
 ```
@@ -156,6 +157,8 @@ label, signal, score, or narrative table.
 Stage 1 is live:
 
 - Windmill pulls Vast and Lium from inside the AWS VPC.
+- The heartbeat can also ingest official published rate cards from Runpod, Lambda, Hyperstack,
+  Nebius, Crusoe, and TensorDock as clearly marked provider observations.
 - Raw provider responses are written to S3 bronze. Lium stores a raw pagination envelope so the
   bronze layer contains page-level provider evidence, not just extracted rows.
 - Normalized offers are written to S3 silver.
@@ -185,7 +188,7 @@ responses are retained, available executors are normalized into `silver/gpu_offe
 gold tables are built with:
 
 ```sh
-uv run gpu-prices build-gold --providers vast,lium
+uv run gpu-prices build-gold --providers vast,lium,crusoe,hyperstack,lambda,nebius,runpod,tensordock
 ```
 
 The Lium adapter uses `GET /api/executors` with `X-API-Key` authentication, based on the public
@@ -195,6 +198,27 @@ The current Lium Windmill path writes S3 bronze/silver, publishes Kafka events, 
 combined gold. Pagination is enabled by default in the Windmill script and bootstrap helper. The
 recurring Kafka-producing Lium job runs from the VPC Windmill worker, the same as Vast, because the
 AutoMQ endpoint is private DNS.
+
+## Published Rate Cards
+
+Live marketplace providers are not enough for a credible frontier benchmark when one provider has
+thin H100/H200/B200/B300 coverage. The platform now supports provider-published rate-card
+observations as a separate ingestion path. These rows are sourced from official public provider
+pricing pages, written to bronze as `rate-card.json`, normalized to `silver/gpu_offers`, and then
+included in combined gold builds.
+
+Current published-rate providers:
+
+- Runpod
+- Lambda
+- Hyperstack
+- Nebius
+- Crusoe
+- TensorDock
+
+These rows are not live inventory. They make the benchmark strip broader and reduce the chance that
+B300 is blank, but they should be read as published pricing context. Procurement and execution still
+need live provider APIs.
 
 The first provider-comparison query shape is:
 
@@ -206,7 +230,7 @@ select
   avg(price_usd_gpu_hr) as simple_mean_usd_gpu_hr,
   count(*) as listing_count
 from gold.fact_gpu_listings
-where availability_status = 'available'
+where availability_status in ('available', 'published_rate')
 group by gpu_model, provider
 order by gpu_model, floor_usd_gpu_hr;
 ```

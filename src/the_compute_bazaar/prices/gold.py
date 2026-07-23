@@ -222,22 +222,25 @@ def read_latest_gold_manifest(lake_root: str) -> dict[str, Any]:
 
 
 def list_gold_manifests(lake_root: str, *, limit: int = 48) -> list[dict[str, Any]]:
+    requested_limit = max(1, int(limit))
     refs = [
         ref
         for ref in list_refs(gold_manifest_prefix(lake_root), suffix=".json")
         if "/run_id=" in ref or "/run_id%3D" in ref
     ]
     manifests: list[dict[str, Any]] = []
-    for ref in refs:
+    for ref in reversed(refs):
         try:
             manifest = dict(read_json(ref))
         except Exception:  # noqa: BLE001 - one bad manifest should not hide the usable history.
             continue
         if manifest.get("table_refs", {}).get("fact_price_index_values"):
             manifests.append(manifest)
+        if len(manifests) >= requested_limit:
+            break
 
     manifests.sort(key=lambda row: str(row.get("observed_at") or ""), reverse=True)
-    return manifests[: max(1, int(limit))]
+    return manifests[:requested_limit]
 
 
 def gold_manifest_prefix(lake_root: str) -> str:
@@ -353,13 +356,22 @@ order by gpu_model
     )
     latest_by_model = {str(row.get("gpu_model")): row for row in latest_rows}
 
-    history = query_gold_index_history(
-        lake_root=lake_root,
-        history_limit=history_limit,
-        gpu_models=gpu_models,
-    )
+    warnings: list[str] = []
+    try:
+        history = query_gold_index_history(
+            lake_root=lake_root,
+            history_limit=history_limit,
+            gpu_models=gpu_models,
+        )
+        history_rows = history["rows"]
+        history_manifest_count = history["history_manifest_count"]
+    except Exception as exc:  # noqa: BLE001 - featured values should still publish without history.
+        history_rows = []
+        history_manifest_count = 0
+        warnings.append(f"featured index history skipped: {exc}")
+
     last_seen_by_model: dict[str, dict[str, Any]] = {}
-    for row in history["rows"]:
+    for row in history_rows:
         gpu_model = str(row.get("gpu_model") or "")
         if gpu_model:
             last_seen_by_model[gpu_model] = row
@@ -427,9 +439,10 @@ order by gpu_model
 
     return {
         "manifest": manifest,
-        "history_manifest_count": history["history_manifest_count"],
+        "history_manifest_count": history_manifest_count,
         "products": featured_products,
         "rows": rows,
+        "warnings": warnings,
     }
 
 
@@ -495,7 +508,7 @@ def query_gold_provider_comparison(
 ) -> dict[str, Any]:
     manifest = read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"]["fact_gpu_listings"]
-    filters = ["availability_status = 'available'"]
+    filters = ["availability_status in ('available', 'published_rate')"]
     if gpu_model:
         filters.append(f"gpu_model = {_sql_literal(gpu_model)}")
     where = f"where {' and '.join(filters)}"
@@ -530,7 +543,7 @@ def query_gold_listings(
 ) -> dict[str, Any]:
     manifest = read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"]["fact_gpu_listings"]
-    filters = ["availability_status = 'available'"]
+    filters = ["availability_status in ('available', 'published_rate')"]
     if gpu_model:
         filters.append(f"gpu_model = {_sql_literal(gpu_model)}")
     where = f"where {' and '.join(filters)}"
@@ -640,19 +653,24 @@ def export_gold_dashboard_snapshot(
         dashboard_exported_at=utc_now().isoformat(),
         dashboard_output_root=output_root,
     )
+    warnings = []
     index = query_gold_price_index(lake_root=lake_root, limit=limit)["rows"]
-    featured_index_payload = query_gold_featured_index(lake_root=lake_root)
+    featured_index_payload = query_gold_featured_index(lake_root=lake_root, history_limit=12)
+    warnings.extend(featured_index_payload.get("warnings", []))
     featured_index = featured_index_payload["rows"]
     benchmark_values_payload = query_gold_benchmark_values(lake_root=lake_root)
     benchmark_values = benchmark_values_payload["rows"]
     benchmark_constituents = query_gold_benchmark_constituents(lake_root=lake_root, limit=limit)["rows"]
     public_benchmark_values = [_public_benchmark_value(row) for row in benchmark_values]
     public_benchmark_constituents = [_public_benchmark_constituent(row) for row in benchmark_constituents]
-    index_history_payload = query_gold_index_history(lake_root=lake_root, history_limit=48)
+    try:
+        index_history_payload = query_gold_index_history(lake_root=lake_root, history_limit=24)
+    except Exception as exc:  # noqa: BLE001 - latest dashboard snapshots are more important than history.
+        index_history_payload = {"history_manifest_count": 0, "rows": []}
+        warnings.append(f"index history export skipped: {exc}")
     index_history = index_history_payload["rows"]
     provider_comparison = query_gold_provider_comparison(lake_root=lake_root, limit=limit)["rows"]
     listings = query_gold_listings(lake_root=lake_root, limit=limit)["rows"]
-    warnings = []
     try:
         constituents = query_gold_index_constituents(lake_root=lake_root, limit=limit)["rows"]
         index_quality = query_gold_index_quality(lake_root=lake_root, limit=limit)["rows"]
@@ -873,7 +891,7 @@ usable_offers as (
     is_secure
   from silver_gpu_offers
   where price_usd_hr > 0
-    and availability_status = 'available'
+    and availability_status in ('available', 'published_rate')
 )
 select
   concat('CBZ-GPU-FLOOR-', gpu_model) as index_symbol,
@@ -916,12 +934,12 @@ candidate_offers as (
     availability_status,
     case
       when price_usd_hr is null or price_usd_hr <= 0 then false
-      when availability_status != 'available' then false
+      when availability_status not in ('available', 'published_rate') then false
       else true
     end as included,
     case
       when price_usd_hr is null or price_usd_hr <= 0 then 'non_positive_price'
-      when availability_status != 'available' then 'not_available'
+      when availability_status not in ('available', 'published_rate') then 'not_available'
       else null
     end as exclusion_reason,
     observed_at

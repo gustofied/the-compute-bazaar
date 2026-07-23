@@ -7,14 +7,15 @@ from typing import Any
 
 from .events import new_run_id
 from .gold import build_gold_market_tables, export_gold_dashboard_snapshot
-from .pipeline import IngestResult, ingest_lium, ingest_vast
+from .pipeline import IngestResult, ingest_lium, ingest_rate_card, ingest_vast
+from .providers.rate_cards import rate_card_providers
 from .schemas import to_jsonable, utc_now
 from .storage import list_refs, read_json, write_json
 
 
 MARKET_RUN_MANIFEST_VERSION = "v1"
 MARKET_RUN_TABLE = "market_runs"
-DEFAULT_MARKET_PROVIDERS = ["vast", "lium"]
+DEFAULT_MARKET_PROVIDERS = ["vast", "lium", *rate_card_providers()]
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,18 @@ def run_market_hourly(
                 query={"size": lium_size},
                 paginate=lium_paginate,
                 max_pages=lium_max_pages,
+            )
+        elif provider in rate_card_providers():
+            result = ingest_rate_card(
+                provider=provider,
+                raw_root=raw_root,
+                lake_root=lake_root,
+                automq_bootstrap_servers=automq_bootstrap_servers,
+                automq_config=automq_config,
+                topic_prefix=topic_prefix,
+                dry_run=dry_run,
+                run_id=provider_run_id,
+                trace_id=market_run_id,
             )
         else:
             raise ValueError(f"Unsupported market provider: {provider}")
@@ -215,21 +228,24 @@ def read_latest_market_run(lake_root: str) -> dict[str, Any]:
 
 
 def list_market_runs(lake_root: str, *, limit: int = 24) -> list[dict[str, Any]]:
+    requested_limit = max(1, int(limit))
     refs = [
         ref
         for ref in list_refs(market_runs_manifest_prefix(lake_root), suffix=".json")
         if "/run_id=" in ref or "/run_id%3D" in ref
     ]
     manifests: list[dict[str, Any]] = []
-    for ref in refs:
+    for ref in reversed(refs):
         try:
             manifest = dict(read_json(ref))
         except Exception:  # noqa: BLE001 - a partial/bad manifest should not hide the good history.
             continue
         manifests.append(manifest)
+        if len(manifests) >= requested_limit:
+            break
 
     manifests.sort(key=lambda row: str(row.get("observed_at") or ""), reverse=True)
-    return manifests[: max(1, int(limit))]
+    return manifests[:requested_limit]
 
 
 def write_dashboard_market_run_snapshots(

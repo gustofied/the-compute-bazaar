@@ -1,13 +1,13 @@
-"""Named DataFusion SQL queries for observed GPU benchmark products."""
+"""Named DataFusion SQL queries for frontier GPU benchmark products."""
 
 from __future__ import annotations
 
 from typing import Any
 
 
-BENCHMARK_METHODOLOGY_VERSION = "observed_trimmed_mean_v0"
-BENCHMARK_VALUES_QUERY_ID = "benchmark_frontier_gpu_families_v0"
-BENCHMARK_CONSTITUENTS_QUERY_ID = "benchmark_frontier_gpu_constituents_v0"
+BENCHMARK_METHODOLOGY_VERSION = "market_observation_trimmed_mean_v1"
+BENCHMARK_VALUES_QUERY_ID = "benchmark_frontier_gpu_families_v1"
+BENCHMARK_CONSTITUENTS_QUERY_ID = "benchmark_frontier_gpu_constituents_v1"
 BENCHMARK_FAMILIES = [
     {"family_id": "H100", "label": "H100", "gpu_model_prefixes": ["H100_"]},
     {"family_id": "H200", "label": "H200", "gpu_model_prefixes": ["H200_"]},
@@ -17,7 +17,7 @@ BENCHMARK_FAMILIES = [
 
 
 def benchmark_values_v0_sql(context: dict[str, Any]) -> str:
-    """Compute observed frontier GPU benchmark values from gold listings."""
+    """Compute frontier GPU benchmark values from gold listings."""
     source_run_id = _sql_literal(str(context["source_run_id"]))
     source_manifest_ref = _sql_literal(str(context["source_manifest_ref"]))
     source_normalized_ref = _sql_literal(str(context["source_normalized_ref"]))
@@ -37,7 +37,7 @@ candidate_offers as (
   join benchmark_families families
     on listings.gpu_model = rtrim(families.gpu_model_prefix, '_')
     or listings.gpu_model like concat(families.gpu_model_prefix, '%')
-  where listings.availability_status = 'available'
+  where listings.availability_status in ('available', 'published_rate')
     and listings.price_usd_gpu_hr > 0
 ),
 ranked as (
@@ -125,7 +125,7 @@ order by families.sort_order
 
 
 def benchmark_constituents_v0_sql(context: dict[str, Any]) -> str:
-    """Return candidate rows behind observed frontier GPU benchmarks."""
+    """Return candidate rows behind frontier GPU benchmarks."""
     source_run_id = _sql_literal(str(context["source_run_id"]))
     source_manifest_ref = _sql_literal(str(context["source_manifest_ref"]))
     source_normalized_ref = _sql_literal(str(context["source_normalized_ref"]))
@@ -145,7 +145,7 @@ candidate_offers as (
   join benchmark_families families
     on listings.gpu_model = rtrim(families.gpu_model_prefix, '_')
     or listings.gpu_model like concat(families.gpu_model_prefix, '%')
-  where listings.availability_status = 'available'
+  where listings.availability_status in ('available', 'published_rate')
     and listings.price_usd_gpu_hr > 0
 ),
 ranked as (

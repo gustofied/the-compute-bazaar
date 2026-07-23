@@ -17,7 +17,7 @@ select
   count(distinct provider) as provider_count
 from gpu_offers
 where price_usd_hr > 0
-  and availability_status = 'available'
+  and availability_status in ('available', 'published_rate')
 group by gpu_model
 order by gpu_model
 """
@@ -42,7 +42,7 @@ with usable_offers as (
     is_spot
   from gpu_offers
   where price_usd_hr > 0
-    and availability_status = 'available'
+    and availability_status in ('available', 'published_rate')
 )
 select
   gpu_model,

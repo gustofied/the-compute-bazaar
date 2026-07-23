@@ -78,6 +78,16 @@ The materialized gold tables are the hourly published memory of those named quer
 deepest truth; the deepest truth is the raw evidence, silver observations, gold inputs, methodology
 query, and manifest chain that can reproduce them.
 
+The benchmark input set can include two kinds of provider observations:
+
+- live marketplace offers from provider APIs such as Vast and Lium
+- official published rate-card observations from providers such as Runpod, Lambda, Hyperstack,
+  Nebius, Crusoe, and TensorDock
+
+Curia should keep those source types legible. Published rate cards improve benchmark coverage, but
+they are not executable inventory. Live procurement workflows should still confirm availability
+through live provider APIs.
+
 ## Gold Contract
 
 Every Curia-authored gold object should carry enough metadata to explain itself:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from functools import lru_cache
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,7 @@ def list_refs(uri_prefix: str, *, suffix: str = "") -> list[str]:
         except ImportError as exc:
             raise RuntimeError("Listing s3:// paths requires boto3") from exc
 
-        client = boto3.client("s3")
+        client = _s3_client()
         prefix = parsed.path.lstrip("/")
         refs: list[str] = []
         continuation_token: str | None = None
@@ -77,7 +78,7 @@ def write_bytes(uri: str, data: bytes, *, content_type: str | None = None) -> st
         kwargs: dict[str, Any] = {"Bucket": bucket, "Key": key, "Body": data}
         if content_type:
             kwargs["ContentType"] = content_type
-        boto3.client("s3").put_object(**kwargs)
+        _s3_client().put_object(**kwargs)
         return uri
 
     path = Path(uri)
@@ -94,10 +95,30 @@ def read_bytes(uri: str) -> bytes:
         except ImportError as exc:
             raise RuntimeError("Reading s3:// paths requires the 'platform' extra: uv sync --extra platform") from exc
 
-        response = boto3.client("s3").get_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
+        response = _s3_client().get_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
         return response["Body"].read()
 
     return Path(uri).read_bytes()
+
+
+@lru_cache(maxsize=1)
+def _s3_client() -> Any:
+    """Create an S3 client with bounded waits for dashboard/export paths."""
+    try:
+        import boto3
+        from botocore.config import Config
+    except ImportError as exc:
+        raise RuntimeError("Reading or writing s3:// paths requires boto3") from exc
+
+    connect_timeout = int(os.getenv("COMPUTE_BAZAAR_S3_CONNECT_TIMEOUT", "5"))
+    read_timeout = int(os.getenv("COMPUTE_BAZAAR_S3_READ_TIMEOUT", "10"))
+    max_attempts = int(os.getenv("COMPUTE_BAZAAR_S3_MAX_ATTEMPTS", "3"))
+    config = Config(
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+        retries={"max_attempts": max_attempts, "mode": "standard"},
+    )
+    return boto3.client("s3", config=config)
 
 
 def write_offers_parquet(uri: str, offers: Iterable[GpuOffer]) -> str:

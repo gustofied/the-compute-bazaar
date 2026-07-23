@@ -26,6 +26,8 @@ from the_compute_bazaar.prices.operator import (
     trace_operator_row,
 )
 from the_compute_bazaar.prices.providers.lium import LiumClient, normalize_executor
+from the_compute_bazaar.prices.pipeline import ingest_rate_card
+from the_compute_bazaar.prices.providers.rate_cards import rate_card_providers
 from the_compute_bazaar.prices.providers.vast import VastClient, default_market_query
 from the_compute_bazaar.prices.schemas import GpuOffer
 from the_compute_bazaar.prices.storage import read_json, write_json, write_offers_parquet
@@ -111,6 +113,40 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertEqual(call["url"], "https://example.test/api/v0/bundles/")
         self.assertEqual(call["headers"]["Authorization"], "Bearer test-key")
         self.assertEqual(call["json"], default_market_query())
+
+    def test_published_rate_cards_normalize_as_provider_observations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            runpod = ingest_rate_card(
+                provider="runpod",
+                raw_root=raw_root,
+                lake_root=lake_root,
+                dry_run=True,
+                run_id="runpod-rates",
+            )
+            hyperstack = ingest_rate_card(
+                provider="hyperstack",
+                raw_root=raw_root,
+                lake_root=lake_root,
+                dry_run=True,
+                run_id="hyperstack-rates",
+            )
+
+            build_gold_market_tables(
+                lake_root=lake_root,
+                providers=["runpod", "hyperstack"],
+                run_id="gold-rate-cards",
+            )
+            values = query_gold_benchmark_values(lake_root=lake_root)
+
+        self.assertIn("runpod", rate_card_providers())
+        self.assertGreater(runpod.normalized_offer_count, 0)
+        self.assertGreater(hyperstack.normalized_offer_count, 0)
+        rows = {row["benchmark_family_id"]: row for row in values["rows"]}
+        self.assertEqual(rows["B300"]["status"], "observed")
+        self.assertEqual(rows["B300"]["provider_count"], 2)
+        self.assertEqual(rows["H200"]["provider_count"], 2)
 
 
 class GoldQueryTests(unittest.TestCase):

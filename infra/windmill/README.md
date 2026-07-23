@@ -150,7 +150,7 @@ AWS_EXECUTION_ENV,AWS_CONTAINER_CREDENTIALS_RELATIVE_URI,AWS_DEFAULT_REGION,AWS_
 The main script is `infra/windmill/market_hourly.py`. It runs the complete heartbeat:
 
 ```text
-ingest Vast -> ingest Lium -> build gold -> export dashboard JSON -> write market run manifest
+ingest Vast -> ingest Lium -> ingest published rate cards -> build gold -> export dashboard JSON -> write market run manifest
 ```
 
 In the dev worker image it shells out to the baked project CLI:
@@ -192,7 +192,7 @@ Suggested schedule args, using Windmill variables/secrets:
   "kafka_password": "$var:f/compute-bazaar/kafka_password",
   "aws_region": "eu-west-3",
   "topic_prefix": "gpu",
-  "providers": "vast,lium",
+  "providers": "vast,lium,crusoe,hyperstack,lambda,nebius,runpod,tensordock",
   "lium_size": 200,
   "lium_max_pages": 10,
   "lium_paginate": true,
@@ -240,6 +240,7 @@ Inside a VPC-connected worker image, this is the equivalent command:
 ```sh
 gpu-prices ingest-vast
 gpu-prices ingest-lium --size 200 --paginate --max-pages 10
+gpu-prices ingest-rate-card --provider published_rate_cards
 gpu-prices market-hourly
 ```
 

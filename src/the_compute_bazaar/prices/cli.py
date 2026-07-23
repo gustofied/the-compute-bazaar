@@ -30,7 +30,8 @@ from .market_run import (
     write_dashboard_market_run_snapshots,
 )
 from .operator import list_operator_queries, preview_operator_ref, run_operator_query, run_operator_sql
-from .pipeline import ingest_lium, ingest_vast
+from .pipeline import ingest_lium, ingest_rate_card, ingest_vast
+from .providers.rate_cards import DEFAULT_RATE_CARD_PROVIDER, rate_card_providers
 from .schemas import to_jsonable
 
 
@@ -67,6 +68,23 @@ def main() -> None:
     ingest_lium_parser.add_argument("--run-id")
     ingest_lium_parser.add_argument("--trace-id")
     ingest_lium_parser.add_argument("--dry-run", action="store_true", help="Skip AutoMQ and keep publishing in memory")
+
+    ingest_rate_card_parser = subparsers.add_parser(
+        "ingest-rate-card",
+        help="Ingest official published provider rate cards as benchmark observations",
+    )
+    ingest_rate_card_parser.add_argument(
+        "--provider",
+        choices=[DEFAULT_RATE_CARD_PROVIDER, *rate_card_providers()],
+        default=DEFAULT_RATE_CARD_PROVIDER,
+    )
+    ingest_rate_card_parser.add_argument("--raw-root", default=os.getenv("COMPUTE_BAZAAR_RAW_ROOT", "data/raw"))
+    ingest_rate_card_parser.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
+    ingest_rate_card_parser.add_argument("--automq-bootstrap-servers", default=kafka_bootstrap_servers_from_env())
+    ingest_rate_card_parser.add_argument("--topic-prefix", default=os.getenv("COMPUTE_BAZAAR_TOPIC_PREFIX", "gpu"))
+    ingest_rate_card_parser.add_argument("--run-id")
+    ingest_rate_card_parser.add_argument("--trace-id")
+    ingest_rate_card_parser.add_argument("--dry-run", action="store_true", help="Skip AutoMQ and keep publishing in memory")
 
     query = subparsers.add_parser("query", help="Run DataFusion SQL over a Parquet dataset")
     query.add_argument("--parquet", required=True)
@@ -115,14 +133,14 @@ def main() -> None:
 
     gold_benchmarks = subparsers.add_parser(
         "gold-benchmarks",
-        help="Query the latest H100/H200/B200/B300 observed benchmark values",
+        help="Query the latest H100/H200/B200/B300 benchmark values",
     )
     gold_benchmarks.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
     gold_benchmarks.add_argument("--limit", type=int, default=25)
 
     gold_benchmark_constituents = subparsers.add_parser(
         "gold-benchmark-constituents",
-        help="Query listing constituents behind observed benchmark values",
+        help="Query listing constituents behind benchmark values",
     )
     gold_benchmark_constituents.add_argument("--lake-root", default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"))
     gold_benchmark_constituents.add_argument("--benchmark-family-id", choices=["H100", "H200", "B200", "B300"])
@@ -199,7 +217,7 @@ def main() -> None:
         "--dashboard-output-root",
         default=os.getenv("COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT", "data/dashboard/compute-bazaar"),
     )
-    market_hourly.add_argument("--providers", default="vast,lium")
+    market_hourly.add_argument("--providers", default=",".join(["vast", "lium", *rate_card_providers()]))
     market_hourly.add_argument("--automq-bootstrap-servers", default=kafka_bootstrap_servers_from_env())
     market_hourly.add_argument("--topic-prefix", default=os.getenv("COMPUTE_BAZAAR_TOPIC_PREFIX", "gpu"))
     market_hourly.add_argument("--run-id")
@@ -282,6 +300,21 @@ def main() -> None:
             api_base=args.api_base,
             paginate=args.paginate,
             max_pages=args.max_pages,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "ingest-rate-card":
+        result = ingest_rate_card(
+            provider=args.provider,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
         )
         _print_json(result.to_dict())
         return
@@ -429,7 +462,7 @@ def main() -> None:
                 raw_root=args.raw_root,
                 lake_root=args.lake_root,
                 dashboard_output_root=args.dashboard_output_root,
-                providers=_parse_csv(args.providers) or ["vast", "lium"],
+                providers=_parse_csv(args.providers) or ["vast", "lium", *rate_card_providers()],
                 automq_bootstrap_servers=args.automq_bootstrap_servers,
                 automq_config=kafka_config_from_env(),
                 topic_prefix=args.topic_prefix,

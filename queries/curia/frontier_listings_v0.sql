@@ -19,7 +19,7 @@ select
   source_normalized_ref,
   observed_at
 from fact_gpu_listings
-where availability_status = 'available'
+where availability_status in ('available', 'published_rate')
   and (
     gpu_model like 'H100%'
     or gpu_model like 'H200%'

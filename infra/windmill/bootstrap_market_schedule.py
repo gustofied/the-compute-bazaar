@@ -21,6 +21,9 @@ from bootstrap_provider_schedule import (
 )
 
 
+DEFAULT_PROVIDER_SCOPE = "vast,lium,crusoe,hyperstack,lambda,nebius,runpod,tensordock"
+
+
 def main() -> None:
     _load_local_env()
 
@@ -59,7 +62,10 @@ def main() -> None:
         path=script_path,
         content=script_body,
         summary="Hourly Compute Bazaar market heartbeat",
-        description="Ingests Vast and Lium, builds gold, exports dashboard JSON, and writes a market run manifest.",
+        description=(
+            "Ingests Vast, Lium, and official published rate cards, builds gold, "
+            "exports dashboard JSON, and writes a market run manifest."
+        ),
     )
     run_args = schedule_args(
         folder,
@@ -167,7 +173,7 @@ def schedule_args(
         "kafka_password": f"$var:f/{folder}/kafka_password",
         "aws_region": os.getenv("AWS_REGION", "eu-west-3"),
         "topic_prefix": "gpu",
-        "providers": "vast,lium",
+        "providers": DEFAULT_PROVIDER_SCOPE,
         "lium_size": lium_size,
         "lium_max_pages": lium_max_pages,
         "lium_paginate": lium_paginate,

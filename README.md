@@ -50,6 +50,7 @@ More artefacts will come here later.
 ```text
 Provider APIs
   -> Windmill scheduled workers
+  -> official published rate-card snapshots
   -> AutoMQ / Kafka event stream
   -> S3 bronze raw evidence
   -> S3 silver normalized offers
@@ -67,7 +68,7 @@ silver/gpu_offers          normalized provider offers in one schema
 Curia                      controlled authoring layer for market truth
 gold/fact_gpu_listings     query-ready market listings
 gold/fact_price_index_*    index values and constituents
-gold/fact_benchmark_*      observed H100/H200/B200/B300 benchmark values and constituents
+gold/fact_benchmark_*      H100/H200/B200/B300 benchmark values and constituents
 gold/dim_*                 GPU, provider, and region dimensions
 AutoMQ                     live event tape
 DataFusion                 SQL compute engine Curia uses over lake tables
@@ -126,6 +127,7 @@ Local dry runs:
 ```sh
 uv run gpu-prices ingest-vast --dry-run --raw-root data/raw --lake-root data/lake
 uv run gpu-prices ingest-lium --dry-run --paginate --max-pages 10 --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-rate-card --provider runpod --dry-run --raw-root data/raw --lake-root data/lake
 ```
 
 VPC/Windmill production-shaped runs publish to AutoMQ and write S3:
@@ -133,6 +135,7 @@ VPC/Windmill production-shaped runs publish to AutoMQ and write S3:
 ```sh
 uv run gpu-prices ingest-vast
 uv run gpu-prices ingest-lium --size 200 --paginate --max-pages 10
+uv run gpu-prices ingest-rate-card --provider published_rate_cards
 ```
 
 Inspect latest provider output:
@@ -147,8 +150,9 @@ Windmill setup lives in [infra/windmill/](infra/windmill/).
 
 ## Market Heartbeat
 
-The main Stage 1.5 loop is `market-hourly`. It ingests both providers, writes bronze/silver,
-builds gold, exports dashboard JSON, and writes one top-level market run manifest.
+The main Stage 1.5 loop is `market-hourly`. It ingests live marketplace providers plus official
+published rate-card providers, writes bronze/silver, builds gold, exports dashboard JSON, and writes
+one top-level market run manifest.
 
 ```sh
 uv run gpu-prices market-hourly --dry-run \
@@ -176,7 +180,7 @@ keeps only public-safe status, counts, and query rows.
 Build combined gold tables from latest provider silver manifests:
 
 ```sh
-uv run gpu-prices build-gold --providers vast,lium
+uv run gpu-prices build-gold --providers vast,lium,crusoe,hyperstack,lambda,nebius,runpod,tensordock
 uv run gpu-prices latest-gold-manifest
 uv run gpu-prices gold-index --limit 10
 uv run gpu-prices gold-index-history --history-limit 24
@@ -188,20 +192,25 @@ uv run gpu-prices gold-provider-comparison --limit 20
 uv run gpu-prices export-gold-dashboard --limit 100
 ```
 
-The provider comparison and price-index commands filter to available offers.
+The provider comparison and price-index commands filter to available live offers and published-rate
+observations.
 The listing table keeps broader evidence rows so provider state can be inspected
 without polluting market-floor outputs.
 The constituents table keeps included and excluded index candidates with an
 `exclusion_reason`, so index values can be explained rather than only displayed.
-The benchmark tables currently publish four observed frontier families: H100,
-H200, B200, and B300. Their v0 benchmark value is a representative observed
-GPU-hour price over available family listings, with the underlying rows kept in
+The benchmark tables currently publish four frontier families: H100, H200,
+B200, and B300. Their current benchmark value is a representative GPU-hour price over available live
+offers and official published rate-card observations, with the underlying rows kept in
 `fact_benchmark_constituents`. The benchmark methodology is query-defined:
 Python writes `gold.fact_gpu_listings`, then runs named DataFusion SQL from
 `src/the_compute_bazaar/prices/benchmark_queries.py` and materializes the result
 as `gold.fact_benchmark_values` and `gold.fact_benchmark_constituents`. In the
 project language, that is a Curia-authored gold product: DataFusion computes the
 methodology, Curia decides and records what becomes product truth.
+
+The rate-card providers are deliberately separate from live inventory providers. They are useful
+for benchmark context and provider breadth, but they are not proof that a machine is rentable at
+that exact second. Live procurement should still use live provider APIs.
 
 ## Dashboard
 
@@ -336,7 +345,7 @@ http://127.0.0.1:8777/exemplars/compute/feeling_the_compute.html
 
 That server also exposes `/api/dashboard-snapshots/*.json`, so the AdamSioud page can keep its
 static-site shape while syncing small public-safe labels from the latest S3 gold snapshot. The first
-publication signal is the H100/H200/B200/B300 observed benchmark strip from
+publication signal is the H100/H200/B200/B300 benchmark strip from
 `featured-benchmarks.json`, with `featured-index.json` as a floor fallback while old snapshots age
 out. The prototype dashboard remains the draft surface; AdamSioud should receive only composed,
 publication-ready signals.

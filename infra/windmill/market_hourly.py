@@ -7,6 +7,9 @@ import os
 import subprocess
 
 
+DEFAULT_PROVIDER_SCOPE = "vast,lium,crusoe,hyperstack,lambda,nebius,runpod,tensordock"
+
+
 def main(
     vast_api_key: str | None = None,
     lium_api_key: str | None = None,
@@ -20,7 +23,7 @@ def main(
     kafka_password: str | None = None,
     aws_region: str = "eu-west-3",
     topic_prefix: str = "gpu",
-    providers: str = "vast,lium",
+    providers: str = DEFAULT_PROVIDER_SCOPE,
     lium_size: int = 200,
     lium_max_pages: int = 10,
     lium_paginate: bool = True,

@@ -6,7 +6,7 @@
       "query_id": "benchmark_values",
       "version": "v0",
       "title": "Benchmark Values",
-      "description": "Curia-authored H100, H200, B200, and B300 observed benchmark values.",
+      "description": "Curia-authored H100, H200, B200, and B300 market benchmark values.",
       "tables": ["fact_benchmark_values"],
       "sql_path": "benchmark_values_v0.sql",
       "default_limit": 20
