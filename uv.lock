@@ -961,6 +961,16 @@ name = "instinct-bench"
 version = "0.1.0"
 source = { virtual = "external/instinct-bench" }
 
+[package.dev-dependencies]
+dev = [
+    { name = "jsonschema" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "jsonschema", specifier = "==4.26.0" }]
+
 [[package]]
 name = "jinja2"
 version = "3.1.6"
