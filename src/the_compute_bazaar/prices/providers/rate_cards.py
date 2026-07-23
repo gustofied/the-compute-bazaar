@@ -17,7 +17,7 @@ from ..schemas import GpuOffer
 
 
 DEFAULT_RATE_CARD_PROVIDER = "published_rate_cards"
-RATE_CARD_SOURCE_VERSION = "2026-07-24.1"
+RATE_CARD_SOURCE_VERSION = "2026-07-24.2"
 RATE_CARD_SOURCE_CHECKED_AT = "2026-07-23T22:00:00+00:00"
 
 
@@ -60,6 +60,102 @@ class RateCardEntry:
 
 
 PUBLISHED_RATE_CARDS: tuple[RateCardEntry, ...] = (
+    RateCardEntry(
+        provider="denvr",
+        source_offer_id="denvr-h100-sxm-80gb-8x",
+        gpu_name="NVIDIA H100 SXM",
+        gpu_count=8,
+        vram_gb=80,
+        price_usd_gpu_hr=2.10,
+        source_url="https://docs.denvrdata.com/docs/platform/billing",
+        source_checked_at="2026-07-23T23:05:00+00:00",
+        notes="Published on-demand price per GPU for an 8x H100 SXM instance.",
+    ),
+    RateCardEntry(
+        provider="voltage_park",
+        source_offer_id="voltage-park-h100-sxm-80gb-from",
+        gpu_name="NVIDIA H100 SXM",
+        vram_gb=80,
+        price_usd_gpu_hr=1.99,
+        source_url="https://www.voltagepark.com/pricing",
+        price_basis="published_from_rate",
+        source_checked_at="2026-07-23T23:05:00+00:00",
+        notes="Published starting price for an H100 hour without a contract.",
+    ),
+    RateCardEntry(
+        provider="massed_compute",
+        source_offer_id="massed-compute-h100-80gb-1x",
+        gpu_name="NVIDIA H100",
+        vram_gb=80,
+        price_usd_gpu_hr=2.73,
+        source_url="https://vm.massedcompute.com/pricing",
+        source_checked_at="2026-07-23T23:05:00+00:00",
+        notes="Published on-demand price for a 1x H100 instance.",
+    ),
+    RateCardEntry(
+        provider="massed_compute",
+        source_offer_id="massed-compute-h100-sxm5-80gb-8x",
+        gpu_name="NVIDIA H100 SXM5",
+        gpu_count=8,
+        vram_gb=80,
+        price_usd_gpu_hr=3.14,
+        source_url="https://vm.massedcompute.com/pricing",
+        source_checked_at="2026-07-23T23:05:00+00:00",
+        notes="Published $25.12 hourly price for an 8x H100 SXM5 instance.",
+    ),
+    RateCardEntry(
+        provider="massed_compute",
+        source_offer_id="massed-compute-h100-nvl-94gb-1x",
+        gpu_name="NVIDIA H100 NVL",
+        vram_gb=94,
+        price_usd_gpu_hr=3.11,
+        source_url="https://vm.massedcompute.com/pricing",
+        source_checked_at="2026-07-23T23:05:00+00:00",
+        notes="Published on-demand price for a 1x H100 NVL instance.",
+    ),
+    RateCardEntry(
+        provider="massed_compute",
+        source_offer_id="massed-compute-h200-nvl-141gb-1x",
+        gpu_name="NVIDIA H200 NVL",
+        vram_gb=141,
+        price_usd_gpu_hr=3.62,
+        source_url="https://vm.massedcompute.com/pricing",
+        source_checked_at="2026-07-23T23:05:00+00:00",
+        notes="Published on-demand price for a 1x H200 NVL instance.",
+    ),
+    RateCardEntry(
+        provider="verda",
+        source_offer_id="verda-h200-sxm5-141gb-8x",
+        gpu_name="NVIDIA H200 SXM5",
+        gpu_count=8,
+        vram_gb=141,
+        price_usd_gpu_hr=4.00,
+        source_url="https://verda.com/instant-clusters",
+        source_checked_at="2026-07-23T23:05:00+00:00",
+        notes="Published $32.00 hourly node price for an 8x H200 instant cluster.",
+    ),
+    RateCardEntry(
+        provider="verda",
+        source_offer_id="verda-b200-sxm6-180gb-8x",
+        gpu_name="NVIDIA B200 SXM6",
+        gpu_count=8,
+        vram_gb=180,
+        price_usd_gpu_hr=6.11,
+        source_url="https://verda.com/instant-clusters",
+        source_checked_at="2026-07-23T23:05:00+00:00",
+        notes="Published $48.88 hourly node price for an 8x B200 instant cluster.",
+    ),
+    RateCardEntry(
+        provider="verda",
+        source_offer_id="verda-b300-sxm6-288gb-8x",
+        gpu_name="NVIDIA B300 SXM6",
+        gpu_count=8,
+        vram_gb=288,
+        price_usd_gpu_hr=7.50,
+        source_url="https://verda.com/instant-clusters",
+        source_checked_at="2026-07-23T23:05:00+00:00",
+        notes="Published $60.00 hourly node price for an 8x B300 instant cluster.",
+    ),
     RateCardEntry(
         provider="runpod",
         source_offer_id="runpod-pods-b300-288gb-1x",

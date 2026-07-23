@@ -82,7 +82,8 @@ The benchmark input set can include two kinds of provider observations:
 
 - live marketplace offers from provider APIs such as Vast and Lium
 - official published rate-card observations from providers such as Runpod, Lambda, Hyperstack,
-  Nebius, Crusoe, DigitalOcean, GMI Cloud, TensorDock, and VESSL
+  Nebius, Crusoe, Denvr, DigitalOcean, GMI Cloud, Massed Compute, TensorDock,
+  Verda, VESSL, and Voltage Park
 
 Curia keeps those source types legible. The advertised benchmark uses one
 eligible floor per provider and publishes their median, while future and

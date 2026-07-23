@@ -22,7 +22,8 @@ from bootstrap_provider_schedule import (
 
 
 DEFAULT_PROVIDER_SCOPE = (
-    "vast,lium,crusoe,digitalocean,gmi_cloud,hyperstack,lambda,nebius,runpod,tensordock,vessl"
+    "vast,lium,crusoe,denvr,digitalocean,gmi_cloud,hyperstack,lambda,massed_compute,"
+    "nebius,runpod,tensordock,verda,vessl,voltage_park"
 )
 
 

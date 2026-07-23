@@ -192,7 +192,7 @@ Suggested schedule args, using Windmill variables/secrets:
   "kafka_password": "$var:f/compute-bazaar/kafka_password",
   "aws_region": "eu-west-3",
   "topic_prefix": "gpu",
-  "providers": "vast,lium,crusoe,digitalocean,gmi_cloud,hyperstack,lambda,nebius,runpod,tensordock,vessl",
+  "providers": "vast,lium,crusoe,denvr,digitalocean,gmi_cloud,hyperstack,lambda,massed_compute,nebius,runpod,tensordock,verda,vessl,voltage_park",
   "lium_size": 200,
   "lium_max_pages": 10,
   "lium_paginate": true,

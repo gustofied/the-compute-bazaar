@@ -154,6 +154,10 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertIn("runpod", rate_card_providers())
         self.assertIn("gmi_cloud", rate_card_providers())
         self.assertIn("digitalocean", rate_card_providers())
+        self.assertIn("denvr", rate_card_providers())
+        self.assertIn("massed_compute", rate_card_providers())
+        self.assertIn("verda", rate_card_providers())
+        self.assertIn("voltage_park", rate_card_providers())
         self.assertGreater(runpod.normalized_offer_count, 0)
         self.assertGreater(hyperstack.normalized_offer_count, 0)
         self.assertGreater(vessl.normalized_offer_count, 0)
@@ -169,6 +173,34 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertFalse(hyperstack_b300["included"])
         self.assertEqual(hyperstack_b300["availability_status"], "published_rate_future")
         self.assertEqual(hyperstack_b300["exclusion_reason"], "future_rate")
+
+    def test_new_rate_cards_expand_frontier_gpu_coverage(self) -> None:
+        providers = ["denvr", "massed_compute", "verda", "voltage_park"]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            for provider in providers:
+                ingest_rate_card(
+                    provider=provider,
+                    raw_root=raw_root,
+                    lake_root=lake_root,
+                    dry_run=True,
+                    run_id=f"{provider}-rates",
+                )
+
+            build_gold_market_tables(
+                lake_root=lake_root,
+                providers=providers,
+                run_id="gold-expanded-rate-cards",
+            )
+            values = query_gold_benchmark_values(lake_root=lake_root)
+
+        rows = {row["benchmark_family_id"]: row for row in values["rows"]}
+        self.assertEqual(rows["H100"]["provider_count"], 3)
+        self.assertEqual(rows["H100"]["benchmark_usd_gpu_hr"], 2.10)
+        self.assertEqual(rows["H200"]["provider_count"], 2)
+        self.assertEqual(rows["B200"]["provider_count"], 1)
+        self.assertEqual(rows["B300"]["provider_count"], 1)
 
 
 class GoldQueryTests(unittest.TestCase):

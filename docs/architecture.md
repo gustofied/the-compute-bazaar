@@ -158,8 +158,8 @@ Stage 1 is live:
 
 - Windmill pulls Vast and Lium from inside the AWS VPC.
 - The heartbeat can also ingest official published rate cards from Runpod, Lambda, Hyperstack,
-  Nebius, Crusoe, DigitalOcean, GMI Cloud, TensorDock, and VESSL as clearly
-  marked provider observations.
+  Nebius, Crusoe, Denvr, DigitalOcean, GMI Cloud, Massed Compute, TensorDock,
+  Verda, VESSL, and Voltage Park as clearly marked provider observations.
 - Raw provider responses are written to S3 bronze. Lium stores a raw pagination envelope so the
   bronze layer contains page-level provider evidence, not just extracted rows.
 - Normalized offers are written to S3 silver.
@@ -189,7 +189,7 @@ responses are retained, available executors are normalized into `silver/gpu_offe
 gold tables are built with:
 
 ```sh
-uv run gpu-prices build-gold --providers vast,lium,crusoe,digitalocean,gmi_cloud,hyperstack,lambda,nebius,runpod,tensordock,vessl
+uv run gpu-prices build-gold --providers vast,lium,crusoe,denvr,digitalocean,gmi_cloud,hyperstack,lambda,massed_compute,nebius,runpod,tensordock,verda,vessl,voltage_park
 ```
 
 The Lium adapter uses `GET /api/executors` with `X-API-Key` authentication, based on the public
@@ -215,9 +215,13 @@ Current published-rate providers:
 - Hyperstack
 - Nebius
 - Crusoe
+- Denvr
 - TensorDock
 - GMI Cloud
+- Massed Compute
+- Verda
 - VESSL
+- Voltage Park
 - DigitalOcean
 
 These rows are not live inventory. Each keeps a source URL, source-check time,

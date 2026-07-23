@@ -180,7 +180,7 @@ keeps only public-safe status, counts, and query rows.
 Build combined gold tables from latest provider silver manifests:
 
 ```sh
-uv run gpu-prices build-gold --providers vast,lium,crusoe,digitalocean,gmi_cloud,hyperstack,lambda,nebius,runpod,tensordock,vessl
+uv run gpu-prices build-gold --providers vast,lium,crusoe,denvr,digitalocean,gmi_cloud,hyperstack,lambda,massed_compute,nebius,runpod,tensordock,verda,vessl,voltage_park
 uv run gpu-prices latest-gold-manifest
 uv run gpu-prices gold-index --limit 10
 uv run gpu-prices gold-index-history --history-limit 24
@@ -213,12 +213,15 @@ project language, that is a Curia-authored gold product: DataFusion computes the
 methodology, Curia decides and records what becomes product truth.
 
 The rate-card providers are deliberately separate from live inventory providers.
-Current official-source coverage includes Crusoe, DigitalOcean, GMI Cloud,
-Hyperstack, Lambda, Nebius, Runpod, TensorDock, and VESSL. The curated rows
-retain their source URL, source-check time, price basis, and access mode. They
-are useful for benchmark context and provider breadth, but they are not proof
-that a machine is rentable at that exact second. Live procurement should still
-use live provider APIs.
+Current official-source coverage includes Crusoe, Denvr, DigitalOcean, GMI
+Cloud, Hyperstack, Lambda, Massed Compute, Nebius, Runpod, TensorDock, Verda,
+VESSL, and Voltage Park. The curated rows retain their source URL, source-check
+time, price basis, and access mode. They are useful for price context and
+provider breadth, but they are not proof that a machine is rentable at that
+exact second. Live procurement should still use live provider APIs.
+
+See [docs/h100-market-comparison.md](docs/h100-market-comparison.md) for the
+current H100 checks against Ornn, Silicon Data, Compute Desk, and Compute Index.
 
 ## Dashboard
 
