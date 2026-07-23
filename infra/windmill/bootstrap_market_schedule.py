@@ -21,7 +21,9 @@ from bootstrap_provider_schedule import (
 )
 
 
-DEFAULT_PROVIDER_SCOPE = "vast,lium,crusoe,hyperstack,lambda,nebius,runpod,tensordock"
+DEFAULT_PROVIDER_SCOPE = (
+    "vast,lium,crusoe,digitalocean,gmi_cloud,hyperstack,lambda,nebius,runpod,tensordock,vessl"
+)
 
 
 def main() -> None:

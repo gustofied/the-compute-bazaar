@@ -132,21 +132,43 @@ class GpuNormalizationTests(unittest.TestCase):
                 dry_run=True,
                 run_id="hyperstack-rates",
             )
+            vessl = ingest_rate_card(
+                provider="vessl",
+                raw_root=raw_root,
+                lake_root=lake_root,
+                dry_run=True,
+                run_id="vessl-rates",
+            )
 
             build_gold_market_tables(
                 lake_root=lake_root,
-                providers=["runpod", "hyperstack"],
+                providers=["runpod", "hyperstack", "vessl"],
                 run_id="gold-rate-cards",
             )
             values = query_gold_benchmark_values(lake_root=lake_root)
+            constituents = query_gold_benchmark_constituents(
+                lake_root=lake_root,
+                benchmark_family_id="B300",
+            )
 
         self.assertIn("runpod", rate_card_providers())
+        self.assertIn("gmi_cloud", rate_card_providers())
+        self.assertIn("digitalocean", rate_card_providers())
         self.assertGreater(runpod.normalized_offer_count, 0)
         self.assertGreater(hyperstack.normalized_offer_count, 0)
+        self.assertGreater(vessl.normalized_offer_count, 0)
         rows = {row["benchmark_family_id"]: row for row in values["rows"]}
         self.assertEqual(rows["B300"]["status"], "observed")
         self.assertEqual(rows["B300"]["provider_count"], 2)
         self.assertEqual(rows["H200"]["provider_count"], 2)
+        self.assertEqual(rows["B300"]["benchmark_basis"], "advertised_hourly")
+        self.assertEqual(rows["B300"]["methodology_version"], "advertised_provider_floor_median_v1")
+        hyperstack_b300 = next(
+            row for row in constituents["rows"] if row["provider"] == "hyperstack"
+        )
+        self.assertFalse(hyperstack_b300["included"])
+        self.assertEqual(hyperstack_b300["availability_status"], "published_rate_future")
+        self.assertEqual(hyperstack_b300["exclusion_reason"], "future_rate")
 
 
 class GoldQueryTests(unittest.TestCase):
@@ -362,7 +384,9 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual(rows["H200"]["status"], "not_observed")
         self.assertIsNone(rows["H200"]["benchmark_usd_gpu_hr"])
         self.assertEqual(len(constituents["rows"]), 3)
-        self.assertTrue(all(row["included"] for row in constituents["rows"]))
+        self.assertEqual(sum(bool(row["included"]) for row in constituents["rows"]), 2)
+        excluded = [row for row in constituents["rows"] if not row["included"]]
+        self.assertEqual(excluded[0]["exclusion_reason"], "higher_same_provider_offer")
         self.assertIn("featured_benchmarks", export["output_refs"])
         self.assertIn("benchmark_constituents", export["output_refs"])
         self.assertEqual(export["row_counts"]["featured_benchmarks"], 4)

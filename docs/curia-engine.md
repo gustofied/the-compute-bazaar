@@ -82,11 +82,14 @@ The benchmark input set can include two kinds of provider observations:
 
 - live marketplace offers from provider APIs such as Vast and Lium
 - official published rate-card observations from providers such as Runpod, Lambda, Hyperstack,
-  Nebius, Crusoe, and TensorDock
+  Nebius, Crusoe, DigitalOcean, GMI Cloud, TensorDock, and VESSL
 
-Curia should keep those source types legible. Published rate cards improve benchmark coverage, but
-they are not executable inventory. Live procurement workflows should still confirm availability
-through live provider APIs.
+Curia keeps those source types legible. The advertised benchmark uses one
+eligible floor per provider and publishes their median, while future and
+committed rates remain evidence rather than constituents. Published rate cards
+improve benchmark coverage, but they are not executable inventory. Live
+procurement workflows should still confirm availability through live provider
+APIs.
 
 ## Gold Contract
 

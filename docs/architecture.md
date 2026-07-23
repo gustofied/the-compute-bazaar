@@ -85,7 +85,7 @@ For Stage 1, the index should stay simple and honest:
 
 ```text
 Compute Bazaar Live Price Index
-Indicative, provider-observed plus published-rate context, refreshed hourly
+Indicative advertised GPU-hour benchmark, refreshed hourly
 ```
 
 The table `gold.fact_price_index_values` should answer questions like:
@@ -158,7 +158,8 @@ Stage 1 is live:
 
 - Windmill pulls Vast and Lium from inside the AWS VPC.
 - The heartbeat can also ingest official published rate cards from Runpod, Lambda, Hyperstack,
-  Nebius, Crusoe, and TensorDock as clearly marked provider observations.
+  Nebius, Crusoe, DigitalOcean, GMI Cloud, TensorDock, and VESSL as clearly
+  marked provider observations.
 - Raw provider responses are written to S3 bronze. Lium stores a raw pagination envelope so the
   bronze layer contains page-level provider evidence, not just extracted rows.
 - Normalized offers are written to S3 silver.
@@ -188,7 +189,7 @@ responses are retained, available executors are normalized into `silver/gpu_offe
 gold tables are built with:
 
 ```sh
-uv run gpu-prices build-gold --providers vast,lium,crusoe,hyperstack,lambda,nebius,runpod,tensordock
+uv run gpu-prices build-gold --providers vast,lium,crusoe,digitalocean,gmi_cloud,hyperstack,lambda,nebius,runpod,tensordock,vessl
 ```
 
 The Lium adapter uses `GET /api/executors` with `X-API-Key` authentication, based on the public
@@ -215,10 +216,19 @@ Current published-rate providers:
 - Nebius
 - Crusoe
 - TensorDock
+- GMI Cloud
+- VESSL
+- DigitalOcean
 
-These rows are not live inventory. They make the benchmark strip broader and reduce the chance that
-B300 is blank, but they should be read as published pricing context. Procurement and execution still
-need live provider APIs.
+These rows are not live inventory. Each keeps a source URL, source-check time,
+price basis, and access mode. Current hourly and request-based advertised rates
+can enter the benchmark; future and reserved rates remain queryable evidence
+but are excluded. Procurement and execution still need live provider APIs.
+
+The frontier benchmark first selects one eligible floor per provider and GPU
+family, then publishes the median of those provider floors. This prevents a
+marketplace with many rows from receiving accidental extra weight. See
+`docs/benchmark-methodology.md` for the complete contract.
 
 The first provider-comparison query shape is:
 

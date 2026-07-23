@@ -6,7 +6,7 @@
       "query_id": "benchmark_values",
       "version": "v0",
       "title": "Benchmark Values",
-      "description": "Curia-authored H100, H200, B200, and B300 market benchmark values.",
+      "description": "Provider-balanced advertised H100, H200, B200, and B300 GPU-hour benchmarks.",
       "tables": ["fact_benchmark_values"],
       "sql_path": "benchmark_values_v0.sql",
       "default_limit": 20
@@ -15,7 +15,7 @@
       "query_id": "benchmark_constituents",
       "version": "v0",
       "title": "Benchmark Constituents",
-      "description": "Rows behind each frontier benchmark, including inclusion and exclusion state.",
+      "description": "Provider-floor constituents plus excluded higher, future, and committed-term observations.",
       "tables": ["fact_benchmark_constituents"],
       "sql_path": "benchmark_constituents_v0.sql",
       "default_limit": 100

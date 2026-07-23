@@ -131,7 +131,7 @@ The compute index is one of the first real gold products. For Stage 1, keep it s
 
 ```text
 Compute Bazaar Live Price Index
-Indicative, provider-observed plus published-rate context, refreshed hourly
+Indicative advertised GPU-hour benchmark, refreshed hourly
 ```
 
 The first index family can start as:

@@ -180,7 +180,7 @@ keeps only public-safe status, counts, and query rows.
 Build combined gold tables from latest provider silver manifests:
 
 ```sh
-uv run gpu-prices build-gold --providers vast,lium,crusoe,hyperstack,lambda,nebius,runpod,tensordock
+uv run gpu-prices build-gold --providers vast,lium,crusoe,digitalocean,gmi_cloud,hyperstack,lambda,nebius,runpod,tensordock,vessl
 uv run gpu-prices latest-gold-manifest
 uv run gpu-prices gold-index --limit 10
 uv run gpu-prices gold-index-history --history-limit 24
@@ -199,18 +199,26 @@ without polluting market-floor outputs.
 The constituents table keeps included and excluded index candidates with an
 `exclusion_reason`, so index values can be explained rather than only displayed.
 The benchmark tables currently publish four frontier families: H100, H200,
-B200, and B300. Their current benchmark value is a representative GPU-hour price over available live
-offers and official published rate-card observations, with the underlying rows kept in
-`fact_benchmark_constituents`. The benchmark methodology is query-defined:
+B200, and B300. Their current benchmark value is the median of each provider's
+lowest eligible advertised GPU-hour price. This gives every provider one
+constituent rather than allowing a marketplace with many rows to dominate the
+result. The underlying rows are kept in `fact_benchmark_constituents`; future
+and committed-rate observations stay auditable but are not eligible. The full
+method is documented in [docs/benchmark-methodology.md](docs/benchmark-methodology.md).
+The benchmark methodology is query-defined:
 Python writes `gold.fact_gpu_listings`, then runs named DataFusion SQL from
 `src/the_compute_bazaar/prices/benchmark_queries.py` and materializes the result
 as `gold.fact_benchmark_values` and `gold.fact_benchmark_constituents`. In the
 project language, that is a Curia-authored gold product: DataFusion computes the
 methodology, Curia decides and records what becomes product truth.
 
-The rate-card providers are deliberately separate from live inventory providers. They are useful
-for benchmark context and provider breadth, but they are not proof that a machine is rentable at
-that exact second. Live procurement should still use live provider APIs.
+The rate-card providers are deliberately separate from live inventory providers.
+Current official-source coverage includes Crusoe, DigitalOcean, GMI Cloud,
+Hyperstack, Lambda, Nebius, Runpod, TensorDock, and VESSL. The curated rows
+retain their source URL, source-check time, price basis, and access mode. They
+are useful for benchmark context and provider breadth, but they are not proof
+that a machine is rentable at that exact second. Live procurement should still
+use live provider APIs.
 
 ## Dashboard
 

@@ -17,7 +17,8 @@ from ..schemas import GpuOffer
 
 
 DEFAULT_RATE_CARD_PROVIDER = "published_rate_cards"
-RATE_CARD_SOURCE_VERSION = "2026-07-23"
+RATE_CARD_SOURCE_VERSION = "2026-07-24.1"
+RATE_CARD_SOURCE_CHECKED_AT = "2026-07-23T22:00:00+00:00"
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,8 @@ class RateCardEntry:
     source_url: str | None = None
     price_basis: str = "published_on_demand"
     availability_status: str = "published_rate"
+    access_mode: str = "self_serve"
+    source_checked_at: str = RATE_CARD_SOURCE_CHECKED_AT
     notes: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -49,6 +52,8 @@ class RateCardEntry:
             "source_url": self.source_url,
             "price_basis": self.price_basis,
             "availability_status": self.availability_status,
+            "access_mode": self.access_mode,
+            "source_checked_at": self.source_checked_at,
             "notes": self.notes,
             "source_version": RATE_CARD_SOURCE_VERSION,
         }
@@ -149,7 +154,9 @@ PUBLISHED_RATE_CARDS: tuple[RateCardEntry, ...] = (
         vram_gb=288,
         price_usd_gpu_hr=7.40,
         source_url="https://www.hyperstack.cloud/gpu-pricing",
-        notes="On-demand GPU pricing.",
+        availability_status="published_rate_future",
+        access_mode="announced",
+        notes="Published future on-demand price; availability announced for August 2026.",
     ),
     RateCardEntry(
         provider="hyperstack",
@@ -183,39 +190,39 @@ PUBLISHED_RATE_CARDS: tuple[RateCardEntry, ...] = (
         source_offer_id="nebius-b300-nvlink-288gb-1x",
         gpu_name="NVIDIA B300 NVLink",
         vram_gb=288,
-        price_usd_gpu_hr=6.10,
+        price_usd_gpu_hr=7.85,
         region="uk-south1",
         source_url="https://docs.nebius.com/compute/resources/pricing",
-        notes="On-demand unified GPU hour price.",
+        notes="On-demand GPU price effective June 1, 2026.",
     ),
     RateCardEntry(
         provider="nebius",
         source_offer_id="nebius-b200-nvlink-180gb-1x",
         gpu_name="NVIDIA B200 NVLink",
         vram_gb=180,
-        price_usd_gpu_hr=5.50,
+        price_usd_gpu_hr=7.15,
         region="us-central1",
         source_url="https://docs.nebius.com/compute/resources/pricing",
-        notes="On-demand unified GPU hour price.",
+        notes="On-demand GPU price effective June 1, 2026.",
     ),
     RateCardEntry(
         provider="nebius",
         source_offer_id="nebius-h200-nvlink-141gb-1x",
         gpu_name="NVIDIA H200 NVLink",
         vram_gb=141,
-        price_usd_gpu_hr=3.50,
+        price_usd_gpu_hr=4.50,
         source_url="https://docs.nebius.com/compute/resources/pricing",
-        notes="On-demand unified GPU hour price.",
+        notes="On-demand GPU price effective June 1, 2026.",
     ),
     RateCardEntry(
         provider="nebius",
         source_offer_id="nebius-h100-nvlink-80gb-1x",
         gpu_name="NVIDIA H100 NVLink",
         vram_gb=80,
-        price_usd_gpu_hr=2.95,
+        price_usd_gpu_hr=3.85,
         region="eu-north1",
         source_url="https://docs.nebius.com/compute/resources/pricing",
-        notes="On-demand unified GPU hour price.",
+        notes="On-demand GPU price effective June 1, 2026.",
     ),
     RateCardEntry(
         provider="crusoe",
@@ -244,6 +251,101 @@ PUBLISHED_RATE_CARDS: tuple[RateCardEntry, ...] = (
         source_url="https://marketplace.tensordock.com/",
         notes="Public website 'from' price.",
     ),
+    RateCardEntry(
+        provider="gmi_cloud",
+        source_offer_id="gmi-cloud-h100-80gb-from",
+        gpu_name="NVIDIA H100",
+        vram_gb=80,
+        price_usd_gpu_hr=2.00,
+        source_url="https://www.gmicloud.ai/en/pricing",
+        price_basis="published_from_rate",
+        access_mode="contact_sales",
+        notes="Published from-rate for dedicated H100 capacity.",
+    ),
+    RateCardEntry(
+        provider="gmi_cloud",
+        source_offer_id="gmi-cloud-h200-141gb-from",
+        gpu_name="NVIDIA H200",
+        vram_gb=141,
+        price_usd_gpu_hr=2.60,
+        source_url="https://www.gmicloud.ai/en/pricing",
+        price_basis="published_from_rate",
+        access_mode="contact_sales",
+        notes="Published from-rate for dedicated H200 capacity.",
+    ),
+    RateCardEntry(
+        provider="gmi_cloud",
+        source_offer_id="gmi-cloud-b200-192gb-from",
+        gpu_name="NVIDIA B200",
+        vram_gb=192,
+        price_usd_gpu_hr=4.00,
+        source_url="https://www.gmicloud.ai/en/pricing",
+        price_basis="published_from_rate",
+        availability_status="published_rate_request",
+        access_mode="contact_sales",
+        notes="Published from-rate; provider marks B200 as limited availability.",
+    ),
+    RateCardEntry(
+        provider="vessl",
+        source_offer_id="vessl-h100-sxm-80gb-1x",
+        gpu_name="NVIDIA H100 SXM",
+        vram_gb=80,
+        price_usd_gpu_hr=2.39,
+        source_url="https://vessl.ai/en/pricing",
+        notes="Published on-demand rate marked instantly available.",
+    ),
+    RateCardEntry(
+        provider="vessl",
+        source_offer_id="vessl-b200-192gb-request",
+        gpu_name="NVIDIA B200",
+        vram_gb=192,
+        price_usd_gpu_hr=5.50,
+        source_url="https://vessl.ai/en/pricing",
+        availability_status="published_rate_request",
+        access_mode="contact_sales",
+        notes="Published on-demand rate marked available upon request.",
+    ),
+    RateCardEntry(
+        provider="vessl",
+        source_offer_id="vessl-b300-288gb-request",
+        gpu_name="NVIDIA B300",
+        vram_gb=288,
+        price_usd_gpu_hr=7.50,
+        source_url="https://vessl.ai/en/pricing",
+        availability_status="published_rate_request",
+        access_mode="contact_sales",
+        notes="Published on-demand rate marked available upon request.",
+    ),
+    RateCardEntry(
+        provider="digitalocean",
+        source_offer_id="digitalocean-h100-hgx-80gb-1x",
+        gpu_name="NVIDIA H100 HGX",
+        vram_gb=80,
+        price_usd_gpu_hr=3.39,
+        source_url="https://www.digitalocean.com/pricing/gpu-droplets",
+        notes="Published on-demand GPU Droplet rate.",
+    ),
+    RateCardEntry(
+        provider="digitalocean",
+        source_offer_id="digitalocean-h200-hgx-141gb-1x",
+        gpu_name="NVIDIA H200 HGX",
+        vram_gb=141,
+        price_usd_gpu_hr=3.44,
+        source_url="https://www.digitalocean.com/pricing/gpu-droplets",
+        notes="Published on-demand GPU Droplet rate.",
+    ),
+    RateCardEntry(
+        provider="digitalocean",
+        source_offer_id="digitalocean-b300-hgx-288gb-12m",
+        gpu_name="NVIDIA B300 HGX",
+        vram_gb=288,
+        price_usd_gpu_hr=7.94,
+        source_url="https://www.digitalocean.com/pricing/gpu-droplets",
+        price_basis="published_12_month_reserved",
+        availability_status="published_rate_reserved",
+        access_mode="contact_sales",
+        notes="Published 12-month reserved rate; retained as evidence but excluded from the hourly advertised benchmark.",
+    ),
 )
 
 
@@ -262,6 +364,7 @@ def rate_card_raw_payload(provider: str | None = None) -> dict[str, Any]:
     return {
         "source_type": "published_provider_rate_cards",
         "source_version": RATE_CARD_SOURCE_VERSION,
+        "source_checked_at": RATE_CARD_SOURCE_CHECKED_AT,
         "provider": provider or DEFAULT_RATE_CARD_PROVIDER,
         "entry_count": len(entries),
         "providers": sorted({entry.provider for entry in entries}),
@@ -309,10 +412,12 @@ def normalize_rate_card_entry(
     if price_usd_gpu_hr is None or price_usd_gpu_hr <= 0:
         return None
 
+    source_checked_at = _datetime_or_none(_entry_value(entry, "source_checked_at"))
+
     return GpuOffer(
         provider=provider,
         source_offer_id=str(_entry_value(entry, "source_offer_id") or f"{provider}:{gpu_name}:{price_usd_gpu_hr}"),
-        observed_at=observed_at,
+        observed_at=source_checked_at or observed_at,
         gpu_raw_name=gpu_name,
         gpu_model=gpu_model,
         gpu_count=gpu_count,
@@ -330,6 +435,8 @@ def normalize_rate_card_entry(
             "price_basis": _entry_value(entry, "price_basis") or "published_on_demand",
             "source_url": _entry_value(entry, "source_url"),
             "source_version": RATE_CARD_SOURCE_VERSION,
+            "source_checked_at": _entry_value(entry, "source_checked_at"),
+            "access_mode": _entry_value(entry, "access_mode"),
             "notes": _entry_value(entry, "notes"),
         },
     )
@@ -355,3 +462,14 @@ def _string_or_none(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _datetime_or_none(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
