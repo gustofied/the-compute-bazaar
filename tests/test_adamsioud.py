@@ -1,3 +1,4 @@
+import json
 import unittest
 from pathlib import Path
 
@@ -13,6 +14,31 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn("/api/dashboard-snapshots/{filename}", paths)
         self.assertIn("/api/snapshots/{name}", paths)
         self.assertIn("/", paths)
+
+    def test_compute_article_contains_the_maintained_sandbox_views(self) -> None:
+        article_root = Path("external/AdamSioud/exemplars/compute")
+        article = (article_root / "feeling_the_compute.html").read_text(
+            encoding="utf-8"
+        )
+        script = (article_root / "sandbox-cost.js").read_text(encoding="utf-8")
+        payload = json.loads(
+            (article_root / "sandbox-cost.json").read_text(encoding="utf-8")
+        )
+
+        self.assertIn("data-sandbox-cost", article)
+        self.assertIn("Public hourly price for four processors and 8 GB", article)
+        self.assertIn("II Cost of the Same Software Job", article)
+        self.assertIn('id="sandbox-combined-chart"', article)
+        self.assertIn('src="./sandbox-cost.js?v=1"', article)
+        self.assertIn("sandbox-cost.json", script)
+        self.assertIn("effectiveCssZoom", script)
+        self.assertEqual(
+            payload["manifest"]["row_counts"]["sandbox_hourly_price_series"],
+            33,
+        )
+        self.assertEqual(payload["same_job_cost"]["comparable_run_count"], 7)
+        self.assertEqual(payload["same_job_cost"]["calendar_day_count"], 5)
+        self.assertEqual(len(payload["same_job_cost"]["rows"]), 38)
 
 
 if __name__ == "__main__":

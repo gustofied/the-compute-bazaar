@@ -69,6 +69,7 @@ Curia                      controlled authoring layer for market truth
 gold/fact_gpu_listings     query-ready market listings
 gold/fact_price_index_*    index values and constituents
 gold/fact_benchmark_*      H100/H200/B200/B300 benchmark values and constituents
+gold/sandbox_*             sandbox hourly price, same-job cost, and relative series
 gold/dim_*                 GPU, provider, and region dimensions
 AutoMQ                     live event tape
 DataFusion                 SQL compute engine Curia uses over lake tables
@@ -214,6 +215,54 @@ uv run python infra/windmill/bootstrap_market_schedule.py
 
 The private lake manifest keeps provider raw refs and silver refs for audit. The dashboard export
 keeps only public-safe status, counts, and query rows.
+
+## Sandbox Cost Benchmark
+
+The maintained sandbox benchmark follows the same evidence-to-product model:
+
+```text
+public price evidence + StarSling benchmark runs
+  -> bronze source records
+  -> silver normalized prices and comparable runs
+  -> named DataFusion queries
+  -> gold hourly price, same-job cost, and base-100 comparison
+  -> sandbox-cost.json
+  -> AdamSioud Compute article
+```
+
+The current record has 33 dated price observations for 11 services and 38
+service results from seven comparable public runs over five calendar days.
+Every matching repeated intraday run is retained. Earlier two-processor runs
+are captured but rejected because the publication shape is four processors,
+8 GB memory, and 40 GB disk.
+
+```sh
+uv run sandbox-cost validate
+
+uv run sandbox-cost build \
+  --output-root data/sandbox-cost \
+  --dashboard-output-root data/dashboard/compute-bazaar \
+  --gpu-history-ref data/dashboard/compute-bazaar/benchmark-history.json
+
+uv run sandbox-cost query \
+  --output-root data/sandbox-cost \
+  --query same-job-cost \
+  --limit 10
+
+uv run sandbox-cost refresh-benchmark \
+  --output-root data/sandbox-cost \
+  --source-ref main \
+  --check
+```
+
+The hourly `market-hourly` heartbeat rebuilds and publishes
+`sandbox-cost.json` after exporting GPU benchmark history. A daily GitHub
+Actions check detects new or structurally changed public benchmark runs.
+Provider price pages remain a manual reviewed input because their billing
+semantics and markup are not one stable API.
+
+See [docs/sandbox-cost-benchmark.md](docs/sandbox-cost-benchmark.md) for source
+semantics, formulas, layer paths, review rules, and refresh instructions.
 
 ## Build Gold
 

@@ -9,6 +9,8 @@ flowchart LR
   Vast["Provider API: Vast.ai"] --> Windmill["Windmill scheduled workers"]
   Lium["Provider API: Lium"] --> Windmill
   Rates["Official published rate cards"] --> Windmill
+  SandboxRates["Reviewed sandbox price evidence"] --> SandboxBronze["Sandbox bronze evidence"]
+  StarSling["StarSling public benchmark runs"] --> SandboxBronze
 
   Windmill --> AutoMQ["AutoMQ / Kafka topics"]
   Windmill --> Bronze["S3 bronze: raw JSON evidence"]
@@ -19,12 +21,16 @@ flowchart LR
   Curia --> DataFusion["DataFusion SQL engine"]
   DataFusion --> Curia
   Curia --> Gold["S3 gold: Curia-authored market objects"]
+  SandboxBronze --> SandboxSilver["Sandbox silver: normalized prices and runs"]
+  SandboxSilver --> DataFusion
+  DataFusion --> SandboxGold["Sandbox gold: hourly, same-job, base-100"]
   Bronze --> Workspace["Evidence workspace: raw files, notes, investigations"]
   Workspace --> Curia
 
   Gold --> CLI["CLI queries"]
   Gold --> API["Future API / MCP"]
   Gold --> Dashboard["D3 blog/dashboard"]
+  SandboxGold --> Dashboard
   MarketRun --> Dashboard
   MarketRun --> API
   AutoMQ --> Live["Future live backend / live feed"]
@@ -138,6 +144,39 @@ The operator workbench uses the same idea for inspection views: named SQL files 
 through DataFusion rather than embedding the view logic in Python. The same workbench also exposes
 read-only scratch SQL over latest gold `fact_*` and `dim_*` tables. Scratch queries are exploratory;
 useful ones should be promoted into the Curia catalog before they become methodology.
+
+## Sandbox Cost Product
+
+The sandbox-cost benchmark applies the same layer discipline to public CPU and
+memory rates plus the StarSling HPC Sandbox Benchmark:
+
+```text
+reviewed price evidence + commit-pinned public benchmark source
+  -> bronze
+  -> silver/sandbox_hourly_prices
+  -> silver/sandbox_benchmark_runs
+  -> DataFusion methodology queries
+  -> gold/sandbox_hourly_price_series
+  -> gold/sandbox_fixed_average
+  -> gold/sandbox_same_job_cost
+  -> gold/sandbox_combined_base100
+  -> dashboard/compute-bazaar/sandbox-cost.json
+```
+
+The fixed hourly average uses the same eight services at every event date.
+Same-job cost is `runtime_seconds / 3600 * hourly_price`, using only the
+processor-and-memory component. The combined GPU/sandbox series rebases each
+compatible series to 100 at its first shared observation; it does not combine
+raw dollar levels or claim demand or volume.
+
+The hourly Windmill heartbeat rebuilds this gold product after GPU dashboard
+history is exported. A separate daily source check detects new or changed
+StarSling evidence. Public provider price pages are reviewed manually because
+their billing semantics are not safely interchangeable or uniformly
+machine-readable.
+
+See [sandbox-cost-benchmark.md](sandbox-cost-benchmark.md) for the complete
+measurement and maintenance contract.
 
 ## Workspace / Evidence Layer
 

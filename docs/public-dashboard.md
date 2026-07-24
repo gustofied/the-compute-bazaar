@@ -53,6 +53,7 @@ latest-index.json
 featured-index.json
 featured-benchmarks.json
 benchmark-history.json
+sandbox-cost.json
 index-history.json
 index-quality.json
 index-constituents.json
@@ -74,6 +75,14 @@ B200, and B300 benchmark observations plus the provider-floor interquartile rang
 coverage counts. Each export merges the newest observations into the existing history, so the
 hourly job does not need to rescan the full lake. Use it instead of downloading the much larger
 all-product `index-history.json` on public story pages.
+
+`sandbox-cost.json` is the public article payload for the reviewed sandbox
+benchmark. It contains the 33 dated hourly-price observations, the fixed
+eight-service average, all 38 comparable service results from seven public
+runs, and the exploratory H100/sandbox base-100 series. It contains source URLs
+and plain caveats, but no private lake credentials or raw private S3 objects.
+The hourly market run rebuilds it from maintained evidence and the newly
+exported GPU benchmark history.
 
 ## S3/CloudFront Shape
 
@@ -112,6 +121,7 @@ to the S3 dashboard prefix. That means the public base URL serves files directly
 https://DISTRIBUTION.cloudfront.net/manifest.json
 https://DISTRIBUTION.cloudfront.net/latest-index.json
 https://DISTRIBUTION.cloudfront.net/featured-benchmarks.json
+https://DISTRIBUTION.cloudfront.net/sandbox-cost.json
 ```
 
 The Terraform stack can output the bucket policy statement without applying it. Keep

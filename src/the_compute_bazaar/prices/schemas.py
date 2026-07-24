@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, is_dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 
@@ -15,7 +15,7 @@ def utc_now() -> datetime:
 
 
 def to_jsonable(value: Any) -> Any:
-    if isinstance(value, datetime):
+    if isinstance(value, (date, datetime)):
         return value.isoformat()
     if is_dataclass(value):
         return {k: to_jsonable(v) for k, v in asdict(value).items()}

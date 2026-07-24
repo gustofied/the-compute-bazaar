@@ -35,6 +35,7 @@ SNAPSHOT_FILES = {
     "featured-index": "featured-index.json",
     "featured-benchmarks": "featured-benchmarks.json",
     "benchmark-history": "benchmark-history.json",
+    "sandbox-cost": "sandbox-cost.json",
     "index-constituents": "index-constituents.json",
     "index-quality": "index-quality.json",
     "index-history": "index-history.json",

@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from the_compute_bazaar.sandbox_cost.pipeline import build_sandbox_cost
+
 from .coverage import query_frontier_coverage_ref
 from .events import new_run_id
 from .gold import build_gold_market_tables, export_gold_dashboard_snapshot
@@ -208,8 +210,14 @@ def run_market_hourly(
         output_root=dashboard_output_root,
         limit=dashboard_limit,
     )
+    sandbox_cost = build_sandbox_cost(
+        output_root="/".join([lake_root.rstrip("/"), "sandbox_cost"]),
+        dashboard_output_root=dashboard_output_root,
+        gpu_history_ref=dashboard_export["output_refs"]["benchmark_history"],
+    )
     dashboard_output_refs = {
         **dashboard_export["output_refs"],
+        "sandbox_cost": str(sandbox_cost.public_ref),
         "market_run": _dashboard_market_run_ref(dashboard_output_root),
         "market_history": _dashboard_market_history_ref(dashboard_output_root),
     }
@@ -219,6 +227,12 @@ def run_market_hourly(
         "gpu_products": gold_result.row_counts.get("dim_gpu_products", 0),
         "index_values": gold_result.row_counts.get("fact_price_index_values", 0),
         "index_constituents": gold_result.row_counts.get("fact_index_constituents", 0),
+        "sandbox_price_observations": sandbox_cost.row_counts.get(
+            "sandbox_hourly_price_series", 0
+        ),
+        "sandbox_benchmark_results": sandbox_cost.row_counts.get(
+            "sandbox_same_job_cost", 0
+        ),
     }
     checks["gold"] = (
         "ok" if all(value > 0 for value in row_counts.values()) else "warning"
@@ -226,6 +240,17 @@ def run_market_hourly(
     checks["dashboard_export"] = (
         "ok" if dashboard_export.get("output_refs") else "warning"
     )
+    checks["sandbox_cost"] = (
+        "ok"
+        if sandbox_cost.public_ref
+        and sandbox_cost.row_counts.get("sandbox_combined_base100", 0) > 0
+        else "warning"
+    )
+    data_quality["sandbox_cost"] = {
+        "build_id": sandbox_cost.build_id,
+        "row_counts": sandbox_cost.row_counts,
+        "manifest_ref": sandbox_cost.manifest_ref,
+    }
     status = "success" if all(value == "ok" for value in checks.values()) else "warning"
 
     payload = {

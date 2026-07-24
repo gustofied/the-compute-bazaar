@@ -2562,6 +2562,7 @@ class GoldQueryTests(unittest.TestCase):
             )
             latest = read_latest_market_run(lake_root)
             public_latest = read_json(f"{dashboard_root}/market-run.json")
+            sandbox_public = read_json(f"{dashboard_root}/sandbox-cost.json")
 
         self.assertEqual(result.status, "warning")
         self.assertEqual(result.successful_providers, ["crusoe"])
@@ -2573,6 +2574,23 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual(public_latest["successful_providers"], ["crusoe"])
         self.assertEqual(public_latest["failed_providers"], ["unsupported-provider"])
         self.assertGreater(result.row_counts["listings"], 0)
+        self.assertEqual(result.checks["sandbox_cost"], "warning")
+        self.assertEqual(result.row_counts["sandbox_price_observations"], 33)
+        self.assertEqual(result.row_counts["sandbox_benchmark_results"], 38)
+        self.assertEqual(
+            result.dashboard_output_refs["sandbox_cost"],
+            f"{dashboard_root}/sandbox-cost.json",
+        )
+        self.assertEqual(
+            sandbox_public["manifest"]["row_counts"][
+                "sandbox_hourly_price_series"
+            ],
+            33,
+        )
+        self.assertEqual(
+            sandbox_public["same_job_cost"]["comparable_run_count"],
+            7,
+        )
 
 
 def _offer(

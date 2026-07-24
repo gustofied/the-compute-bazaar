@@ -32,6 +32,7 @@ ie-dc-share = "the_compute_bazaar.tangents.ie_dc_share:main"
 ie-flow-map = "the_compute_bazaar.tangents.ie_flow_map:main"
 ie-grid-dashboard = "the_compute_bazaar.tangents.ie_grid_dashboard:main"
 ireland-compute-map = "the_compute_bazaar.tangents.ireland_compute_map:main"
+sandbox-cost = "the_compute_bazaar.sandbox_cost.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]

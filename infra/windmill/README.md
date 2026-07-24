@@ -154,7 +154,7 @@ AWS_EXECUTION_ENV,AWS_CONTAINER_CREDENTIALS_RELATIVE_URI,AWS_DEFAULT_REGION,AWS_
 The main script is `infra/windmill/market_hourly.py`. It runs the complete heartbeat:
 
 ```text
-ingest live APIs -> ingest current price observations -> ingest published rate cards -> build gold -> export dashboard JSON -> write market run manifest
+ingest live APIs -> ingest current price observations -> ingest published rate cards -> build GPU gold -> export GPU history -> build sandbox-cost gold -> export dashboard JSON -> write market run manifest
 ```
 
 In the dev worker image it shells out to the baked project CLI:
@@ -217,6 +217,15 @@ The helper reads the required provider/Kafka/S3 values from your local environme
 Windmill variables/secrets, creates the market script, and adds the hourly schedule. It also creates
 `dashboard_output_root`, deriving `s3://.../dashboard/compute-bazaar` from `COMPUTE_BAZAAR_LAKE_ROOT`
 when `COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT` is not set.
+
+The same hourly run writes `sandbox-cost.json` beside the GPU dashboard files.
+Sandbox price evidence is reviewed and versioned in the project; the hourly job
+does not scrape provider marketing pages. The public StarSling benchmark
+repository is checked separately each day by
+`.github/workflows/sandbox-cost-sources.yml`. A failed check means new evidence
+or schema drift needs review. After review, update canonical evidence with the
+commit-pinned `sandbox-cost refresh-benchmark --update-evidence` command in
+`docs/sandbox-cost-benchmark.md`, then rebuild and redeploy the worker image.
 
 Provider-only schedules can still be bootstrapped for debugging:
 
