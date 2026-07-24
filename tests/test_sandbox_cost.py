@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from the_compute_bazaar.prices.storage import write_parquet_rows
 from the_compute_bazaar.sandbox_cost.pipeline import (
     BENCHMARK_EVIDENCE,
     PRICE_EVIDENCE,
@@ -102,8 +103,9 @@ class SandboxCostPipelineTests(unittest.TestCase):
                             "source_run_ids": {"vast": "private-run"},
                         },
                         "rows": [
-                            _gpu_row("2026-07-23T23:00:00Z", 2.5, 8),
-                            _gpu_row("2026-07-24T12:00:00Z", 2.25, 10),
+                            _gpu_row("2026-07-22T23:00:00Z", 2.75, 2),
+                            _gpu_row("2026-07-23T23:00:00Z", 2.5, 12),
+                            _gpu_row("2026-07-24T12:00:00Z", 2.25, 14),
                         ],
                     }
                 ),
@@ -128,20 +130,77 @@ class SandboxCostPipelineTests(unittest.TestCase):
 
         self.assertEqual(first.build_id, second.build_id)
         self.assertEqual(first.row_counts["sandbox_hourly_price_series"], 33)
+        self.assertEqual(first.row_counts["sandbox_price_events"], 10)
+        self.assertEqual(first.row_counts["sandbox_current_rates"], 11)
+        self.assertEqual(first.row_counts["sandbox_fixed_rate"], 4)
         self.assertEqual(first.row_counts["sandbox_same_job_cost"], 38)
-        self.assertEqual(first.row_counts["sandbox_combined_base100"], 2)
+        self.assertEqual(first.row_counts["sandbox_same_job_summary"], 6)
+        self.assertEqual(first.row_counts["gpu_h100_daily_coverage"], 3)
+        self.assertEqual(first.row_counts["gpu_h100_eligible_history"], 2)
+        self.assertEqual(first.row_counts["sandbox_gpu_cpu_common_start"], 2)
+        self.assertEqual(
+            public["manifest"]["manifest_version"], "sandbox_cost_gold_v2"
+        )
         self.assertEqual(public["same_job_cost"]["comparable_run_count"], 7)
         self.assertEqual(public["same_job_cost"]["calendar_day_count"], 5)
+        self.assertEqual(len(public["same_job_cost"]["service_summary"]), 6)
         self.assertEqual(public["combined"]["rows"][0]["gpu_base_100"], 100.0)
         self.assertEqual(public["combined"]["rows"][1]["gpu_base_100"], 90.0)
+        self.assertFalse(
+            public["combined"]["coverage_history"][0]["comparison_eligible"]
+        )
         self.assertEqual(
-            public["hourly_price"]["fixed_membership_average"][-1][
-                "average_usd_per_hour"
+            public["combined"]["coverage_history"][0]["exclusion_reason"],
+            "provider_coverage_below_10",
+        )
+        self.assertEqual(
+            public["hourly_price"]["fixed_cohort_rate"][-1][
+                "median_usd_per_hour"
             ],
-            0.456,
+            0.40356,
+        )
+        self.assertEqual(
+            public["hourly_price"]["fixed_cohort_rate"][-1]["p25_usd_per_hour"],
+            0.3312,
+        )
+        self.assertEqual(
+            public["hourly_price"]["fixed_cohort_rate"][-1]["p75_usd_per_hour"],
+            0.6309,
+        )
+        self.assertEqual(
+            {
+                row["series_id"]
+                for row in public["same_job_cost"]["service_summary"]
+                if row["on_lower_left_frontier"]
+            },
+            {"daytona-vm", "novita"},
         )
         self.assertTrue(
             all(row["benchmark_source_url"] for row in public["same_job_cost"]["rows"])
+        )
+        self.assertTrue(
+            all(
+                row["source_url"].startswith("https://")
+                for row in public["hourly_price"]["rows"]
+            )
+        )
+        self.assertTrue(
+            all(
+                row["source_url"].startswith("https://")
+                for row in public["hourly_price"]["price_events"]
+            )
+        )
+        self.assertTrue(
+            all(
+                row["source_url"].startswith("https://")
+                for row in public["hourly_price"]["current_cross_section"]
+            )
+        )
+        self.assertTrue(
+            all(
+                row["benchmark_source_url"].startswith("https://")
+                for row in public["same_job_cost"]["rows"]
+            )
         )
         public_text = json.dumps(public)
         self.assertNotIn("s3://", public_text)
@@ -174,12 +233,42 @@ class SandboxCostPipelineTests(unittest.TestCase):
 
         self.assertNotEqual(first.build_id, second.build_id)
 
+    def test_build_accepts_parquet_gpu_history(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            gpu_history = root / "benchmark-history.parquet"
+            write_parquet_rows(
+                str(gpu_history),
+                [
+                    _gpu_row("2026-07-23T23:00:00Z", 2.5, 12),
+                    _gpu_row("2026-07-24T12:00:00Z", 2.25, 14),
+                ],
+            )
+
+            result = build_sandbox_cost(
+                output_root=str(root / "lake"),
+                gpu_history_ref=str(gpu_history),
+            )
+            manifest = json.loads(
+                (root / "lake" / "gold" / "manifest.json").read_text()
+            )
+
+        self.assertEqual(result.row_counts["gpu_h100_daily_coverage"], 2)
+        self.assertEqual(
+            manifest["gpu_source_manifest"]["manifest_version"],
+            "gpu_benchmark_history_parquet_v1",
+        )
+        self.assertEqual(
+            manifest["gpu_source_manifest"]["row_counts"]["benchmark_history"],
+            2,
+        )
+
     def test_allowlisted_query_runs_through_datafusion(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             build_sandbox_cost(output_root=tmpdir)
             result = query_sandbox_gold(
                 output_root=tmpdir,
-                query_id="fixed-average",
+                query_id="fixed-rate",
                 limit=2,
             )
 
@@ -218,6 +307,9 @@ def _gpu_row(observed_at: str, price: float, providers: int) -> dict[str, object
         "benchmark_family_id": "H100",
         "benchmark_usd_gpu_hr": price,
         "provider_count": providers,
+        "included_offer_count": providers,
+        "provider_floor_p25_usd_gpu_hr": price * 0.9,
+        "provider_floor_p75_usd_gpu_hr": price * 1.1,
         "methodology_version": "advertised_provider_floor_median_v1",
         "benchmark_basis": "advertised_hourly",
         "calculated_at": observed_at,

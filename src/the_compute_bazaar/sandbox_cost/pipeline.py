@@ -26,9 +26,16 @@ SOURCE_MANIFEST = EVIDENCE_ROOT / "source-manifest.json"
 
 TARGET_SHAPE = {"vcpus": 4, "memory_gib": 8, "disk_gb": 40}
 FIXED_COHORT = "2026"
-FIXED_AVERAGE_QUERY_ID = "sandbox_fixed_membership_average_v1"
+SANDBOX_RATE_METHODOLOGY = "advertised_fixed_cohort_median_iqr_v2"
+FIXED_RATE_QUERY_ID = "sandbox_fixed_cohort_rate_v2"
+PRICE_EVENTS_QUERY_ID = "sandbox_rate_card_events_v1"
+CURRENT_RATES_QUERY_ID = "sandbox_current_rate_cross_section_v1"
 SAME_JOB_QUERY_ID = "sandbox_same_job_cost_v1"
-COMBINED_QUERY_ID = "sandbox_gpu_cpu_base100_v1"
+SAME_JOB_SUMMARY_QUERY_ID = "sandbox_same_job_service_summary_v1"
+GPU_COMPARISON_MIN_PROVIDERS = 10
+GPU_DAILY_QUERY_ID = "h100_daily_broad_coverage_v1"
+GPU_ELIGIBLE_QUERY_ID = "h100_broad_coverage_prints_v1"
+COMBINED_QUERY_ID = "sandbox_gpu_cpu_common_start_v3"
 NUMERIC_DECIMAL_PLACES = 12
 
 RUNTIME_PRICE_SERIES = {
@@ -87,11 +94,26 @@ BENCHMARK_FIELDS = {
     "color",
 }
 
-FIXED_AVERAGE_SQL = f"""
-with event_dates as (
-  select distinct observed_date
+FIXED_RATE_SQL = f"""
+with ordered_prices as (
+  select
+    *,
+    lag(price_usd_per_hour) over (
+      partition by series_id
+      order by cast(observed_date as date), point_order
+    ) as previous_price_usd_per_hour
   from sandbox_hourly_prices
-  where observed_date >= '2026-01-01'
+  where index_eligible = true
+    and index_cohort = '{FIXED_COHORT}'
+),
+event_dates as (
+  select cast('2026-01-01' as date) as observed_date
+  union
+  select distinct cast(observed_date as date) as observed_date
+  from ordered_prices
+  where cast(observed_date as date) >= cast('2026-01-01' as date)
+    and previous_price_usd_per_hour is not null
+    and abs(price_usd_per_hour - previous_price_usd_per_hour) > 0.000000001
 ),
 members as (
   select distinct series_id
@@ -105,17 +127,17 @@ ranked as (
     prices.series_id,
     prices.series_label,
     prices.price_usd_per_hour,
-    prices.observed_date as source_price_date,
+    cast(prices.observed_date as date) as source_price_date,
     prices.source_url,
     row_number() over (
       partition by dates.observed_date, prices.series_id
-      order by prices.observed_date desc, prices.point_order desc
+      order by cast(prices.observed_date as date) desc, prices.point_order desc
     ) as recency_rank
   from event_dates dates
   cross join members
   join sandbox_hourly_prices prices
     on prices.series_id = members.series_id
-   and prices.observed_date <= dates.observed_date
+   and cast(prices.observed_date as date) <= dates.observed_date
 ),
 current_members as (
   select *
@@ -124,7 +146,16 @@ current_members as (
 )
 select
   observed_date,
+  '{SANDBOX_RATE_METHODOLOGY}' as methodology_version,
+  '{FIXED_COHORT}' as cohort_id,
+  median(price_usd_per_hour) as median_usd_per_hour,
   avg(price_usd_per_hour) as average_usd_per_hour,
+  percentile_cont(0.25) within group (
+    order by price_usd_per_hour
+  ) as p25_usd_per_hour,
+  percentile_cont(0.75) within group (
+    order by price_usd_per_hour
+  ) as p75_usd_per_hour,
   count(*) as member_count,
   min(price_usd_per_hour) as minimum_usd_per_hour,
   max(price_usd_per_hour) as maximum_usd_per_hour
@@ -132,6 +163,77 @@ from current_members
 group by observed_date
 having count(*) = 8
 order by observed_date
+"""
+
+PRICE_EVENTS_SQL = """
+with ordered as (
+  select
+    *,
+    lag(price_usd_per_hour) over (
+      partition by series_id
+      order by cast(observed_date as date), point_order
+    ) as previous_price_usd_per_hour
+  from sandbox_hourly_prices
+  where index_eligible = true
+)
+select
+  series_order,
+  point_order,
+  series_id,
+  series_label,
+  observed_date,
+  previous_price_usd_per_hour,
+  price_usd_per_hour,
+  price_usd_per_hour - previous_price_usd_per_hour as price_change_usd_per_hour,
+  (
+    price_usd_per_hour / previous_price_usd_per_hour - 1.0
+  ) * 100.0 as price_change_percent,
+  date_role,
+  change_precision,
+  evidence_class,
+  source_label,
+  source_url,
+  note,
+  color
+from ordered
+where previous_price_usd_per_hour is not null
+  and abs(price_usd_per_hour - previous_price_usd_per_hour) > 0.000000001
+order by cast(observed_date as date), series_order, point_order
+"""
+
+CURRENT_RATES_SQL = f"""
+with ranked as (
+  select
+    *,
+    row_number() over (
+      partition by series_id
+      order by cast(observed_date as date) desc, point_order desc
+    ) as recency_rank
+  from sandbox_hourly_prices
+  where index_eligible = true
+)
+select
+  series_order,
+  series_id,
+  series_label,
+  observed_date,
+  price_usd_per_hour,
+  processor_quantity,
+  processor_unit,
+  processor_rate_usd_per_unit_hour,
+  memory_gib,
+  memory_rate_usd_per_gib_hour,
+  index_cohort = '{FIXED_COHORT}' as fixed_cohort_member,
+  date_role,
+  change_precision,
+  evidence_class,
+  source_label,
+  source_url,
+  note,
+  color
+from ranked
+where recency_rank = 1
+order by price_usd_per_hour, series_label
 """
 
 SAME_JOB_SQL = """
@@ -160,7 +262,98 @@ from sandbox_benchmark_runs
 order by series_order, generated_at, point_order
 """
 
-COMBINED_BASE100_SQL = """
+SAME_JOB_SUMMARY_SQL = """
+with summary as (
+  select
+    series_order,
+    series_id,
+    series_label,
+    color,
+    count(*) as result_count,
+    count(distinct benchmark_run_id) as run_count,
+    min(generated_at) as first_generated_at,
+    max(generated_at) as latest_generated_at,
+    median(runtime_seconds) as median_runtime_seconds,
+    avg(runtime_seconds) as average_runtime_seconds,
+    percentile_cont(0.25) within group (
+      order by runtime_seconds
+    ) as p25_runtime_seconds,
+    percentile_cont(0.75) within group (
+      order by runtime_seconds
+    ) as p75_runtime_seconds,
+    min(runtime_seconds) as minimum_runtime_seconds,
+    max(runtime_seconds) as maximum_runtime_seconds,
+    median(estimated_cost_usd) as median_estimated_cost_usd,
+    avg(estimated_cost_usd) as average_estimated_cost_usd,
+    percentile_cont(0.25) within group (
+      order by estimated_cost_usd
+    ) as p25_estimated_cost_usd,
+    percentile_cont(0.75) within group (
+      order by estimated_cost_usd
+    ) as p75_estimated_cost_usd,
+    min(estimated_cost_usd) as minimum_estimated_cost_usd,
+    max(estimated_cost_usd) as maximum_estimated_cost_usd
+  from sandbox_same_job_cost
+  group by series_order, series_id, series_label, color
+)
+select
+  summary.series_order,
+  summary.series_id,
+  summary.series_label,
+  summary.color,
+  summary.result_count,
+  summary.run_count,
+  summary.first_generated_at,
+  summary.latest_generated_at,
+  summary.median_runtime_seconds,
+  summary.average_runtime_seconds,
+  summary.p25_runtime_seconds,
+  summary.p75_runtime_seconds,
+  summary.minimum_runtime_seconds,
+  summary.maximum_runtime_seconds,
+  summary.median_estimated_cost_usd,
+  summary.average_estimated_cost_usd,
+  summary.p25_estimated_cost_usd,
+  summary.p75_estimated_cost_usd,
+  summary.minimum_estimated_cost_usd,
+  summary.maximum_estimated_cost_usd,
+  count(comparison.series_id) = 0 as on_lower_left_frontier
+from summary
+left join summary comparison
+  on comparison.series_id != summary.series_id
+ and comparison.median_runtime_seconds <= summary.median_runtime_seconds
+ and comparison.median_estimated_cost_usd
+   <= summary.median_estimated_cost_usd
+ and (
+   comparison.median_runtime_seconds < summary.median_runtime_seconds
+   or comparison.median_estimated_cost_usd
+     < summary.median_estimated_cost_usd
+ )
+group by
+  summary.series_order,
+  summary.series_id,
+  summary.series_label,
+  summary.color,
+  summary.result_count,
+  summary.run_count,
+  summary.first_generated_at,
+  summary.latest_generated_at,
+  summary.median_runtime_seconds,
+  summary.average_runtime_seconds,
+  summary.p25_runtime_seconds,
+  summary.p75_runtime_seconds,
+  summary.minimum_runtime_seconds,
+  summary.maximum_runtime_seconds,
+  summary.median_estimated_cost_usd,
+  summary.average_estimated_cost_usd,
+  summary.p25_estimated_cost_usd,
+  summary.p75_estimated_cost_usd,
+  summary.minimum_estimated_cost_usd,
+  summary.maximum_estimated_cost_usd
+order by median_runtime_seconds, median_estimated_cost_usd
+"""
+
+GPU_DAILY_COVERAGE_SQL = f"""
 with compatible_gpu as (
   select
     gold_observed_at,
@@ -168,6 +361,9 @@ with compatible_gpu as (
     benchmark_family_id,
     benchmark_usd_gpu_hr,
     provider_count,
+    included_offer_count,
+    provider_floor_p25_usd_gpu_hr,
+    provider_floor_p75_usd_gpu_hr,
     methodology_version,
     benchmark_basis,
     row_number() over (
@@ -180,52 +376,184 @@ with compatible_gpu as (
     and benchmark_basis = 'advertised_hourly'
     and benchmark_usd_gpu_hr > 0
 ),
-joined as (
+deduplicated as (
+  select
+    *
+  from compatible_gpu
+  where duplicate_rank = 1
+),
+daily_all as (
+  select
+    observed_date,
+    count(*) as research_print_count,
+    median(benchmark_usd_gpu_hr) as research_benchmark_usd_gpu_hr,
+    min(provider_count) as minimum_provider_count,
+    max(provider_count) as maximum_provider_count
+  from deduplicated
+  group by observed_date
+),
+daily_broad as (
+  select
+    observed_date,
+    count(*) as eligible_print_count,
+    median(benchmark_usd_gpu_hr) as benchmark_usd_gpu_hr,
+    median(provider_floor_p25_usd_gpu_hr)
+      as provider_floor_p25_usd_gpu_hr,
+    median(provider_floor_p75_usd_gpu_hr)
+      as provider_floor_p75_usd_gpu_hr,
+    median(provider_count) as median_provider_count,
+    min(provider_count) as eligible_minimum_provider_count,
+    max(provider_count) as eligible_maximum_provider_count,
+    median(included_offer_count) as median_included_offer_count
+  from deduplicated
+  where provider_count >= {GPU_COMPARISON_MIN_PROVIDERS}
+  group by observed_date
+)
+select
+  daily_all.observed_date,
+  daily_all.research_print_count,
+  daily_all.research_benchmark_usd_gpu_hr,
+  daily_all.minimum_provider_count,
+  daily_all.maximum_provider_count,
+  coalesce(daily_broad.eligible_print_count, 0) as eligible_print_count,
+  daily_broad.benchmark_usd_gpu_hr,
+  daily_broad.provider_floor_p25_usd_gpu_hr,
+  daily_broad.provider_floor_p75_usd_gpu_hr,
+  daily_broad.median_provider_count,
+  daily_broad.eligible_minimum_provider_count,
+  daily_broad.eligible_maximum_provider_count,
+  daily_broad.median_included_offer_count,
+  daily_broad.eligible_print_count is not null as comparison_eligible,
+  case
+    when daily_broad.eligible_print_count is not null then null
+    else 'provider_coverage_below_{GPU_COMPARISON_MIN_PROVIDERS}'
+  end as exclusion_reason
+from daily_all
+left join daily_broad
+  on daily_all.observed_date = daily_broad.observed_date
+order by daily_all.observed_date
+"""
+
+GPU_ELIGIBLE_HISTORY_SQL = f"""
+with compatible_gpu as (
+  select
+    gold_observed_at,
+    cast(gold_observed_at as date) as observed_date,
+    benchmark_family_id,
+    benchmark_usd_gpu_hr,
+    provider_count,
+    included_offer_count,
+    provider_floor_p25_usd_gpu_hr,
+    provider_floor_p75_usd_gpu_hr,
+    methodology_version,
+    benchmark_basis,
+    calculated_at,
+    row_number() over (
+      partition by gold_observed_at, benchmark_family_id
+      order by calculated_at desc
+    ) as duplicate_rank
+  from gpu_benchmark_history
+  where benchmark_family_id = 'H100'
+    and methodology_version = 'advertised_provider_floor_median_v1'
+    and benchmark_basis = 'advertised_hourly'
+    and benchmark_usd_gpu_hr > 0
+)
+select
+  gold_observed_at,
+  observed_date,
+  benchmark_family_id,
+  benchmark_usd_gpu_hr,
+  provider_count,
+  included_offer_count,
+  provider_floor_p25_usd_gpu_hr,
+  provider_floor_p75_usd_gpu_hr,
+  methodology_version,
+  benchmark_basis,
+  calculated_at
+from compatible_gpu
+where duplicate_rank = 1
+  and provider_count >= {GPU_COMPARISON_MIN_PROVIDERS}
+order by gold_observed_at
+"""
+
+COMBINED_COMMON_START_SQL = """
+with joined as (
   select
     gpu.gold_observed_at,
     gpu.observed_date,
     gpu.benchmark_usd_gpu_hr,
     gpu.provider_count,
+    gpu.included_offer_count,
+    gpu.provider_floor_p25_usd_gpu_hr,
+    gpu.provider_floor_p75_usd_gpu_hr,
+    gpu.methodology_version as gpu_methodology_version,
+    gpu.benchmark_basis as gpu_benchmark_basis,
     sandbox.observed_date as sandbox_price_date,
-    sandbox.average_usd_per_hour,
+    sandbox.median_usd_per_hour as sandbox_median_usd_per_hour,
+    sandbox.p25_usd_per_hour as sandbox_p25_usd_per_hour,
+    sandbox.p75_usd_per_hour as sandbox_p75_usd_per_hour,
+    sandbox.member_count as sandbox_member_count,
     row_number() over (
       partition by gpu.gold_observed_at
       order by sandbox.observed_date desc
     ) as sandbox_recency_rank
-  from compatible_gpu gpu
-  join sandbox_fixed_average sandbox
+  from gpu_h100_eligible_history gpu
+  join sandbox_fixed_rate sandbox
     on cast(sandbox.observed_date as date) <= gpu.observed_date
-  where gpu.duplicate_rank = 1
 ),
 comparable as (
   select *
   from joined
   where sandbox_recency_rank = 1
 ),
-based as (
+baseline_ranked as (
   select
     *,
-    first_value(benchmark_usd_gpu_hr) over (
-      order by gold_observed_at
-      rows between unbounded preceding and unbounded following
-    ) as first_gpu_value,
-    first_value(average_usd_per_hour) over (
-      order by gold_observed_at
-      rows between unbounded preceding and unbounded following
-    ) as first_sandbox_value
+    row_number() over (order by gold_observed_at) as baseline_rank
   from comparable
+),
+baseline as (
+  select
+    benchmark_usd_gpu_hr as first_gpu_value,
+    sandbox_median_usd_per_hour as first_sandbox_value,
+    gold_observed_at as common_start_at
+  from baseline_ranked
+  where baseline_rank = 1
 )
 select
-  gold_observed_at,
-  observed_date,
-  benchmark_usd_gpu_hr,
-  provider_count,
-  sandbox_price_date,
-  average_usd_per_hour as sandbox_average_usd_per_hour,
-  benchmark_usd_gpu_hr / first_gpu_value * 100.0 as gpu_base_100,
-  average_usd_per_hour / first_sandbox_value * 100.0 as sandbox_base_100
-from based
-order by gold_observed_at
+  comparable.gold_observed_at,
+  comparable.observed_date,
+  baseline.common_start_at,
+  comparable.benchmark_usd_gpu_hr,
+  comparable.provider_count,
+  comparable.included_offer_count,
+  comparable.provider_floor_p25_usd_gpu_hr,
+  comparable.provider_floor_p75_usd_gpu_hr,
+  comparable.gpu_methodology_version,
+  comparable.gpu_benchmark_basis,
+  comparable.sandbox_price_date,
+  comparable.sandbox_median_usd_per_hour,
+  comparable.sandbox_p25_usd_per_hour,
+  comparable.sandbox_p75_usd_per_hour,
+  comparable.sandbox_member_count,
+  comparable.benchmark_usd_gpu_hr
+    / comparable.sandbox_median_usd_per_hour
+      as sandbox_hours_per_h100_gpu_hour,
+  comparable.benchmark_usd_gpu_hr
+    / baseline.first_gpu_value * 100.0 as gpu_base_100,
+  comparable.provider_floor_p25_usd_gpu_hr
+    / baseline.first_gpu_value * 100.0 as gpu_p25_base_100,
+  comparable.provider_floor_p75_usd_gpu_hr
+    / baseline.first_gpu_value * 100.0 as gpu_p75_base_100,
+  comparable.sandbox_median_usd_per_hour
+    / baseline.first_sandbox_value * 100.0 as sandbox_base_100,
+  comparable.sandbox_p25_usd_per_hour
+    / baseline.first_sandbox_value * 100.0 as sandbox_p25_base_100,
+  comparable.sandbox_p75_usd_per_hour
+    / baseline.first_sandbox_value * 100.0 as sandbox_p75_base_100
+from comparable
+cross join baseline
+order by comparable.gold_observed_at
 """
 
 GOLD_QUERIES = {
@@ -234,9 +562,19 @@ select *
 from sandbox_hourly_price_series
 order by series_order, observed_date, point_order
 """,
-    "fixed-average": """
+    "price-events": """
 select *
-from sandbox_fixed_average
+from sandbox_price_events
+order by observed_date, series_order, point_order
+""",
+    "current-rates": """
+select *
+from sandbox_current_rates
+order by price_usd_per_hour, series_label
+""",
+    "fixed-rate": """
+select *
+from sandbox_fixed_rate
 order by observed_date
 """,
     "same-job-cost": """
@@ -244,9 +582,24 @@ select *
 from sandbox_same_job_cost
 order by series_order, generated_at, point_order
 """,
-    "combined-base100": """
+    "same-job-summary": """
 select *
-from sandbox_combined_base100
+from sandbox_same_job_summary
+order by median_runtime_seconds, median_estimated_cost_usd
+""",
+    "gpu-daily-coverage": """
+select *
+from gpu_h100_daily_coverage
+order by observed_date
+""",
+    "gpu-eligible-history": """
+select *
+from gpu_h100_eligible_history
+order by gold_observed_at
+""",
+    "combined-common-start": """
+select *
+from sandbox_gpu_cpu_common_start
 order by gold_observed_at
 """,
 }
@@ -367,10 +720,22 @@ order by series_order, observed_date, point_order
 """,
         )
     )
-    fixed_average = _canonicalize_numeric_rows(
+    fixed_rate = _canonicalize_numeric_rows(
         query_tables(
             tables={"sandbox_hourly_prices": silver_refs["sandbox_hourly_prices"]},
-            sql=FIXED_AVERAGE_SQL,
+            sql=FIXED_RATE_SQL,
+        )
+    )
+    price_events = _canonicalize_numeric_rows(
+        query_tables(
+            tables={"sandbox_hourly_prices": silver_refs["sandbox_hourly_prices"]},
+            sql=PRICE_EVENTS_SQL,
+        )
+    )
+    current_rates = _canonicalize_numeric_rows(
+        query_tables(
+            tables={"sandbox_hourly_prices": silver_refs["sandbox_hourly_prices"]},
+            sql=CURRENT_RATES_SQL,
         )
     )
     same_job = _canonicalize_numeric_rows(
@@ -379,24 +744,52 @@ order by series_order, observed_date, point_order
             sql=SAME_JOB_SQL,
         )
     )
+    same_job_ref = _join(output_root, "gold/sandbox_same_job_cost.parquet")
+    write_parquet_rows(same_job_ref, same_job)
+    same_job_summary = _canonicalize_numeric_rows(
+        query_tables(
+            tables={"sandbox_same_job_cost": same_job_ref},
+            sql=SAME_JOB_SUMMARY_SQL,
+        )
+    )
 
     gpu_rows, gpu_manifest = _load_gpu_history(gpu_history_ref)
     combined: list[dict[str, Any]] = []
+    gpu_daily_coverage: list[dict[str, Any]] = []
+    gpu_eligible_history: list[dict[str, Any]] = []
     gpu_silver_ref: str | None = None
     if gpu_rows:
         gpu_silver_ref = _join(output_root, "silver/gpu_benchmark_history.parquet")
         write_parquet_rows(gpu_silver_ref, gpu_rows)
-        fixed_average_ref = _join(
-            output_root, "gold/sandbox_fixed_average.parquet"
+        fixed_rate_ref = _join(output_root, "gold/sandbox_fixed_rate.parquet")
+        gpu_daily_ref = _join(
+            output_root, "gold/gpu_h100_daily_coverage.parquet"
         )
-        write_parquet_rows(fixed_average_ref, fixed_average)
+        gpu_eligible_ref = _join(
+            output_root, "gold/gpu_h100_eligible_history.parquet"
+        )
+        write_parquet_rows(fixed_rate_ref, fixed_rate)
+        gpu_daily_coverage = _canonicalize_numeric_rows(
+            query_tables(
+                tables={"gpu_benchmark_history": gpu_silver_ref},
+                sql=GPU_DAILY_COVERAGE_SQL,
+            )
+        )
+        write_parquet_rows(gpu_daily_ref, gpu_daily_coverage)
+        gpu_eligible_history = _canonicalize_numeric_rows(
+            query_tables(
+                tables={"gpu_benchmark_history": gpu_silver_ref},
+                sql=GPU_ELIGIBLE_HISTORY_SQL,
+            )
+        )
+        write_parquet_rows(gpu_eligible_ref, gpu_eligible_history)
         combined = _canonicalize_numeric_rows(
             query_tables(
                 tables={
-                    "gpu_benchmark_history": gpu_silver_ref,
-                    "sandbox_fixed_average": fixed_average_ref,
+                    "gpu_h100_eligible_history": gpu_eligible_ref,
+                    "sandbox_fixed_rate": fixed_rate_ref,
                 },
-                sql=COMBINED_BASE100_SQL,
+                sql=COMBINED_COMMON_START_SQL,
             )
         )
 
@@ -404,25 +797,53 @@ order by series_order, observed_date, point_order
         "sandbox_hourly_price_series": _join(
             output_root, "gold/sandbox_hourly_price_series.parquet"
         ),
-        "sandbox_fixed_average": _join(
-            output_root, "gold/sandbox_fixed_average.parquet"
+        "sandbox_price_events": _join(
+            output_root, "gold/sandbox_price_events.parquet"
         ),
-        "sandbox_same_job_cost": _join(
-            output_root, "gold/sandbox_same_job_cost.parquet"
+        "sandbox_current_rates": _join(
+            output_root, "gold/sandbox_current_rates.parquet"
         ),
-        "sandbox_combined_base100": _join(
-            output_root, "gold/sandbox_combined_base100.parquet"
+        "sandbox_fixed_rate": _join(
+            output_root, "gold/sandbox_fixed_rate.parquet"
+        ),
+        "sandbox_same_job_cost": same_job_ref,
+        "sandbox_same_job_summary": _join(
+            output_root, "gold/sandbox_same_job_summary.parquet"
+        ),
+        "gpu_h100_daily_coverage": _join(
+            output_root, "gold/gpu_h100_daily_coverage.parquet"
+        ),
+        "gpu_h100_eligible_history": _join(
+            output_root, "gold/gpu_h100_eligible_history.parquet"
+        ),
+        "sandbox_gpu_cpu_common_start": _join(
+            output_root, "gold/sandbox_gpu_cpu_common_start.parquet"
         ),
     }
     write_parquet_rows(table_refs["sandbox_hourly_price_series"], hourly_gold)
-    write_parquet_rows(table_refs["sandbox_fixed_average"], fixed_average)
-    write_parquet_rows(table_refs["sandbox_same_job_cost"], same_job)
-    write_parquet_rows(table_refs["sandbox_combined_base100"], combined)
+    write_parquet_rows(table_refs["sandbox_price_events"], price_events)
+    write_parquet_rows(table_refs["sandbox_current_rates"], current_rates)
+    write_parquet_rows(table_refs["sandbox_fixed_rate"], fixed_rate)
+    write_parquet_rows(table_refs["sandbox_same_job_summary"], same_job_summary)
+    write_parquet_rows(
+        table_refs["gpu_h100_daily_coverage"], gpu_daily_coverage
+    )
+    write_parquet_rows(
+        table_refs["gpu_h100_eligible_history"], gpu_eligible_history
+    )
+    write_parquet_rows(
+        table_refs["sandbox_gpu_cpu_common_start"], combined
+    )
 
     query_hashes = {
-        "fixed_average": _sha256_text(FIXED_AVERAGE_SQL),
+        "fixed_rate": _sha256_text(FIXED_RATE_SQL),
+        "price_events": _sha256_text(PRICE_EVENTS_SQL),
+        "current_rates": _sha256_text(CURRENT_RATES_SQL),
         "same_job_cost": _sha256_text(SAME_JOB_SQL),
-        "combined": _sha256_text(COMBINED_BASE100_SQL),
+        "same_job_summary": _sha256_text(SAME_JOB_SUMMARY_SQL),
+        "gpu_daily_coverage": _sha256_text(GPU_DAILY_COVERAGE_SQL),
+        "gpu_eligible_history": _sha256_text(GPU_ELIGIBLE_HISTORY_SQL),
+        "combined": _sha256_text(COMBINED_COMMON_START_SQL),
     }
     input_hash = _content_hash(
         {
@@ -432,7 +853,9 @@ order by series_order, observed_date, point_order
             "gpu_rows": gpu_rows,
             "gpu_source_manifest": _public_gpu_source_manifest(gpu_manifest),
             "target_shape": TARGET_SHAPE,
-            "fixed_average_cohort": FIXED_COHORT,
+            "fixed_rate_cohort": FIXED_COHORT,
+            "sandbox_rate_methodology": SANDBOX_RATE_METHODOLOGY,
+            "gpu_comparison_min_providers": GPU_COMPARISON_MIN_PROVIDERS,
             "numeric_decimal_places": NUMERIC_DECIMAL_PLACES,
             "query_hashes": query_hashes,
         }
@@ -446,23 +869,37 @@ order by series_order, observed_date, point_order
     )
     row_counts = {
         "sandbox_hourly_price_series": len(hourly_gold),
-        "sandbox_fixed_average": len(fixed_average),
+        "sandbox_price_events": len(price_events),
+        "sandbox_current_rates": len(current_rates),
+        "sandbox_fixed_rate": len(fixed_rate),
         "sandbox_same_job_cost": len(same_job),
-        "sandbox_combined_base100": len(combined),
+        "sandbox_same_job_summary": len(same_job_summary),
+        "gpu_h100_daily_coverage": len(gpu_daily_coverage),
+        "gpu_h100_eligible_history": len(gpu_eligible_history),
+        "sandbox_gpu_cpu_common_start": len(combined),
     }
     manifest = {
-        "manifest_version": "sandbox_cost_gold_v1",
+        "manifest_version": "sandbox_cost_gold_v2",
         "build_id": build_id,
         "built_at": built_at,
         "input_hash": input_hash,
         "source_repository": source_manifest["source_repository"],
         "source_commit": source_manifest["source_commit"],
         "target_shape": TARGET_SHAPE,
-        "fixed_average_cohort": FIXED_COHORT,
+        "source_reviewed_at": prices_payload.get("retrieved_at"),
+        "benchmark_retrieved_at": benchmarks_payload.get("retrieved_at"),
+        "fixed_rate_cohort": FIXED_COHORT,
+        "sandbox_rate_methodology": SANDBOX_RATE_METHODOLOGY,
+        "gpu_comparison_min_providers": GPU_COMPARISON_MIN_PROVIDERS,
         "numeric_decimal_places": NUMERIC_DECIMAL_PLACES,
         "query_ids": {
-            "fixed_average": FIXED_AVERAGE_QUERY_ID,
+            "fixed_rate": FIXED_RATE_QUERY_ID,
+            "price_events": PRICE_EVENTS_QUERY_ID,
+            "current_rates": CURRENT_RATES_QUERY_ID,
             "same_job_cost": SAME_JOB_QUERY_ID,
+            "same_job_summary": SAME_JOB_SUMMARY_QUERY_ID,
+            "gpu_daily_coverage": GPU_DAILY_QUERY_ID,
+            "gpu_eligible_history": GPU_ELIGIBLE_QUERY_ID,
             "combined": COMBINED_QUERY_ID,
         },
         "query_hashes": query_hashes,
@@ -487,8 +924,12 @@ order by series_order, observed_date, point_order
             _public_payload(
                 manifest=manifest,
                 hourly_rows=hourly_gold,
-                fixed_average=fixed_average,
+                fixed_rate=fixed_rate,
+                price_events=price_events,
+                current_rates=current_rates,
                 same_job=same_job,
+                same_job_summary=same_job_summary,
+                gpu_daily_coverage=gpu_daily_coverage,
                 combined=combined,
             ),
         )
@@ -673,8 +1114,12 @@ def _public_payload(
     *,
     manifest: dict[str, Any],
     hourly_rows: list[dict[str, Any]],
-    fixed_average: list[dict[str, Any]],
+    fixed_rate: list[dict[str, Any]],
+    price_events: list[dict[str, Any]],
+    current_rates: list[dict[str, Any]],
     same_job: list[dict[str, Any]],
+    same_job_summary: list[dict[str, Any]],
+    gpu_daily_coverage: list[dict[str, Any]],
     combined: list[dict[str, Any]],
 ) -> dict[str, Any]:
     source_rows: dict[str, dict[str, str]] = {}
@@ -694,7 +1139,15 @@ def _public_payload(
             "build_id": manifest["build_id"],
             "built_at": manifest["built_at"],
             "target_shape": manifest["target_shape"],
-            "fixed_average_cohort": manifest["fixed_average_cohort"],
+            "source_reviewed_at": manifest["source_reviewed_at"],
+            "benchmark_retrieved_at": manifest["benchmark_retrieved_at"],
+            "fixed_rate_cohort": manifest["fixed_rate_cohort"],
+            "sandbox_rate_methodology": manifest[
+                "sandbox_rate_methodology"
+            ],
+            "gpu_comparison_min_providers": manifest[
+                "gpu_comparison_min_providers"
+            ],
             "numeric_decimal_places": manifest["numeric_decimal_places"],
             "query_ids": manifest["query_ids"],
             "row_counts": manifest["row_counts"],
@@ -703,33 +1156,65 @@ def _public_payload(
             ),
         },
         "hourly_price": {
-            "title": "Public hourly price for four processors and 8 GB of memory",
+            "title": (
+                "Advertised hourly rate for a four-vCPU-equivalent, "
+                "8 GiB sandbox"
+            ),
             "unit": "USD per hour",
+            "rate_basis": "processor and memory rate card only",
+            "methodology_version": SANDBOX_RATE_METHODOLOGY,
             "rows": hourly_rows,
-            "fixed_membership_average": fixed_average,
+            "current_cross_section": current_rates,
+            "fixed_cohort_rate": fixed_rate,
+            # Keep the old field for one publication cycle while article caches expire.
+            "fixed_membership_average": fixed_rate,
+            "price_events": price_events,
         },
         "same_job_cost": {
-            "title": "Cost of the same software job",
+            "title": (
+                "One workload: measured runtime and estimated "
+                "processor-and-memory cost"
+            ),
             "benchmark": "StarSling HPC Sandbox Benchmark: Better Auth",
             "unit": "USD",
             "runtime_unit": "seconds",
+            "cost_scope": "processor_and_memory_only",
             "comparable_run_count": len(
                 {row["benchmark_run_id"] for row in same_job}
             ),
             "calendar_day_count": len({row["observed_date"] for row in same_job}),
             "rows": same_job,
+            "service_summary": same_job_summary,
         },
         "combined": {
-            "title": "Observed compute costs, rebased",
-            "basis": "Each series equals 100 at its first shared observation",
+            "title": "GPU and sandbox rates from a common starting point",
+            "basis": (
+                "Hourly H100 observed benchmark prints with at least "
+                f"{GPU_COMPARISON_MIN_PROVIDERS} providers and the fixed-cohort "
+                "sandbox median each equal 100 at the first eligible GPU print"
+            ),
+            "gpu_input": (
+                "Eligible hourly H100 advertised provider-floor "
+                "benchmark prints"
+            ),
+            "sandbox_input": (
+                "As-of fixed eight-service median advertised sandbox rate"
+            ),
+            "coverage_gate": {
+                "minimum_gpu_provider_count": GPU_COMPARISON_MIN_PROVIDERS,
+                "excluded_history_is_retained": True,
+            },
             "can_show": (
-                "relative movement in the observed H100 benchmark and the "
-                "fixed-membership sandbox hourly average"
+                "relative advertised-rate movement after broad H100 coverage "
+                "begins, cross-sectional price dispersion, provider coverage, "
+                "and the price ratio between one H100 GPU-hour and one "
+                "standardized sandbox hour"
             ),
             "cannot_show": (
                 "price-level equivalence, demand, transaction volume, or "
-                "total customer invoices"
+                "GPU utilization, causal effects, or total customer invoices"
             ),
+            "coverage_history": gpu_daily_coverage,
             "rows": combined,
         },
         "sources": sorted(source_rows.values(), key=lambda row: row["label"]),
@@ -755,6 +1240,31 @@ def _public_gpu_source_manifest(raw: Any) -> dict[str, Any] | None:
 def _load_gpu_history(ref: str | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if not ref:
         return [], {}
+    if ref.partition("?")[0].lower().endswith(".parquet"):
+        rows = query_tables(
+            tables={"gpu_benchmark_history": ref},
+            sql="""
+select *
+from gpu_benchmark_history
+order by gold_observed_at, benchmark_family_id
+""",
+        )
+        normalized = _normalize_gpu_history_rows(rows, ref)
+        observed_at = max(
+            (str(row["gold_observed_at"]) for row in normalized),
+            default=None,
+        )
+        methodologies = sorted(
+            {str(row["methodology_version"]) for row in normalized}
+        )
+        return normalized, {
+            "manifest_version": "gpu_benchmark_history_parquet_v1",
+            "methodology_version": (
+                methodologies[0] if len(methodologies) == 1 else methodologies
+            ),
+            "observed_at": observed_at,
+            "row_counts": {"benchmark_history": len(normalized)},
+        }
     try:
         payload = read_json(ref)
     except FileNotFoundError:
@@ -762,11 +1272,23 @@ def _load_gpu_history(ref: str | None) -> tuple[list[dict[str, Any]], dict[str, 
     rows = payload.get("rows")
     if not isinstance(rows, list):
         raise ValueError(f"GPU history at {ref} does not contain a rows list")
+    return _normalize_gpu_history_rows(rows, ref), dict(
+        payload.get("manifest") or {}
+    )
+
+
+def _normalize_gpu_history_rows(
+    rows: list[Any],
+    ref: str,
+) -> list[dict[str, Any]]:
     required = {
         "gold_observed_at",
         "benchmark_family_id",
         "benchmark_usd_gpu_hr",
         "provider_count",
+        "included_offer_count",
+        "provider_floor_p25_usd_gpu_hr",
+        "provider_floor_p75_usd_gpu_hr",
         "methodology_version",
         "benchmark_basis",
         "calculated_at",
@@ -785,7 +1307,7 @@ def _load_gpu_history(ref: str | None) -> tuple[list[dict[str, Any]], dict[str, 
         if raw["benchmark_usd_gpu_hr"] is None:
             continue
         normalized.append(dict(raw))
-    return normalized, dict(payload.get("manifest") or {})
+    return normalized
 
 
 def _read_local_json(path: Path) -> dict[str, Any]:

@@ -77,12 +77,14 @@ hourly job does not need to rescan the full lake. Use it instead of downloading 
 all-product `index-history.json` on public story pages.
 
 `sandbox-cost.json` is the public article payload for the reviewed sandbox
-benchmark. It contains the 33 dated hourly-price observations, the fixed
-eight-service average, all 38 comparable service results from seven public
-runs, and the exploratory H100/sandbox base-100 series. It contains source URLs
-and plain caveats, but no private lake credentials or raw private S3 objects.
-The hourly market run rebuilds it from maintained evidence and the newly
-exported GPU benchmark history.
+benchmark. It contains 33 dated hourly-price observations, 10 actual rate-change
+events, the current 11-service cross-section, the fixed eight-service
+median/p25-p75 series, all 38 comparable service results from seven public
+runs, six workload summaries, retained H100 coverage history, and the
+coverage-gated H100/sandbox common-start series. It contains source URLs and
+plain caveats, but no private lake credentials or raw private S3 objects. The
+hourly market run rebuilds it from maintained evidence and the newly exported
+GPU benchmark history.
 
 ## S3/CloudFront Shape
 

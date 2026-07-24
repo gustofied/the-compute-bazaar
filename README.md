@@ -225,7 +225,7 @@ public price evidence + StarSling benchmark runs
   -> bronze source records
   -> silver normalized prices and comparable runs
   -> named DataFusion queries
-  -> gold hourly price, same-job cost, and base-100 comparison
+  -> gold fixed-cohort rates, same-job summaries, and coverage-gated comparison
   -> sandbox-cost.json
   -> AdamSioud Compute article
 ```
@@ -236,13 +236,20 @@ Every matching repeated intraday run is retained. Earlier two-processor runs
 are captured but rejected because the publication shape is four processors,
 8 GB memory, and 40 GB disk.
 
+The hourly sandbox headline is the median of the same eight-service cohort,
+with p25-p75 and mean retained as descriptive fields. The H100 comparison uses
+only hourly benchmark prints with at least 10 contributing providers. Earlier
+low-coverage observations stay in the coverage table; they are not connected
+into a misleading continuous price line. Provider count is coverage, not
+transaction volume or GPU utilization.
+
 ```sh
 uv run sandbox-cost validate
 
 uv run sandbox-cost build \
   --output-root data/sandbox-cost \
   --dashboard-output-root data/dashboard/compute-bazaar \
-  --gpu-history-ref data/dashboard/compute-bazaar/benchmark-history.json
+  --gpu-history-ref data/sandbox-cost/silver/gpu_benchmark_history.parquet
 
 uv run sandbox-cost query \
   --output-root data/sandbox-cost \

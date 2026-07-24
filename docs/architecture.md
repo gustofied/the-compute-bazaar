@@ -157,17 +157,30 @@ reviewed price evidence + commit-pinned public benchmark source
   -> silver/sandbox_benchmark_runs
   -> DataFusion methodology queries
   -> gold/sandbox_hourly_price_series
-  -> gold/sandbox_fixed_average
+  -> gold/sandbox_price_events
+  -> gold/sandbox_current_rates
+  -> gold/sandbox_fixed_rate
   -> gold/sandbox_same_job_cost
-  -> gold/sandbox_combined_base100
+  -> gold/sandbox_same_job_summary
+  -> gold/gpu_h100_daily_coverage
+  -> gold/gpu_h100_eligible_history
+  -> gold/sandbox_gpu_cpu_common_start
   -> dashboard/compute-bazaar/sandbox-cost.json
 ```
 
-The fixed hourly average uses the same eight services at every event date.
-Same-job cost is `runtime_seconds / 3600 * hourly_price`, using only the
-processor-and-memory component. The combined GPU/sandbox series rebases each
-compatible series to 100 at its first shared observation; it does not combine
-raw dollar levels or claim demand or volume.
+The fixed hourly rate uses the same eight services at every event date and
+publishes the cohort median and p25-p75 range; the arithmetic mean remains a
+secondary descriptive field. Same-job cost is
+`runtime_seconds / 3600 * hourly_price`, using only the processor-and-memory
+component. The workload summary retains all raw runs and calculates medians,
+interquartile ranges, and a descriptive lower-left runtime/cost frontier.
+
+The combined GPU/sandbox series uses hourly H100 benchmark prints only when at
+least 10 providers contribute. It rebases both compatible series to 100 at the
+first eligible H100 timestamp. The full retained H100 history remains in the
+coverage table, including excluded low-coverage periods. This view does not
+combine raw dollar levels or claim demand, transaction volume, or GPU
+utilization.
 
 The hourly Windmill heartbeat rebuilds this gold product after GPU dashboard
 history is exported. A separate daily source check detects new or changed

@@ -243,7 +243,7 @@ def run_market_hourly(
     checks["sandbox_cost"] = (
         "ok"
         if sandbox_cost.public_ref
-        and sandbox_cost.row_counts.get("sandbox_combined_base100", 0) > 0
+        and sandbox_cost.row_counts.get("sandbox_gpu_cpu_common_start", 0) > 0
         else "warning"
     )
     data_quality["sandbox_cost"] = {
