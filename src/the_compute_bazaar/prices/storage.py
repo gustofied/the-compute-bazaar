@@ -26,11 +26,6 @@ def list_refs(uri_prefix: str, *, suffix: str = "") -> list[str]:
     """List local or S3 refs under a prefix."""
     if uri_prefix.startswith("s3://"):
         parsed = urlparse(uri_prefix.rstrip("/") + "/")
-        try:
-            import boto3
-        except ImportError as exc:
-            raise RuntimeError("Listing s3:// paths requires boto3") from exc
-
         client = _s3_client()
         prefix = parsed.path.lstrip("/")
         refs: list[str] = []
@@ -52,7 +47,11 @@ def list_refs(uri_prefix: str, *, suffix: str = "") -> list[str]:
     root = Path(uri_prefix)
     if not root.exists():
         return []
-    refs = [str(path) for path in root.rglob(f"*{suffix}" if suffix else "*") if path.is_file()]
+    refs = [
+        str(path)
+        for path in root.rglob(f"*{suffix}" if suffix else "*")
+        if path.is_file()
+    ]
     return sorted(refs)
 
 
@@ -70,11 +69,6 @@ def write_bytes(uri: str, data: bytes, *, content_type: str | None = None) -> st
         parsed = urlparse(uri)
         bucket = parsed.netloc
         key = parsed.path.lstrip("/")
-        try:
-            import boto3
-        except ImportError as exc:
-            raise RuntimeError("Writing s3:// paths requires the 'platform' extra: uv sync --extra platform") from exc
-
         kwargs: dict[str, Any] = {"Bucket": bucket, "Key": key, "Body": data}
         if content_type:
             kwargs["ContentType"] = content_type
@@ -90,12 +84,9 @@ def write_bytes(uri: str, data: bytes, *, content_type: str | None = None) -> st
 def read_bytes(uri: str) -> bytes:
     if uri.startswith("s3://"):
         parsed = urlparse(uri)
-        try:
-            import boto3
-        except ImportError as exc:
-            raise RuntimeError("Reading s3:// paths requires the 'platform' extra: uv sync --extra platform") from exc
-
-        response = _s3_client().get_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
+        response = _s3_client().get_object(
+            Bucket=parsed.netloc, Key=parsed.path.lstrip("/")
+        )
         return response["Body"].read()
 
     return Path(uri).read_bytes()
@@ -131,19 +122,25 @@ def write_parquet_rows(uri: str, rows: Iterable[Mapping[str, Any]]) -> str:
         import pyarrow as pa
         import pyarrow.parquet as pq
     except ImportError as exc:
-        raise RuntimeError("Writing Parquet requires the 'platform' extra: uv sync --extra platform") from exc
+        raise RuntimeError(
+            "Writing Parquet requires the 'platform' extra: uv sync --extra platform"
+        ) from exc
 
     table = pa.Table.from_pylist(materialized)
     if uri.startswith("s3://"):
         try:
             import pyarrow.fs as pafs
         except ImportError as exc:
-            raise RuntimeError("Writing Parquet to S3 requires pyarrow filesystem support") from exc
+            raise RuntimeError(
+                "Writing Parquet to S3 requires pyarrow filesystem support"
+            ) from exc
 
         parsed = urlparse(uri)
         region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
         filesystem = pafs.S3FileSystem(region=region) if region else pafs.S3FileSystem()
-        with filesystem.open_output_stream(f"{parsed.netloc}/{parsed.path.lstrip('/')}") as sink:
+        with filesystem.open_output_stream(
+            f"{parsed.netloc}/{parsed.path.lstrip('/')}"
+        ) as sink:
             pq.write_table(table, sink)
         return uri
 
@@ -153,7 +150,9 @@ def write_parquet_rows(uri: str, rows: Iterable[Mapping[str, Any]]) -> str:
     return str(path)
 
 
-def date_partition(root: str, *, provider: str, observed_date: str, run_id: str, filename: str) -> str:
+def date_partition(
+    root: str, *, provider: str, observed_date: str, run_id: str, filename: str
+) -> str:
     return "/".join(
         [
             root.rstrip("/"),
@@ -193,7 +192,9 @@ def _normalize_parquet_value(value: Any) -> Any:
     if isinstance(value, Mapping):
         if not value:
             return None
-        return {str(key): _normalize_parquet_value(child) for key, child in value.items()}
+        return {
+            str(key): _normalize_parquet_value(child) for key, child in value.items()
+        }
     if isinstance(value, list):
         return [_normalize_parquet_value(child) for child in value]
     return value

@@ -22,25 +22,67 @@ from bootstrap_provider_schedule import (
 
 
 DEFAULT_PROVIDER_SCOPE = (
-    "vast,lium,crusoe,denvr,digitalocean,gmi_cloud,hyperstack,lambda,massed_compute,"
-    "nebius,runpod,tensordock,verda,vessl,voltage_park"
+    "vast,lium,spheron,inference_sh,clore,akash,aws_spot,azure,runpod,verda,"
+    "published_rate_cards"
+)
+OPTIONAL_PROVIDER_VARIABLES = (
+    (
+        "PRIME_INTELLECT_API_KEY",
+        "prime_intellect_api_key",
+        "Prime Intellect availability API key",
+    ),
+    ("SHADEFORM_API_KEY", "shadeform_api_key", "Shadeform inventory API key"),
+    ("SESTERCE_API_KEY", "sesterce_api_key", "Sesterce offers API key"),
+    ("TENSORDOCK_API_KEY", "tensordock_api_key", "TensorDock read API key"),
+    ("HYPERSTACK_API_KEY", "hyperstack_api_key", "Hyperstack read API key"),
+    ("LAMBDA_CLOUD_API_KEY", "lambda_cloud_api_key", "Lambda Cloud read API key"),
+    (
+        "DIGITALOCEAN_API_TOKEN",
+        "digitalocean_api_token",
+        "DigitalOcean sizes read token",
+    ),
+    ("GPUS_IO_API_KEY", "gpus_io_api_key", "GPUs.io read API key"),
+    ("VERDA_CLIENT_ID", "verda_client_id", "Verda OAuth client ID"),
+    ("VERDA_CLIENT_SECRET", "verda_client_secret", "Verda OAuth client secret"),
 )
 
 
 def main() -> None:
     _load_local_env()
 
-    parser = argparse.ArgumentParser(description="Create or update the Windmill market heartbeat job")
-    parser.add_argument("--base-url", default=os.getenv("WINDMILL_BASE_URL", DEFAULT_BASE_URL))
-    parser.add_argument("--workspace", default=os.getenv("WINDMILL_WORKSPACE", DEFAULT_WORKSPACE))
-    parser.add_argument("--folder", default=os.getenv("WINDMILL_FOLDER", DEFAULT_FOLDER))
-    parser.add_argument("--token", default=os.getenv("WINDMILL_TOKEN") or _read_token_file())
+    parser = argparse.ArgumentParser(
+        description="Create or update the Windmill market heartbeat job"
+    )
+    parser.add_argument(
+        "--base-url", default=os.getenv("WINDMILL_BASE_URL", DEFAULT_BASE_URL)
+    )
+    parser.add_argument(
+        "--workspace", default=os.getenv("WINDMILL_WORKSPACE", DEFAULT_WORKSPACE)
+    )
+    parser.add_argument(
+        "--folder", default=os.getenv("WINDMILL_FOLDER", DEFAULT_FOLDER)
+    )
+    parser.add_argument(
+        "--token", default=os.getenv("WINDMILL_TOKEN") or _read_token_file()
+    )
     parser.add_argument("--timezone", default=os.getenv("WINDMILL_TIMEZONE", "UTC"))
-    parser.add_argument("--cron", default=os.getenv("WINDMILL_MARKET_CRON", DEFAULT_CRON))
-    parser.add_argument("--disabled", action="store_true", help="Create the schedule disabled")
-    parser.add_argument("--run-now", action="store_true", help="Run the market script once after upsert")
-    parser.add_argument("--run-id", help="Optional market_run_id to pass to the one-off run")
-    parser.add_argument("--wait", action="store_true", help="Wait for the one-off run and include its result")
+    parser.add_argument(
+        "--cron", default=os.getenv("WINDMILL_MARKET_CRON", DEFAULT_CRON)
+    )
+    parser.add_argument(
+        "--disabled", action="store_true", help="Create the schedule disabled"
+    )
+    parser.add_argument(
+        "--run-now", action="store_true", help="Run the market script once after upsert"
+    )
+    parser.add_argument(
+        "--run-id", help="Optional market_run_id to pass to the one-off run"
+    )
+    parser.add_argument(
+        "--wait",
+        action="store_true",
+        help="Wait for the one-off run and include its result",
+    )
     parser.add_argument("--dashboard-limit", type=int, default=100)
     parser.add_argument("--lium-size", type=int, default=200)
     parser.add_argument("--lium-max-pages", type=int, default=10)
@@ -48,9 +90,13 @@ def main() -> None:
     args = parser.parse_args()
 
     if not args.token:
-        raise SystemExit("Set WINDMILL_TOKEN, pass --token, or create .secrets/windmill-bootstrap-token.txt")
+        raise SystemExit(
+            "Set WINDMILL_TOKEN, pass --token, or create .secrets/windmill-bootstrap-token.txt"
+        )
 
-    client = WindmillClient(base_url=args.base_url, workspace=args.workspace, token=args.token)
+    client = WindmillClient(
+        base_url=args.base_url, workspace=args.workspace, token=args.token
+    )
     folder = args.folder
 
     client.create_folder(folder)
@@ -59,14 +105,16 @@ def main() -> None:
 
     script_path = f"f/{folder}/market_hourly"
     schedule_path = f"f/{folder}/market_hourly_hourly"
-    script_body = Path(__file__).with_name("market_hourly.py").read_text(encoding="utf-8")
+    script_body = (
+        Path(__file__).with_name("market_hourly.py").read_text(encoding="utf-8")
+    )
 
     client.upsert_script(
         path=script_path,
         content=script_body,
         summary="Hourly Compute Bazaar market heartbeat",
         description=(
-            "Ingests Vast, Lium, and official published rate cards, builds gold, "
+            "Ingests live API sources, AWS Spot observations, and published rate cards, builds gold, "
             "exports dashboard JSON, and writes a market run manifest."
         ),
     )
@@ -122,9 +170,24 @@ def required_variables(folder: str) -> list[dict[str, Any]]:
         ("LIUM_API_KEY", "lium_api_key", True, "Lium API key"),
         ("COMPUTE_BAZAAR_RAW_ROOT", "raw_root", False, "Raw S3 root"),
         ("COMPUTE_BAZAAR_LAKE_ROOT", "lake_root", False, "Lake S3 root"),
-        ("COMPUTE_BAZAAR_KAFKA_BOOTSTRAP_SERVERS", "kafka_bootstrap_servers", False, "Kafka bootstrap servers"),
-        ("COMPUTE_BAZAAR_KAFKA_USERNAME", "kafka_username", True, "Kafka SASL username"),
-        ("COMPUTE_BAZAAR_KAFKA_PASSWORD", "kafka_password", True, "Kafka SASL password"),
+        (
+            "COMPUTE_BAZAAR_KAFKA_BOOTSTRAP_SERVERS",
+            "kafka_bootstrap_servers",
+            False,
+            "Kafka bootstrap servers",
+        ),
+        (
+            "COMPUTE_BAZAAR_KAFKA_USERNAME",
+            "kafka_username",
+            True,
+            "Kafka SASL username",
+        ),
+        (
+            "COMPUTE_BAZAAR_KAFKA_PASSWORD",
+            "kafka_password",
+            True,
+            "Kafka SASL password",
+        ),
     ]
     variables: list[dict[str, Any]] = []
     missing: list[str] = []
@@ -142,7 +205,21 @@ def required_variables(folder: str) -> list[dict[str, Any]]:
             }
         )
     if missing:
-        raise SystemExit(f"Missing required environment variables: {', '.join(missing)}")
+        raise SystemExit(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+
+    for env_name, variable_name, description in OPTIONAL_PROVIDER_VARIABLES:
+        value = os.getenv(env_name)
+        if value:
+            variables.append(
+                {
+                    "path": f"f/{folder}/{variable_name}",
+                    "value": value,
+                    "is_secret": True,
+                    "description": description,
+                }
+            )
 
     variables.append(
         {
@@ -163,7 +240,7 @@ def schedule_args(
     lium_max_pages: int,
     lium_paginate: bool,
 ) -> dict[str, Any]:
-    return {
+    args: dict[str, Any] = {
         "vast_api_key": f"$var:f/{folder}/vast_api_key",
         "lium_api_key": f"$var:f/{folder}/lium_api_key",
         "raw_root": f"$var:f/{folder}/raw_root",
@@ -176,13 +253,36 @@ def schedule_args(
         "kafka_password": f"$var:f/{folder}/kafka_password",
         "aws_region": os.getenv("AWS_REGION", "eu-west-3"),
         "topic_prefix": "gpu",
-        "providers": DEFAULT_PROVIDER_SCOPE,
+        "providers": _provider_scope(),
         "lium_size": lium_size,
         "lium_max_pages": lium_max_pages,
         "lium_paginate": lium_paginate,
         "dashboard_limit": dashboard_limit,
         "dry_run": False,
     }
+    for env_name, variable_name, _ in OPTIONAL_PROVIDER_VARIABLES:
+        if os.getenv(env_name):
+            args[variable_name] = f"$var:f/{folder}/{variable_name}"
+    return args
+
+
+def _provider_scope() -> str:
+    providers = DEFAULT_PROVIDER_SCOPE.split(",")
+    providers.extend(
+        provider
+        for provider, env_name in (
+            ("prime_intellect", "PRIME_INTELLECT_API_KEY"),
+            ("shadeform", "SHADEFORM_API_KEY"),
+            ("sesterce", "SESTERCE_API_KEY"),
+            ("tensordock", "TENSORDOCK_API_KEY"),
+            ("hyperstack", "HYPERSTACK_API_KEY"),
+            ("lambda", "LAMBDA_CLOUD_API_KEY"),
+            ("digitalocean", "DIGITALOCEAN_API_TOKEN"),
+            ("gpus_io", "GPUS_IO_API_KEY"),
+        )
+        if os.getenv(env_name)
+    )
+    return ",".join(providers)
 
 
 def _dashboard_output_root() -> str:

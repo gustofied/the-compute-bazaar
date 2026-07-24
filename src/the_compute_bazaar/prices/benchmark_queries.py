@@ -196,10 +196,12 @@ select
   {query_id} as methodology_query_id,
   frontier.listing_id,
   frontier.provider,
+  frontier.source_connector,
   frontier.source_offer_id,
   frontier.gpu_model,
   frontier.gpu_raw_name,
   frontier.gpu_count,
+  frontier.available_gpu_count,
   frontier.vram_gb,
   frontier.price_usd_gpu_hr,
   frontier.price_usd_instance_hr,
@@ -212,6 +214,8 @@ select
   case when eligible.provider_rank = 1 then 'provider_floor' else null end as inclusion_reason,
   case
     when eligible.provider_rank = 1 then null
+    when frontier.availability_status in ('spot_available', 'spot_price_observed')
+      then 'different_price_basis_spot'
     when frontier.availability_status = 'published_rate_future' then 'future_rate'
     when frontier.availability_status = 'published_rate_reserved' then 'committed_term_rate'
     when frontier.availability_status not in ('available', 'published_rate', 'published_rate_request')

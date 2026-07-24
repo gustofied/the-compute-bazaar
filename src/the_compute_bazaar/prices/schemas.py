@@ -69,6 +69,8 @@ class GpuOffer:
     gpu_count: int
     vram_gb: float | None
     price_usd_hr: float
+    available_gpu_count: int | None = None
+    source_connector: str | None = None
     currency: str = "USD"
     country: str | None = None
     region: str | None = None
@@ -102,4 +104,3 @@ class GpuIndexPrice:
 
     def to_dict(self) -> dict[str, Any]:
         return to_jsonable(self)
-

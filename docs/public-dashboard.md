@@ -63,8 +63,10 @@ listings-sample.json
 These files are safe for a browser because they contain product/query outputs, counts, checks, and
 public-facing rows. `featured-benchmarks.json` is the public strip for the current H100,
 H200, B200, and B300 benchmark families. `benchmark-constituents.json` is still public-safe, but it is
-for operator/product inspection rather than the minimal AdamSioud label. These files do not contain
-provider API keys, Kafka credentials, or private raw S3 refs.
+for operator/product inspection rather than the minimal AdamSioud label. Its `complete` and
+`row_count` fields confirm that the file contains the full current constituent set rather than the
+sample used by `listings-sample.json`. These files do not contain provider API keys, Kafka
+credentials, or private raw S3 refs.
 
 ## S3/CloudFront Shape
 

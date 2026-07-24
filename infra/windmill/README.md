@@ -135,6 +135,10 @@ VAST_API_KEY=...
 LIUM_API_KEY=...
 ```
 
+Public connectors need no secret. Optional authenticated connectors are added
+to the schedule when their matching environment variable from
+`.env.example` is present.
+
 Prefer an AWS IAM role attached to the worker compute. Do not put AWS access keys in Windmill
 unless there is no alternative.
 
@@ -150,7 +154,7 @@ AWS_EXECUTION_ENV,AWS_CONTAINER_CREDENTIALS_RELATIVE_URI,AWS_DEFAULT_REGION,AWS_
 The main script is `infra/windmill/market_hourly.py`. It runs the complete heartbeat:
 
 ```text
-ingest Vast -> ingest Lium -> ingest published rate cards -> build gold -> export dashboard JSON -> write market run manifest
+ingest live APIs -> ingest current price observations -> ingest published rate cards -> build gold -> export dashboard JSON -> write market run manifest
 ```
 
 In the dev worker image it shells out to the baked project CLI:
@@ -192,7 +196,7 @@ Suggested schedule args, using Windmill variables/secrets:
   "kafka_password": "$var:f/compute-bazaar/kafka_password",
   "aws_region": "eu-west-3",
   "topic_prefix": "gpu",
-  "providers": "vast,lium,crusoe,denvr,digitalocean,gmi_cloud,hyperstack,lambda,massed_compute,nebius,runpod,tensordock,verda,vessl,voltage_park",
+  "providers": "vast,lium,spheron,inference_sh,clore,akash,aws_spot,azure,runpod,verda,published_rate_cards",
   "lium_size": 200,
   "lium_max_pages": 10,
   "lium_paginate": true,

@@ -16,7 +16,13 @@ from the_compute_bazaar.prices.gold import (
     query_gold_listings,
     query_gold_provider_comparison,
 )
-from the_compute_bazaar.prices.market_run import list_market_runs, read_latest_market_run, write_market_run_manifest
+from the_compute_bazaar.prices.coverage import query_frontier_coverage
+from the_compute_bazaar.prices.market_run import (
+    list_market_runs,
+    read_latest_market_run,
+    run_market_hourly,
+    write_market_run_manifest,
+)
 from the_compute_bazaar.prices.normalize import canonical_gpu_model
 from the_compute_bazaar.prices.operator import (
     list_operator_queries,
@@ -27,10 +33,69 @@ from the_compute_bazaar.prices.operator import (
 )
 from the_compute_bazaar.prices.providers.lium import LiumClient, normalize_executor
 from the_compute_bazaar.prices.pipeline import ingest_rate_card
+from the_compute_bazaar.prices.providers.akash import AkashClient, normalize_gpu_prices
+from the_compute_bazaar.prices.providers.aws_spot import (
+    AwsSpotClient,
+    normalize_spot_prices,
+)
+from the_compute_bazaar.prices.providers.azure_retail import (
+    AzureRetailClient,
+    normalize_retail_prices,
+)
+from the_compute_bazaar.prices.providers.clore import CloreClient, normalize_servers
+from the_compute_bazaar.prices.providers.digitalocean import (
+    DigitalOceanClient,
+    normalize_sizes as normalize_digitalocean_sizes,
+)
+from the_compute_bazaar.prices.providers.gpus_io import (
+    GpusIoClient,
+    normalize_prices as normalize_gpus_io_prices,
+)
+from the_compute_bazaar.prices.providers.hyperstack import (
+    HyperstackClient,
+    normalize_stock,
+)
+from the_compute_bazaar.prices.providers.inference_sh import (
+    InferenceShClient,
+    normalize_instance_types as normalize_inference_sh_instance_types,
+)
+from the_compute_bazaar.prices.providers.lambda_cloud import (
+    LambdaCloudClient,
+    normalize_instance_types as normalize_lambda_instance_types,
+)
+from the_compute_bazaar.prices.providers.prime_intellect import (
+    PrimeIntellectClient,
+    normalize_availability,
+)
 from the_compute_bazaar.prices.providers.rate_cards import rate_card_providers
-from the_compute_bazaar.prices.providers.vast import VastClient, default_market_query
+from the_compute_bazaar.prices.providers.runpod import RunpodClient, normalize_gpu_types
+from the_compute_bazaar.prices.providers.sesterce import (
+    normalize_offers as normalize_sesterce_offers,
+)
+from the_compute_bazaar.prices.providers.shadeform import normalize_instance_types
+from the_compute_bazaar.prices.providers.spheron import (
+    SpheronClient,
+    normalize_offers as normalize_spheron_offers,
+)
+from the_compute_bazaar.prices.providers.tensordock import (
+    TensorDockClient,
+    normalize_hostnodes,
+)
+from the_compute_bazaar.prices.providers.verda import (
+    VerdaClient,
+    normalize_instance_catalog,
+)
+from the_compute_bazaar.prices.providers.vast import (
+    VastClient,
+    default_market_query,
+    default_market_segments,
+)
 from the_compute_bazaar.prices.schemas import GpuOffer
-from the_compute_bazaar.prices.storage import read_json, write_json, write_offers_parquet
+from the_compute_bazaar.prices.storage import (
+    read_json,
+    write_json,
+    write_offers_parquet,
+)
 
 
 OBSERVED_AT = datetime(2026, 6, 17, 12, 0, tzinfo=timezone.utc)
@@ -46,8 +111,17 @@ class GpuNormalizationTests(unittest.TestCase):
                 "available_gpu_count": 2,
                 "gpu_count": 2,
                 "tier": "secure",
-                "location": {"country": "Finland", "city": "Helsinki", "region_name": "Uusimaa"},
-                "specs": {"gpu": {"count": 2, "details": [{"name": "NVIDIA H100", "capacity": 81920}]}},
+                "location": {
+                    "country": "Finland",
+                    "city": "Helsinki",
+                    "region_name": "Uusimaa",
+                },
+                "specs": {
+                    "gpu": {
+                        "count": 2,
+                        "details": [{"name": "NVIDIA H100", "capacity": 81920}],
+                    }
+                },
             },
             observed_at=OBSERVED_AT,
             raw_ref="s3://bucket/raw/lium.json",
@@ -58,6 +132,7 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertEqual(offer.provider, "lium")
         self.assertEqual(offer.gpu_model, "H100_80GB_x2")
         self.assertEqual(offer.gpu_count, 2)
+        self.assertEqual(offer.available_gpu_count, 2)
         self.assertEqual(offer.price_usd_hr, 2.5)
         self.assertEqual(offer.vram_gb, 80)
         self.assertTrue(offer.is_secure)
@@ -65,7 +140,9 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertEqual(offer.region, "Helsinki, Uusimaa")
 
     def test_provider_gpu_name_variants_share_canonical_model(self) -> None:
-        self.assertEqual(canonical_gpu_model("NVIDIA A100-SXM4-80GB", 81920), "A100_80GB")
+        self.assertEqual(
+            canonical_gpu_model("NVIDIA A100-SXM4-80GB", 81920), "A100_80GB"
+        )
         self.assertEqual(
             canonical_gpu_model("NVIDIA RTX PRO 6000 Blackwell Server Edition", 98304),
             "RTXPro6000B_96GB",
@@ -76,11 +153,22 @@ class GpuNormalizationTests(unittest.TestCase):
             "RTX6000Ada_48GB",
         )
         self.assertEqual(canonical_gpu_model("NVIDIA A800 PCIe", 81920), "A800_80GB")
-        self.assertEqual(canonical_gpu_model("NVIDIA RTX 4090D", 24576), "RTX4090D_24GB")
+        self.assertEqual(
+            canonical_gpu_model("NVIDIA RTX 4090D", 24576), "RTX4090D_24GB"
+        )
         self.assertEqual(canonical_gpu_model("NVIDIA Tesla T4", 16384), "T4_16GB")
         self.assertEqual(canonical_gpu_model("NVIDIA RTX A2000", 12288), "A2000_12GB")
-        self.assertEqual(canonical_gpu_model("NVIDIA Quadro P4000", 8192), "QuadroP4000_8GB")
-        self.assertEqual(canonical_gpu_model("NVIDIA Quadro RTX 4000", 8192), "QuadroRTX4000_8GB")
+        self.assertEqual(
+            canonical_gpu_model("NVIDIA Quadro P4000", 8192), "QuadroP4000_8GB"
+        )
+        self.assertEqual(
+            canonical_gpu_model("NVIDIA Quadro RTX 4000", 8192), "QuadroRTX4000_8GB"
+        )
+        self.assertEqual(canonical_gpu_model("A6000", 49152), "A6000_48GB")
+        self.assertEqual(canonical_gpu_model("RTX4090", 24576), "RTX4090_24GB")
+        self.assertEqual(canonical_gpu_model("RTXPro6000", 98304), "RTXPro6000B_96GB")
+        self.assertEqual(canonical_gpu_model("V100_32G", 32768), "V100_32GB")
+        self.assertEqual(canonical_gpu_model("A30", 24576), "A30_24GB")
 
     def test_lium_fetch_pages_preserves_raw_pages_and_dedupes_executors(self) -> None:
         session = _FakeSession(
@@ -90,11 +178,17 @@ class GpuNormalizationTests(unittest.TestCase):
                 {"data": []},
             ]
         )
-        client = LiumClient(api_key="test-key", api_base="https://example.test/api", session=session)
+        client = LiumClient(
+            api_key="test-key", api_base="https://example.test/api", session=session
+        )
 
-        fetched = client.fetch_executor_pages(query={"size": 2}, paginate=True, max_pages=4)
+        fetched = client.fetch_executor_pages(
+            query={"size": 2}, paginate=True, max_pages=4
+        )
 
-        self.assertEqual([row["id"] for row in fetched.executors], ["exec-a", "exec-b", "exec-c"])
+        self.assertEqual(
+            [row["id"] for row in fetched.executors], ["exec-a", "exec-b", "exec-c"]
+        )
         self.assertEqual(fetched.raw_payload["mode"], "paginated")
         self.assertEqual(fetched.raw_payload["executor_count"], 3)
         self.assertEqual(len(fetched.raw_payload["pages"]), 3)
@@ -102,7 +196,9 @@ class GpuNormalizationTests(unittest.TestCase):
 
     def test_vast_default_market_query_uses_json_post_search(self) -> None:
         session = _FakeSession([{"offers": [{"id": 123, "gpu_name": "RTX 4090"}]}])
-        client = VastClient(api_key="test-key", api_base="https://example.test/api/v0", session=session)
+        client = VastClient(
+            api_key="test-key", api_base="https://example.test/api/v0", session=session
+        )
 
         payload = client.search_bundles()
 
@@ -113,6 +209,858 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertEqual(call["url"], "https://example.test/api/v0/bundles/")
         self.assertEqual(call["headers"]["Authorization"], "Bearer test-key")
         self.assertEqual(call["json"], default_market_query())
+
+    def test_vast_segmented_market_search_preserves_raw_responses_and_dedupes(
+        self,
+    ) -> None:
+        session = _FakeSession(
+            [
+                {"offers": [{"id": "broad-1", "gpu_name": "RTX 4090"}]},
+                {
+                    "offers": [
+                        {"id": "h100-1", "gpu_name": "H100"},
+                        {"id": "h200-1", "gpu_name": "H200"},
+                        {"id": "b200-1", "gpu_name": "B200"},
+                        {"id": "b300-1", "gpu_name": "B300"},
+                    ]
+                },
+            ]
+        )
+        client = VastClient(
+            api_key="test-key", api_base="https://example.test/api/v0", session=session
+        )
+
+        fetched = client.fetch_market_segments()
+
+        self.assertEqual(
+            [row["id"] for row in fetched.offers],
+            ["broad-1", "h100-1", "h200-1", "b200-1", "b300-1"],
+        )
+        self.assertEqual(fetched.raw_payload["mode"], "segmented_market_search")
+        self.assertEqual(fetched.raw_payload["segment_count"], 2)
+        self.assertEqual(fetched.raw_payload["offer_count"], 5)
+        self.assertEqual(
+            [segment["segment"] for segment in fetched.raw_payload["segments"]],
+            ["broad_market", "frontier_gpu_market"],
+        )
+        self.assertEqual(
+            [call["json"] for call in session.calls],
+            [query for _, query in default_market_segments()],
+        )
+
+    def test_aws_spot_prices_are_separate_instance_price_observations(self) -> None:
+        session = _FakeBotoSession(
+            {
+                "us-east-1": {
+                    "SpotPriceHistory": [
+                        {
+                            "AvailabilityZone": "us-east-1d",
+                            "InstanceType": "p6-b300.48xlarge",
+                            "ProductDescription": "Linux/UNIX",
+                            "SpotPrice": "39.6519",
+                            "Timestamp": OBSERVED_AT,
+                        }
+                    ]
+                }
+            }
+        )
+        fetched = AwsSpotClient(
+            session=session, regions=["us-east-1"]
+        ).fetch_current_prices(observed_at=OBSERVED_AT)
+        offers, unknown = normalize_spot_prices(
+            fetched.prices,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/aws-spot.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0].gpu_model, "B300_288GB_x8")
+        self.assertEqual(offers[0].gpu_count, 8)
+        self.assertEqual(offers[0].price_usd_hr, 39.6519)
+        self.assertEqual(offers[0].availability_status, "spot_price_observed")
+        self.assertTrue(offers[0].is_spot)
+        self.assertFalse(offers[0].metadata["capacity_confirmed"])
+
+    def test_azure_retail_prices_paginate_and_keep_rate_types_separate(self) -> None:
+        sku_spec = {
+            "arm_sku_name": "Standard_ND128isr_NDR_GB200_v6",
+            "gpu_raw_name": "NVIDIA B200 in GB200 NVL72",
+            "gpu_model": "B200_180GB",
+            "gpu_count": 4,
+            "vram_gb": 192.0,
+            "package_model": "GB200 NVL72",
+        }
+        linux_rate = {
+            "currencyCode": "USD",
+            "retailPrice": 108.16,
+            "armRegionName": "westus3",
+            "location": "US West 3",
+            "effectiveStartDate": "2025-04-01T00:00:00Z",
+            "meterId": "meter-ondemand",
+            "meterName": "ND128isrNDRGB200v6",
+            "productName": "Virtual Machines NDsrGB200NDRv6 Series",
+            "skuName": "ND128isrNDRGB200v6",
+            "serviceName": "Virtual Machines",
+            "unitOfMeasure": "1 Hour",
+            "type": "Consumption",
+            "isPrimaryMeterRegion": True,
+            "armSkuName": sku_spec["arm_sku_name"],
+        }
+        spot_rate = {
+            **linux_rate,
+            "retailPrice": 64.0,
+            "meterId": "meter-spot",
+            "meterName": "ND128isrNDRGB200v6 Spot",
+            "skuName": "ND128isrNDRGB200v6 Spot",
+        }
+        session = _FakeSession(
+            [
+                {
+                    "Items": [linux_rate],
+                    "NextPageLink": "https://example.test/prices?page=2",
+                    "Count": 1,
+                },
+                {
+                    "Items": [
+                        spot_rate,
+                        {**linux_rate, "productName": "Virtual Machines Windows"},
+                        {**linux_rate, "type": "Reservation"},
+                    ],
+                    "NextPageLink": None,
+                    "Count": 3,
+                },
+            ]
+        )
+        fetched = AzureRetailClient(
+            prices_url="https://example.test/prices",
+            session=session,
+        ).fetch_frontier_prices(sku_specs=[sku_spec])
+        offers, unknown = normalize_retail_prices(
+            fetched.prices,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/azure.json",
+            sku_specs=[sku_spec],
+        )
+
+        self.assertEqual(len(fetched.prices), 4)
+        self.assertEqual(fetched.raw_payload["page_count"], 2)
+        self.assertEqual(session.calls[0]["params"]["$top"], 1000)
+        self.assertEqual(session.calls[1]["params"], {})
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 2)
+        self.assertEqual(offers[0].gpu_model, "B200_180GB_x4")
+        self.assertEqual(offers[0].price_usd_hr, 108.16)
+        self.assertEqual(offers[0].availability_status, "published_rate")
+        self.assertEqual(offers[0].metadata["package_model"], "GB200 NVL72")
+        self.assertFalse(offers[0].metadata["capacity_confirmed"])
+        self.assertEqual(offers[1].availability_status, "spot_price_observed")
+        self.assertTrue(offers[1].is_spot)
+
+    def test_tensordock_keeps_live_capacity_but_marks_component_price(self) -> None:
+        session = _FakeSession(
+            [
+                {
+                    "data": {
+                        "hostnodes": [
+                            {
+                                "id": "host-1",
+                                "location_id": "loc-1",
+                                "uptime_percentage": 99.9,
+                                "available_resources": {
+                                    "gpus": [
+                                        {
+                                            "v0Name": "h100-sxm5-80gb",
+                                            "displayName": "H100 SXM5 80GB",
+                                            "availableCount": 8,
+                                            "price_per_hr": 2.2,
+                                        }
+                                    ]
+                                },
+                                "location": {
+                                    "city": "Austin",
+                                    "stateprovince": "Texas",
+                                    "country": "United States",
+                                    "organizationName": "Example DC",
+                                },
+                            }
+                        ]
+                    }
+                }
+            ]
+        )
+        fetched = TensorDockClient(
+            api_key="token",
+            api_base="https://example.test/api/v2",
+            session=session,
+        ).fetch_hostnodes()
+        offers, unknown = normalize_hostnodes(
+            fetched.hostnodes,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/tensordock.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0].gpu_model, "H100_80GB")
+        self.assertEqual(offers[0].available_gpu_count, 8)
+        self.assertEqual(offers[0].price_usd_hr, 2.2)
+        self.assertEqual(
+            offers[0].availability_status,
+            "available_component_rate",
+        )
+        self.assertEqual(
+            session.calls[0]["headers"]["Authorization"],
+            "Bearer token",
+        )
+
+    def test_inference_sh_preserves_upstream_provider_and_available_regions(
+        self,
+    ) -> None:
+        session = _FakeSession(
+            [
+                [
+                    {
+                        "id": "lambdalabs.8x-b200",
+                        "cloud": "lambdalabs",
+                        "shade_instance_type": "8x B200",
+                        "cloud_instance_type": "gpu_8x_b200",
+                        "deployment_type": "vm",
+                        "hourly_price": 3200,
+                        "configuration": {
+                            "gpu_type": "B200",
+                            "num_gpus": 8,
+                            "vram_per_gpu_in_gb": 180,
+                            "vcpus": 208,
+                            "memory_in_gb": 1800,
+                        },
+                        "availability": [
+                            {"available": True, "region": "us-west-1"},
+                            {"available": False, "region": "us-east-1"},
+                        ],
+                    }
+                ]
+            ]
+        )
+        fetched = InferenceShClient(
+            api_base="https://example.test",
+            session=session,
+        ).fetch_instance_types()
+        offers, unknown = normalize_inference_sh_instance_types(
+            fetched.instance_types,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/inference-sh.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0].provider, "lambda")
+        self.assertEqual(offers[0].source_connector, "inference_sh")
+        self.assertEqual(offers[0].gpu_model, "B200_180GB_x8")
+        self.assertEqual(offers[0].available_gpu_count, 8)
+        self.assertEqual(offers[0].price_usd_hr, 32)
+        self.assertEqual(offers[0].region, "us-west-1")
+        self.assertEqual(
+            session.calls[0]["headers"]["X-API-Version"],
+            "2",
+        )
+
+    def test_gpus_io_paginates_and_preserves_provider_level_live_offers(
+        self,
+    ) -> None:
+        session = _FakeSession(
+            [
+                {
+                    "data": [
+                        {
+                            "gpu": {
+                                "key": "b300",
+                                "name": "NVIDIA B300",
+                                "vramGb": 288,
+                            },
+                            "provider": {
+                                "id": "lambdalabs",
+                                "name": "Lambda",
+                                "website": "https://lambda.ai",
+                            },
+                            "rentalType": "on_demand",
+                            "commitmentTermMonths": None,
+                            "gpuCount": 8,
+                            "pricePerGpuHourUsd": 4.5,
+                            "totalPricePerHourUsd": 36,
+                            "regions": ["us", "fi"],
+                            "available": True,
+                            "lastUpdated": "2026-07-24T00:00:00Z",
+                            "specs": {"vcpu": 208, "ramGb": 1800},
+                        }
+                    ],
+                    "pagination": {"nextCursor": "next-page", "limit": 200},
+                },
+                {
+                    "data": [
+                        {
+                            "gpu": {
+                                "key": "h100",
+                                "name": "NVIDIA H100",
+                                "vramGb": 80,
+                            },
+                            "provider": {"id": "runpod", "name": "RunPod"},
+                            "rentalType": "spot",
+                            "gpuCount": 1,
+                            "pricePerGpuHourUsd": 1.8,
+                            "totalPricePerHourUsd": 1.8,
+                            "regions": ["us"],
+                            "available": True,
+                        }
+                    ],
+                    "pagination": {"nextCursor": None, "limit": 200},
+                },
+            ]
+        )
+        fetched = GpusIoClient(
+            api_key="gpus-key",
+            api_base="https://example.test/v1",
+            session=session,
+        ).fetch_prices()
+        offers, unknown = normalize_gpus_io_prices(
+            fetched.prices,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/gpus-io.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(fetched.raw_payload["pages"]), 2)
+        self.assertEqual(len(offers), 3)
+        self.assertEqual(offers[0].provider, "lambda")
+        self.assertEqual(offers[0].source_connector, "gpus_io")
+        self.assertEqual(offers[0].gpu_model, "B300_288GB_x8")
+        self.assertEqual(offers[0].available_gpu_count, 8)
+        self.assertEqual(offers[0].price_usd_hr, 36)
+        self.assertEqual(offers[2].availability_status, "spot_available")
+        self.assertEqual(session.calls[1]["params"]["cursor"], "next-page")
+        self.assertEqual(
+            session.calls[0]["headers"]["Authorization"],
+            "Bearer gpus-key",
+        )
+
+    def test_hyperstack_joins_live_stock_to_pricebook_without_double_counting(
+        self,
+    ) -> None:
+        session = _FakeSession(
+            [
+                {
+                    "stocks": [
+                        {
+                            "region": "CANADA-1",
+                            "stock-type": "GPU",
+                            "models": [
+                                {
+                                    "model": "B200-SXM",
+                                    "available": "6",
+                                    "configurations": {
+                                        "1x": 6,
+                                        "2x": 2,
+                                        "4x": 0,
+                                    },
+                                }
+                            ],
+                        }
+                    ]
+                },
+                [
+                    {"name": "CPU", "value": "0"},
+                    {"name": "RAM", "value": "0"},
+                    {"name": "B200-SXM", "value": "4.25"},
+                ],
+            ]
+        )
+        fetched = HyperstackClient(
+            api_key="key",
+            api_base="https://example.test/v1",
+            session=session,
+        ).fetch_stock_and_prices()
+        offers, unknown = normalize_stock(
+            fetched.stocks,
+            pricebook=fetched.pricebook,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/hyperstack.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 2)
+        self.assertEqual(offers[0].gpu_model, "B200_180GB")
+        self.assertEqual(offers[0].available_gpu_count, 6)
+        self.assertEqual(offers[0].price_usd_hr, 4.25)
+        self.assertEqual(offers[1].gpu_model, "B200_180GB_x2")
+        self.assertEqual(offers[1].available_gpu_count, 0)
+        self.assertEqual(offers[1].price_usd_hr, 8.5)
+        self.assertEqual(session.calls[0]["headers"]["api_key"], "key")
+
+    def test_lambda_cloud_expands_capacity_regions_into_executable_offers(
+        self,
+    ) -> None:
+        session = _FakeSession(
+            [
+                {
+                    "data": {
+                        "gpu_8x_b200": {
+                            "instance_type": {
+                                "name": "gpu_8x_b200",
+                                "description": "8x NVIDIA B200",
+                                "gpu_description": "NVIDIA B200 (180 GB SXM)",
+                                "price_cents_per_hour": 3200,
+                                "specs": {
+                                    "vcpus": 208,
+                                    "memory_gib": 1800,
+                                    "storage_gib": 6144,
+                                    "gpus": 8,
+                                },
+                            },
+                            "regions_with_capacity_available": [
+                                {"name": "us-west-1", "description": "California"},
+                                {"name": "us-south-1", "description": "Texas"},
+                            ],
+                        }
+                    }
+                }
+            ]
+        )
+        fetched = LambdaCloudClient(
+            api_key="lambda-key",
+            api_base="https://example.test/api/v1",
+            session=session,
+        ).fetch_instance_types()
+        offers, unknown = normalize_lambda_instance_types(
+            fetched.instance_types,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/lambda.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 2)
+        self.assertEqual(offers[0].gpu_model, "B200_180GB_x8")
+        self.assertEqual(offers[0].gpu_count, 8)
+        self.assertEqual(offers[0].available_gpu_count, 8)
+        self.assertEqual(offers[0].price_usd_hr, 32)
+        self.assertEqual(offers[1].region, "us-south-1")
+
+    def test_digitalocean_paginates_live_gpu_sizes_by_region(self) -> None:
+        session = _FakeSession(
+            [
+                {
+                    "sizes": [
+                        {
+                            "slug": "gpu-b300x8-2304gb",
+                            "available": True,
+                            "description": "GPU B300 x8",
+                            "price_hourly": 31.92,
+                            "price_monthly": 23301.6,
+                            "regions": ["ric1"],
+                            "gpu_info": {
+                                "count": 8,
+                                "model": "nvidia_b300",
+                                "vram": {"amount": 2304, "unit": "gib"},
+                            },
+                            "vcpus": 224,
+                            "memory": 2097152,
+                            "disk": 7200,
+                        }
+                    ],
+                    "links": {"pages": {}},
+                    "meta": {"total": 1},
+                }
+            ]
+        )
+        fetched = DigitalOceanClient(
+            api_token="do-token",
+            api_base="https://example.test/v2",
+            session=session,
+        ).fetch_sizes()
+        offers, unknown = normalize_digitalocean_sizes(
+            fetched.sizes,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/digitalocean.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0].gpu_model, "B300_288GB_x8")
+        self.assertEqual(offers[0].vram_gb, 288)
+        self.assertEqual(offers[0].available_gpu_count, 8)
+        self.assertEqual(offers[0].price_usd_hr, 31.92)
+        self.assertEqual(offers[0].region, "ric1")
+
+    def test_prime_intellect_frontier_availability_preserves_source_provider(
+        self,
+    ) -> None:
+        session = _FakeSession(
+            [
+                {
+                    "items": [
+                        {
+                            "cloudId": "h100-pcie-1",
+                            "gpuType": "H100_80GB",
+                            "provider": "runpod",
+                            "gpuCount": 2,
+                            "gpuMemory": 80,
+                            "security": "secure_cloud",
+                            "prices": {"currency": "USD", "onDemand": 4.2},
+                            "region": "united_states",
+                            "dataCenter": "US-KS-2",
+                            "country": "US",
+                            "stockStatus": "Available",
+                            "isSpot": False,
+                        }
+                    ],
+                    "totalCount": 1,
+                }
+            ]
+        )
+        fetched = PrimeIntellectClient(
+            api_key="test-key",
+            api_base="https://example.test/api/v1",
+            session=session,
+        ).fetch_frontier_availability(gpu_types=["H100_80GB"])
+        offers, unknown = normalize_availability(
+            fetched.items,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/prime.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0].provider, "prime_intellect")
+        self.assertEqual(offers[0].gpu_model, "H100_80GB_x2")
+        self.assertEqual(offers[0].price_usd_hr, 4.2)
+        self.assertEqual(offers[0].metadata["upstream_provider"], "runpod")
+        self.assertEqual(session.calls[0]["params"]["gpu_type"], "H100_80GB")
+
+    def test_shadeform_expands_available_regions_and_converts_cents(self) -> None:
+        offers, unknown = normalize_instance_types(
+            [
+                {
+                    "cloud": "hyperstack",
+                    "shade_instance_type": "H200x8",
+                    "cloud_instance_type": "gpu_8x_h200",
+                    "configuration": {
+                        "gpu_type": "H200",
+                        "num_gpus": 8,
+                        "vram_per_gpu_in_gb": 141,
+                    },
+                    "hourly_price": 3200,
+                    "availability": [
+                        {"region": "eu-1", "available": True, "display_name": "Europe"},
+                        {
+                            "region": "us-1",
+                            "available": False,
+                            "display_name": "United States",
+                        },
+                    ],
+                }
+            ],
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/shadeform.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0].provider, "shadeform")
+        self.assertEqual(offers[0].gpu_model, "H200_141GB_x8")
+        self.assertEqual(offers[0].price_usd_hr, 32.0)
+        self.assertEqual(offers[0].region, "Europe")
+
+    def test_sesterce_and_runpod_normalize_live_availability(self) -> None:
+        sesterce, sesterce_unknown = normalize_sesterce_offers(
+            [
+                {
+                    "gpuName": "B200",
+                    "gpuCount": 8,
+                    "instanceId": "B200x8",
+                    "cloud": {"_id": "cloud-1", "name": "Valence"},
+                    "configuration": {"vRamGB": 180, "interconnect": "SXM"},
+                    "hourlyPrice": 48,
+                    "availability": [
+                        {
+                            "region": "fr-1",
+                            "name": "France",
+                            "countryCode": "FR",
+                            "available": True,
+                        }
+                    ],
+                }
+            ],
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/sesterce.json",
+        )
+        runpod, runpod_unknown = normalize_gpu_types(
+            [
+                {
+                    "id": "NVIDIA H100 80GB HBM3",
+                    "displayName": "H100",
+                    "memoryInGb": 80,
+                    "secureCloud": True,
+                    "lowestPrice": {
+                        "stockStatus": "High",
+                        "uninterruptablePrice": 2.49,
+                        "availableGpuCounts": [1, 2, 4, 8],
+                    },
+                }
+            ],
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/runpod.json",
+        )
+
+        self.assertEqual(sesterce_unknown, [])
+        self.assertEqual(sesterce[0].gpu_model, "B200_180GB_x8")
+        self.assertEqual(sesterce[0].price_usd_hr, 48)
+        self.assertEqual(runpod_unknown, [])
+        self.assertEqual(runpod[0].gpu_model, "H100_80GB")
+        self.assertEqual(runpod[0].price_usd_hr, 2.49)
+        self.assertEqual(runpod[0].availability_status, "available")
+
+    def test_runpod_read_only_inventory_does_not_require_an_api_key(self) -> None:
+        session = _FakeSession([{"data": {"gpuTypes": [{"id": "NVIDIA B300"}]}}])
+        client = RunpodClient(
+            session=session, graphql_url="https://example.test/graphql"
+        )
+
+        fetched = client.fetch_gpu_types()
+
+        self.assertEqual(fetched.gpu_types, [{"id": "NVIDIA B300"}])
+        self.assertNotIn("params", session.calls[0])
+
+    def test_clore_public_marketplace_normalizes_available_server_hour_price(
+        self,
+    ) -> None:
+        session = _FakeSession(
+            [
+                {
+                    "code": 0,
+                    "servers": [
+                        {
+                            "id": 113361,
+                            "owner": 9001,
+                            "rented": False,
+                            "gpu_array": [" H100 80GB HBM3"] * 8,
+                            "specs": {
+                                "gpu": "8x NVIDIA H100 80GB HBM3",
+                                "gpuram": 79,
+                                "net": {"cc": "CA", "down": 1000, "up": 1000},
+                            },
+                            "price": {"usd": {"on_demand_usd": 20.0}},
+                            "reliability": 0.99,
+                            "rating": {"avg": 4.8, "cnt": 20},
+                            "partial_gpu_rental": {
+                                "total_gpus": 8,
+                                "available_gpus": 8,
+                            },
+                            "cuda_version": "12.8",
+                            "mrl": 24,
+                        },
+                        {
+                            "id": 113362,
+                            "rented": True,
+                            "gpu_array": [" H100 80GB HBM3"],
+                            "price": {"usd": {"on_demand_usd": 2.5}},
+                        },
+                    ],
+                }
+            ]
+        )
+        fetched = CloreClient(
+            marketplace_url="https://example.test/v1/marketplace",
+            session=session,
+        ).fetch_marketplace()
+        offers, unknown = normalize_servers(
+            fetched.servers,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/clore.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(fetched.raw_payload["server_count"], 2)
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0].provider, "clore")
+        self.assertEqual(offers[0].gpu_model, "H100_80GB_x8")
+        self.assertEqual(offers[0].gpu_count, 8)
+        self.assertEqual(offers[0].price_usd_hr, 20.0)
+        self.assertEqual(offers[0].country, "CA")
+        self.assertEqual(offers[0].availability_status, "available")
+        self.assertTrue(offers[0].metadata["capacity_confirmed"])
+        self.assertTrue(offers[0].metadata["partial_gpu_rental_enabled"])
+        self.assertEqual(offers[0].metadata["partial_gpu_available"], 8)
+
+    def test_verda_public_catalog_and_authenticated_availability_are_distinct(
+        self,
+    ) -> None:
+        instance_type = {
+            "instance_type": "2B300.60V",
+            "model": "B300",
+            "name": "B300 SXM6 268GB",
+            "price_per_hour": "15.00",
+            "spot_price": "5.25",
+            "currency": "usd",
+            "gpu": {
+                "description": "2x B300 SXM6 268GB",
+                "number_of_gpus": 2,
+            },
+            "gpu_memory": {"size_in_gigabytes": 268},
+            "manufacturer": "NVIDIA",
+        }
+        public_offers, public_unknown = normalize_instance_catalog(
+            [instance_type],
+            availability=None,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/verda.json",
+        )
+        live_offers, live_unknown = normalize_instance_catalog(
+            [instance_type],
+            availability=[
+                {"location_code": "FIN-02", "availabilities": ["2B300.60V"]},
+                {"location_code": "ICE-01", "availabilities": ["2B300.60V"]},
+            ],
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/verda.json",
+        )
+
+        self.assertEqual(public_unknown, [])
+        self.assertEqual(live_unknown, [])
+        self.assertEqual(public_offers[0].availability_status, "published_rate")
+        self.assertFalse(public_offers[0].metadata["capacity_confirmed"])
+        self.assertEqual(
+            [offer.region for offer in live_offers if not offer.is_spot],
+            ["FIN-02", "ICE-01"],
+        )
+        self.assertTrue(
+            all(offer.gpu_model == "B300_288GB_x2" for offer in live_offers)
+        )
+        self.assertEqual(live_offers[-1].availability_status, "spot_price_observed")
+
+    def test_verda_client_uses_oauth_only_when_credentials_are_present(self) -> None:
+        public_session = _FakeSession([[{"instance_type": "1H100"}]])
+        public_fetch = VerdaClient(
+            api_base="https://example.test/v1",
+            session=public_session,
+        ).fetch_catalog()
+        authenticated_session = _FakeSession(
+            [
+                [{"instance_type": "1B300.30V"}],
+                {"access_token": "short-lived-token"},
+                [{"location_code": "FIN-02", "availabilities": ["1B300.30V"]}],
+            ]
+        )
+        authenticated_fetch = VerdaClient(
+            client_id="client-id",
+            client_secret="client-secret",
+            api_base="https://example.test/v1",
+            session=authenticated_session,
+        ).fetch_catalog()
+
+        self.assertIsNone(public_fetch.availability)
+        self.assertEqual([call["method"] for call in public_session.calls], ["GET"])
+        self.assertEqual(authenticated_fetch.availability[0]["location_code"], "FIN-02")
+        self.assertEqual(
+            [call["method"] for call in authenticated_session.calls],
+            ["GET", "POST", "GET"],
+        )
+        self.assertEqual(
+            authenticated_session.calls[-1]["headers"]["Authorization"],
+            "Bearer short-lived-token",
+        )
+
+    def test_spheron_flattens_live_feed_and_separates_spot_offers(self) -> None:
+        session = _FakeSession(
+            [
+                {
+                    "data": [
+                        {
+                            "gpuType": "B300_SXM6",
+                            "displayName": "B300 SXM6",
+                            "offers": [
+                                {
+                                    "provider": "spheron-es",
+                                    "offerId": "uk-b300-spot",
+                                    "gpuCount": 1,
+                                    "price": 5.8455,
+                                    "available": True,
+                                    "clusters": ["UK South 1"],
+                                    "gpu_memory": 262,
+                                    "spot_price": 5.8455,
+                                    "maintenance": False,
+                                    "extras": {
+                                        "technical": {
+                                            "units_available": 26,
+                                            "availability_level": "AVAILABILITY_LEVEL_MEDIUM",
+                                        }
+                                    },
+                                }
+                            ],
+                        }
+                    ]
+                }
+            ]
+        )
+        fetched = SpheronClient(
+            offers_url="https://example.test/gpu-offers", session=session
+        ).fetch_offers()
+        offers, unknown = normalize_spheron_offers(
+            fetched.offers,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/spheron.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0].provider, "spheron")
+        self.assertEqual(offers[0].source_connector, "spheron")
+        self.assertEqual(offers[0].gpu_model, "B300_288GB")
+        self.assertEqual(offers[0].availability_status, "spot_available")
+        self.assertTrue(offers[0].is_spot)
+        self.assertEqual(offers[0].metadata["upstream_provider"], "spheron-es")
+        self.assertEqual(offers[0].metadata["units_available"], 26)
+        self.assertEqual(offers[0].available_gpu_count, 26)
+
+    def test_akash_preserves_capacity_without_duplicating_summary_rows(self) -> None:
+        session = _FakeSession(
+            [
+                {
+                    "availability": {"total": 261, "available": 135},
+                    "models": [
+                        {
+                            "vendor": "nvidia",
+                            "model": "h100",
+                            "ram": "80Gi",
+                            "interface": "SXM5",
+                            "availability": {"total": 71, "available": 29},
+                            "providerAvailability": {"total": 4, "available": 4},
+                            "price": {
+                                "currency": "USD",
+                                "min": 2.01,
+                                "max": 3.16,
+                                "med": 2.58,
+                            },
+                        }
+                    ],
+                }
+            ]
+        )
+        fetched = AkashClient(
+            prices_url="https://example.test/v1/gpu-prices",
+            session=session,
+        ).fetch_gpu_prices()
+        offers, unknown = normalize_gpu_prices(
+            fetched.models,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/akash.json",
+        )
+
+        self.assertEqual(unknown, [])
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0].gpu_model, "H100_80GB")
+        self.assertEqual(offers[0].price_usd_hr, 2.01)
+        self.assertEqual(offers[0].metadata["available_gpu_units"], 29)
+        self.assertEqual(offers[0].available_gpu_count, 29)
+        self.assertEqual(offers[0].metadata["available_provider_count"], 4)
 
     def test_published_rate_cards_normalize_as_provider_observations(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -166,12 +1114,16 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertEqual(rows["B300"]["provider_count"], 2)
         self.assertEqual(rows["H200"]["provider_count"], 2)
         self.assertEqual(rows["B300"]["benchmark_basis"], "advertised_hourly")
-        self.assertEqual(rows["B300"]["methodology_version"], "advertised_provider_floor_median_v1")
+        self.assertEqual(
+            rows["B300"]["methodology_version"], "advertised_provider_floor_median_v1"
+        )
         hyperstack_b300 = next(
             row for row in constituents["rows"] if row["provider"] == "hyperstack"
         )
         self.assertFalse(hyperstack_b300["included"])
-        self.assertEqual(hyperstack_b300["availability_status"], "published_rate_future")
+        self.assertEqual(
+            hyperstack_b300["availability_status"], "published_rate_future"
+        )
         self.assertEqual(hyperstack_b300["exclusion_reason"], "future_rate")
 
     def test_new_rate_cards_expand_frontier_gpu_coverage(self) -> None:
@@ -220,7 +1172,11 @@ class GoldQueryTests(unittest.TestCase):
                         price_usd_hr=0.10,
                         availability_status="unavailable",
                     ),
-                    _offer(provider="vast", source_offer_id="vast-available", price_usd_hr=0.20),
+                    _offer(
+                        provider="vast",
+                        source_offer_id="vast-available",
+                        price_usd_hr=0.20,
+                    ),
                 ],
             )
             _write_provider_run(
@@ -229,11 +1185,17 @@ class GoldQueryTests(unittest.TestCase):
                 provider="lium",
                 run_id="lium-test",
                 offers=[
-                    _offer(provider="lium", source_offer_id="lium-available", price_usd_hr=0.30),
+                    _offer(
+                        provider="lium",
+                        source_offer_id="lium-available",
+                        price_usd_hr=0.30,
+                    ),
                 ],
             )
 
-            build_gold_market_tables(lake_root=lake_root, providers=["vast", "lium"], run_id="gold-test")
+            build_gold_market_tables(
+                lake_root=lake_root, providers=["vast", "lium"], run_id="gold-test"
+            )
             result = query_gold_provider_comparison(
                 lake_root=lake_root,
                 gpu_model="RTX4090_24GB",
@@ -255,16 +1217,26 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual(rows[0]["floor_usd_gpu_hr"], 0.30)
         self.assertEqual(rows[1]["floor_usd_gpu_hr"], 0.20)
         self.assertEqual(rows[1]["listing_count"], 1)
-        excluded = [row for row in constituents["rows"] if row["listing_id"] == "vast:vast-unavailable"]
+        excluded = [
+            row
+            for row in constituents["rows"]
+            if row["listing_id"] == "vast:vast-unavailable"
+        ]
         self.assertEqual(len(excluded), 1)
         self.assertFalse(excluded[0]["included"])
         self.assertEqual(excluded[0]["exclusion_reason"], "not_available")
-        available_listing = [row for row in listings["rows"] if row["listing_id"] == "vast:vast-available"]
+        available_listing = [
+            row
+            for row in listings["rows"]
+            if row["listing_id"] == "vast:vast-available"
+        ]
         self.assertEqual(len(available_listing), 1)
         self.assertEqual(available_listing[0]["price_usd_instance_hr"], 0.20)
         self.assertEqual(available_listing[0]["price_usd_gpu_hr"], 0.20)
         self.assertTrue(available_listing[0]["has_raw_evidence"])
-        self.assertEqual(available_listing[0]["source_run_id"], "vast:vast-test,lium:lium-test")
+        self.assertEqual(
+            available_listing[0]["source_run_id"], "vast:vast-test,lium:lium-test"
+        )
 
     def test_market_run_manifest_writes_latest_pointer(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -289,7 +1261,11 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual(latest["market_run_id"], "market-test")
         self.assertEqual(latest["manifest_ref"], manifest_ref)
         self.assertEqual([row["market_run_id"] for row in history], ["market-test"])
-        self.assertTrue(manifest_ref.endswith("/_manifests/market_runs/date=2026-06-17/run_id=market-test.json"))
+        self.assertTrue(
+            manifest_ref.endswith(
+                "/_manifests/market_runs/date=2026-06-17/run_id=market-test.json"
+            )
+        )
 
     def test_gold_index_history_reads_recent_gold_manifests(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -300,32 +1276,44 @@ class GoldQueryTests(unittest.TestCase):
                 raw_root=raw_root,
                 provider="vast",
                 run_id="vast-history-1",
-                offers=[_offer(provider="vast", source_offer_id="vast-1", price_usd_hr=0.20)],
+                offers=[
+                    _offer(provider="vast", source_offer_id="vast-1", price_usd_hr=0.20)
+                ],
             )
             _write_provider_run(
                 lake_root=lake_root,
                 raw_root=raw_root,
                 provider="lium",
                 run_id="lium-history-1",
-                offers=[_offer(provider="lium", source_offer_id="lium-1", price_usd_hr=0.30)],
+                offers=[
+                    _offer(provider="lium", source_offer_id="lium-1", price_usd_hr=0.30)
+                ],
             )
-            build_gold_market_tables(lake_root=lake_root, providers=["vast", "lium"], run_id="gold-history-1")
+            build_gold_market_tables(
+                lake_root=lake_root, providers=["vast", "lium"], run_id="gold-history-1"
+            )
 
             _write_provider_run(
                 lake_root=lake_root,
                 raw_root=raw_root,
                 provider="vast",
                 run_id="vast-history-2",
-                offers=[_offer(provider="vast", source_offer_id="vast-2", price_usd_hr=0.40)],
+                offers=[
+                    _offer(provider="vast", source_offer_id="vast-2", price_usd_hr=0.40)
+                ],
             )
             _write_provider_run(
                 lake_root=lake_root,
                 raw_root=raw_root,
                 provider="lium",
                 run_id="lium-history-2",
-                offers=[_offer(provider="lium", source_offer_id="lium-2", price_usd_hr=0.50)],
+                offers=[
+                    _offer(provider="lium", source_offer_id="lium-2", price_usd_hr=0.50)
+                ],
             )
-            build_gold_market_tables(lake_root=lake_root, providers=["vast", "lium"], run_id="gold-history-2")
+            build_gold_market_tables(
+                lake_root=lake_root, providers=["vast", "lium"], run_id="gold-history-2"
+            )
 
             history = query_gold_index_history(
                 lake_root=lake_root,
@@ -335,7 +1323,9 @@ class GoldQueryTests(unittest.TestCase):
 
         rows = history["rows"]
         self.assertEqual(history["history_manifest_count"], 2)
-        self.assertEqual({row["gold_run_id"] for row in rows}, {"gold-history-1", "gold-history-2"})
+        self.assertEqual(
+            {row["gold_run_id"] for row in rows}, {"gold-history-1", "gold-history-2"}
+        )
         self.assertEqual({row["gpu_model"] for row in rows}, {"RTX4090_24GB"})
         self.assertEqual({row["floor_usd_gpu_hr"] for row in rows}, {0.20, 0.40})
 
@@ -393,16 +1383,22 @@ class GoldQueryTests(unittest.TestCase):
                 ],
             )
 
-            build = build_gold_market_tables(lake_root=lake_root, providers=["vast", "lium"], run_id="gold-benchmark")
+            build = build_gold_market_tables(
+                lake_root=lake_root, providers=["vast", "lium"], run_id="gold-benchmark"
+            )
             values = query_gold_benchmark_values(lake_root=lake_root)
-            constituents = query_gold_benchmark_constituents(lake_root=lake_root, benchmark_family_id="H100")
+            constituents = query_gold_benchmark_constituents(
+                lake_root=lake_root, benchmark_family_id="H100"
+            )
             export = export_gold_dashboard_snapshot(
                 lake_root=lake_root,
                 output_root=dashboard_root,
-                limit=100,
+                limit=1,
             )
             public_benchmarks = read_json(export["output_refs"]["featured_benchmarks"])
-            public_constituents = read_json(export["output_refs"]["benchmark_constituents"])
+            public_constituents = read_json(
+                export["output_refs"]["benchmark_constituents"]
+            )
 
         rows = {row["benchmark_family_id"]: row for row in values["rows"]}
         self.assertEqual(build.row_counts["fact_benchmark_values"], 4)
@@ -423,11 +1419,133 @@ class GoldQueryTests(unittest.TestCase):
         self.assertIn("benchmark_constituents", export["output_refs"])
         self.assertEqual(export["row_counts"]["featured_benchmarks"], 4)
         self.assertEqual(export["row_counts"]["benchmark_constituents"], 4)
+        self.assertTrue(public_constituents["complete"])
+        self.assertEqual(public_constituents["row_count"], 4)
+        self.assertEqual(len(public_constituents["rows"]), 4)
+        self.assertTrue(
+            all(
+                row["source_connector"] == row["provider"]
+                for row in public_constituents["rows"]
+            )
+        )
         self.assertNotIn("source_manifest_ref", public_benchmarks["rows"][0])
         self.assertNotIn("source_normalized_ref", public_benchmarks["rows"][0])
         self.assertNotIn("raw_ref", public_constituents["rows"][0])
         self.assertNotIn("source_manifest_ref", public_constituents["rows"][0])
         self.assertNotIn("source_normalized_ref", public_constituents["rows"][0])
+
+    def test_frontier_coverage_keeps_live_spot_and_rate_card_counts_separate(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="vast",
+                run_id="vast-coverage",
+                offers=[
+                    _offer(
+                        provider="vast",
+                        source_offer_id="h100-live-1",
+                        price_usd_hr=2,
+                        gpu_raw_name="H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                        available_gpu_count=30,
+                    ),
+                    _offer(
+                        provider="vast",
+                        source_offer_id="h100-live-2",
+                        price_usd_hr=3,
+                        gpu_raw_name="H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                        available_gpu_count=25,
+                    ),
+                ],
+            )
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="aws_spot",
+                run_id="aws-coverage",
+                offers=[
+                    _offer(
+                        provider="aws_spot",
+                        source_offer_id="h100-spot",
+                        price_usd_hr=4,
+                        availability_status="spot_price_observed",
+                        gpu_raw_name="H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                    )
+                ],
+            )
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="runpod",
+                run_id="runpod-coverage",
+                offers=[
+                    _offer(
+                        provider="runpod",
+                        source_offer_id="h100-rate",
+                        price_usd_hr=5,
+                        availability_status="published_rate",
+                        gpu_raw_name="H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                    )
+                ],
+            )
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="inference_sh",
+                run_id="inference-sh-coverage",
+                offers=[
+                    _offer(
+                        provider="vast",
+                        source_connector="inference_sh",
+                        source_offer_id="h100-aggregate-copy",
+                        price_usd_hr=2.5,
+                        gpu_raw_name="H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                        available_gpu_count=10,
+                    )
+                ],
+            )
+            build_gold_market_tables(
+                lake_root=lake_root,
+                providers=["vast", "aws_spot", "runpod", "inference_sh"],
+                run_id="gold-coverage",
+            )
+            coverage = query_frontier_coverage(
+                lake_root=lake_root,
+                target=2,
+                capacity_target=50,
+                observation_target=4,
+            )
+
+        rows = {row["gpu_family"]: row for row in coverage["rows"]}
+        self.assertEqual(rows["H100"]["live_offer_count"], 3)
+        self.assertEqual(rows["H100"]["live_gpu_capacity_lower_bound"], 55)
+        self.assertEqual(rows["H100"]["live_on_demand_offer_count"], 3)
+        self.assertEqual(rows["H100"]["live_spot_offer_count"], 0)
+        self.assertEqual(rows["H100"]["spot_price_observation_count"], 1)
+        self.assertEqual(rows["H100"]["published_rate_count"], 1)
+        self.assertEqual(rows["H100"]["current_observation_count"], 5)
+        self.assertTrue(rows["H100"]["target_met"])
+        self.assertTrue(rows["H100"]["capacity_target_met"])
+        self.assertEqual(rows["H100"]["capacity_shortfall_to_target"], 0)
+        self.assertTrue(rows["H100"]["observation_target_met"])
+        self.assertEqual(rows["H100"]["observation_shortfall_to_target"], 0)
+        self.assertEqual(rows["B300"]["shortfall_to_target"], 2)
+        self.assertEqual(rows["B300"]["capacity_shortfall_to_target"], 50)
+        self.assertEqual(rows["B300"]["observation_shortfall_to_target"], 4)
 
     def test_featured_index_keeps_frontier_gpus_and_last_seen_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -450,7 +1568,9 @@ class GoldQueryTests(unittest.TestCase):
                     )
                 ],
             )
-            build_gold_market_tables(lake_root=lake_root, providers=["vast"], run_id="gold-frontier-1")
+            build_gold_market_tables(
+                lake_root=lake_root, providers=["vast"], run_id="gold-frontier-1"
+            )
 
             _write_provider_run(
                 lake_root=lake_root,
@@ -468,7 +1588,9 @@ class GoldQueryTests(unittest.TestCase):
                     )
                 ],
             )
-            build_gold_market_tables(lake_root=lake_root, providers=["vast"], run_id="gold-frontier-2")
+            build_gold_market_tables(
+                lake_root=lake_root, providers=["vast"], run_id="gold-frontier-2"
+            )
 
             featured = query_gold_featured_index(
                 lake_root=lake_root,
@@ -515,12 +1637,20 @@ class GoldQueryTests(unittest.TestCase):
                     )
                 ],
             )
-            build_gold_market_tables(lake_root=lake_root, providers=["vast"], run_id="gold-operator")
+            build_gold_market_tables(
+                lake_root=lake_root, providers=["vast"], run_id="gold-operator"
+            )
 
             catalog = list_operator_queries(lake_root=lake_root)
-            values = run_operator_query(lake_root=lake_root, query_id="benchmark_values", limit=10)
-            constituents = run_operator_query(lake_root=lake_root, query_id="benchmark_constituents", limit=10)
-            counts = run_operator_query(lake_root=lake_root, query_id="gold_table_counts", limit=20)
+            values = run_operator_query(
+                lake_root=lake_root, query_id="benchmark_values", limit=10
+            )
+            constituents = run_operator_query(
+                lake_root=lake_root, query_id="benchmark_constituents", limit=10
+            )
+            counts = run_operator_query(
+                lake_root=lake_root, query_id="gold_table_counts", limit=20
+            )
             scratch = run_operator_sql(
                 lake_root=lake_root,
                 sql="""
@@ -546,23 +1676,38 @@ class GoldQueryTests(unittest.TestCase):
                 ref="queries/curia/benchmark_constituents_v0.sql",
             )
             with self.assertRaises(PermissionError):
-                preview_operator_ref(lake_root=lake_root, ref=f"{raw_root}/not-in-manifest.json")
+                preview_operator_ref(
+                    lake_root=lake_root, ref=f"{raw_root}/not-in-manifest.json"
+                )
             with self.assertRaises(ValueError):
-                run_operator_sql(lake_root=lake_root, sql="drop table fact_gpu_listings")
+                run_operator_sql(
+                    lake_root=lake_root, sql="drop table fact_gpu_listings"
+                )
             with self.assertRaises(ValueError):
-                run_operator_sql(lake_root=lake_root, sql="select * from fact_gpu_listings; select * from dim_providers")
+                run_operator_sql(
+                    lake_root=lake_root,
+                    sql="select * from fact_gpu_listings; select * from dim_providers",
+                )
             with self.assertRaises(ValueError):
-                run_operator_sql(lake_root=lake_root, sql="select * from read_parquet('s3://bucket/elsewhere')")
+                run_operator_sql(
+                    lake_root=lake_root,
+                    sql="select * from read_parquet('s3://bucket/elsewhere')",
+                )
 
         self.assertEqual(catalog["manifest"]["run_id"], "gold-operator")
         catalog_rows = {query["query_id"]: query for query in catalog["queries"]}
         self.assertIn("benchmark_values", catalog_rows)
         self.assertEqual(catalog_rows["benchmark_values"]["version"], "v0")
         self.assertEqual(catalog_rows["benchmark_values"]["engine"], "datafusion")
-        self.assertEqual(catalog_rows["benchmark_values"]["sql_path"], "queries/curia/benchmark_values_v0.sql")
+        self.assertEqual(
+            catalog_rows["benchmark_values"]["sql_path"],
+            "queries/curia/benchmark_values_v0.sql",
+        )
         self.assertEqual(len(catalog_rows["benchmark_values"]["query_hash"]), 64)
         self.assertTrue(all(query["available"] for query in catalog["queries"]))
-        self.assertEqual(values["query"]["sql_path"], "queries/curia/benchmark_values_v0.sql")
+        self.assertEqual(
+            values["query"]["sql_path"], "queries/curia/benchmark_values_v0.sql"
+        )
         self.assertEqual(values["query"]["version"], "v0")
         benchmark_rows = {row["benchmark_family_id"]: row for row in values["rows"]}
         self.assertEqual(benchmark_rows["H100"]["benchmark_usd_gpu_hr"], 2.00)
@@ -575,15 +1720,49 @@ class GoldQueryTests(unittest.TestCase):
         table_counts = {row["table_name"]: row["row_count"] for row in counts["rows"]}
         self.assertEqual(table_counts["fact_gpu_listings"], 1)
         self.assertEqual(table_counts["fact_benchmark_values"], 4)
-        self.assertEqual([step["layer"] for step in lineage["trajectory"]], ["bronze", "silver", "curia", "gold"])
+        self.assertEqual(
+            [step["layer"] for step in lineage["trajectory"]],
+            ["bronze", "silver", "curia", "gold"],
+        )
         self.assertEqual(lineage["row_refs"]["provider"], "vast")
-        self.assertEqual(lineage["provider_runs"][0]["raw_ref"], f"{raw_root}/provider=vast/date=2026-06-17/run_id=vast-operator/offers.json")
+        self.assertEqual(
+            lineage["provider_runs"][0]["raw_ref"],
+            f"{raw_root}/provider=vast/date=2026-06-17/run_id=vast-operator/offers.json",
+        )
         self.assertIn("fact_benchmark_constituents", lineage["gold"]["table_refs"])
         self.assertEqual(preview["kind"], "json")
         self.assertEqual(preview["json_summary"]["type"], "array")
         self.assertEqual(preview["json_summary"]["item_count"], 1)
         self.assertEqual(sql_preview["kind"], "sql")
         self.assertIn("fact_benchmark_constituents", sql_preview["text"])
+
+    def test_market_run_keeps_partial_snapshot_when_one_provider_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            raw_root = f"{tmp}/raw"
+            lake_root = f"{tmp}/lake"
+            dashboard_root = f"{tmp}/dashboard"
+
+            result = run_market_hourly(
+                raw_root=raw_root,
+                lake_root=lake_root,
+                dashboard_output_root=dashboard_root,
+                providers=["crusoe", "unsupported-provider"],
+                run_id="market-partial",
+                dry_run=True,
+            )
+            latest = read_latest_market_run(lake_root)
+            public_latest = read_json(f"{dashboard_root}/market-run.json")
+
+        self.assertEqual(result.status, "warning")
+        self.assertEqual(result.successful_providers, ["crusoe"])
+        self.assertEqual(result.failed_providers, ["unsupported-provider"])
+        self.assertEqual(result.checks["crusoe"], "ok")
+        self.assertEqual(result.checks["unsupported-provider"], "error")
+        self.assertEqual(latest["successful_providers"], ["crusoe"])
+        self.assertEqual(latest["failed_providers"], ["unsupported-provider"])
+        self.assertEqual(public_latest["successful_providers"], ["crusoe"])
+        self.assertEqual(public_latest["failed_providers"], ["unsupported-provider"])
+        self.assertGreater(result.row_counts["listings"], 0)
 
 
 def _offer(
@@ -595,6 +1774,8 @@ def _offer(
     gpu_raw_name: str = "RTX 4090",
     gpu_model: str = "RTX4090_24GB",
     vram_gb: float = 24,
+    available_gpu_count: int | None = None,
+    source_connector: str | None = None,
 ) -> GpuOffer:
     return GpuOffer(
         provider=provider,
@@ -605,6 +1786,8 @@ def _offer(
         gpu_count=1,
         vram_gb=vram_gb,
         price_usd_hr=price_usd_hr,
+        available_gpu_count=available_gpu_count,
+        source_connector=source_connector,
         country="US",
         region="California",
         availability_status=availability_status,
@@ -620,10 +1803,10 @@ def _write_provider_run(
     run_id: str,
     offers: list[GpuOffer],
 ) -> None:
-    raw_ref = f"{raw_root}/provider={provider}/date=2026-06-17/run_id={run_id}/offers.json"
-    normalized_ref = (
-        f"{lake_root}/silver/gpu_offers/date=2026-06-17/provider={provider}/run_id={run_id}/offers.parquet"
+    raw_ref = (
+        f"{raw_root}/provider={provider}/date=2026-06-17/run_id={run_id}/offers.json"
     )
+    normalized_ref = f"{lake_root}/silver/gpu_offers/date=2026-06-17/provider={provider}/run_id={run_id}/offers.parquet"
     manifest_ref = f"{lake_root}/_manifests/gpu_offers/provider={provider}/date=2026-06-17/run_id={run_id}.json"
     latest_ref = f"{lake_root}/_manifests/gpu_offers/provider={provider}/latest.json"
     manifest = {
@@ -661,7 +1844,13 @@ class _FakeSession:
         timeout: int,
     ) -> "_FakeResponse":
         self.calls.append(
-            {"method": "GET", "url": url, "params": dict(params), "headers": dict(headers), "timeout": timeout}
+            {
+                "method": "GET",
+                "url": url,
+                "params": dict(params),
+                "headers": dict(headers),
+                "timeout": timeout,
+            }
         )
         return _FakeResponse(self.payloads[len(self.calls) - 1])
 
@@ -672,10 +1861,18 @@ class _FakeSession:
         json: dict[str, object],
         headers: dict[str, str],
         timeout: int,
+        params: dict[str, object] | None = None,
     ) -> "_FakeResponse":
-        self.calls.append(
-            {"method": "POST", "url": url, "json": dict(json), "headers": dict(headers), "timeout": timeout}
-        )
+        call: dict[str, object] = {
+            "method": "POST",
+            "url": url,
+            "json": dict(json),
+            "headers": dict(headers),
+            "timeout": timeout,
+        }
+        if params is not None:
+            call["params"] = dict(params)
+        self.calls.append(call)
         return _FakeResponse(self.payloads[len(self.calls) - 1])
 
 
@@ -688,6 +1885,24 @@ class _FakeResponse:
 
     def json(self) -> object:
         return self.payload
+
+
+class _FakeBotoSession:
+    def __init__(self, responses: dict[str, dict[str, object]]) -> None:
+        self.responses = responses
+        self.calls: list[dict[str, object]] = []
+
+    def client(self, service_name: str, *, region_name: str) -> "_FakeEc2Client":
+        self.calls.append({"service_name": service_name, "region_name": region_name})
+        return _FakeEc2Client(self.responses[region_name])
+
+
+class _FakeEc2Client:
+    def __init__(self, response: dict[str, object]) -> None:
+        self.response = response
+
+    def describe_spot_price_history(self, **kwargs: object) -> dict[str, object]:
+        return self.response
 
 
 if __name__ == "__main__":

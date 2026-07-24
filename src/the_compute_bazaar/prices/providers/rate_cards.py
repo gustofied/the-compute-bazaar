@@ -477,7 +477,9 @@ def normalize_rate_card_entries(
     normalized: list[GpuOffer] = []
     unknown_gpu_names: list[str] = []
     for entry in entries:
-        offer = normalize_rate_card_entry(entry, observed_at=observed_at, raw_ref=raw_ref)
+        offer = normalize_rate_card_entry(
+            entry, observed_at=observed_at, raw_ref=raw_ref
+        )
         if offer is None:
             name = str(_entry_value(entry, "gpu_name") or "")
             if name:
@@ -512,19 +514,25 @@ def normalize_rate_card_entry(
 
     return GpuOffer(
         provider=provider,
-        source_offer_id=str(_entry_value(entry, "source_offer_id") or f"{provider}:{gpu_name}:{price_usd_gpu_hr}"),
+        source_offer_id=str(
+            _entry_value(entry, "source_offer_id")
+            or f"{provider}:{gpu_name}:{price_usd_gpu_hr}"
+        ),
         observed_at=source_checked_at or observed_at,
         gpu_raw_name=gpu_name,
         gpu_model=gpu_model,
         gpu_count=gpu_count,
         vram_gb=vram_gb,
         price_usd_hr=price_usd_gpu_hr * gpu_count,
+        source_connector="published_rate_cards",
         currency="USD",
         country=_string_or_none(_entry_value(entry, "country")),
         region=_string_or_none(_entry_value(entry, "region")),
         is_spot=False,
         is_secure=True,
-        availability_status=str(_entry_value(entry, "availability_status") or "published_rate"),
+        availability_status=str(
+            _entry_value(entry, "availability_status") or "published_rate"
+        ),
         raw_ref=raw_ref,
         metadata={
             "source_kind": "published_rate_card",

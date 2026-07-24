@@ -156,7 +156,15 @@ label, signal, score, or narrative table.
 
 Stage 1 is live:
 
-- Windmill pulls Vast and Lium from inside the AWS VPC.
+- Windmill runs direct live APIs, public cross-cloud catalogs, cloud price
+  observations, and separately labeled published rate cards from inside the
+  AWS VPC.
+- The default live connector set is Vast, Lium, Spheron, Inference.sh, Clore,
+  Akash, RunPod, and Verda. AWS Spot and Azure retail are current price
+  observations but are not proof of deployable capacity.
+- Optional authenticated connectors cover Prime Intellect, Shadeform,
+  Sesterce, TensorDock, Hyperstack, Lambda Cloud, DigitalOcean, GPUs.io, and
+  Verda availability.
 - The heartbeat can also ingest official published rate cards from Runpod, Lambda, Hyperstack,
   Nebius, Crusoe, Denvr, DigitalOcean, GMI Cloud, Massed Compute, TensorDock,
   Verda, VESSL, and Voltage Park as clearly marked provider observations.
@@ -182,14 +190,14 @@ Stage 1.5 is now started:
 The Windmill schedule is active. The next operational step is to watch the first few cycles for
 provider/API, Kafka, S3, and data-quality behavior.
 
-## Second Provider
+## Direct Provider Example
 
-Lium is the second provider. It uses the same bronze and silver contracts as Vast: raw executor
+Lium uses the same bronze and silver contracts as Vast: raw executor
 responses are retained, available executors are normalized into `silver/gpu_offers`, and combined
 gold tables are built with:
 
 ```sh
-uv run gpu-prices build-gold --providers vast,lium,crusoe,denvr,digitalocean,gmi_cloud,hyperstack,lambda,massed_compute,nebius,runpod,tensordock,verda,vessl,voltage_park
+uv run gpu-prices build-gold --providers vast,lium,spheron,inference_sh,clore,akash,aws_spot,azure,runpod,verda,published_rate_cards
 ```
 
 The Lium adapter uses `GET /api/executors` with `X-API-Key` authentication, based on the public
@@ -199,6 +207,12 @@ The current Lium Windmill path writes S3 bronze/silver, publishes Kafka events, 
 combined gold. Pagination is enabled by default in the Windmill script and bootstrap helper. The
 recurring Kafka-producing Lium job runs from the VPC Windmill worker, the same as Vast, because the
 AutoMQ endpoint is private DNS.
+
+Aggregate catalogs keep the actual upstream seller in `provider` and the feed
+used to observe it in `source_connector`. Benchmark provider floors therefore
+remain seller-level. Capacity coverage first sums each seller/connector lower
+bound, then keeps the maximum connector total for that seller; direct and
+aggregate observations of the same inventory are not added together.
 
 ## Published Rate Cards
 

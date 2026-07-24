@@ -31,6 +31,7 @@ The benchmark accepts:
 It excludes:
 
 - unavailable live offers
+- GPU component rates that exclude required CPU, RAM, or storage
 - announced future prices
 - reserved or committed-term prices
 - zero or negative prices

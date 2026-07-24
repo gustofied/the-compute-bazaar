@@ -2,20 +2,74 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
+from .coverage import query_frontier_coverage_ref
 from .events import new_run_id
 from .gold import build_gold_market_tables, export_gold_dashboard_snapshot
-from .pipeline import IngestResult, ingest_lium, ingest_rate_card, ingest_vast
-from .providers.rate_cards import rate_card_providers
+from .pipeline import (
+    IngestResult,
+    ingest_akash,
+    ingest_aws_spot,
+    ingest_azure_retail,
+    ingest_clore,
+    ingest_digitalocean,
+    ingest_gpus_io,
+    ingest_hyperstack,
+    ingest_inference_sh,
+    ingest_lambda_cloud,
+    ingest_lium,
+    ingest_prime_intellect,
+    ingest_rate_card,
+    ingest_runpod,
+    ingest_sesterce,
+    ingest_shadeform,
+    ingest_spheron,
+    ingest_tensordock,
+    ingest_verda,
+    ingest_vast,
+)
+from .providers.rate_cards import DEFAULT_RATE_CARD_PROVIDER, rate_card_providers
 from .schemas import to_jsonable, utc_now
 from .storage import list_refs, read_json, write_json
 
 
 MARKET_RUN_MANIFEST_VERSION = "v1"
 MARKET_RUN_TABLE = "market_runs"
-DEFAULT_MARKET_PROVIDERS = ["vast", "lium", *rate_card_providers()]
+OPTIONAL_API_PROVIDERS = {
+    "prime_intellect": "PRIME_INTELLECT_API_KEY",
+    "shadeform": "SHADEFORM_API_KEY",
+    "sesterce": "SESTERCE_API_KEY",
+    "tensordock": "TENSORDOCK_API_KEY",
+    "hyperstack": "HYPERSTACK_API_KEY",
+    "lambda": "LAMBDA_CLOUD_API_KEY",
+    "digitalocean": "DIGITALOCEAN_API_TOKEN",
+    "gpus_io": "GPUS_IO_API_KEY",
+}
+
+
+def default_market_providers() -> list[str]:
+    providers = [
+        "vast",
+        "lium",
+        "spheron",
+        "inference_sh",
+        "clore",
+        "akash",
+        "aws_spot",
+        "azure",
+        "runpod",
+        "verda",
+        DEFAULT_RATE_CARD_PROVIDER,
+    ]
+    providers.extend(
+        provider
+        for provider, env_name in OPTIONAL_API_PROVIDERS.items()
+        if os.getenv(env_name)
+    )
+    return providers
 
 
 @dataclass(frozen=True)
@@ -24,6 +78,8 @@ class MarketRunResult:
     status: str
     observed_at: str
     providers: list[str]
+    successful_providers: list[str]
+    failed_providers: list[str]
     provider_runs: dict[str, str]
     provider_raw_refs: dict[str, str]
     provider_normalized_refs: dict[str, str | None]
@@ -61,53 +117,35 @@ def run_market_hourly(
     market_run_id = run_id or new_run_id("market")
     observed_at = utc_now()
     observed_date = observed_at.date().isoformat()
-    provider_scope = providers or DEFAULT_MARKET_PROVIDERS
+    provider_scope = list(dict.fromkeys(providers or default_market_providers()))
 
     provider_results: dict[str, IngestResult] = {}
     checks: dict[str, str] = {}
     data_quality: dict[str, Any] = {"providers": {}}
 
     for provider in provider_scope:
-        provider_run_id = f"{provider}-{market_run_id}"
-        if provider == "vast":
-            result = ingest_vast(
-                raw_root=raw_root,
-                lake_root=lake_root,
-                automq_bootstrap_servers=automq_bootstrap_servers,
-                automq_config=automq_config,
-                topic_prefix=topic_prefix,
-                dry_run=dry_run,
-                run_id=provider_run_id,
-                trace_id=market_run_id,
-            )
-        elif provider == "lium":
-            result = ingest_lium(
-                raw_root=raw_root,
-                lake_root=lake_root,
-                automq_bootstrap_servers=automq_bootstrap_servers,
-                automq_config=automq_config,
-                topic_prefix=topic_prefix,
-                dry_run=dry_run,
-                run_id=provider_run_id,
-                trace_id=market_run_id,
-                query={"size": lium_size},
-                paginate=lium_paginate,
-                max_pages=lium_max_pages,
-            )
-        elif provider in rate_card_providers():
-            result = ingest_rate_card(
+        try:
+            result = _ingest_market_provider(
                 provider=provider,
+                market_run_id=market_run_id,
                 raw_root=raw_root,
                 lake_root=lake_root,
                 automq_bootstrap_servers=automq_bootstrap_servers,
                 automq_config=automq_config,
                 topic_prefix=topic_prefix,
+                lium_size=lium_size,
+                lium_paginate=lium_paginate,
+                lium_max_pages=lium_max_pages,
                 dry_run=dry_run,
-                run_id=provider_run_id,
-                trace_id=market_run_id,
             )
-        else:
-            raise ValueError(f"Unsupported market provider: {provider}")
+        except Exception as exc:  # noqa: BLE001 - providers are isolated at the run boundary.
+            checks[provider] = "error"
+            data_quality["providers"][provider] = {
+                "status": "error",
+                "error_type": type(exc).__name__,
+                "error": _provider_error_message(exc),
+            }
+            continue
 
         provider_results[provider] = result
         provider_quality = {
@@ -120,8 +158,32 @@ def run_market_hourly(
         data_quality["providers"][provider] = provider_quality
         checks[provider] = _provider_check_status(result)
 
+    successful_providers = [
+        provider
+        for provider in provider_scope
+        if provider in provider_results
+        and provider_results[provider].normalized_ref
+        and provider_results[provider].normalized_offer_count > 0
+    ]
+    failed_providers = [
+        provider for provider in provider_scope if provider not in successful_providers
+    ]
+    data_quality["successful_providers"] = successful_providers
+    data_quality["failed_providers"] = failed_providers
+    if not successful_providers:
+        raise RuntimeError(
+            "All market providers failed or returned no normalized offers"
+        )
+
     gold_run_id = f"gold-{market_run_id}"
-    gold_result = build_gold_market_tables(lake_root=lake_root, providers=provider_scope, run_id=gold_run_id)
+    gold_result = build_gold_market_tables(
+        lake_root=lake_root,
+        providers=successful_providers,
+        run_id=gold_run_id,
+    )
+    data_quality["frontier_coverage"] = query_frontier_coverage_ref(
+        table_ref=gold_result.table_refs["fact_gpu_listings"],
+    )
     dashboard_export_id = f"dashboard-{market_run_id}"
     dashboard_export = export_gold_dashboard_snapshot(
         lake_root=lake_root,
@@ -140,8 +202,12 @@ def run_market_hourly(
         "index_values": gold_result.row_counts.get("fact_price_index_values", 0),
         "index_constituents": gold_result.row_counts.get("fact_index_constituents", 0),
     }
-    checks["gold"] = "ok" if all(value > 0 for value in row_counts.values()) else "warning"
-    checks["dashboard_export"] = "ok" if dashboard_export.get("output_refs") else "warning"
+    checks["gold"] = (
+        "ok" if all(value > 0 for value in row_counts.values()) else "warning"
+    )
+    checks["dashboard_export"] = (
+        "ok" if dashboard_export.get("output_refs") else "warning"
+    )
     status = "success" if all(value == "ok" for value in checks.values()) else "warning"
 
     payload = {
@@ -152,13 +218,21 @@ def run_market_hourly(
         "observed_at": observed_at.isoformat(),
         "observed_date": observed_date,
         "providers": provider_scope,
-        "provider_runs": {provider: result.run_id for provider, result in provider_results.items()},
-        "provider_raw_refs": {provider: result.raw_ref for provider, result in provider_results.items()},
+        "successful_providers": successful_providers,
+        "failed_providers": failed_providers,
+        "provider_runs": {
+            provider: result.run_id for provider, result in provider_results.items()
+        },
+        "provider_raw_refs": {
+            provider: result.raw_ref for provider, result in provider_results.items()
+        },
         "provider_normalized_refs": {
-            provider: result.normalized_ref for provider, result in provider_results.items()
+            provider: result.normalized_ref
+            for provider, result in provider_results.items()
         },
         "provider_manifest_refs": {
-            provider: result.manifest_ref for provider, result in provider_results.items()
+            provider: result.manifest_ref
+            for provider, result in provider_results.items()
         },
         "gold_run_id": gold_result.run_id,
         "gold_manifest_ref": gold_result.manifest_ref,
@@ -187,21 +261,102 @@ def run_market_hourly(
         status=status,
         observed_at=observed_at.isoformat(),
         providers=provider_scope,
-        provider_runs={provider: result.run_id for provider, result in provider_results.items()},
-        provider_raw_refs={provider: result.raw_ref for provider, result in provider_results.items()},
+        successful_providers=successful_providers,
+        failed_providers=failed_providers,
+        provider_runs={
+            provider: result.run_id for provider, result in provider_results.items()
+        },
+        provider_raw_refs={
+            provider: result.raw_ref for provider, result in provider_results.items()
+        },
         provider_normalized_refs={
-            provider: result.normalized_ref for provider, result in provider_results.items()
+            provider: result.normalized_ref
+            for provider, result in provider_results.items()
         },
         gold_run_id=gold_result.run_id,
         dashboard_export_id=dashboard_export_id,
         row_counts=row_counts,
         checks=checks,
         data_quality=data_quality,
-        provider_results={provider: result.to_dict() for provider, result in provider_results.items()},
+        provider_results={
+            provider: result.to_dict() for provider, result in provider_results.items()
+        },
         gold_manifest_ref=gold_result.manifest_ref,
         dashboard_output_refs=dashboard_output_refs,
         manifest_ref=manifest_ref,
     )
+
+
+def _ingest_market_provider(
+    *,
+    provider: str,
+    market_run_id: str,
+    raw_root: str,
+    lake_root: str,
+    automq_bootstrap_servers: str | None,
+    automq_config: dict[str, str] | None,
+    topic_prefix: str,
+    lium_size: int,
+    lium_paginate: bool,
+    lium_max_pages: int,
+    dry_run: bool,
+) -> IngestResult:
+    common_kwargs = {
+        "raw_root": raw_root,
+        "lake_root": lake_root,
+        "automq_bootstrap_servers": automq_bootstrap_servers,
+        "automq_config": automq_config,
+        "topic_prefix": topic_prefix,
+        "dry_run": dry_run,
+        "run_id": f"{provider}-{market_run_id}",
+        "trace_id": market_run_id,
+    }
+    if provider == "vast":
+        return ingest_vast(**common_kwargs)
+    if provider == "lium":
+        return ingest_lium(
+            **common_kwargs,
+            query={"size": lium_size},
+            paginate=lium_paginate,
+            max_pages=lium_max_pages,
+        )
+    if provider == "aws_spot":
+        return ingest_aws_spot(**common_kwargs)
+    if provider == "azure":
+        return ingest_azure_retail(**common_kwargs)
+    if provider == "spheron":
+        return ingest_spheron(**common_kwargs)
+    if provider == "inference_sh":
+        return ingest_inference_sh(**common_kwargs)
+    if provider == "gpus_io":
+        return ingest_gpus_io(**common_kwargs)
+    if provider == "clore":
+        return ingest_clore(**common_kwargs)
+    if provider == "verda":
+        return ingest_verda(**common_kwargs)
+    if provider == "akash":
+        return ingest_akash(**common_kwargs)
+    if provider == "prime_intellect":
+        return ingest_prime_intellect(**common_kwargs)
+    if provider == "shadeform":
+        return ingest_shadeform(**common_kwargs)
+    if provider == "sesterce":
+        return ingest_sesterce(**common_kwargs)
+    if provider == "runpod":
+        return ingest_runpod(**common_kwargs)
+    if provider == "tensordock":
+        return ingest_tensordock(**common_kwargs)
+    if provider == "hyperstack":
+        return ingest_hyperstack(**common_kwargs)
+    if provider == "lambda":
+        return ingest_lambda_cloud(**common_kwargs)
+    if provider == "digitalocean":
+        return ingest_digitalocean(**common_kwargs)
+    if provider == DEFAULT_RATE_CARD_PROVIDER:
+        return ingest_rate_card(provider=DEFAULT_RATE_CARD_PROVIDER, **common_kwargs)
+    if provider in rate_card_providers():
+        return ingest_rate_card(provider=provider, **common_kwargs)
+    raise ValueError(f"Unsupported market provider: {provider}")
 
 
 def write_market_run_manifest(
@@ -256,7 +411,10 @@ def write_dashboard_market_run_snapshots(
     limit: int = 24,
 ) -> dict[str, str]:
     latest_manifest = latest or read_latest_market_run(lake_root)
-    history = [_public_market_run_manifest(row) for row in list_market_runs(lake_root, limit=limit)]
+    history = [
+        _public_market_run_manifest(row)
+        for row in list_market_runs(lake_root, limit=limit)
+    ]
     if not history:
         history = [_public_market_run_manifest(latest_manifest)]
 
@@ -277,14 +435,18 @@ def write_dashboard_market_run_snapshots(
 
 
 def latest_market_run_ref(lake_root: str) -> str:
-    return "/".join([lake_root.rstrip("/"), "_manifests", MARKET_RUN_TABLE, "latest.json"])
+    return "/".join(
+        [lake_root.rstrip("/"), "_manifests", MARKET_RUN_TABLE, "latest.json"]
+    )
 
 
 def market_runs_manifest_prefix(lake_root: str) -> str:
     return "/".join([lake_root.rstrip("/"), "_manifests", MARKET_RUN_TABLE])
 
 
-def market_run_manifest_ref(lake_root: str, *, observed_date: str, market_run_id: str) -> str:
+def market_run_manifest_ref(
+    lake_root: str, *, observed_date: str, market_run_id: str
+) -> str:
     return "/".join(
         [
             lake_root.rstrip("/"),
@@ -304,6 +466,11 @@ def _provider_check_status(result: IngestResult) -> str:
     return "ok"
 
 
+def _provider_error_message(exc: Exception) -> str:
+    message = " ".join(str(exc).split())
+    return message[:500] or type(exc).__name__
+
+
 def _dashboard_market_run_ref(output_root: str) -> str:
     return "/".join([output_root.rstrip("/"), "market-run.json"])
 
@@ -320,6 +487,8 @@ def _public_market_run_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "observed_at": payload.get("observed_at"),
         "observed_date": payload.get("observed_date"),
         "providers": payload.get("providers"),
+        "successful_providers": payload.get("successful_providers"),
+        "failed_providers": payload.get("failed_providers"),
         "provider_runs": payload.get("provider_runs"),
         "gold_run_id": payload.get("gold_run_id"),
         "dashboard_export_id": payload.get("dashboard_export_id"),

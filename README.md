@@ -107,6 +107,28 @@ export AWS_PROFILE=compute-bazaar
 export AWS_REGION=YOUR_AWS_REGION
 ```
 
+The default heartbeat also uses public live APIs from Spheron, Inference.sh,
+Clore, Akash, RunPod, and Verda, plus AWS Spot and Azure retail-price APIs.
+Optional authenticated live sources are enabled automatically when their
+credential is present:
+
+```sh
+export PRIME_INTELLECT_API_KEY=...
+export SHADEFORM_API_KEY=...
+export SESTERCE_API_KEY=...
+export TENSORDOCK_API_KEY=...
+export HYPERSTACK_API_KEY=...
+export LAMBDA_CLOUD_API_KEY=...
+export DIGITALOCEAN_API_TOKEN=...
+export GPUS_IO_API_KEY=...
+export VERDA_CLIENT_ID=...
+export VERDA_CLIENT_SECRET=...
+```
+
+See [docs/provider-sources.md](docs/provider-sources.md) for source and capacity
+semantics. Do not treat a published price, component rate, or regional
+availability flag as an exact inventory count.
+
 For AutoMQ/Kafka publishing:
 
 ```sh
@@ -127,6 +149,7 @@ Local dry runs:
 ```sh
 uv run gpu-prices ingest-vast --dry-run --raw-root data/raw --lake-root data/lake
 uv run gpu-prices ingest-lium --dry-run --paginate --max-pages 10 --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-inference-sh --dry-run --raw-root data/raw --lake-root data/lake
 uv run gpu-prices ingest-rate-card --provider runpod --dry-run --raw-root data/raw --lake-root data/lake
 ```
 
@@ -150,9 +173,11 @@ Windmill setup lives in [infra/windmill/](infra/windmill/).
 
 ## Market Heartbeat
 
-The main Stage 1.5 loop is `market-hourly`. It ingests live marketplace providers plus official
-published rate-card providers, writes bronze/silver, builds gold, exports dashboard JSON, and writes
-one top-level market run manifest.
+The main Stage 1.5 loop is `market-hourly`. It ingests direct and aggregate live
+API sources plus separately labeled price observations and published rate
+cards, writes bronze/silver, builds gold, exports dashboard JSON, and writes one
+top-level market run manifest. One provider failure is isolated from the rest
+of the run.
 
 ```sh
 uv run gpu-prices market-hourly --dry-run \
@@ -180,7 +205,7 @@ keeps only public-safe status, counts, and query rows.
 Build combined gold tables from latest provider silver manifests:
 
 ```sh
-uv run gpu-prices build-gold --providers vast,lium,crusoe,denvr,digitalocean,gmi_cloud,hyperstack,lambda,massed_compute,nebius,runpod,tensordock,verda,vessl,voltage_park
+uv run gpu-prices build-gold --providers vast,lium,spheron,inference_sh,clore,akash,aws_spot,azure,runpod,verda,published_rate_cards
 uv run gpu-prices latest-gold-manifest
 uv run gpu-prices gold-index --limit 10
 uv run gpu-prices gold-index-history --history-limit 24
@@ -219,6 +244,21 @@ VESSL, and Voltage Park. The curated rows retain their source URL, source-check
 time, price basis, and access mode. They are useful for price context and
 provider breadth, but they are not proof that a machine is rentable at that
 exact second. Live procurement should still use live provider APIs.
+
+Measure frontier source depth with DataFusion:
+
+```sh
+uv run gpu-prices frontier-coverage \
+  --target 50 \
+  --capacity-target 50 \
+  --observation-target 50
+```
+
+The three targets are intentionally distinct: live offer rows, a conservative
+lower bound on live GPU units, and all current price observations. Aggregate
+connectors retain the upstream seller as `provider` and use `source_connector`
+for provenance. Capacity takes the strongest connector-level lower bound per
+seller so the same stock is not added twice.
 
 See [docs/h100-market-comparison.md](docs/h100-market-comparison.md) for the
 current H100 checks against Ornn, Silicon Data, Compute Desk, and Compute Index.

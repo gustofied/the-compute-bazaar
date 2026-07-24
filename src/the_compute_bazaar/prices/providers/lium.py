@@ -35,17 +35,23 @@ class LiumClient:
         self.api_base = api_base.rstrip("/")
         self.session = session or requests.Session()
 
-    def list_executors(self, query: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
+    def list_executors(
+        self, query: Mapping[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         """Return currently available Lium executors."""
         return self.fetch_executors(query=query).executors
 
-    def fetch_executors(self, query: Mapping[str, Any] | None = None) -> LiumExecutorsFetch:
+    def fetch_executors(
+        self, query: Mapping[str, Any] | None = None
+    ) -> LiumExecutorsFetch:
         """Return one Lium executor page and preserve the raw provider response."""
         headers = {"Accept": "application/json"}
         if self.api_key:
             headers["X-API-Key"] = self.api_key
 
-        clean_query = {key: value for key, value in (query or {}).items() if value is not None}
+        clean_query = {
+            key: value for key, value in (query or {}).items() if value is not None
+        }
         response = self.session.get(
             f"{self.api_base}/executors",
             params=clean_query,
@@ -183,20 +189,31 @@ def normalize_executor(
     if price_per_gpu is None or price_per_gpu <= 0:
         return None
 
-    location = entry.get("location") if isinstance(entry.get("location"), Mapping) else {}
+    location = (
+        entry.get("location") if isinstance(entry.get("location"), Mapping) else {}
+    )
     country = _string_or_none(location.get("country"))
-    region = ", ".join(
-        part
-        for part in [
-            _string_or_none(location.get("city")),
-            _string_or_none(location.get("region_name") or location.get("region")),
-        ]
-        if part
-    ) or None
+    region = (
+        ", ".join(
+            part
+            for part in [
+                _string_or_none(location.get("city")),
+                _string_or_none(location.get("region_name") or location.get("region")),
+            ]
+            if part
+        )
+        or None
+    )
 
-    source_offer_id = str(entry.get("id") or entry.get("executor_id") or f"{gpu_name}:{price_per_gpu}:{gpu_count}")
+    source_offer_id = str(
+        entry.get("id")
+        or entry.get("executor_id")
+        or f"{gpu_name}:{price_per_gpu}:{gpu_count}"
+    )
     specs = entry.get("specs") if isinstance(entry.get("specs"), Mapping) else {}
 
+    is_spot = _bool_or_none(_nested(specs, "is_spot"))
+    available_gpu_count = _int_or_none(entry.get("available_gpu_count"))
     return GpuOffer(
         provider="lium",
         source_offer_id=source_offer_id,
@@ -206,12 +223,17 @@ def normalize_executor(
         gpu_count=gpu_count,
         vram_gb=round(vram_mb / 1024, 2) if vram_mb else None,
         price_usd_hr=price_per_gpu * gpu_count,
+        available_gpu_count=(
+            available_gpu_count
+            if available_gpu_count is not None and available_gpu_count > 0
+            else gpu_count
+        ),
         currency="USD",
         country=country,
         region=region,
-        is_spot=_bool_or_none(_nested(specs, "is_spot")),
+        is_spot=is_spot,
         is_secure=(entry.get("tier") == "secure") if entry.get("tier") else None,
-        availability_status="available",
+        availability_status="spot_available" if is_spot else "available",
         raw_ref=raw_ref,
         metadata={
             "available_gpu_count": entry.get("available_gpu_count"),
@@ -226,6 +248,11 @@ def normalize_executor(
             "price_per_gpu": price_per_gpu,
             "tier": entry.get("tier"),
             "uptime_in_minutes": entry.get("uptime_in_minutes"),
+            "capacity_basis": (
+                "provider_available_gpu_count"
+                if available_gpu_count is not None and available_gpu_count > 0
+                else "available_executor_bundle"
+            ),
         },
     )
 
@@ -241,9 +268,9 @@ def _gpu_name(entry: Mapping[str, Any]) -> str:
 
 def _gpu_count(entry: Mapping[str, Any]) -> int:
     for value in [
-        entry.get("available_gpu_count"),
         entry.get("gpu_count"),
         _nested(entry, "specs", "gpu", "count"),
+        entry.get("available_gpu_count"),
     ]:
         parsed = _int_or_none(value)
         if parsed is not None and parsed > 0:

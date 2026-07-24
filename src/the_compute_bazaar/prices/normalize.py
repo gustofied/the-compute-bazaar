@@ -17,6 +17,7 @@ GpuRule = tuple[Callable[[str], bool], int, str]
 GPU_RULES: list[GpuRule] = [
     (lambda n: n == "A16", 16, "A16_16GB"),
     (lambda n: n == "A10", 24, "A10_24GB"),
+    (lambda n: n == "A30", 24, "A30_24GB"),
     (lambda n: n == "A40", 48, "A40_48GB"),
     (lambda n: n == "A800 PCIE" or n.startswith("A800"), 80, "A800_80GB"),
     (lambda n: n == "L4", 24, "L4_24GB"),
@@ -79,7 +80,11 @@ GPU_RULES: list[GpuRule] = [
     (lambda n: n == "RTX 5080", 16, "RTX5080_16GB"),
     (lambda n: n == "RTX 5090", 32, "RTX5090_32GB"),
     (lambda n: n == "RTX 5880ADA", 48, "RTX5880Ada_48GB"),
-    (lambda n: n == "RTX 6000ADA" or n.startswith("RTX 6000 ADA"), 48, "RTX6000Ada_48GB"),
+    (
+        lambda n: n == "RTX 6000ADA" or n.startswith("RTX 6000 ADA"),
+        48,
+        "RTX6000Ada_48GB",
+    ),
     (lambda n: n == "RTX A2000", 6, "A2000_6GB"),
     (lambda n: n == "RTX A2000", 12, "A2000_12GB"),
     (lambda n: n == "RTX A4000", 16, "A4000_16GB"),
@@ -109,7 +114,9 @@ GPU_RULES: list[GpuRule] = [
 ]
 
 
-def canonical_gpu_model(gpu_name: str, gpu_ram_mb: float | int | None = None) -> str | None:
+def canonical_gpu_model(
+    gpu_name: str, gpu_ram_mb: float | int | None = None
+) -> str | None:
     normalized = _normalize_gpu_name(gpu_name)
     matches = [
         canonical
@@ -130,4 +137,21 @@ def _normalize_gpu_name(gpu_name: str) -> str:
         .replace("GEFORCE", "")
         .split()
     )
-    return normalized
+    aliases = {
+        "A2000": "RTX A2000",
+        "A4000": "RTX A4000",
+        "A4500": "RTX A4500",
+        "A5000": "RTX A5000",
+        "A6000": "RTX A6000",
+        "RTX4000ADA": "RTX 4000ADA",
+        "RTX4090": "RTX 4090",
+        "RTX5000ADA": "RTX 5000ADA",
+        "RTX6000ADA": "RTX 6000ADA",
+        "RTXPRO4000": "RTX PRO 4000",
+        "RTXPRO4500": "RTX PRO 4500",
+        "RTXPRO5000": "RTX PRO 5000",
+        "RTXPRO6000": "RTX PRO 6000",
+        "V100": "TESLA V100",
+        "V100 32G": "TESLA V100",
+    }
+    return aliases.get(normalized, normalized)
