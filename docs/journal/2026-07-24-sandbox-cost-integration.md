@@ -504,6 +504,9 @@ Publication record:
 - public article:
   `https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html`
 - schedule: `f/compute-bazaar/market_hourly_hourly`, enabled hourly in UTC
+- clean scheduled-source CI:
+  `https://github.com/gustofied/the-compute-bazaar/actions/runs/30134572437`,
+  passed on `e9791e1`
 
 The live product contains:
 
@@ -534,6 +537,12 @@ filled the dev host's 20 GiB root volume. The live worker was never replaced
 during that failure. Removing only unused images and BuildKit cache recovered
 space; active containers and volumes were untouched. The operational README
 now records that recovery and the preferred registry-built production path.
+
+The first clean CI attempt also exposed that `uv --locked` needs the public
+`external/instinct-bench` workspace member. The workflow now initializes that
+single public submodule explicitly. It does not attempt to fetch the separate
+private AdamSioud submodule; article integration tests remain part of the local
+release gate.
 
 This release does not change the claim boundary. It is a descriptive,
 source-linked developer-workload snapshot. It is not lifecycle latency,
