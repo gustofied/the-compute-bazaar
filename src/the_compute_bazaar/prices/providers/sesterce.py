@@ -13,7 +13,7 @@ from ..normalize import canonical_gpu_model
 from ..schemas import GpuOffer
 
 
-DEFAULT_SESTERCE_API_BASE = "https://api.sesterce.com"
+DEFAULT_SESTERCE_API_BASE = "https://api.cloud.sesterce.com"
 
 
 @dataclass(frozen=True)

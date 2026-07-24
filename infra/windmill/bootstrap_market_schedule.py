@@ -22,8 +22,9 @@ from bootstrap_provider_schedule import (
 
 
 DEFAULT_PROVIDER_SCOPE = (
-    "vast,lium,spheron,inference_sh,clore,akash,aws_spot,azure,runpod,verda,"
-    "published_rate_cards"
+    "vast,lium,spheron,inference_sh,gridstackhub,cloud_gpu_prices,"
+    "thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,clore,akash,aws_spot,"
+    "azure,runpod,verda,published_rate_cards"
 )
 OPTIONAL_PROVIDER_VARIABLES = (
     (
@@ -42,6 +43,12 @@ OPTIONAL_PROVIDER_VARIABLES = (
         "DigitalOcean sizes read token",
     ),
     ("GPUS_IO_API_KEY", "gpus_io_api_key", "GPUs.io read API key"),
+    (
+        "GETDEPLOYING_API_KEY",
+        "getdeploying_api_key",
+        "GetDeploying read API key",
+    ),
+    ("JL_API_KEY", "jarvislabs_api_key", "JarvisLabs availability API key"),
     ("VERDA_CLIENT_ID", "verda_client_id", "Verda OAuth client ID"),
     ("VERDA_CLIENT_SECRET", "verda_client_secret", "Verda OAuth client secret"),
 )
@@ -279,6 +286,8 @@ def _provider_scope() -> str:
             ("lambda", "LAMBDA_CLOUD_API_KEY"),
             ("digitalocean", "DIGITALOCEAN_API_TOKEN"),
             ("gpus_io", "GPUS_IO_API_KEY"),
+            ("getdeploying", "GETDEPLOYING_API_KEY"),
+            ("jarvislabs", "JL_API_KEY"),
         )
         if os.getenv(env_name)
     )

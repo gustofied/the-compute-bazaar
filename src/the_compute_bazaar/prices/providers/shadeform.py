@@ -14,6 +14,12 @@ from ..schemas import GpuOffer
 
 
 DEFAULT_SHADEFORM_API_BASE = "https://api.shadeform.ai/v1"
+PROVIDER_ALIASES = {
+    "lambda_labs": "lambda",
+    "lambdalabs": "lambda",
+    "massed_compute": "massed_compute",
+    "massedcompute": "massed_compute",
+}
 
 
 @dataclass(frozen=True)
@@ -104,13 +110,15 @@ def normalize_instance_types(
             ):
                 continue
             cloud = str(entry.get("cloud") or "")
+            provider = _provider_id(cloud)
             cloud_instance_type = str(entry.get("cloud_instance_type") or "")
             shade_instance_type = str(entry.get("shade_instance_type") or "")
             region = str(region_entry.get("region") or "")
             display_name = str(region_entry.get("display_name") or "")
             normalized.append(
                 GpuOffer(
-                    provider="shadeform",
+                    provider=provider,
+                    source_connector="shadeform",
                     source_offer_id=":".join(
                         part
                         for part in (
@@ -174,3 +182,8 @@ def _int_or_none(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _provider_id(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    return PROVIDER_ALIASES.get(normalized, normalized) or "shadeform"

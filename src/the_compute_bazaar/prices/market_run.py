@@ -15,21 +15,30 @@ from .pipeline import (
     ingest_aws_spot,
     ingest_azure_retail,
     ingest_clore,
+    ingest_cloud_gpu_prices,
     ingest_digitalocean,
     ingest_gpus_io,
+    ingest_getdeploying,
+    ingest_gridstackhub,
     ingest_hyperstack,
     ingest_inference_sh,
+    ingest_jarvislabs,
     ingest_lambda_cloud,
     ingest_lium,
+    ingest_oracle_cloud,
+    ingest_ovhcloud,
     ingest_prime_intellect,
     ingest_rate_card,
     ingest_runpod,
+    ingest_scaleway,
     ingest_sesterce,
     ingest_shadeform,
     ingest_spheron,
     ingest_tensordock,
+    ingest_thunder_compute,
     ingest_verda,
     ingest_vast,
+    ingest_vultr,
 )
 from .providers.rate_cards import DEFAULT_RATE_CARD_PROVIDER, rate_card_providers
 from .schemas import to_jsonable, utc_now
@@ -47,6 +56,8 @@ OPTIONAL_API_PROVIDERS = {
     "lambda": "LAMBDA_CLOUD_API_KEY",
     "digitalocean": "DIGITALOCEAN_API_TOKEN",
     "gpus_io": "GPUS_IO_API_KEY",
+    "getdeploying": "GETDEPLOYING_API_KEY",
+    "jarvislabs": "JL_API_KEY",
 }
 
 
@@ -56,6 +67,13 @@ def default_market_providers() -> list[str]:
         "lium",
         "spheron",
         "inference_sh",
+        "gridstackhub",
+        "cloud_gpu_prices",
+        "thunder_compute",
+        "vultr",
+        "scaleway",
+        "oracle_cloud",
+        "ovhcloud",
         "clore",
         "akash",
         "aws_spot",
@@ -328,6 +346,22 @@ def _ingest_market_provider(
         return ingest_spheron(**common_kwargs)
     if provider == "inference_sh":
         return ingest_inference_sh(**common_kwargs)
+    if provider == "gridstackhub":
+        return ingest_gridstackhub(**common_kwargs)
+    if provider == "cloud_gpu_prices":
+        return ingest_cloud_gpu_prices(**common_kwargs)
+    if provider == "getdeploying":
+        return ingest_getdeploying(**common_kwargs)
+    if provider == "thunder_compute":
+        return ingest_thunder_compute(**common_kwargs)
+    if provider == "vultr":
+        return ingest_vultr(**common_kwargs)
+    if provider == "scaleway":
+        return ingest_scaleway(**common_kwargs)
+    if provider == "oracle_cloud":
+        return ingest_oracle_cloud(**common_kwargs)
+    if provider == "ovhcloud":
+        return ingest_ovhcloud(**common_kwargs)
     if provider == "gpus_io":
         return ingest_gpus_io(**common_kwargs)
     if provider == "clore":
@@ -352,6 +386,8 @@ def _ingest_market_provider(
         return ingest_lambda_cloud(**common_kwargs)
     if provider == "digitalocean":
         return ingest_digitalocean(**common_kwargs)
+    if provider == "jarvislabs":
+        return ingest_jarvislabs(**common_kwargs)
     if provider == DEFAULT_RATE_CARD_PROVIDER:
         return ingest_rate_card(provider=DEFAULT_RATE_CARD_PROVIDER, **common_kwargs)
     if provider in rate_card_providers():

@@ -8,8 +8,9 @@ import subprocess
 
 
 DEFAULT_PROVIDER_SCOPE = (
-    "vast,lium,spheron,inference_sh,clore,akash,aws_spot,azure,runpod,verda,"
-    "published_rate_cards"
+    "vast,lium,spheron,inference_sh,gridstackhub,cloud_gpu_prices,"
+    "thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,clore,akash,aws_spot,"
+    "azure,runpod,verda,published_rate_cards"
 )
 
 
@@ -24,6 +25,8 @@ def main(
     lambda_cloud_api_key: str | None = None,
     digitalocean_api_token: str | None = None,
     gpus_io_api_key: str | None = None,
+    getdeploying_api_key: str | None = None,
+    jarvislabs_api_key: str | None = None,
     verda_client_id: str | None = None,
     verda_client_secret: str | None = None,
     raw_root: str | None = None,
@@ -55,6 +58,8 @@ def main(
     _set_env_if_present(env, "LAMBDA_CLOUD_API_KEY", lambda_cloud_api_key)
     _set_env_if_present(env, "DIGITALOCEAN_API_TOKEN", digitalocean_api_token)
     _set_env_if_present(env, "GPUS_IO_API_KEY", gpus_io_api_key)
+    _set_env_if_present(env, "GETDEPLOYING_API_KEY", getdeploying_api_key)
+    _set_env_if_present(env, "JL_API_KEY", jarvislabs_api_key)
     _set_env_if_present(env, "VERDA_CLIENT_ID", verda_client_id)
     _set_env_if_present(env, "VERDA_CLIENT_SECRET", verda_client_secret)
     _set_env_if_present(env, "COMPUTE_BAZAAR_RAW_ROOT", raw_root)
@@ -81,6 +86,8 @@ def main(
         lambda_cloud_api_key=lambda_cloud_api_key,
         digitalocean_api_token=digitalocean_api_token,
         gpus_io_api_key=gpus_io_api_key,
+        getdeploying_api_key=getdeploying_api_key,
+        jarvislabs_api_key=jarvislabs_api_key,
     )
 
     command = [
@@ -133,6 +140,8 @@ def _default_provider_scope(
     lambda_cloud_api_key: str | None,
     digitalocean_api_token: str | None,
     gpus_io_api_key: str | None,
+    getdeploying_api_key: str | None,
+    jarvislabs_api_key: str | None,
 ) -> str:
     providers = DEFAULT_PROVIDER_SCOPE.split(",")
     for provider, key in (
@@ -144,6 +153,8 @@ def _default_provider_scope(
         ("lambda", lambda_cloud_api_key),
         ("digitalocean", digitalocean_api_token),
         ("gpus_io", gpus_io_api_key),
+        ("getdeploying", getdeploying_api_key),
+        ("jarvislabs", jarvislabs_api_key),
     ):
         if key:
             providers.append(provider)

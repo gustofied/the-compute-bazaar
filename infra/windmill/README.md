@@ -196,7 +196,7 @@ Suggested schedule args, using Windmill variables/secrets:
   "kafka_password": "$var:f/compute-bazaar/kafka_password",
   "aws_region": "eu-west-3",
   "topic_prefix": "gpu",
-  "providers": "vast,lium,spheron,inference_sh,clore,akash,aws_spot,azure,runpod,verda,published_rate_cards",
+  "providers": "vast,lium,spheron,inference_sh,gridstackhub,cloud_gpu_prices,thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,clore,akash,aws_spot,azure,runpod,verda,published_rate_cards",
   "lium_size": 200,
   "lium_max_pages": 10,
   "lium_paginate": true,

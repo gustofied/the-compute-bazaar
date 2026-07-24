@@ -107,8 +107,11 @@ export AWS_PROFILE=compute-bazaar
 export AWS_REGION=YOUR_AWS_REGION
 ```
 
-The default heartbeat also uses public live APIs from Spheron, Inference.sh,
-Clore, Akash, RunPod, and Verda, plus AWS Spot and Azure retail-price APIs.
+The default heartbeat also uses public APIs from Spheron, Inference.sh,
+GridStackHub, Cloud GPU Prices, Thunder Compute, Vultr, Scaleway, Oracle
+Cloud, OVHcloud, Clore, Akash, RunPod, and Verda, plus AWS Spot and Azure
+retail-price APIs. External aggregators are labeled and excluded from benchmark
+constituents.
 Optional authenticated live sources are enabled automatically when their
 credential is present:
 
@@ -121,13 +124,17 @@ export HYPERSTACK_API_KEY=...
 export LAMBDA_CLOUD_API_KEY=...
 export DIGITALOCEAN_API_TOKEN=...
 export GPUS_IO_API_KEY=...
+export GETDEPLOYING_API_KEY=...
+export JL_API_KEY=...
 export VERDA_CLIENT_ID=...
 export VERDA_CLIENT_SECRET=...
 ```
 
 See [docs/provider-sources.md](docs/provider-sources.md) for source and capacity
-semantics. Do not treat a published price, component rate, or regional
-availability flag as an exact inventory count.
+semantics and [docs/provider-registry.md](docs/provider-registry.md) for the
+integrated sources and ranked connector backlog. Do not treat a published
+price, component rate, or regional availability flag as an exact inventory
+count.
 
 For AutoMQ/Kafka publishing:
 
@@ -150,6 +157,14 @@ Local dry runs:
 uv run gpu-prices ingest-vast --dry-run --raw-root data/raw --lake-root data/lake
 uv run gpu-prices ingest-lium --dry-run --paginate --max-pages 10 --raw-root data/raw --lake-root data/lake
 uv run gpu-prices ingest-inference-sh --dry-run --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-thunder-compute --dry-run --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-vultr --dry-run --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-scaleway --dry-run --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-oracle-cloud --dry-run --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-ovhcloud --dry-run --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-gridstackhub --dry-run --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-cloud-gpu-prices --dry-run --raw-root data/raw --lake-root data/lake
+uv run gpu-prices ingest-getdeploying --dry-run --raw-root data/raw --lake-root data/lake
 uv run gpu-prices ingest-rate-card --provider runpod --dry-run --raw-root data/raw --lake-root data/lake
 ```
 
@@ -205,7 +220,7 @@ keeps only public-safe status, counts, and query rows.
 Build combined gold tables from latest provider silver manifests:
 
 ```sh
-uv run gpu-prices build-gold --providers vast,lium,spheron,inference_sh,clore,akash,aws_spot,azure,runpod,verda,published_rate_cards
+uv run gpu-prices build-gold --providers vast,lium,spheron,inference_sh,gridstackhub,cloud_gpu_prices,thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,clore,akash,aws_spot,azure,runpod,verda,published_rate_cards
 uv run gpu-prices latest-gold-manifest
 uv run gpu-prices gold-index --limit 10
 uv run gpu-prices gold-index-history --history-limit 24
@@ -238,12 +253,13 @@ project language, that is a Curia-authored gold product: DataFusion computes the
 methodology, Curia decides and records what becomes product truth.
 
 The rate-card providers are deliberately separate from live inventory providers.
-Current official-source coverage includes Crusoe, Denvr, DigitalOcean, GMI
-Cloud, Hyperstack, Lambda, Massed Compute, Nebius, Runpod, TensorDock, Verda,
-VESSL, and Voltage Park. The curated rows retain their source URL, source-check
-time, price basis, and access mode. They are useful for price context and
-provider breadth, but they are not proof that a machine is rentable at that
-exact second. Live procurement should still use live provider APIs.
+Current official-source coverage includes Civo, Crusoe, Denvr, DigitalOcean,
+GMI Cloud, Hyperbolic, Hyperstack, Koyeb, Lambda, Massed Compute, Nebius,
+Runpod, TensorDock, Verda, VESSL, and Voltage Park. The curated rows retain
+their source URL, source-check time, price basis, and access mode. They are
+useful for price context and provider breadth, but they are not proof that a
+machine is rentable at that exact second. Live procurement should still use
+live provider APIs.
 
 Measure frontier source depth with DataFusion:
 

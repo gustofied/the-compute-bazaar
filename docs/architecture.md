@@ -159,15 +159,18 @@ Stage 1 is live:
 - Windmill runs direct live APIs, public cross-cloud catalogs, cloud price
   observations, and separately labeled published rate cards from inside the
   AWS VPC.
-- The default live connector set is Vast, Lium, Spheron, Inference.sh, Clore,
-  Akash, RunPod, and Verda. AWS Spot and Azure retail are current price
-  observations but are not proof of deployable capacity.
+- The default source set is Vast, Lium, Spheron, Inference.sh, GridStackHub,
+  Cloud GPU Prices, Thunder Compute, Vultr, Scaleway, Oracle Cloud, OVHcloud,
+  Clore, Akash, RunPod, and Verda. AWS Spot and Azure retail are current price
+  observations but are not proof of deployable capacity. External aggregators
+  are retained for discovery and comparison but cannot vote in the benchmark.
 - Optional authenticated connectors cover Prime Intellect, Shadeform,
-  Sesterce, TensorDock, Hyperstack, Lambda Cloud, DigitalOcean, GPUs.io, and
-  Verda availability.
+  Sesterce, TensorDock, Hyperstack, Lambda Cloud, DigitalOcean, GPUs.io,
+  JarvisLabs, and Verda availability.
 - The heartbeat can also ingest official published rate cards from Runpod, Lambda, Hyperstack,
-  Nebius, Crusoe, Denvr, DigitalOcean, GMI Cloud, Massed Compute, TensorDock,
-  Verda, VESSL, and Voltage Park as clearly marked provider observations.
+  Nebius, Crusoe, Civo, Denvr, DigitalOcean, GMI Cloud, Hyperbolic, Koyeb,
+  Massed Compute, TensorDock, Verda, VESSL, and Voltage Park as clearly marked
+  provider observations.
 - Raw provider responses are written to S3 bronze. Lium stores a raw pagination envelope so the
   bronze layer contains page-level provider evidence, not just extracted rows.
 - Normalized offers are written to S3 silver.
@@ -197,7 +200,7 @@ responses are retained, available executors are normalized into `silver/gpu_offe
 gold tables are built with:
 
 ```sh
-uv run gpu-prices build-gold --providers vast,lium,spheron,inference_sh,clore,akash,aws_spot,azure,runpod,verda,published_rate_cards
+uv run gpu-prices build-gold --providers vast,lium,spheron,inference_sh,gridstackhub,cloud_gpu_prices,thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,clore,akash,aws_spot,azure,runpod,verda,published_rate_cards
 ```
 
 The Lium adapter uses `GET /api/executors` with `X-API-Key` authentication, based on the public
@@ -237,6 +240,9 @@ Current published-rate providers:
 - VESSL
 - Voltage Park
 - DigitalOcean
+- Civo
+- Koyeb
+- Hyperbolic
 
 These rows are not live inventory. Each keeps a source URL, source-check time,
 price basis, and access mode. Current hourly and request-based advertised rates

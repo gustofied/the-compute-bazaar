@@ -46,21 +46,30 @@ from .pipeline import (
     ingest_aws_spot,
     ingest_azure_retail,
     ingest_clore,
+    ingest_cloud_gpu_prices,
     ingest_digitalocean,
     ingest_gpus_io,
+    ingest_getdeploying,
+    ingest_gridstackhub,
     ingest_hyperstack,
     ingest_inference_sh,
+    ingest_jarvislabs,
     ingest_lambda_cloud,
     ingest_lium,
+    ingest_oracle_cloud,
+    ingest_ovhcloud,
     ingest_prime_intellect,
     ingest_rate_card,
     ingest_runpod,
+    ingest_scaleway,
     ingest_sesterce,
     ingest_shadeform,
     ingest_spheron,
     ingest_tensordock,
+    ingest_thunder_compute,
     ingest_verda,
     ingest_vast,
+    ingest_vultr,
 )
 from .providers.rate_cards import DEFAULT_RATE_CARD_PROVIDER, rate_card_providers
 from .schemas import to_jsonable
@@ -169,6 +178,72 @@ def main() -> None:
     )
     ingest_inference_sh_parser.add_argument("--api-base")
     _add_ingest_storage_args(ingest_inference_sh_parser)
+
+    ingest_thunder_parser = subparsers.add_parser(
+        "ingest-thunder-compute",
+        help="Fetch Thunder Compute's public live GPU prices and availability",
+    )
+    ingest_thunder_parser.add_argument("--api-base")
+    _add_ingest_storage_args(ingest_thunder_parser)
+
+    ingest_vultr_parser = subparsers.add_parser(
+        "ingest-vultr",
+        help="Fetch Vultr's public GPU plans and regional deployability",
+    )
+    ingest_vultr_parser.add_argument("--api-base")
+    _add_ingest_storage_args(ingest_vultr_parser)
+
+    ingest_scaleway_parser = subparsers.add_parser(
+        "ingest-scaleway",
+        help="Fetch Scaleway's public zone GPU prices and availability",
+    )
+    ingest_scaleway_parser.add_argument("--api-base")
+    ingest_scaleway_parser.add_argument("--fx-url")
+    _add_ingest_storage_args(ingest_scaleway_parser)
+
+    ingest_oracle_parser = subparsers.add_parser(
+        "ingest-oracle-cloud",
+        help="Fetch Oracle Cloud's public GPU pay-as-you-go list prices",
+    )
+    ingest_oracle_parser.add_argument("--api-url")
+    _add_ingest_storage_args(ingest_oracle_parser)
+
+    ingest_ovhcloud_parser = subparsers.add_parser(
+        "ingest-ovhcloud",
+        help="Fetch OVHcloud's public hourly GPU instance catalog",
+    )
+    ingest_ovhcloud_parser.add_argument("--catalog-url")
+    ingest_ovhcloud_parser.add_argument("--fx-url")
+    _add_ingest_storage_args(ingest_ovhcloud_parser)
+
+    ingest_gridstackhub_parser = subparsers.add_parser(
+        "ingest-gridstackhub",
+        help="Fetch GridStackHub's public external GPU price-reference feed",
+    )
+    ingest_gridstackhub_parser.add_argument("--api-url")
+    _add_ingest_storage_args(ingest_gridstackhub_parser)
+
+    ingest_cloud_gpu_prices_parser = subparsers.add_parser(
+        "ingest-cloud-gpu-prices",
+        help="Fetch Cloud GPU Prices' public external frontier GPU catalog",
+    )
+    ingest_cloud_gpu_prices_parser.add_argument("--api-url")
+    ingest_cloud_gpu_prices_parser.add_argument("--page-size", type=int, default=100)
+    ingest_cloud_gpu_prices_parser.add_argument("--max-pages", type=int, default=10)
+    _add_ingest_storage_args(ingest_cloud_gpu_prices_parser)
+
+    ingest_getdeploying_parser = subparsers.add_parser(
+        "ingest-getdeploying",
+        help="Fetch GetDeploying's authenticated external frontier GPU feed",
+    )
+    ingest_getdeploying_parser.add_argument(
+        "--api-key",
+        default=os.getenv("GETDEPLOYING_API_KEY"),
+    )
+    ingest_getdeploying_parser.add_argument("--api-url")
+    ingest_getdeploying_parser.add_argument("--page-size", type=int, default=100)
+    ingest_getdeploying_parser.add_argument("--max-pages", type=int, default=20)
+    _add_ingest_storage_args(ingest_getdeploying_parser)
 
     ingest_gpus_io_parser = subparsers.add_parser(
         "ingest-gpus-io",
@@ -281,6 +356,17 @@ def main() -> None:
     ingest_digitalocean_parser.add_argument("--api-base")
     ingest_digitalocean_parser.add_argument("--max-pages", type=int, default=10)
     _add_ingest_storage_args(ingest_digitalocean_parser)
+
+    ingest_jarvislabs_parser = subparsers.add_parser(
+        "ingest-jarvislabs",
+        help="Fetch JarvisLabs live GPU prices and free-device counts",
+    )
+    ingest_jarvislabs_parser.add_argument(
+        "--api-key",
+        default=os.getenv("JL_API_KEY"),
+    )
+    ingest_jarvislabs_parser.add_argument("--api-base")
+    _add_ingest_storage_args(ingest_jarvislabs_parser)
 
     ingest_rate_card_parser = subparsers.add_parser(
         "ingest-rate-card",
@@ -716,6 +802,133 @@ def main() -> None:
         _print_json(result.to_dict())
         return
 
+    if args.command == "ingest-thunder-compute":
+        result = ingest_thunder_compute(
+            api_base=args.api_base,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "ingest-vultr":
+        result = ingest_vultr(
+            api_base=args.api_base,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "ingest-scaleway":
+        result = ingest_scaleway(
+            api_base=args.api_base,
+            fx_url=args.fx_url,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "ingest-oracle-cloud":
+        result = ingest_oracle_cloud(
+            api_url=args.api_url,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "ingest-ovhcloud":
+        result = ingest_ovhcloud(
+            catalog_url=args.catalog_url,
+            fx_url=args.fx_url,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "ingest-gridstackhub":
+        result = ingest_gridstackhub(
+            api_url=args.api_url,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "ingest-cloud-gpu-prices":
+        result = ingest_cloud_gpu_prices(
+            api_url=args.api_url,
+            page_size=args.page_size,
+            max_pages=args.max_pages,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "ingest-getdeploying":
+        result = ingest_getdeploying(
+            api_key=args.api_key,
+            api_url=args.api_url,
+            page_size=args.page_size,
+            max_pages=args.max_pages,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
+        )
+        _print_json(result.to_dict())
+        return
+
     if args.command == "ingest-gpus-io":
         result = ingest_gpus_io(
             api_key=args.api_key,
@@ -883,6 +1096,22 @@ def main() -> None:
             api_token=args.api_token,
             api_base=args.api_base,
             max_pages=args.max_pages,
+            raw_root=args.raw_root,
+            lake_root=args.lake_root,
+            automq_bootstrap_servers=args.automq_bootstrap_servers,
+            automq_config=kafka_config_from_env(),
+            topic_prefix=args.topic_prefix,
+            dry_run=args.dry_run,
+            run_id=args.run_id,
+            trace_id=args.trace_id,
+        )
+        _print_json(result.to_dict())
+        return
+
+    if args.command == "ingest-jarvislabs":
+        result = ingest_jarvislabs(
+            api_key=args.api_key,
+            api_base=args.api_base,
             raw_root=args.raw_root,
             lake_root=args.lake_root,
             automq_bootstrap_servers=args.automq_bootstrap_servers,

@@ -17,8 +17,8 @@ from ..schemas import GpuOffer
 
 
 DEFAULT_RATE_CARD_PROVIDER = "published_rate_cards"
-RATE_CARD_SOURCE_VERSION = "2026-07-24.2"
-RATE_CARD_SOURCE_CHECKED_AT = "2026-07-23T22:00:00+00:00"
+RATE_CARD_SOURCE_VERSION = "2026-07-24.3"
+RATE_CARD_SOURCE_CHECKED_AT = "2026-07-24T00:00:00+00:00"
 
 
 @dataclass(frozen=True)
@@ -441,6 +441,67 @@ PUBLISHED_RATE_CARDS: tuple[RateCardEntry, ...] = (
         availability_status="published_rate_reserved",
         access_mode="contact_sales",
         notes="Published 12-month reserved rate; retained as evidence but excluded from the hourly advertised benchmark.",
+    ),
+    RateCardEntry(
+        provider="koyeb",
+        source_offer_id="koyeb-h100-80gb-1x",
+        gpu_name="NVIDIA H100",
+        vram_gb=80,
+        price_usd_gpu_hr=2.50,
+        source_url="https://www.koyeb.com/docs/reference/instances",
+        source_checked_at="2026-07-24T00:00:00+00:00",
+        notes="Published hourly price for the canonical 1x H100 instance.",
+    ),
+    RateCardEntry(
+        provider="koyeb",
+        source_offer_id="koyeb-h200-141gb-1x",
+        gpu_name="NVIDIA H200",
+        vram_gb=141,
+        price_usd_gpu_hr=3.00,
+        source_url="https://www.koyeb.com/docs/reference/instances",
+        source_checked_at="2026-07-24T00:00:00+00:00",
+        notes="Published hourly price for the canonical 1x H200 instance.",
+    ),
+    RateCardEntry(
+        provider="koyeb",
+        source_offer_id="koyeb-b200-180gb-1x",
+        gpu_name="NVIDIA B200",
+        vram_gb=180,
+        price_usd_gpu_hr=5.50,
+        source_url="https://www.koyeb.com/docs/reference/instances",
+        source_checked_at="2026-07-24T00:00:00+00:00",
+        notes="Published hourly price for the canonical 1x B200 instance.",
+    ),
+    RateCardEntry(
+        provider="civo",
+        source_offer_id="civo-h100-sxm-80gb-1x",
+        gpu_name="NVIDIA H100 SXM",
+        vram_gb=80,
+        price_usd_gpu_hr=2.99,
+        source_url="https://www.civo.com/pricing",
+        source_checked_at="2026-07-24T00:00:00+00:00",
+        notes="Published on-demand hourly price for a 1x H100 instance.",
+    ),
+    RateCardEntry(
+        provider="civo",
+        source_offer_id="civo-h200-sxm-141gb-1x",
+        gpu_name="NVIDIA H200 SXM",
+        vram_gb=141,
+        price_usd_gpu_hr=3.49,
+        source_url="https://www.civo.com/pricing",
+        source_checked_at="2026-07-24T00:00:00+00:00",
+        notes="Published on-demand hourly price for a 1x H200 instance.",
+    ),
+    RateCardEntry(
+        provider="hyperbolic",
+        source_offer_id="hyperbolic-h100-sxm-80gb-1x",
+        gpu_name="NVIDIA H100 SXM",
+        vram_gb=80,
+        price_usd_gpu_hr=1.49,
+        source_url="https://docs.hyperbolic.xyz/docs/faq",
+        source_checked_at="2026-07-24T00:00:00+00:00",
+        price_basis="published_starting_on_demand",
+        notes="Published single-H100 on-demand price; capacity varies with partner inventory.",
     ),
 )
 

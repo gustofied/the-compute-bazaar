@@ -15,6 +15,12 @@ from ..schemas import GpuOffer
 
 DEFAULT_PRIME_INTELLECT_API_BASE = "https://api.primeintellect.ai/api/v1"
 PRIME_FRONTIER_GPU_TYPES = ("H100_80GB", "H200_141GB", "B200_180GB", "B300_262GB")
+PROVIDER_ALIASES = {
+    "lambda_labs": "lambda",
+    "lambdalabs": "lambda",
+    "massed_compute": "massed_compute",
+    "massedcompute": "massed_compute",
+}
 
 
 @dataclass(frozen=True)
@@ -139,6 +145,7 @@ def normalize_availability(
         else:
             availability_status = "available" if is_available else "unavailable"
         provider_name = str(entry.get("provider") or "")
+        provider = _provider_id(provider_name)
         cloud_id = str(entry.get("cloudId") or "")
         data_center = str(entry.get("dataCenter") or "")
         country = _string_or_none(entry.get("country"))
@@ -153,7 +160,8 @@ def normalize_availability(
 
         normalized.append(
             GpuOffer(
-                provider="prime_intellect",
+                provider=provider,
+                source_connector="prime_intellect",
                 source_offer_id=":".join(
                     part
                     for part in (provider_name, cloud_id, data_center, str(gpu_count))
@@ -242,3 +250,8 @@ def _string_or_none(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _provider_id(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    return PROVIDER_ALIASES.get(normalized, normalized) or "prime_intellect"
