@@ -69,10 +69,11 @@ for operator/product inspection rather than the minimal AdamSioud label. Its `co
 sample used by `listings-sample.json`. These files do not contain provider API keys, Kafka
 credentials, or private raw S3 refs.
 
-`benchmark-history.json` is the compact article/chart feed. It carries only recent H100, H200,
+`benchmark-history.json` is the compact article/chart feed. It carries the retained H100, H200,
 B200, and B300 benchmark observations plus the provider-floor interquartile range and small
-coverage counts. Use it instead of downloading the much larger all-product `index-history.json`
-on public story pages.
+coverage counts. Each export merges the newest observations into the existing history, so the
+hourly job does not need to rescan the full lake. Use it instead of downloading the much larger
+all-product `index-history.json` on public story pages.
 
 ## S3/CloudFront Shape
 

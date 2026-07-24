@@ -84,7 +84,7 @@ offer_aggregated as (
     avg(case when included_in_trimmed_mean then price_usd_gpu_hr else null end) as trimmed_mean_usd_gpu_hr,
     percentile_cont(0.25) within group (order by price_usd_gpu_hr) as p25_usd_gpu_hr,
     percentile_cont(0.75) within group (order by price_usd_gpu_hr) as p75_usd_gpu_hr,
-    min(price_usd_instance_hr) as cheapest_offer_usd_hr,
+    min(price_usd_hr) as cheapest_offer_usd_hr,
     count(*) as offer_count,
     count(distinct provider) as provider_count,
     count(distinct gpu_model) as gpu_model_count,

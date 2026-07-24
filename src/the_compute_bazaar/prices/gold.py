@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -509,27 +510,20 @@ def query_gold_benchmark_history(
     *,
     lake_root: str,
     history_limit: int = 24,
+    canonical_market_runs_only: bool = False,
 ) -> dict[str, Any]:
-    """Return recent frontier benchmark values as a compact time series."""
+    """Recompute recent frontier benchmarks from each retained gold snapshot."""
     manifests = list_gold_manifests(lake_root, limit=history_limit)
     rows: list[dict[str, Any]] = []
     included_manifest_count = 0
 
     for manifest in reversed(manifests):
+        if canonical_market_runs_only and not _is_canonical_market_run_id(
+            manifest.get("run_id")
+        ):
+            continue
         try:
-            table_ref = manifest.get("table_refs", {}).get("fact_benchmark_values")
-            if table_ref:
-                benchmark_rows = query_parquet(
-                    parquet_uri=table_ref,
-                    table_name="fact_benchmark_values",
-                    sql="""
-select *
-from fact_benchmark_values
-order by benchmark_family_id
-""",
-                )
-            else:
-                benchmark_rows, _ = _benchmark_rows_from_latest_listings(manifest)
+            benchmark_rows = _benchmark_values_from_latest_listings(manifest)
         except Exception:  # noqa: BLE001 - one legacy run should not hide comparable history.
             continue
 
@@ -749,6 +743,7 @@ def export_gold_dashboard_snapshot(
     lake_root: str,
     output_root: str,
     limit: int = 100,
+    benchmark_history_limit: int = 24,
 ) -> dict[str, Any]:
     """Export public JSON snapshots for static D3/blog consumers."""
     manifest = read_latest_gold_manifest(lake_root)
@@ -776,7 +771,9 @@ def export_gold_dashboard_snapshot(
     ]
     try:
         benchmark_history_payload = query_gold_benchmark_history(
-            lake_root=lake_root, history_limit=24
+            lake_root=lake_root,
+            history_limit=benchmark_history_limit,
+            canonical_market_runs_only=True,
         )
     except Exception as exc:  # noqa: BLE001 - latest values should survive a history failure.
         benchmark_history_payload = {"history_manifest_count": 0, "rows": []}
@@ -784,7 +781,18 @@ def export_gold_dashboard_snapshot(
     public_benchmark_history = [
         _public_benchmark_history_value(row)
         for row in benchmark_history_payload["rows"]
+        if _has_benchmark_value(row)
     ]
+    benchmark_history_ref = "/".join(
+        [output_root.rstrip("/"), "benchmark-history.json"]
+    )
+    existing_benchmark_history = _read_existing_benchmark_history(
+        benchmark_history_ref
+    )
+    public_benchmark_history = _merge_public_benchmark_history(
+        existing_benchmark_history,
+        public_benchmark_history,
+    )
     try:
         index_history_payload = query_gold_index_history(
             lake_root=lake_root, history_limit=24
@@ -816,9 +824,7 @@ def export_gold_dashboard_snapshot(
         "featured_benchmarks": "/".join(
             [output_root.rstrip("/"), "featured-benchmarks.json"]
         ),
-        "benchmark_history": "/".join(
-            [output_root.rstrip("/"), "benchmark-history.json"]
-        ),
+        "benchmark_history": benchmark_history_ref,
         "index_constituents": "/".join(
             [output_root.rstrip("/"), "index-constituents.json"]
         ),
@@ -860,9 +866,12 @@ def export_gold_dashboard_snapshot(
             "manifest": public_manifest,
             "methodology_version": BENCHMARK_METHODOLOGY_VERSION,
             "families": BENCHMARK_FAMILIES,
-            "history_manifest_count": benchmark_history_payload[
-                "history_manifest_count"
-            ],
+            "history_manifest_count": len(
+                {
+                    row.get("gold_run_id") or row.get("gold_observed_at")
+                    for row in public_benchmark_history
+                }
+            ),
             "row_count": len(public_benchmark_history),
             "rows": public_benchmark_history,
         },
@@ -1157,7 +1166,24 @@ def _benchmark_rows_from_latest_listings(
     manifest: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     table_ref = manifest["table_refs"]["fact_gpu_listings"]
-    context = {
+    return _benchmark_rows_from_listing_ref(
+        table_ref,
+        context=_benchmark_context(manifest),
+    )
+
+
+def _benchmark_values_from_latest_listings(
+    manifest: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return query_parquet(
+        parquet_uri=manifest["table_refs"]["fact_gpu_listings"],
+        table_name="fact_gpu_listings",
+        sql=benchmark_values_v0_sql(_benchmark_context(manifest)),
+    )
+
+
+def _benchmark_context(manifest: dict[str, Any]) -> dict[str, str]:
+    return {
         "source_run_id": ",".join(
             f"{name}:{run_id}"
             for name, run_id in dict(manifest.get("source_run_ids") or {}).items()
@@ -1172,7 +1198,15 @@ def _benchmark_rows_from_latest_listings(
         ),
         "calculated_at": str(manifest.get("observed_at") or utc_now().isoformat()),
     }
-    return _benchmark_rows_from_listing_ref(table_ref, context=context)
+
+
+def _is_canonical_market_run_id(run_id: Any) -> bool:
+    return bool(
+        re.fullmatch(
+            r"gold-market-\d{8}T\d{6}-[0-9a-f]{8}",
+            str(run_id or ""),
+        )
+    )
 
 
 def _benchmark_rows_from_listing_ref(
@@ -1324,6 +1358,60 @@ def _public_benchmark_history_value(row: dict[str, Any]) -> dict[str, Any]:
             "gold_observed_date",
         ]
     }
+
+
+def _has_benchmark_value(row: dict[str, Any]) -> bool:
+    value = row.get("benchmark_usd_gpu_hr")
+    try:
+        return value is not None and float(value) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _merge_public_benchmark_history(
+    existing_rows: Any,
+    current_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    candidates = [
+        row
+        for row in (existing_rows if isinstance(existing_rows, list) else [])
+        if isinstance(row, dict)
+    ]
+    candidates.extend(current_rows)
+    for row in candidates:
+        if row.get("methodology_version") != BENCHMARK_METHODOLOGY_VERSION:
+            continue
+        if not _has_benchmark_value(row):
+            continue
+        run_id = str(row.get("gold_run_id") or "")
+        if run_id and not _is_canonical_market_run_id(run_id):
+            continue
+        observed_at = str(row.get("gold_observed_at") or "")
+        family = str(row.get("benchmark_family_id") or "")
+        if not observed_at or not family:
+            continue
+        merged[(run_id or observed_at, family)] = row
+    return sorted(
+        merged.values(),
+        key=lambda row: (
+            str(row.get("gold_observed_at") or ""),
+            str(row.get("benchmark_family_id") or ""),
+        ),
+    )
+
+
+def _read_existing_benchmark_history(ref: str) -> Any:
+    try:
+        payload = read_json(ref)
+    except FileNotFoundError:
+        return []
+    except Exception as exc:
+        error = getattr(exc, "response", {}).get("Error", {})
+        if str(error.get("Code") or "") in {"404", "NoSuchKey", "NotFound"}:
+            return []
+        raise
+    return payload.get("rows", []) if isinstance(payload, dict) else []
 
 
 def _public_benchmark_constituent(row: dict[str, Any]) -> dict[str, Any]:

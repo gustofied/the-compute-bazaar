@@ -2044,7 +2044,10 @@ class GoldQueryTests(unittest.TestCase):
             raw_root = str(Path(tmpdir) / "raw")
             dashboard_root = str(Path(tmpdir) / "dashboard")
 
-            for suffix, price in [("1", 2.00), ("2", 2.50)]:
+            for suffix, gold_run_id, price in [
+                ("1", "gold-market-20260101T000000-00000001", 2.00),
+                ("2", "gold-market-20260101T010000-00000002", 2.50),
+            ]:
                 _write_provider_run(
                     lake_root=lake_root,
                     raw_root=raw_root,
@@ -2064,8 +2067,15 @@ class GoldQueryTests(unittest.TestCase):
                 build_gold_market_tables(
                     lake_root=lake_root,
                     providers=["vast"],
-                    run_id=f"gold-benchmark-history-{suffix}",
+                    run_id=gold_run_id,
                 )
+                if suffix == "1":
+                    export_gold_dashboard_snapshot(
+                        lake_root=lake_root,
+                        output_root=dashboard_root,
+                        limit=1,
+                        benchmark_history_limit=1,
+                    )
 
             history = query_gold_benchmark_history(
                 lake_root=lake_root,
@@ -2075,6 +2085,7 @@ class GoldQueryTests(unittest.TestCase):
                 lake_root=lake_root,
                 output_root=dashboard_root,
                 limit=1,
+                benchmark_history_limit=1,
             )
             public_history = read_json(export["output_refs"]["benchmark_history"])
 
@@ -2090,11 +2101,14 @@ class GoldQueryTests(unittest.TestCase):
         )
         self.assertEqual(
             {row["gold_run_id"] for row in h100_rows},
-            {"gold-benchmark-history-1", "gold-benchmark-history-2"},
+            {
+                "gold-market-20260101T000000-00000001",
+                "gold-market-20260101T010000-00000002",
+            },
         )
         self.assertEqual(public_history["history_manifest_count"], 2)
-        self.assertEqual(public_history["row_count"], 8)
-        self.assertEqual(export["row_counts"]["benchmark_history"], 8)
+        self.assertEqual(public_history["row_count"], 2)
+        self.assertEqual(export["row_counts"]["benchmark_history"], 2)
         self.assertNotIn("source_manifest_ref", public_history["rows"][0])
         self.assertNotIn("source_run_id", public_history["rows"][0])
 
@@ -2173,7 +2187,7 @@ class GoldQueryTests(unittest.TestCase):
             build = build_gold_market_tables(
                 lake_root=lake_root,
                 providers=["vast", "lium", "gridstackhub"],
-                run_id="gold-benchmark",
+                run_id="gold-market-20260101T000000-00000001",
             )
             values = query_gold_benchmark_values(lake_root=lake_root)
             constituents = query_gold_benchmark_constituents(
@@ -2211,7 +2225,7 @@ class GoldQueryTests(unittest.TestCase):
         self.assertIn("benchmark_history", export["output_refs"])
         self.assertIn("benchmark_constituents", export["output_refs"])
         self.assertEqual(export["row_counts"]["featured_benchmarks"], 4)
-        self.assertEqual(export["row_counts"]["benchmark_history"], 4)
+        self.assertEqual(export["row_counts"]["benchmark_history"], 2)
         self.assertEqual(export["row_counts"]["benchmark_constituents"], 5)
         self.assertTrue(public_constituents["complete"])
         self.assertEqual(public_constituents["row_count"], 5)
