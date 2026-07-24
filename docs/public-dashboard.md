@@ -52,6 +52,7 @@ market-history.json
 latest-index.json
 featured-index.json
 featured-benchmarks.json
+benchmark-history.json
 index-history.json
 index-quality.json
 index-constituents.json
@@ -67,6 +68,11 @@ for operator/product inspection rather than the minimal AdamSioud label. Its `co
 `row_count` fields confirm that the file contains the full current constituent set rather than the
 sample used by `listings-sample.json`. These files do not contain provider API keys, Kafka
 credentials, or private raw S3 refs.
+
+`benchmark-history.json` is the compact article/chart feed. It carries only recent H100, H200,
+B200, and B300 benchmark observations plus the provider-floor interquartile range and small
+coverage counts. Use it instead of downloading the much larger all-product `index-history.json`
+on public story pages.
 
 ## S3/CloudFront Shape
 

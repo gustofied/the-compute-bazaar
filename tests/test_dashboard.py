@@ -29,6 +29,10 @@ class DashboardSnapshotTests(unittest.TestCase):
     def test_snapshot_file_route_rejects_unknown_files(self) -> None:
         self.assertEqual(_snapshot_name_for_filename("latest-index.json"), "latest-index")
         self.assertEqual(_snapshot_name_for_filename("index-history.json"), "index-history")
+        self.assertEqual(
+            _snapshot_name_for_filename("benchmark-history.json"),
+            "benchmark-history",
+        )
         with self.assertRaises(HTTPException):
             _snapshot_name_for_filename("../manifest.json")
         with self.assertRaises(HTTPException):

@@ -10,6 +10,7 @@ from the_compute_bazaar.prices.gold import (
     build_gold_market_tables,
     export_gold_dashboard_snapshot,
     query_gold_benchmark_constituents,
+    query_gold_benchmark_history,
     query_gold_benchmark_values,
     query_gold_featured_index,
     query_gold_index_constituents,
@@ -2037,6 +2038,66 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual({row["gpu_model"] for row in rows}, {"RTX4090_24GB"})
         self.assertEqual({row["floor_usd_gpu_hr"] for row in rows}, {0.20, 0.40})
 
+    def test_gold_benchmark_history_exports_compact_frontier_series(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            dashboard_root = str(Path(tmpdir) / "dashboard")
+
+            for suffix, price in [("1", 2.00), ("2", 2.50)]:
+                _write_provider_run(
+                    lake_root=lake_root,
+                    raw_root=raw_root,
+                    provider="vast",
+                    run_id=f"vast-benchmark-history-{suffix}",
+                    offers=[
+                        _offer(
+                            provider="vast",
+                            source_offer_id=f"h100-history-{suffix}",
+                            price_usd_hr=price,
+                            gpu_raw_name="NVIDIA H100",
+                            gpu_model="H100_80GB",
+                            vram_gb=80,
+                        )
+                    ],
+                )
+                build_gold_market_tables(
+                    lake_root=lake_root,
+                    providers=["vast"],
+                    run_id=f"gold-benchmark-history-{suffix}",
+                )
+
+            history = query_gold_benchmark_history(
+                lake_root=lake_root,
+                history_limit=10,
+            )
+            export = export_gold_dashboard_snapshot(
+                lake_root=lake_root,
+                output_root=dashboard_root,
+                limit=1,
+            )
+            public_history = read_json(export["output_refs"]["benchmark_history"])
+
+        h100_rows = [
+            row
+            for row in history["rows"]
+            if row["benchmark_family_id"] == "H100"
+        ]
+        self.assertEqual(history["history_manifest_count"], 2)
+        self.assertEqual(
+            [row["benchmark_usd_gpu_hr"] for row in h100_rows],
+            [2.00, 2.50],
+        )
+        self.assertEqual(
+            {row["gold_run_id"] for row in h100_rows},
+            {"gold-benchmark-history-1", "gold-benchmark-history-2"},
+        )
+        self.assertEqual(public_history["history_manifest_count"], 2)
+        self.assertEqual(public_history["row_count"], 8)
+        self.assertEqual(export["row_counts"]["benchmark_history"], 8)
+        self.assertNotIn("source_manifest_ref", public_history["rows"][0])
+        self.assertNotIn("source_run_id", public_history["rows"][0])
+
     def test_gold_benchmark_values_group_frontier_gpu_families(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             lake_root = str(Path(tmpdir) / "lake")
@@ -2147,8 +2208,10 @@ class GoldQueryTests(unittest.TestCase):
             {"higher_same_provider_offer", "not_currently_available"},
         )
         self.assertIn("featured_benchmarks", export["output_refs"])
+        self.assertIn("benchmark_history", export["output_refs"])
         self.assertIn("benchmark_constituents", export["output_refs"])
         self.assertEqual(export["row_counts"]["featured_benchmarks"], 4)
+        self.assertEqual(export["row_counts"]["benchmark_history"], 4)
         self.assertEqual(export["row_counts"]["benchmark_constituents"], 5)
         self.assertTrue(public_constituents["complete"])
         self.assertEqual(public_constituents["row_count"], 5)

@@ -505,6 +505,66 @@ order by benchmark_family_id
     return {"manifest": manifest, "rows": rows}
 
 
+def query_gold_benchmark_history(
+    *,
+    lake_root: str,
+    history_limit: int = 24,
+) -> dict[str, Any]:
+    """Return recent frontier benchmark values as a compact time series."""
+    manifests = list_gold_manifests(lake_root, limit=history_limit)
+    rows: list[dict[str, Any]] = []
+    included_manifest_count = 0
+
+    for manifest in reversed(manifests):
+        try:
+            table_ref = manifest.get("table_refs", {}).get("fact_benchmark_values")
+            if table_ref:
+                benchmark_rows = query_parquet(
+                    parquet_uri=table_ref,
+                    table_name="fact_benchmark_values",
+                    sql="""
+select *
+from fact_benchmark_values
+order by benchmark_family_id
+""",
+                )
+            else:
+                benchmark_rows, _ = _benchmark_rows_from_latest_listings(manifest)
+        except Exception:  # noqa: BLE001 - one legacy run should not hide comparable history.
+            continue
+
+        benchmark_rows = [
+            row
+            for row in benchmark_rows
+            if row.get("methodology_version") == BENCHMARK_METHODOLOGY_VERSION
+        ]
+        if not benchmark_rows:
+            continue
+        included_manifest_count += 1
+
+        for row in benchmark_rows:
+            rows.append(
+                {
+                    **row,
+                    "gold_run_id": manifest.get("run_id"),
+                    "gold_observed_at": manifest.get("observed_at"),
+                    "gold_observed_date": manifest.get("observed_date"),
+                }
+            )
+
+    rows.sort(
+        key=lambda row: (
+            str(row.get("gold_observed_at") or ""),
+            str(row.get("benchmark_family_id") or ""),
+        )
+    )
+    return {
+        "manifest": read_latest_gold_manifest(lake_root),
+        "history_manifest_count": included_manifest_count,
+        "rows": rows,
+    }
+
+
 def query_gold_benchmark_constituents(
     *,
     lake_root: str,
@@ -715,6 +775,17 @@ def export_gold_dashboard_snapshot(
         _public_benchmark_constituent(row) for row in benchmark_constituents
     ]
     try:
+        benchmark_history_payload = query_gold_benchmark_history(
+            lake_root=lake_root, history_limit=24
+        )
+    except Exception as exc:  # noqa: BLE001 - latest values should survive a history failure.
+        benchmark_history_payload = {"history_manifest_count": 0, "rows": []}
+        warnings.append(f"benchmark history export skipped: {exc}")
+    public_benchmark_history = [
+        _public_benchmark_history_value(row)
+        for row in benchmark_history_payload["rows"]
+    ]
+    try:
         index_history_payload = query_gold_index_history(
             lake_root=lake_root, history_limit=24
         )
@@ -744,6 +815,9 @@ def export_gold_dashboard_snapshot(
         "featured_index": "/".join([output_root.rstrip("/"), "featured-index.json"]),
         "featured_benchmarks": "/".join(
             [output_root.rstrip("/"), "featured-benchmarks.json"]
+        ),
+        "benchmark_history": "/".join(
+            [output_root.rstrip("/"), "benchmark-history.json"]
         ),
         "index_constituents": "/".join(
             [output_root.rstrip("/"), "index-constituents.json"]
@@ -778,6 +852,19 @@ def export_gold_dashboard_snapshot(
             "methodology_version": BENCHMARK_METHODOLOGY_VERSION,
             "families": BENCHMARK_FAMILIES,
             "rows": public_benchmark_values,
+        },
+    )
+    write_json(
+        output_refs["benchmark_history"],
+        {
+            "manifest": public_manifest,
+            "methodology_version": BENCHMARK_METHODOLOGY_VERSION,
+            "families": BENCHMARK_FAMILIES,
+            "history_manifest_count": benchmark_history_payload[
+                "history_manifest_count"
+            ],
+            "row_count": len(public_benchmark_history),
+            "rows": public_benchmark_history,
         },
     )
     write_json(
@@ -821,6 +908,7 @@ def export_gold_dashboard_snapshot(
             "latest_index": len(index),
             "featured_index": len(featured_index),
             "featured_benchmarks": len(benchmark_values),
+            "benchmark_history": len(public_benchmark_history),
             "index_constituents": len(constituents),
             "index_quality": len(index_quality),
             "index_history": len(index_history),
@@ -1211,6 +1299,29 @@ def _public_benchmark_value(row: dict[str, Any]) -> dict[str, Any]:
             "status",
             "source_run_id",
             "calculated_at",
+        ]
+    }
+
+
+def _public_benchmark_history_value(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: row.get(key)
+        for key in [
+            "benchmark_symbol",
+            "benchmark_family_id",
+            "benchmark_label",
+            "methodology_version",
+            "benchmark_basis",
+            "benchmark_usd_gpu_hr",
+            "provider_floor_p25_usd_gpu_hr",
+            "provider_floor_p75_usd_gpu_hr",
+            "included_offer_count",
+            "provider_count",
+            "latest_observed_at",
+            "calculated_at",
+            "gold_run_id",
+            "gold_observed_at",
+            "gold_observed_date",
         ]
     }
 
