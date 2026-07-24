@@ -260,3 +260,31 @@ The recurring release was exercised through the real VPC worker:
 
 A fresh local build from the newly exported public GPU history produced the
 same build ID and byte-identical `sandbox-cost.json`.
+
+## Live Verification
+
+The final public article is:
+
+```text
+https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html
+```
+
+The live HTML and `sandbox-cost.js?v=5` were byte-identical to AdamSioud commit
+`0300eea`. CloudFront, the local dashboard export, and the checked-in article
+fallback all had SHA-256
+`eb5e3677d8833b8b4da497ce061817def006e3d6d596a1613e7828df4bd966d8`.
+
+Final browser checks used 1280 x 720 and 390 x 844 viewports:
+
+- build `sandbox-cost-7248f5de0415d3f2` rendered from the public data URL;
+- all four D3 charts rendered within the article column;
+- mobile document overflow was zero, while wide audit tables scrolled only
+  inside their wrappers;
+- the public payload exposed 11 rate cards, 10 change events, 33 price
+  observations, six service summaries, 38 raw service results, and 30 eligible
+  H100 prints;
+- the benchmark section had 105 HTTPS or internal-anchor links, with no empty
+  or insecure link;
+- pointer tooltips remained inside the viewport and keyboard arrows/Home/End
+  updated `aria-valuetext`;
+- desktop and mobile browser consoles contained no warnings or errors.
