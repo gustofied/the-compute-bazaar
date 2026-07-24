@@ -69,7 +69,7 @@ Curia                      controlled authoring layer for market truth
 gold/fact_gpu_listings     query-ready market listings
 gold/fact_price_index_*    index values and constituents
 gold/fact_benchmark_*      H100/H200/B200/B300 benchmark values and constituents
-gold/sandbox_*             sandbox hourly price, same-job cost, and relative series
+gold/sandbox_*             sandbox rates, workload observations, and relative series
 gold/dim_*                 GPU, provider, and region dimensions
 AutoMQ                     live event tape
 DataFusion                 SQL compute engine Curia uses over lake tables
@@ -223,18 +223,21 @@ The maintained sandbox benchmark follows the same evidence-to-product model:
 ```text
 public price evidence + StarSling benchmark runs
   -> bronze source records
-  -> silver normalized prices and comparable runs
+  -> silver normalized prices, batches, jobs, phases, and run metadata
   -> named DataFusion queries
-  -> gold fixed-cohort rates, same-job summaries, and coverage-gated comparison
+  -> gold fixed-cohort rates, workload summaries, and coverage-gated comparison
   -> sandbox-cost.json
   -> AdamSioud Compute article
 ```
 
-The current record has 33 dated price observations for 11 services and 38
-service results from seven comparable public runs over five calendar days.
-Every matching repeated intraday run is retained. Earlier two-processor runs
-are captured but rejected because the publication shape is four processors,
-8 GB memory, and 40 GB disk.
+The current record has 33 dated price observations for 11 services. Workload
+evidence retains 38 provider-batch means from seven source batches over five
+calendar days, plus 69 complete individual jobs reconstructed from 690 aligned
+phase samples in the latest batch. That batch exposes 72
+provider-and-replicate slots; three lack a complete ten-phase result and remain
+visible as incomplete rather than being imputed. Repeated intraday batches
+remain distinct. Earlier two-processor runs are captured but rejected because
+the publication shape is four processors, 8 GiB memory, and 40 GB disk.
 
 The hourly sandbox headline is the median of the same eight-service cohort,
 with p25-p75 and mean retained as descriptive fields. The H100 comparison uses
@@ -253,7 +256,7 @@ uv run sandbox-cost build \
 
 uv run sandbox-cost query \
   --output-root data/sandbox-cost \
-  --query same-job-cost \
+  --query workload-latest-replicates \
   --limit 10
 
 uv run sandbox-cost refresh-benchmark \

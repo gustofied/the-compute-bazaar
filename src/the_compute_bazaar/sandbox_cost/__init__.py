@@ -1,4 +1,4 @@
-"""Evidence-backed sandbox price and same-job cost benchmark."""
+"""Evidence-backed sandbox rate and software-workload benchmark."""
 
 from .pipeline import (
     build_sandbox_cost,

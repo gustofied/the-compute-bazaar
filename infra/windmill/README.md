@@ -117,6 +117,21 @@ ssh ec2-user@HOST '
 '
 ```
 
+The dev runtime has a 20 GiB root volume. Repeated image builds can leave
+several gigabytes of unused BuildKit cache even when every service is healthy.
+Before a rebuild, inspect rather than guessing:
+
+```sh
+df -h /
+sudo docker system df
+```
+
+If only the build cache is reclaimable, `sudo docker builder prune -a -f`
+removes unused build layers without touching active images, containers,
+volumes, Postgres, or Windmill state. Do not prune volumes. The longer-term
+production shape is a registry-built worker image rather than building on this
+small runtime host.
+
 ## Required Environment
 
 Set these as Windmill variables/secrets or worker environment variables:

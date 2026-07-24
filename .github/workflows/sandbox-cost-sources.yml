@@ -41,4 +41,4 @@ jobs:
       - name: Run focused benchmark tests
         run: >-
           uv run --package the-compute-bazaar python -m unittest
-          tests.test_sandbox_cost
+          tests.test_sandbox_cost tests.test_adamsioud

@@ -30,8 +30,11 @@ SANDBOX_RATE_METHODOLOGY = "advertised_fixed_cohort_median_iqr_v2"
 FIXED_RATE_QUERY_ID = "sandbox_fixed_cohort_rate_v2"
 PRICE_EVENTS_QUERY_ID = "sandbox_rate_card_events_v1"
 CURRENT_RATES_QUERY_ID = "sandbox_current_rate_cross_section_v1"
-SAME_JOB_QUERY_ID = "sandbox_same_job_cost_v1"
-SAME_JOB_SUMMARY_QUERY_ID = "sandbox_same_job_service_summary_v1"
+WORKLOAD_BATCH_QUERY_ID = "sandbox_workload_batch_history_v2"
+WORKLOAD_REPLICATE_QUERY_ID = "sandbox_workload_latest_replicates_v2"
+WORKLOAD_PHASE_QUERY_ID = "sandbox_workload_latest_phases_v1"
+WORKLOAD_PHASE_SUMMARY_QUERY_ID = "sandbox_workload_phase_summary_v1"
+WORKLOAD_SUMMARY_QUERY_ID = "sandbox_workload_service_summary_v2"
 GPU_COMPARISON_MIN_PROVIDERS = 10
 GPU_DAILY_QUERY_ID = "h100_daily_broad_coverage_v1"
 GPU_ELIGIBLE_QUERY_ID = "h100_broad_coverage_prints_v1"
@@ -45,6 +48,64 @@ RUNTIME_PRICE_SERIES = {
     "modal-gvisor": "modal",
     "modal-vm": "modal",
     "novita": "novita",
+}
+
+RATE_METERING = {
+    "beam": {
+        "processor_meter": "reserved_capacity",
+        "memory_meter": "reserved_capacity",
+        "billing_basis_label": "physical cores and memory while running",
+    },
+    "blaxel": {
+        "processor_meter": "memory_coupled",
+        "memory_meter": "active_runtime",
+        "billing_basis_label": "active runtime, priced by allocated memory",
+    },
+    "daytona": {
+        "processor_meter": "reserved_capacity",
+        "memory_meter": "reserved_capacity",
+        "billing_basis_label": "reserved CPU and memory while running",
+    },
+    "e2b": {
+        "processor_meter": "reserved_capacity",
+        "memory_meter": "reserved_capacity",
+        "billing_basis_label": "reserved CPU and memory while running",
+    },
+    "fly-sprites": {
+        "processor_meter": "actual_usage",
+        "memory_meter": "actual_usage",
+        "billing_basis_label": "actual CPU and memory use",
+    },
+    "freestyle": {
+        "processor_meter": "reserved_capacity",
+        "memory_meter": "reserved_capacity",
+        "billing_basis_label": "VM CPU and memory while running",
+    },
+    "modal": {
+        "processor_meter": "max_requested_or_actual",
+        "memory_meter": "max_requested_or_actual",
+        "billing_basis_label": "higher of requested or actual use",
+    },
+    "novita": {
+        "processor_meter": "reserved_capacity",
+        "memory_meter": "reserved_capacity",
+        "billing_basis_label": "allocated CPU and memory while running",
+    },
+    "runloop": {
+        "processor_meter": "reserved_capacity",
+        "memory_meter": "reserved_capacity",
+        "billing_basis_label": "devbox CPU and memory while active",
+    },
+    "sailboxes": {
+        "processor_meter": "actual_usage",
+        "memory_meter": "actual_usage",
+        "billing_basis_label": "actual CPU and memory use",
+    },
+    "vercel": {
+        "processor_meter": "active_usage",
+        "memory_meter": "reserved_capacity",
+        "billing_basis_label": "active CPU and provisioned memory",
+    },
 }
 
 PRICE_FIELDS = {
@@ -71,7 +132,7 @@ PRICE_FIELDS = {
     "color",
 }
 
-BENCHMARK_FIELDS = {
+BATCH_FIELDS = {
     "series_order",
     "point_order",
     "series_id",
@@ -85,13 +146,112 @@ BENCHMARK_FIELDS = {
     "vcpus",
     "memory_gib",
     "disk_gb",
+    "observed_vcpus",
+    "observed_memory_gib",
+    "observed_disk_gb",
+    "cpu_model",
+    "virtualization",
+    "country",
+    "region",
+    "city",
+    "egress_asn",
     "job_parts",
     "benchmark_run_id",
+    "source_run_sha",
+    "workload_app_version",
+    "task_signature",
+    "methodology_id",
     "benchmark_source_url",
     "price_date",
     "price_source_url",
+    "cost_basis",
+    "lifecycle_included",
+    "workload_gap_count",
+    "replicate_count",
+    "replicate_data_available",
+    "observation_level",
+    "runtime_basis",
     "note",
     "color",
+}
+
+REPLICATE_FIELDS = {
+    "series_order",
+    "series_id",
+    "series_label",
+    "observed_date",
+    "generated_at",
+    "runtime_seconds",
+    "hourly_price_usd",
+    "estimated_cost_usd",
+    "price_scope",
+    "vcpus",
+    "memory_gib",
+    "disk_gb",
+    "observed_vcpus",
+    "observed_memory_gib",
+    "observed_disk_gb",
+    "cpu_model",
+    "virtualization",
+    "country",
+    "region",
+    "city",
+    "egress_asn",
+    "job_parts",
+    "benchmark_run_id",
+    "source_run_sha",
+    "workload_app_version",
+    "task_signature",
+    "methodology_id",
+    "benchmark_source_url",
+    "price_date",
+    "price_source_url",
+    "cost_basis",
+    "lifecycle_included",
+    "workload_gap_count",
+    "color",
+    "replicate_index",
+    "task_count",
+    "observation_level",
+    "runtime_basis",
+}
+
+PHASE_FIELDS = {
+    "series_order",
+    "series_id",
+    "series_label",
+    "observed_date",
+    "generated_at",
+    "benchmark_run_id",
+    "source_run_sha",
+    "methodology_id",
+    "workload_app_version",
+    "task_signature",
+    "replicate_index",
+    "task_order",
+    "task_id",
+    "task_label",
+    "runtime_seconds",
+    "benchmark_source_url",
+    "color",
+}
+
+RUN_METADATA_FIELDS = {
+    "benchmark_run_id",
+    "generated_at",
+    "source_run_sha",
+    "methodology_id",
+    "workload_app_version",
+    "task_signature",
+    "target_vcpus",
+    "target_memory_gib",
+    "target_disk_gb",
+    "task_count",
+    "provider_result_count",
+    "replicate_indexed",
+    "runtime_basis",
+    "lifecycle_included",
+    "benchmark_source_url",
 }
 
 FIXED_RATE_SQL = f"""
@@ -223,6 +383,9 @@ select
   processor_rate_usd_per_unit_hour,
   memory_gib,
   memory_rate_usd_per_gib_hour,
+  processor_meter,
+  memory_meter,
+  billing_basis_label,
   index_cohort = '{FIXED_COHORT}' as fixed_cohort_member,
   date_role,
   change_precision,
@@ -236,41 +399,89 @@ where recency_rank = 1
 order by price_usd_per_hour, series_label
 """
 
-SAME_JOB_SQL = """
-select
-  series_order,
-  point_order,
-  series_id,
-  series_label,
-  observed_date,
-  generated_at,
-  runtime_seconds,
-  hourly_price_usd,
-  runtime_seconds / 3600.0 * hourly_price_usd as estimated_cost_usd,
-  price_scope,
-  vcpus,
-  memory_gib,
-  disk_gb,
-  job_parts,
-  benchmark_run_id,
-  benchmark_source_url,
-  price_date,
-  price_source_url,
-  note,
-  color
-from sandbox_benchmark_runs
+WORKLOAD_BATCH_SQL = """
+select *
+from sandbox_benchmark_batches
 order by series_order, generated_at, point_order
 """
 
-SAME_JOB_SUMMARY_SQL = """
-with summary as (
+WORKLOAD_LATEST_REPLICATES_SQL = """
+with latest as (
+  select max(generated_at) as generated_at
+  from sandbox_benchmark_replicates
+)
+select replicates.*
+from sandbox_benchmark_replicates replicates
+join latest on latest.generated_at = replicates.generated_at
+order by series_order, replicate_index
+"""
+
+WORKLOAD_LATEST_PHASES_SQL = """
+with latest as (
+  select max(generated_at) as generated_at
+  from sandbox_benchmark_phases
+)
+select phases.*
+from sandbox_benchmark_phases phases
+join latest on latest.generated_at = phases.generated_at
+order by series_order, replicate_index, task_order
+"""
+
+WORKLOAD_PHASE_SUMMARY_SQL = """
+select
+  series_order,
+  series_id,
+  series_label,
+  color,
+  task_order,
+  task_id,
+  task_label,
+  count(*) as sample_count,
+  median(runtime_seconds) as median_runtime_seconds,
+  avg(runtime_seconds) as average_runtime_seconds,
+  percentile_cont(0.25) within group (
+    order by runtime_seconds
+  ) as p25_runtime_seconds,
+  percentile_cont(0.75) within group (
+    order by runtime_seconds
+  ) as p75_runtime_seconds,
+  min(runtime_seconds) as minimum_runtime_seconds,
+  max(runtime_seconds) as maximum_runtime_seconds
+from sandbox_workload_latest_phases
+group by
+  series_order,
+  series_id,
+  series_label,
+  color,
+  task_order,
+  task_id,
+  task_label
+order by series_order, task_order
+"""
+
+WORKLOAD_SUMMARY_SQL = """
+with source_slots as (
+  select count(distinct replicate_index) as source_replicate_slot_count
+  from sandbox_workload_latest_replicates
+),
+summary as (
   select
     series_order,
     series_id,
     series_label,
     color,
     count(*) as result_count,
+    max(source_slots.source_replicate_slot_count)
+      as source_replicate_slot_count,
+    max(source_slots.source_replicate_slot_count) - count(*)
+      as incomplete_replicate_count,
+    cast(count(*) as double)
+      / cast(max(source_slots.source_replicate_slot_count) as double)
+      as replicate_completion_ratio,
     count(distinct benchmark_run_id) as run_count,
+    min(benchmark_run_id) as benchmark_run_id,
+    min(methodology_id) as methodology_id,
+    min(source_run_sha) as source_run_sha,
     min(generated_at) as first_generated_at,
     max(generated_at) as latest_generated_at,
     median(runtime_seconds) as median_runtime_seconds,
@@ -293,7 +504,8 @@ with summary as (
     ) as p75_estimated_cost_usd,
     min(estimated_cost_usd) as minimum_estimated_cost_usd,
     max(estimated_cost_usd) as maximum_estimated_cost_usd
-  from sandbox_same_job_cost
+  from sandbox_workload_latest_replicates
+  cross join source_slots
   group by series_order, series_id, series_label, color
 )
 select
@@ -302,7 +514,13 @@ select
   summary.series_label,
   summary.color,
   summary.result_count,
+  summary.source_replicate_slot_count,
+  summary.incomplete_replicate_count,
+  summary.replicate_completion_ratio,
   summary.run_count,
+  summary.benchmark_run_id,
+  summary.methodology_id,
+  summary.source_run_sha,
   summary.first_generated_at,
   summary.latest_generated_at,
   summary.median_runtime_seconds,
@@ -335,7 +553,13 @@ group by
   summary.series_label,
   summary.color,
   summary.result_count,
+  summary.source_replicate_slot_count,
+  summary.incomplete_replicate_count,
+  summary.replicate_completion_ratio,
   summary.run_count,
+  summary.benchmark_run_id,
+  summary.methodology_id,
+  summary.source_run_sha,
   summary.first_generated_at,
   summary.latest_generated_at,
   summary.median_runtime_seconds,
@@ -577,14 +801,29 @@ select *
 from sandbox_fixed_rate
 order by observed_date
 """,
-    "same-job-cost": """
+    "workload-batch-history": """
 select *
-from sandbox_same_job_cost
+from sandbox_workload_batch_history
 order by series_order, generated_at, point_order
 """,
-    "same-job-summary": """
+    "workload-latest-replicates": """
 select *
-from sandbox_same_job_summary
+from sandbox_workload_latest_replicates
+order by series_order, replicate_index
+""",
+    "workload-latest-phases": """
+select *
+from sandbox_workload_latest_phases
+order by series_order, replicate_index, task_order
+""",
+    "workload-phase-summary": """
+select *
+from sandbox_workload_phase_summary
+order by series_order, task_order
+""",
+    "workload-summary": """
+select *
+from sandbox_workload_service_summary
 order by median_runtime_seconds, median_estimated_cost_usd
 """,
     "gpu-daily-coverage": """
@@ -632,7 +871,7 @@ def validate_evidence(
     )
     _require_schema(
         benchmarks_payload,
-        "sandbox_benchmark_observation_v1",
+        "sandbox_benchmark_observation_v2",
         benchmark_path,
     )
     _require_schema(
@@ -642,18 +881,41 @@ def validate_evidence(
     )
 
     prices = _validate_prices(prices_payload.get("rows"))
-    benchmarks = _validate_benchmarks(benchmarks_payload.get("rows"), prices)
-    _validate_source_manifest(source_manifest, benchmarks)
+    batches = _validate_batches(benchmarks_payload.get("batch_rows"), prices)
+    replicates = _validate_replicates(
+        benchmarks_payload.get("replicate_rows"),
+        prices,
+        batches,
+    )
+    phases = _validate_phases(
+        benchmarks_payload.get("phase_rows"),
+        replicates,
+    )
+    run_metadata = _validate_run_metadata(
+        benchmarks_payload.get("run_metadata"),
+        batches,
+        replicates,
+    )
+    _validate_source_manifest(source_manifest, batches)
 
     return {
         "price_observation_count": len(prices),
         "price_service_count": len({row["series_id"] for row in prices}),
-        "benchmark_result_count": len(benchmarks),
-        "benchmark_service_count": len({row["series_id"] for row in benchmarks}),
-        "benchmark_run_count": len({row["benchmark_run_id"] for row in benchmarks}),
+        "benchmark_batch_count": len(batches),
+        "benchmark_replicate_count": len(replicates),
+        "benchmark_phase_count": len(phases),
+        "benchmark_service_count": len({row["series_id"] for row in batches}),
+        "benchmark_run_count": len({row["benchmark_run_id"] for row in batches}),
         "benchmark_calendar_day_count": len(
-            {row["observed_date"] for row in benchmarks}
+            {row["observed_date"] for row in batches}
         ),
+        "benchmark_methodology_count": len(
+            {row["methodology_id"] for row in run_metadata}
+        ),
+        "latest_replicate_run_id": max(
+            run_metadata,
+            key=lambda row: row["generated_at"],
+        )["benchmark_run_id"],
         "fixed_members": sorted(
             {
                 row["series_id"]
@@ -683,8 +945,11 @@ def build_sandbox_cost(
     prices_payload = _read_local_json(price_path)
     benchmarks_payload = _read_local_json(benchmark_path)
     source_manifest = _read_local_json(source_manifest_path)
-    price_rows = list(prices_payload["rows"])
-    benchmark_rows = list(benchmarks_payload["rows"])
+    price_rows = _validate_prices(prices_payload["rows"])
+    batch_rows = list(benchmarks_payload["batch_rows"])
+    replicate_rows = list(benchmarks_payload["replicate_rows"])
+    phase_rows = list(benchmarks_payload["phase_rows"])
+    run_metadata = list(benchmarks_payload["run_metadata"])
 
     bronze_refs = {
         "hourly_price_evidence": _join(
@@ -703,12 +968,30 @@ def build_sandbox_cost(
         "sandbox_hourly_prices": _join(
             output_root, "silver/sandbox_hourly_prices.parquet"
         ),
-        "sandbox_benchmark_runs": _join(
-            output_root, "silver/sandbox_benchmark_runs.parquet"
+        "sandbox_benchmark_batches": _join(
+            output_root, "silver/sandbox_benchmark_batches.parquet"
+        ),
+        "sandbox_benchmark_replicates": _join(
+            output_root, "silver/sandbox_benchmark_replicates.parquet"
+        ),
+        "sandbox_benchmark_phases": _join(
+            output_root, "silver/sandbox_benchmark_phases.parquet"
+        ),
+        "sandbox_benchmark_run_metadata": _join(
+            output_root, "silver/sandbox_benchmark_run_metadata.parquet"
         ),
     }
     write_parquet_rows(silver_refs["sandbox_hourly_prices"], price_rows)
-    write_parquet_rows(silver_refs["sandbox_benchmark_runs"], benchmark_rows)
+    write_parquet_rows(silver_refs["sandbox_benchmark_batches"], batch_rows)
+    write_parquet_rows(
+        silver_refs["sandbox_benchmark_replicates"],
+        replicate_rows,
+    )
+    write_parquet_rows(silver_refs["sandbox_benchmark_phases"], phase_rows)
+    write_parquet_rows(
+        silver_refs["sandbox_benchmark_run_metadata"],
+        run_metadata,
+    )
 
     hourly_gold = _canonicalize_numeric_rows(
         query_tables(
@@ -738,18 +1021,58 @@ order by series_order, observed_date, point_order
             sql=CURRENT_RATES_SQL,
         )
     )
-    same_job = _canonicalize_numeric_rows(
+    workload_batches = _canonicalize_numeric_rows(
         query_tables(
-            tables={"sandbox_benchmark_runs": silver_refs["sandbox_benchmark_runs"]},
-            sql=SAME_JOB_SQL,
+            tables={
+                "sandbox_benchmark_batches": silver_refs[
+                    "sandbox_benchmark_batches"
+                ]
+            },
+            sql=WORKLOAD_BATCH_SQL,
         )
     )
-    same_job_ref = _join(output_root, "gold/sandbox_same_job_cost.parquet")
-    write_parquet_rows(same_job_ref, same_job)
-    same_job_summary = _canonicalize_numeric_rows(
+    latest_replicates = _canonicalize_numeric_rows(
         query_tables(
-            tables={"sandbox_same_job_cost": same_job_ref},
-            sql=SAME_JOB_SUMMARY_SQL,
+            tables={
+                "sandbox_benchmark_replicates": silver_refs[
+                    "sandbox_benchmark_replicates"
+                ]
+            },
+            sql=WORKLOAD_LATEST_REPLICATES_SQL,
+        )
+    )
+    latest_phases = _canonicalize_numeric_rows(
+        query_tables(
+            tables={
+                "sandbox_benchmark_phases": silver_refs[
+                    "sandbox_benchmark_phases"
+                ]
+            },
+            sql=WORKLOAD_LATEST_PHASES_SQL,
+        )
+    )
+    latest_replicates_ref = _join(
+        output_root,
+        "gold/sandbox_workload_latest_replicates.parquet",
+    )
+    latest_phases_ref = _join(
+        output_root,
+        "gold/sandbox_workload_latest_phases.parquet",
+    )
+    write_parquet_rows(latest_replicates_ref, latest_replicates)
+    write_parquet_rows(latest_phases_ref, latest_phases)
+    workload_summary = _canonicalize_numeric_rows(
+        query_tables(
+            tables={
+                "sandbox_workload_latest_replicates": latest_replicates_ref
+            },
+            sql=WORKLOAD_SUMMARY_SQL,
+        )
+    )
+    phase_summary = _canonicalize_numeric_rows(
+        query_tables(
+            tables={"sandbox_workload_latest_phases": latest_phases_ref},
+            sql=WORKLOAD_PHASE_SUMMARY_SQL,
         )
     )
 
@@ -806,9 +1129,16 @@ order by series_order, observed_date, point_order
         "sandbox_fixed_rate": _join(
             output_root, "gold/sandbox_fixed_rate.parquet"
         ),
-        "sandbox_same_job_cost": same_job_ref,
-        "sandbox_same_job_summary": _join(
-            output_root, "gold/sandbox_same_job_summary.parquet"
+        "sandbox_workload_batch_history": _join(
+            output_root, "gold/sandbox_workload_batch_history.parquet"
+        ),
+        "sandbox_workload_latest_replicates": latest_replicates_ref,
+        "sandbox_workload_latest_phases": latest_phases_ref,
+        "sandbox_workload_phase_summary": _join(
+            output_root, "gold/sandbox_workload_phase_summary.parquet"
+        ),
+        "sandbox_workload_service_summary": _join(
+            output_root, "gold/sandbox_workload_service_summary.parquet"
         ),
         "gpu_h100_daily_coverage": _join(
             output_root, "gold/gpu_h100_daily_coverage.parquet"
@@ -824,7 +1154,18 @@ order by series_order, observed_date, point_order
     write_parquet_rows(table_refs["sandbox_price_events"], price_events)
     write_parquet_rows(table_refs["sandbox_current_rates"], current_rates)
     write_parquet_rows(table_refs["sandbox_fixed_rate"], fixed_rate)
-    write_parquet_rows(table_refs["sandbox_same_job_summary"], same_job_summary)
+    write_parquet_rows(
+        table_refs["sandbox_workload_batch_history"],
+        workload_batches,
+    )
+    write_parquet_rows(
+        table_refs["sandbox_workload_phase_summary"],
+        phase_summary,
+    )
+    write_parquet_rows(
+        table_refs["sandbox_workload_service_summary"],
+        workload_summary,
+    )
     write_parquet_rows(
         table_refs["gpu_h100_daily_coverage"], gpu_daily_coverage
     )
@@ -839,8 +1180,15 @@ order by series_order, observed_date, point_order
         "fixed_rate": _sha256_text(FIXED_RATE_SQL),
         "price_events": _sha256_text(PRICE_EVENTS_SQL),
         "current_rates": _sha256_text(CURRENT_RATES_SQL),
-        "same_job_cost": _sha256_text(SAME_JOB_SQL),
-        "same_job_summary": _sha256_text(SAME_JOB_SUMMARY_SQL),
+        "workload_batches": _sha256_text(WORKLOAD_BATCH_SQL),
+        "workload_replicates": _sha256_text(
+            WORKLOAD_LATEST_REPLICATES_SQL
+        ),
+        "workload_phases": _sha256_text(WORKLOAD_LATEST_PHASES_SQL),
+        "workload_phase_summary": _sha256_text(
+            WORKLOAD_PHASE_SUMMARY_SQL
+        ),
+        "workload_summary": _sha256_text(WORKLOAD_SUMMARY_SQL),
         "gpu_daily_coverage": _sha256_text(GPU_DAILY_COVERAGE_SQL),
         "gpu_eligible_history": _sha256_text(GPU_ELIGIBLE_HISTORY_SQL),
         "combined": _sha256_text(COMBINED_COMMON_START_SQL),
@@ -872,14 +1220,17 @@ order by series_order, observed_date, point_order
         "sandbox_price_events": len(price_events),
         "sandbox_current_rates": len(current_rates),
         "sandbox_fixed_rate": len(fixed_rate),
-        "sandbox_same_job_cost": len(same_job),
-        "sandbox_same_job_summary": len(same_job_summary),
+        "sandbox_workload_batch_history": len(workload_batches),
+        "sandbox_workload_latest_replicates": len(latest_replicates),
+        "sandbox_workload_latest_phases": len(latest_phases),
+        "sandbox_workload_phase_summary": len(phase_summary),
+        "sandbox_workload_service_summary": len(workload_summary),
         "gpu_h100_daily_coverage": len(gpu_daily_coverage),
         "gpu_h100_eligible_history": len(gpu_eligible_history),
         "sandbox_gpu_cpu_common_start": len(combined),
     }
     manifest = {
-        "manifest_version": "sandbox_cost_gold_v2",
+        "manifest_version": "sandbox_cost_gold_v3",
         "build_id": build_id,
         "built_at": built_at,
         "input_hash": input_hash,
@@ -896,8 +1247,11 @@ order by series_order, observed_date, point_order
             "fixed_rate": FIXED_RATE_QUERY_ID,
             "price_events": PRICE_EVENTS_QUERY_ID,
             "current_rates": CURRENT_RATES_QUERY_ID,
-            "same_job_cost": SAME_JOB_QUERY_ID,
-            "same_job_summary": SAME_JOB_SUMMARY_QUERY_ID,
+            "workload_batches": WORKLOAD_BATCH_QUERY_ID,
+            "workload_replicates": WORKLOAD_REPLICATE_QUERY_ID,
+            "workload_phases": WORKLOAD_PHASE_QUERY_ID,
+            "workload_phase_summary": WORKLOAD_PHASE_SUMMARY_QUERY_ID,
+            "workload_summary": WORKLOAD_SUMMARY_QUERY_ID,
             "gpu_daily_coverage": GPU_DAILY_QUERY_ID,
             "gpu_eligible_history": GPU_ELIGIBLE_QUERY_ID,
             "combined": COMBINED_QUERY_ID,
@@ -927,8 +1281,12 @@ order by series_order, observed_date, point_order
                 fixed_rate=fixed_rate,
                 price_events=price_events,
                 current_rates=current_rates,
-                same_job=same_job,
-                same_job_summary=same_job_summary,
+                workload_batches=workload_batches,
+                latest_replicates=latest_replicates,
+                latest_phases=latest_phases,
+                phase_summary=phase_summary,
+                workload_summary=workload_summary,
+                run_metadata=run_metadata,
                 gpu_daily_coverage=gpu_daily_coverage,
                 combined=combined,
             ),
@@ -995,92 +1353,310 @@ def _validate_prices(raw_rows: Any) -> list[dict[str, Any]]:
                 f"Bad hourly-price formula for {row['series_id']} on "
                 f"{row['observed_date']}: expected {expected}, found {observed}"
             )
-        rows.append(row)
+        try:
+            metering = RATE_METERING[str(row["series_id"])]
+        except KeyError as error:
+            raise ValueError(
+                f"Missing rate-metering semantics for {row['series_id']}"
+            ) from error
+        rows.append({**row, **metering})
     return rows
 
 
-def _validate_benchmarks(
+def _validate_batches(
     raw_rows: Any,
     prices: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     if not isinstance(raw_rows, list) or not raw_rows:
-        raise ValueError("Benchmark evidence must contain a non-empty rows list")
+        raise ValueError("Benchmark evidence must contain non-empty batch_rows")
     rows: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
-    by_price_series: dict[str, list[dict[str, Any]]] = {}
-    for price in prices:
-        by_price_series.setdefault(price["series_id"], []).append(price)
-    for series_rows in by_price_series.values():
-        series_rows.sort(key=lambda row: row["observed_date"])
 
     for position, raw in enumerate(raw_rows):
-        row = _strict_row(raw, BENCHMARK_FIELDS, f"benchmark row {position}")
-        _parse_date(row["observed_date"], f"benchmark row {position}")
-        _parse_timestamp(row["generated_at"], f"benchmark row {position}")
+        row = _strict_row(raw, BATCH_FIELDS, f"benchmark batch {position}")
+        _parse_date(row["observed_date"], f"benchmark batch {position}")
+        _parse_timestamp(row["generated_at"], f"benchmark batch {position}")
         key = (
             row["series_id"],
             row["generated_at"],
             row["benchmark_run_id"],
         )
         if key in seen:
-            raise ValueError(f"Duplicate benchmark result: {key}")
+            raise ValueError(f"Duplicate benchmark batch: {key}")
         seen.add(key)
-        shape = {
-            "vcpus": int(row["vcpus"]),
-            "memory_gib": int(row["memory_gib"]),
-            "disk_gb": int(row["disk_gb"]),
-        }
-        if shape != TARGET_SHAPE:
-            raise ValueError(
-                f"Incompatible machine shape in {row['benchmark_run_id']}: {shape}"
-            )
-        if int(row["job_parts"]) != 10:
-            raise ValueError(
-                f"Expected ten job parts in {row['benchmark_run_id']} "
-                f"for {row['series_id']}"
-            )
-        if row["price_scope"] != "processor_and_memory_only":
-            raise ValueError(f"Unexpected price scope in benchmark result {key}")
-        if not str(row["benchmark_source_url"]).startswith(
-            "https://github.com/starslingdev/hpc-sandbox-benchmarks/"
-        ):
-            raise ValueError(f"Missing benchmark source URL for {key}")
-        expected_cost = (
-            Decimal(str(row["runtime_seconds"]))
-            * Decimal(str(row["hourly_price_usd"]))
-            / Decimal("3600")
-        )
-        observed_cost = Decimal(str(row["estimated_cost_usd"]))
-        if abs(expected_cost - observed_cost) > Decimal("0.000000001"):
-            raise ValueError(
-                f"Bad same-job cost for {row['series_id']} on "
-                f"{row['generated_at']}: expected {expected_cost}, "
-                f"found {observed_cost}"
-            )
-        price_series = RUNTIME_PRICE_SERIES.get(row["series_id"])
-        if price_series is None:
-            raise ValueError(f"Unknown benchmark service {row['series_id']!r}")
-        candidates = [
-            price
-            for price in by_price_series.get(price_series, [])
-            if price["observed_date"] <= row["observed_date"]
-        ]
-        if not candidates:
-            raise ValueError(
-                f"No {price_series} price at or before {row['observed_date']}"
-            )
-        price = candidates[-1]
-        if row["price_date"] != price["observed_date"]:
-            raise ValueError(f"Wrong price date retained for benchmark result {key}")
-        if row["price_source_url"] != price["source_url"]:
-            raise ValueError(f"Wrong price source retained for benchmark result {key}")
-        if abs(
-            Decimal(str(row["hourly_price_usd"]))
-            - Decimal(str(price["price_usd_per_hour"]))
-        ) > Decimal("0.000001"):
-            raise ValueError(f"Wrong hourly price retained for benchmark result {key}")
+        _validate_workload_cost_row(row, prices, key)
+        if row["observation_level"] != "provider_batch_summary":
+            raise ValueError(f"Unexpected batch observation level for {key}")
+        if row["runtime_basis"] != "sum_of_published_task_means":
+            raise ValueError(f"Unexpected batch runtime basis for {key}")
+        if int(row["replicate_count"]) < 1:
+            raise ValueError(f"Invalid replicate count for {key}")
+        if bool(row["replicate_data_available"]) and int(row["replicate_count"]) < 2:
+            raise ValueError(f"Indexed replicate batch is too small for {key}")
         rows.append(row)
     return rows
+
+
+def _validate_replicates(
+    raw_rows: Any,
+    prices: list[dict[str, Any]],
+    batches: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not isinstance(raw_rows, list) or not raw_rows:
+        raise ValueError("Benchmark evidence must contain non-empty replicate_rows")
+    batch_keys = {
+        (row["series_id"], row["benchmark_run_id"]): row for row in batches
+    }
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int]] = set()
+    for position, raw in enumerate(raw_rows):
+        row = _strict_row(raw, REPLICATE_FIELDS, f"benchmark replicate {position}")
+        _parse_date(row["observed_date"], f"benchmark replicate {position}")
+        _parse_timestamp(row["generated_at"], f"benchmark replicate {position}")
+        key = (
+            row["series_id"],
+            row["benchmark_run_id"],
+            int(row["replicate_index"]),
+        )
+        if key in seen:
+            raise ValueError(f"Duplicate benchmark replicate: {key}")
+        seen.add(key)
+        _validate_workload_cost_row(row, prices, key)
+        if row["observation_level"] != "aligned_job_replicate":
+            raise ValueError(f"Unexpected replicate observation level for {key}")
+        if (
+            row["runtime_basis"]
+            != "sum_of_ten_task_samples_with_same_replicate_index"
+        ):
+            raise ValueError(f"Unexpected replicate runtime basis for {key}")
+        if int(row["task_count"]) != 10:
+            raise ValueError(f"Expected ten phases for replicate {key}")
+        batch = batch_keys.get((row["series_id"], row["benchmark_run_id"]))
+        if batch is None:
+            raise ValueError(f"Replicate has no retained batch: {key}")
+        for field in (
+            "methodology_id",
+            "source_run_sha",
+            "task_signature",
+            "workload_app_version",
+        ):
+            if row[field] != batch[field]:
+                raise ValueError(f"Replicate {key} disagrees with its batch on {field}")
+        rows.append(row)
+
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(
+            (row["series_id"], row["benchmark_run_id"]),
+            [],
+        ).append(row)
+    for key, batch in batch_keys.items():
+        if not batch["replicate_data_available"]:
+            continue
+        group = grouped.get(key, [])
+        if len(group) != int(batch["replicate_count"]):
+            raise ValueError(
+                f"Replicate count does not match batch {key}: "
+                f"{len(group)} != {batch['replicate_count']}"
+            )
+        mean_runtime = sum(float(row["runtime_seconds"]) for row in group) / len(
+            group
+        )
+        if abs(mean_runtime - float(batch["runtime_seconds"])) > 0.000001:
+            raise ValueError(f"Replicate mean does not reproduce batch runtime {key}")
+    return rows
+
+
+def _validate_phases(
+    raw_rows: Any,
+    replicates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not isinstance(raw_rows, list) or not raw_rows:
+        raise ValueError("Benchmark evidence must contain non-empty phase_rows")
+    replicate_keys = {
+        (
+            row["series_id"],
+            row["benchmark_run_id"],
+            int(row["replicate_index"]),
+        ): row
+        for row in replicates
+    }
+    grouped: dict[tuple[str, str, int], list[dict[str, Any]]] = {}
+    seen: set[tuple[str, str, int, str]] = set()
+    rows: list[dict[str, Any]] = []
+    for position, raw in enumerate(raw_rows):
+        row = _strict_row(raw, PHASE_FIELDS, f"benchmark phase {position}")
+        key = (
+            row["series_id"],
+            row["benchmark_run_id"],
+            int(row["replicate_index"]),
+            row["task_id"],
+        )
+        if key in seen:
+            raise ValueError(f"Duplicate benchmark phase: {key}")
+        seen.add(key)
+        replicate_key = key[:3]
+        replicate = replicate_keys.get(replicate_key)
+        if replicate is None:
+            raise ValueError(f"Phase has no retained replicate: {key}")
+        if not 1 <= int(row["task_order"]) <= 10:
+            raise ValueError(f"Invalid task order for phase {key}")
+        if float(row["runtime_seconds"]) <= 0:
+            raise ValueError(f"Invalid phase runtime for {key}")
+        for field in (
+            "methodology_id",
+            "source_run_sha",
+            "task_signature",
+            "workload_app_version",
+        ):
+            if row[field] != replicate[field]:
+                raise ValueError(f"Phase {key} disagrees with its replicate on {field}")
+        grouped.setdefault(replicate_key, []).append(row)
+        rows.append(row)
+    for key, replicate in replicate_keys.items():
+        phases = grouped.get(key, [])
+        if len(phases) != 10 or {int(row["task_order"]) for row in phases} != set(
+            range(1, 11)
+        ):
+            raise ValueError(f"Replicate {key} does not contain ten unique phases")
+        total = sum(float(row["runtime_seconds"]) for row in phases)
+        if abs(total - float(replicate["runtime_seconds"])) > 0.000001:
+            raise ValueError(f"Phase total does not reproduce replicate runtime {key}")
+    return rows
+
+
+def _validate_run_metadata(
+    raw_rows: Any,
+    batches: list[dict[str, Any]],
+    replicates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not isinstance(raw_rows, list) or not raw_rows:
+        raise ValueError("Benchmark evidence must contain non-empty run_metadata")
+    batch_runs: dict[str, list[dict[str, Any]]] = {}
+    replicate_runs = {row["benchmark_run_id"] for row in replicates}
+    for row in batches:
+        batch_runs.setdefault(row["benchmark_run_id"], []).append(row)
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for position, raw in enumerate(raw_rows):
+        row = _strict_row(raw, RUN_METADATA_FIELDS, f"run metadata {position}")
+        run_id = row["benchmark_run_id"]
+        if run_id in seen:
+            raise ValueError(f"Duplicate run metadata: {run_id}")
+        seen.add(run_id)
+        _parse_timestamp(row["generated_at"], f"run metadata {position}")
+        members = batch_runs.get(run_id)
+        if not members:
+            raise ValueError(f"Run metadata has no retained batch: {run_id}")
+        if int(row["provider_result_count"]) != len(members):
+            raise ValueError(f"Wrong provider count in run metadata {run_id}")
+        if bool(row["replicate_indexed"]) != (run_id in replicate_runs):
+            raise ValueError(f"Wrong replicate-indexed status in run metadata {run_id}")
+        for member in members:
+            for field in (
+                "methodology_id",
+                "source_run_sha",
+                "task_signature",
+                "workload_app_version",
+            ):
+                if row[field] != member[field]:
+                    raise ValueError(
+                        f"Run metadata {run_id} disagrees with batch on {field}"
+                    )
+        rows.append(row)
+    if seen != set(batch_runs):
+        raise ValueError("Run metadata does not cover every retained batch run")
+    return rows
+
+
+def _validate_workload_cost_row(
+    row: dict[str, Any],
+    prices: list[dict[str, Any]],
+    key: tuple[Any, ...],
+) -> None:
+    shape = {
+        "vcpus": int(row["vcpus"]),
+        "memory_gib": int(row["memory_gib"]),
+        "disk_gb": int(row["disk_gb"]),
+    }
+    if shape != TARGET_SHAPE:
+        raise ValueError(
+            f"Incompatible machine shape in {row['benchmark_run_id']}: {shape}"
+        )
+    if int(row["job_parts"]) != 10:
+        raise ValueError(
+            f"Expected ten job parts in {row['benchmark_run_id']} "
+            f"for {row['series_id']}"
+        )
+    if row["price_scope"] != "processor_and_memory_only":
+        raise ValueError(f"Unexpected price scope in benchmark result {key}")
+    if row["cost_basis"] != "public_rate_card_unmetered":
+        raise ValueError(f"Unexpected cost basis in benchmark result {key}")
+    if row["lifecycle_included"] is not False:
+        raise ValueError(f"Lifecycle must remain explicitly excluded for {key}")
+    if float(row["runtime_seconds"]) <= 0:
+        raise ValueError(f"Invalid workload runtime for {key}")
+    if int(row["workload_gap_count"]) < 0:
+        raise ValueError(f"Invalid workload gap count for {key}")
+    if len(str(row["source_run_sha"])) != 40:
+        raise ValueError(f"Missing source run SHA for {key}")
+    if len(str(row["task_signature"])) != 64:
+        raise ValueError(f"Missing task signature for {key}")
+    if len(str(row["workload_app_version"])) != 40:
+        raise ValueError(f"Missing workload version for {key}")
+    if not str(row["methodology_id"]).startswith("starsling-better-auth-"):
+        raise ValueError(f"Invalid methodology ID for {key}")
+    if not str(row["benchmark_source_url"]).startswith(
+        "https://github.com/starslingdev/hpc-sandbox-benchmarks/"
+    ):
+        raise ValueError(f"Missing benchmark source URL for {key}")
+    if row["observed_vcpus"] is not None and abs(
+        float(row["observed_vcpus"]) - TARGET_SHAPE["vcpus"]
+    ) > 0.01:
+        raise ValueError(f"Observed vCPU mismatch for {key}")
+    if row["observed_memory_gib"] is not None and abs(
+        float(row["observed_memory_gib"]) - TARGET_SHAPE["memory_gib"]
+    ) > TARGET_SHAPE["memory_gib"] * 0.1:
+        raise ValueError(f"Observed memory mismatch for {key}")
+
+    expected_cost = (
+        Decimal(str(row["runtime_seconds"]))
+        * Decimal(str(row["hourly_price_usd"]))
+        / Decimal("3600")
+    )
+    observed_cost = Decimal(str(row["estimated_cost_usd"]))
+    if abs(expected_cost - observed_cost) > Decimal("0.000000001"):
+        raise ValueError(
+            f"Bad workload cost for {row['series_id']} on "
+            f"{row['generated_at']}: expected {expected_cost}, "
+            f"found {observed_cost}"
+        )
+    price_series = RUNTIME_PRICE_SERIES.get(row["series_id"])
+    if price_series is None:
+        raise ValueError(f"Unknown benchmark service {row['series_id']!r}")
+    candidates = sorted(
+        (
+            price
+            for price in prices
+            if price["series_id"] == price_series
+            and price["observed_date"] <= row["observed_date"]
+        ),
+        key=lambda price: price["observed_date"],
+    )
+    if not candidates:
+        raise ValueError(
+            f"No {price_series} price at or before {row['observed_date']}"
+        )
+    price = candidates[-1]
+    if row["price_date"] != price["observed_date"]:
+        raise ValueError(f"Wrong price date retained for benchmark result {key}")
+    if row["price_source_url"] != price["source_url"]:
+        raise ValueError(f"Wrong price source retained for benchmark result {key}")
+    if abs(
+        Decimal(str(row["hourly_price_usd"]))
+        - Decimal(str(price["price_usd_per_hour"]))
+    ) > Decimal("0.000001"):
+        raise ValueError(f"Wrong hourly price retained for benchmark result {key}")
 
 
 def _validate_source_manifest(
@@ -1117,8 +1693,12 @@ def _public_payload(
     fixed_rate: list[dict[str, Any]],
     price_events: list[dict[str, Any]],
     current_rates: list[dict[str, Any]],
-    same_job: list[dict[str, Any]],
-    same_job_summary: list[dict[str, Any]],
+    workload_batches: list[dict[str, Any]],
+    latest_replicates: list[dict[str, Any]],
+    latest_phases: list[dict[str, Any]],
+    phase_summary: list[dict[str, Any]],
+    workload_summary: list[dict[str, Any]],
+    run_metadata: list[dict[str, Any]],
     gpu_daily_coverage: list[dict[str, Any]],
     combined: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -1128,11 +1708,12 @@ def _public_payload(
             "label": row["source_label"],
             "url": row["source_url"],
         }
-    for row in same_job:
+    for row in workload_batches:
         source_rows[row["benchmark_source_url"]] = {
-            "label": f"Benchmark run {row['benchmark_run_id']}",
+            "label": f"StarSling batch {row['benchmark_run_id']}",
             "url": row["benchmark_source_url"],
         }
+    latest_run = max(run_metadata, key=lambda row: row["generated_at"])
     return {
         "manifest": {
             "manifest_version": manifest["manifest_version"],
@@ -1157,11 +1738,18 @@ def _public_payload(
         },
         "hourly_price": {
             "title": (
-                "Advertised hourly rate for a four-vCPU-equivalent, "
-                "8 GiB sandbox"
+                "Public hourly cost scenario for four processors and "
+                "8 GiB of memory"
             ),
             "unit": "USD per hour",
             "rate_basis": "processor and memory rate card only",
+            "comparison_scope": (
+                "One hour at the audited four-processor, 8 GiB target. "
+                "Actual-use meters assume those quantities are used for the "
+                "full hour; reserved meters price the requested allocation. "
+                "CPU model, isolation, burst policy, and delivered performance "
+                "are not normalized by the rate series."
+            ),
             "methodology_version": SANDBOX_RATE_METHODOLOGY,
             "rows": hourly_rows,
             "current_cross_section": current_rates,
@@ -1170,21 +1758,66 @@ def _public_payload(
             "fixed_membership_average": fixed_rate,
             "price_events": price_events,
         },
-        "same_job_cost": {
+        "workload": {
             "title": (
-                "One workload: measured runtime and estimated "
+                "One CI workload: measured phase time and estimated "
                 "processor-and-memory cost"
             ),
             "benchmark": "StarSling HPC Sandbox Benchmark: Better Auth",
             "unit": "USD",
             "runtime_unit": "seconds",
             "cost_scope": "processor_and_memory_only",
-            "comparable_run_count": len(
-                {row["benchmark_run_id"] for row in same_job}
+            "cost_basis": "public_rate_card_unmetered",
+            "claim_scope": "descriptive_observed_batch",
+            "summary_statistics": [
+                "all_individual_jobs",
+                "median",
+                "p25",
+                "p75",
+            ],
+            "historical_comparability": "methodology_stratified",
+            "runtime_definition": (
+                "Guest wall time inside ten selected phase windows. Batch "
+                "history sums published task means; latest job rows sum "
+                "samples sharing one upstream replicate index."
             ),
-            "calendar_day_count": len({row["observed_date"] for row in same_job}),
-            "rows": same_job,
-            "service_summary": same_job_summary,
+            "replicate_runtime_basis": (
+                "sum_of_ten_task_samples_with_same_replicate_index"
+            ),
+            "lifecycle_included": False,
+            "excluded_time": [
+                "sandbox startup",
+                "sandbox teardown",
+                "retries",
+                "unmeasured warm-up and task preparation",
+            ],
+            "source_batch_count": len(
+                {row["benchmark_run_id"] for row in workload_batches}
+            ),
+            "calendar_day_count": len(
+                {row["observed_date"] for row in workload_batches}
+            ),
+            "methodology_generation_count": len(
+                {row["methodology_id"] for row in run_metadata}
+            ),
+            "latest_run": latest_run,
+            "latest_replicate_count": len(latest_replicates),
+            "latest_source_replicate_slot_count": max(
+                (
+                    int(row["source_replicate_slot_count"])
+                    for row in workload_summary
+                ),
+                default=0,
+            ),
+            "latest_incomplete_replicate_count": sum(
+                int(row["incomplete_replicate_count"])
+                for row in workload_summary
+            ),
+            "latest_phase_count": len(latest_phases),
+            "batch_history": workload_batches,
+            "latest_replicates": latest_replicates,
+            "phase_summary": phase_summary,
+            "service_summary": workload_summary,
         },
         "combined": {
             "title": "GPU and sandbox rates from a common starting point",

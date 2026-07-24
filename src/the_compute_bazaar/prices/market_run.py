@@ -231,7 +231,7 @@ def run_market_hourly(
             "sandbox_hourly_price_series", 0
         ),
         "sandbox_benchmark_results": sandbox_cost.row_counts.get(
-            "sandbox_same_job_cost", 0
+            "sandbox_workload_latest_replicates", 0
         ),
     }
     checks["gold"] = (

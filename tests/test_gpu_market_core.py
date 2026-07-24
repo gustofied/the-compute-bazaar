@@ -2576,7 +2576,7 @@ class GoldQueryTests(unittest.TestCase):
         self.assertGreater(result.row_counts["listings"], 0)
         self.assertEqual(result.checks["sandbox_cost"], "warning")
         self.assertEqual(result.row_counts["sandbox_price_observations"], 33)
-        self.assertEqual(result.row_counts["sandbox_benchmark_results"], 38)
+        self.assertEqual(result.row_counts["sandbox_benchmark_results"], 69)
         self.assertEqual(
             result.dashboard_output_refs["sandbox_cost"],
             f"{dashboard_root}/sandbox-cost.json",
@@ -2587,10 +2587,7 @@ class GoldQueryTests(unittest.TestCase):
             ],
             33,
         )
-        self.assertEqual(
-            sandbox_public["same_job_cost"]["comparable_run_count"],
-            7,
-        )
+        self.assertEqual(sandbox_public["workload"]["source_batch_count"], 7)
 
 
 def _offer(

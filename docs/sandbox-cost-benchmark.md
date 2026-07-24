@@ -1,31 +1,66 @@
 # Sandbox Cost Benchmark
 
 The sandbox-cost benchmark is a maintained Compute Bazaar data product used by
-the AdamSioud Compute article. It answers three separate questions:
+the AdamSioud Compute article. It answers three deliberately separate
+questions:
 
-1. What advertised processor-and-memory rate do public sandbox services quote
-   for one normalized machine?
-2. How long did one public software workload take on comparable machines, and
-   what processor-and-memory cost does that runtime imply?
-3. How did a coverage-eligible H100 observed quote benchmark and the sandbox
-   cohort rate move after one declared common starting point?
+1. What public processor-and-memory rate is quoted for the audited
+   four-processor, 8 GiB sandbox request?
+2. How long did one pinned software workload spend inside its measured phases,
+   and what marginal processor-and-memory cost does that measured time imply?
+3. How did a coverage-qualified H100 advertised-price benchmark and a fixed
+   sandbox rate-card cohort move after one declared common starting point?
 
-The distinctions are deliberate. An advertised rate is not an invoice, a
-runtime is not a rate, an estimated cost is not a charge, provider count is not
-volume, and an observed offer is not an executed transaction.
+These are not interchangeable measurements. An advertised rate is not an
+invoice. Measured phase time is not lifecycle latency or CPU-busy time. A
+rate-card estimate is not an observed charge. Provider count is not volume. An
+observed offer is not an executed transaction.
+
+## Measurement Contract
+
+The current public workload claim is intentionally narrow:
+
+```text
+workload
+  pinned Better Auth commit and ten task arguments
+
+allocation target
+  four schedulable processors, 8 GiB memory, 40 GB disk
+
+latest observation
+  69 complete fresh-sandbox jobs from 72 source replicate slots
+  11 or 12 complete jobs per service
+  690 retained phase measurements
+
+reported statistic
+  every job, service median, and service p25-p75 range
+
+measured clock
+  guest wall time inside ten selected task windows sharing one replicate index
+
+not measured
+  startup, teardown, retries, queueing, client-visible latency,
+  unmeasured task preparation, reliability, or billed duration
+```
+
+This is a descriptive observed-batch comparison. It is not an SLA, a
+tail-latency study, or a universal provider ranking.
 
 ## Maintained Data Path
 
 ```text
 official price pages + archived observations
-  -> versioned sandbox price evidence
+  -> reviewed immutable price evidence
+
 StarSling public benchmark repository
-  -> commit-pinned raw captures
-  -> shape and schema validation
+  -> commit-pinned source files
+  -> workload, shape, sample, and schema validation
+
 Compute Bazaar GPU benchmark history
   -> retained observed-offer prints and provider coverage
+
 all compatible inputs
-  -> bronze source records
+  -> bronze evidence
   -> silver normalized Parquet
   -> named DataFusion queries
   -> gold publication tables
@@ -33,13 +68,13 @@ all compatible inputs
   -> AdamSioud D3 article
 ```
 
-Canonical reviewed sandbox evidence is packaged under:
+Canonical reviewed evidence lives under:
 
 ```text
 src/the_compute_bazaar/sandbox_cost/evidence/
 ```
 
-Runtime output below the selected `--output-root` is:
+Runtime output below `--output-root` is:
 
 ```text
 bronze/hourly-price-evidence.json
@@ -48,91 +83,68 @@ bronze/source-manifest.json
 bronze/hpc-sandbox-benchmarks/commit=<sha>/...
 
 silver/sandbox_hourly_prices.parquet
-silver/sandbox_benchmark_runs.parquet
+silver/sandbox_benchmark_batches.parquet
+silver/sandbox_benchmark_replicates.parquet
+silver/sandbox_benchmark_phases.parquet
+silver/sandbox_benchmark_run_metadata.parquet
 silver/gpu_benchmark_history.parquet
 
 gold/sandbox_hourly_price_series.parquet
 gold/sandbox_price_events.parquet
 gold/sandbox_current_rates.parquet
 gold/sandbox_fixed_rate.parquet
-gold/sandbox_same_job_cost.parquet
-gold/sandbox_same_job_summary.parquet
+gold/sandbox_workload_batch_history.parquet
+gold/sandbox_workload_latest_replicates.parquet
+gold/sandbox_workload_latest_phases.parquet
+gold/sandbox_workload_phase_summary.parquet
+gold/sandbox_workload_service_summary.parquet
 gold/gpu_h100_daily_coverage.parquet
 gold/gpu_h100_eligible_history.parquet
 gold/sandbox_gpu_cpu_common_start.parquet
 gold/manifest.json
 ```
 
-Bronze preserves evidence and retrieval metadata. Silver standardizes units,
-dates, timing precision, machine shape, runtime, and provenance. Gold contains
-publication-ready products computed by named, hashed DataFusion queries.
+Bronze preserves source records, retrieval metadata, and checksums. Silver
+standardizes units, machine shapes, timestamps, observation levels, timing
+bases, and provenance. Gold contains publication-ready products computed by
+named, hashed DataFusion queries.
 
-## Evidence and Scope
+## Price Evidence
 
-The reviewed price record contains 33 observations for 11 services from
-November 2024 through 24 July 2026. Every observation retains its original URL,
-date meaning, source class, normalization inputs, and explanatory note.
+The reviewed record contains 33 observations for 11 services from November
+2024 through 24 July 2026. Every observation retains:
 
-The normalized sandbox shape is:
+- original and archived URLs where available;
+- observed, published, or provider-stated effective date;
+- original processor billing unit and requested quantity;
+- memory rate and normalized arithmetic;
+- source class and a review note.
 
-```text
-4 vCPU equivalent
-8 GiB memory
-```
+The public title says “four processors and 8 GiB” because that is the allocation
+requested and observed by the audited benchmark adapters. It does not assert
+that four CPU units are physically equivalent across vendors. CPU model,
+architecture, isolation, burst policy, tenancy, and delivered work remain
+different.
 
-Where a public service bills physical cores, the evidence uses two vCPUs per
-physical core. This is a shape conversion, not a claim that every processor,
-host, scheduler, or tenancy model performs identically. The workload comparison
-also requires a 40 GB disk because that is part of the public StarSling target
-specification.
+The normalized number is a one-hour comparison scenario, not one universal
+billing contract. Silver and gold rows retain structured metering semantics:
 
-The current StarSling source contains 38 service results from seven compatible
-runs over five calendar days, 19-23 July 2026. Repeated intraday runs are
-retained. Earlier runs used two processors; they remain in commit-pinned bronze
-and are rejected before silver.
+- reserved meters price the requested capacity while the sandbox runs;
+- active-use meters assume the stated processor or memory quantity is consumed
+  for the full hour;
+- Modal prices the higher of requested or actual use;
+- Blaxel prices active runtime through allocated memory while CPU scales with
+  that memory.
 
-The retained GPU input currently contains 3,121 benchmark-family prints,
-including 887 H100 prints over 37 calendar days. Most early H100 prints had one
-visible provider. Only 30 hourly prints on 23-24 July meet the current
-10-provider comparison gate. The daily coverage table retains both eligible and
-excluded history with an explicit reason.
+The article shows a plain billing-basis label beside every current quote. A
+future rate revision must update both the arithmetic and its metering semantics.
 
-## Source Hierarchy
-
-The project prefers inputs in this order:
-
-1. executed and verifiable transactions, when available under a usable data
-   agreement;
-2. executable offers with availability;
-3. observed provider and marketplace offers;
-4. official public rate cards;
-5. archived rate cards and bounded observations;
-6. clearly labeled expert assumptions.
-
-The current H100 product is level 3: observed advertised offers. The current
-sandbox product is levels 4 and 5: public and archived rate cards. Neither is
-represented as a transaction benchmark.
-
-This hierarchy follows the general data-sufficiency and transparency direction
-in the [IOSCO Principles for Financial
-Benchmarks](https://www.iosco.org/library/pubdocs/pdf/IOSCOPD415.pdf), but
-Compute Bazaar does not claim IOSCO compliance or settlement-grade status.
-
-Useful external reference points:
-
-- [Ornn](https://data.ornn.com/faq) describes a volume-weighted index based on
-  executed transactions. That is a stronger input class than the project
-  currently possesses.
-- [Silicon Data](https://www.silicondata.com/products/silicon-index) separates
-  market segments, standardizes machine and rental terms, and publishes daily
-  indices.
-- [Compute Index](https://www.computeindex.dev/) explicitly labels its product
-  as lowest advertised price and presents availability separately.
-
-These products are not treated as interchangeable validation targets. Their
-input classes, coverage, segmentation, and aggregation methods differ.
-
-## Sandbox Rate Methodology
+This distinction matters for Modal. Modal documents `cpu` as physical cores and
+bills by the higher of requested or actual usage. The audited StarSling adapter
+passes four Modal CPU units for the benchmark target, so the evidence prices
+four requested units rather than silently rewriting the adapter request as two.
+See [Modal sandbox resources and
+pricing](https://modal.com/docs/guide/sandbox-resources).
 
 The normalized advertised rate is:
 
@@ -141,82 +153,188 @@ processor quantity * processor rate per unit-hour
   + memory GiB * memory rate per GiB-hour
 ```
 
-Eight services form the fixed 2026 comparison cohort:
+It excludes storage, network, subscription plans, credits, minimum billing
+increments, idle retention, and provider-specific discounts.
+
+## Fixed Rate-Card Cohort
+
+Eight services form the fixed 2026 cohort:
 
 ```text
 E2B, Daytona, Vercel, Novita, Modal, Runloop, Blaxel, Fly Sprites
 ```
 
-At each actual cohort price-event date, the latest known quote for every member
-is carried forward. A row is emitted only when all eight members are present.
-The primary statistics are:
+At each actual price-event date, the latest known quote for every member is
+carried forward. A row is emitted only when all eight members are present:
 
 ```text
-headline       = median(normalized member rates)
-dispersion     = p25 to p75 normalized member rates
-secondary      = arithmetic mean(normalized member rates)
+headline       median(normalized member rates)
+dispersion     p25 to p75 normalized member rates
+secondary      arithmetic mean(normalized member rates)
 ```
 
-The median is less sensitive than the mean to one unusually expensive or cheap
-rate card. The p25-p75 interval reports the middle half of the cross-section.
-This follows the robust-statistics rationale documented by
-[NIST](https://www.itl.nist.gov/div898/handbook/eda/section3/eda356.htm).
-No member is silently removed as an outlier.
+The median reduces sensitivity to one unusually high or low rate card. The
+p25-p75 interval reports the middle half of the cross-section. No service is
+silently discarded as an outlier. The 11-service current cross-section is
+published separately so discovery can expand without rewriting cohort history.
 
-The current cross-section retains all 11 comparable services. It is shown
-separately from the fixed cohort so new services can improve current discovery
-without rewriting historical membership.
-
-Each dated observation has one of these meanings:
+Date meanings remain explicit:
 
 - `effective`: the provider states when the rate took effect;
-- `published`: the provider states when an update was published;
-- `observed`: the date on which the quote was captured;
-- `between_observations`: the quote changed between checks, so only the first
-  later observation is known;
-- `same_quote`: a later source review confirmed the same quote.
+- `published`: the provider states when the update was published;
+- `observed`: the date on which a source review found the quote;
+- `between_observations`: only the first later observation is known;
+- `same_quote`: a later review confirmed the unchanged quote.
 
-The gold `sandbox_price_events` table contains only actual price changes and
-links every change to its evidence.
+## Workload Evidence Levels
 
-## One Workload Methodology
+The StarSling source is pinned to commit
+`c7c9abf328430e2b5a01b0a4f57863c0fdd87641`. The accepted Better Auth
+workload keeps the same app commit, ten task IDs, task arguments, and target
+shape.
 
-Same-job runtime is:
+The retained evidence has three levels:
 
-```text
-sum of the ten published Better Auth mean task times
-```
+### Phase
 
-Estimated processor-and-memory cost is:
-
-```text
-runtime_seconds / 3600 * matching normalized hourly rate
-```
-
-The matching rate is the latest evidence at or before the run date. The
-estimate excludes storage, network, plans, credits, retries, startup, teardown,
-idle time, and work outside the ten tasks.
-
-Gold retains all 38 raw service results. A second gold table summarizes each of
-the six service variants:
+The latest source batch exposes 690 retained task samples:
 
 ```text
-runtime       median, mean, p25, p75, minimum, maximum
-cost          median, mean, p25, p75, minimum, maximum
-provenance    result count, run count, first and latest run
-frontier      lower-left non-dominated median runtime/cost points
+6 service variants
+* 11 or 12 complete replicate-indexed sandboxes
+* 10 task phases
 ```
 
-The article therefore uses one price-performance scatter:
+Phase rows let the article show whether clone, install, build, lint, or
+type-check work dominates. A displayed phase share is descriptive: the phase
+median divided by the sum of the ten phase medians for that service.
 
-- circles are raw runs;
-- diamonds are service medians;
-- horizontal and vertical whiskers are the middle 50%;
-- the dashed lower-left frontier identifies services not dominated on both
-  median runtime and median estimated cost.
+### Individual job
 
-The frontier is descriptive, not a ranking of reliability, features, startup
-latency, networking, security, or total bill.
+An individual job is reconstructed only when all ten task metrics have the same
+upstream replicate index. The duration is wall time inside each selected phase,
+not CPU utilization:
+
+```text
+measured_phase_seconds(job) =
+  sum(ten task samples with the same provider and replicate index)
+```
+
+The extractor rejects missing, duplicate, or misaligned task indices. The
+latest batch exposes 12 source replicate slots per service, or 72 total. It
+contains 69 complete jobs; three slots have no complete ten-phase result and are
+not imputed. These rows power the primary runtime distribution and the service
+median/p25/p75 summaries.
+
+The ten windows do not all measure the same resource. Clone and cold install
+include network and registry wait. Build, lint, and type-check are mostly local
+work, but two lint tasks have unmeasured preparation and most steady-state tasks
+have an unmeasured warm-up. This is a developer-workload comparison, not a pure
+CPU benchmark.
+
+### Provider-batch mean
+
+The public source currently retains seven compatible batches over five calendar
+days, 19-23 July 2026. They contain 38 provider-batch means:
+
+```text
+batch_active_seconds =
+  sum(ten published task means)
+```
+
+Repeated intraday batches remain distinct. The seven batches use six upstream
+harness commits. The Better Auth app and task signature stayed pinned, but a
+harness change is still a methodology boundary. The article therefore draws no
+continuous trend line across different methodology IDs. Earlier two-processor
+runs remain in commit-pinned bronze and are rejected before silver.
+
+## Statistical Treatment
+
+The latest comparison publishes:
+
+- all 69 complete individual jobs;
+- 69-of-72 completion accounting;
+- median measured phase time per service;
+- p25-p75 measured phase time per service;
+- minimum, maximum, and arithmetic mean in the gold table;
+- the same descriptive summaries for the marginal cost estimate.
+
+With 11-12 complete jobs per service, medians and interquartile ranges are useful
+descriptions. The sample is too small for a stable p95, SLA claim, or narrow
+confidence-bound ranking. No outlier is removed.
+
+This follows the general direction of reproducible cloud benchmarking:
+
+- [StarSling's methodology](https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/c7c9abf328430e2b5a01b0a4f57863c0fdd87641/docs/methodology.md)
+  separates between-sandbox replicates from within-sandbox passes and treats
+  lifecycle as its own dimension.
+- [SeBS](https://spcl.inf.ethz.ch/Publications/.pdf/sebs_middleware_21.pdf)
+  separates benchmark, provider, and client times, distinguishes cold and warm
+  execution, retains variation, and sizes samples against non-parametric
+  confidence intervals.
+- [SPEC Cloud IaaS](https://open.spec.org/cloud_iaas2016/docs/faq/faq.html)
+  treats provisioning time as a separate cloud metric.
+- The [Methodological Principles for Reproducible Performance
+  Evaluation](https://atlarge-research.com/pdfs/TSE_2018_Cloud_Benchmarking_Methodology.pdf)
+  emphasize technical reproducibility, explicit measures, repeated
+  experiments, and claim reproducibility under opaque cloud variation.
+
+The current result is deliberately presented below those stronger inferential
+standards rather than borrowing their language without their sample design.
+
+## Marginal Compute Estimate
+
+For every retained job or batch:
+
+```text
+estimated_processor_and_memory_cost =
+  measured_phase_seconds / 3600
+  * matching_public_hourly_rate
+```
+
+The matching rate is the latest reviewed evidence at or before the benchmark
+date. The estimate is a marginal rate-card model. It is not the provider's
+observed bill and does not include:
+
+- sandbox startup or teardown;
+- queueing, retries, or failed attempts;
+- unmeasured preparation around two lint tasks;
+- storage, network, plans, credits, or minimum billing;
+- idle retention or the difference between requested and actual usage.
+
+The public article uses “marginal estimate,” not “job cost,” for this reason.
+
+## Lifecycle V2
+
+The next runtime experiment should remain separate from the measured-phase
+study.
+For each fresh sandbox and provider it should record:
+
+```text
+t0  client sends create request
+t1  create call resolves
+t2  first command is ready
+t3  pinned workload begins
+t4  pinned workload ends
+t5  teardown request completes
+
+provisioning latency    t2 - t0
+workload wall time      t4 - t3
+client-visible time     t4 - t0
+teardown latency        t5 - t4
+success rate            successful jobs / attempted jobs
+observed billed time    provider billing export, when available
+```
+
+Cold and warm/pool-backed execution must be separate experiments. Concurrency
+must be an explicit treatment, not an incidental side effect. Runs should pin
+region, image, workload commit, task arguments, requested shape, adapter
+version, and harness commit. Provider order should be rotated or randomized
+across repeated time blocks to reduce time-of-day confounding.
+
+The first publication can remain descriptive. A stronger ranking should add
+enough independent batches under one methodology to report uncertainty around
+the median and to study between-batch variation.
 
 ## GPU and Sandbox Common Start
 
@@ -230,9 +348,8 @@ provider_count >= 10
 benchmark_usd_gpu_hr > 0
 ```
 
-For each eligible hourly H100 print, the query carries forward the latest
-fixed-cohort sandbox rate. The first eligible H100 timestamp is the common
-start:
+For each eligible hourly H100 print, DataFusion carries forward the latest
+fixed-cohort sandbox rate. The first eligible H100 timestamp is the base:
 
 ```text
 gpu_base_100 =
@@ -242,60 +359,66 @@ sandbox_base_100 =
   sandbox_fixed_cohort_median / sandbox_median_at_common_start * 100
 ```
 
-The H100 and sandbox p25-p75 bands are rebased by their respective starting
-headline values. They are observed cross-sectional price dispersion, not
-confidence intervals.
+Each p25-p75 band is rebased by its own headline value. The bands are
+cross-sectional price dispersion, not confidence intervals. Raw GPU dollars
+and sandbox dollars are never placed on one axis.
 
-The price ratio is:
+This exploratory view can show relative advertised-price movement, dispersion,
+coverage, and the ratio of the two hourly rate cards. It cannot show executed
+transactions, demand, capacity, volume, utilization, causality, equal work, or
+a full customer invoice.
 
-```text
-sandbox_hours_per_h100_gpu_hour =
-  h100_advertised_usd_per_gpu_hour / sandbox_median_usd_per_hour
-```
+Sandbox throughput could affect GPU utilization in a controlled agent or
+reinforcement-learning workload, but this dataset cannot test that hypothesis.
+A future experiment should hold the model, GPU, and request mix fixed; vary
+sandbox concurrency; and record queue time, completions, failures, plus
+[NVIDIA DCGM](https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html)
+SM activity, tensor activity, memory activity, and power over the same job
+window. Provider scale claims are not substituted for those measurements.
 
-The ratio is a rate-card comparison. It does not mean that one H100 GPU-hour and
-that number of sandbox hours perform equivalent work.
+## Evidence Hierarchy
 
-The combined view can show:
+The project prefers inputs in this order:
 
-- relative advertised-rate movement after broad H100 coverage begins;
-- cross-sectional price dispersion;
-- contributing-provider coverage;
-- the price ratio between the two normalized hourly rates.
+1. executed and verifiable transactions under a usable data agreement;
+2. executable offers with current availability;
+3. observed provider and marketplace offers;
+4. official public rate cards;
+5. archived rate cards and bounded observations;
+6. clearly labeled assumptions.
 
-It cannot show:
+The current H100 product is level 3. The sandbox rate product is levels 4 and
+5. Neither is represented as a transaction benchmark.
 
-- executed transaction prices or traded volume;
-- demand, utilization, or causality;
-- equal compute performance;
-- a full customer invoice;
-- a settlement-ready benchmark.
+Reference products are not treated as interchangeable targets:
 
-Sandbox concurrency can affect GPU utilization in reinforcement-learning
-systems. Modal describes environment throughput as a way to
-[keep GPUs fed](https://modal.com/blog/reinforcement-learning-infrastructure-problem).
-That engineering relationship is not measured by this dataset. Modal's
-millions-per-day claim, E2B's cumulative session claim, and Vercel's
-deployment-per-day claim have different units and scopes. They are not combined
-into a fabricated sandbox-volume series. Ornn documents a protected GPU
-utilization endpoint, but licensed data has not been incorporated.
+- [Ornn](https://data.ornn.com/faq) describes a volume-weighted index based on
+  executed transactions.
+- [Silicon Data](https://www.silicondata.com/products/silicon-index) separates
+  market segments and standardizes machine and rental terms.
+- [Compute Index](https://www.computeindex.dev/) labels lowest advertised
+  prices and availability separately.
 
 ## Determinism and Validation
 
 DataFusion-computed floats are canonicalized to 12 decimal places at the gold
-boundary. Query text hashes, source rows, source metadata, target shape,
-coverage gate, cohort membership, and precision are part of the build identity.
-Identical inputs therefore produce the same build ID and publication JSON.
+boundary. Query hashes, source rows, source metadata, shape, cohort membership,
+coverage gate, and precision are part of the build identity.
 
 The pipeline fails on:
 
-- unknown source or benchmark schema fields;
+- unknown source or benchmark fields;
 - missing required fields;
 - duplicate observations;
-- bad normalized-rate arithmetic;
-- changed values for an existing immutable run;
-- incompatible machine shapes;
-- missing source-manifest files;
+- bad rate arithmetic;
+- changed values for an existing immutable source run;
+- incompatible requested machine shapes;
+- implausible observed processor or memory shapes;
+- missing, duplicate, or misaligned replicate task samples;
+- phase totals that do not reproduce individual jobs;
+- job means that do not reproduce source batch means;
+- workload app, task argument, signature, or methodology drift;
+- missing source-manifest captures;
 - missing GPU provenance fields;
 - unknown allowlisted DataFusion query IDs.
 
@@ -307,7 +430,7 @@ Validate reviewed evidence:
 uv run sandbox-cost validate
 ```
 
-Build from the maintained Parquet GPU history:
+Build from maintained GPU history:
 
 ```sh
 uv run sandbox-cost build \
@@ -316,39 +439,33 @@ uv run sandbox-cost build \
   --gpu-history-ref data/sandbox-cost/silver/gpu_benchmark_history.parquet
 ```
 
-The builder also accepts the public dashboard `benchmark-history.json` contract:
-
-```sh
-uv run sandbox-cost build \
-  --output-root data/sandbox-cost \
-  --dashboard-output-root data/dashboard/compute-bazaar \
-  --gpu-history-ref data/dashboard/compute-bazaar/benchmark-history.json
-```
-
-Run an allowlisted query:
+Run an allowlisted DataFusion query:
 
 ```sh
 uv run sandbox-cost query \
   --output-root data/sandbox-cost \
-  --query combined-common-start \
+  --query workload-latest-replicates \
   --limit 25
 ```
 
-Available IDs:
+Available query IDs:
 
 ```text
 hourly-prices
 price-events
 current-rates
 fixed-rate
-same-job-cost
-same-job-summary
+workload-batch-history
+workload-latest-replicates
+workload-latest-phases
+workload-phase-summary
+workload-summary
 gpu-daily-coverage
 gpu-eligible-history
 combined-common-start
 ```
 
-Fetch the public StarSling source without changing reviewed evidence:
+Check the public StarSling source without changing reviewed evidence:
 
 ```sh
 uv run sandbox-cost refresh-benchmark \
@@ -357,8 +474,8 @@ uv run sandbox-cost refresh-benchmark \
   --check
 ```
 
-`--check` exits nonzero when compatible source evidence is new. Review the
-commit-pinned bronze capture before running:
+`--check` exits nonzero when compatible evidence is new. Review the
+commit-pinned bronze capture before promotion:
 
 ```sh
 uv run sandbox-cost refresh-benchmark \
@@ -367,33 +484,32 @@ uv run sandbox-cost refresh-benchmark \
   --update-evidence
 ```
 
-Never combine `--check` and `--update-evidence`. A historical merge fails if a
-source rewrites a known run.
+Never combine `--check` and `--update-evidence`. Historical source rewrites
+fail instead of silently changing prior observations.
 
 ## Recurrence
 
-Windmill `market_hourly` builds GPU gold, exports benchmark history, builds
-sandbox bronze/silver/gold, writes `sandbox-cost.json`, and publishes the market
-run manifest each hour. The sandbox price evidence changes only after a manual
-rate-card review; the workload evidence changes only after a reviewed
-StarSling refresh.
+Windmill `market_hourly` builds GPU gold, exports benchmark history, rebuilds
+the sandbox product, writes `sandbox-cost.json`, and publishes the market-run
+manifest each hour. Reviewed sandbox rates change only after a manual source
+audit. Workload evidence changes only after a reviewed StarSling promotion.
 
 `.github/workflows/sandbox-cost-sources.yml` runs daily and on demand. It
-validates canonical evidence, fetches StarSling at a resolved commit, detects
+validates evidence, resolves StarSling to an immutable commit, detects
 source/schema drift or new compatible runs, and runs focused tests. A failed
-check is a review request, not permission to publish new measurements.
+source check is a review request, not permission to publish.
 
-Public price pages do not expose one stable, semantically equivalent API.
-Manual review is therefore intentional:
+Manual price review is intentional:
 
-1. Open every current source URL.
-2. Verify billing basis, shape conversion, currency, and date meaning.
-3. Add an immutable observation. Do not replace history.
-4. Run validation, focused tests, and a deterministic build.
-5. Inspect the rate event, current-rate row, chart, table, and source link.
-6. Publish only after the methodology or cohort implications are reviewed.
+1. Open the current and archived source URLs.
+2. Verify billing unit, requested quantity, memory basis, currency, and date
+   meaning.
+3. Append an immutable observation; never replace history.
+4. Validate, build, and run focused tests.
+5. Inspect the event, current-rate row, chart, table, and source link.
+6. Publish only after reviewing methodology and cohort effects.
 
-## Publication
+## Publication and Verification
 
 The public-safe artifact is:
 
@@ -401,12 +517,8 @@ The public-safe artifact is:
 dashboard/compute-bazaar/sandbox-cost.json
 ```
 
-The public AdamSioud article prefers the configured CloudFront URL and falls
-back to its checked-in `exemplars/compute/sandbox-cost.json`. Localhost and
-`file:` previews intentionally prefer the checked-in artifact so visual QA does
-not silently read an older CDN object.
-
-Article sources:
+The AdamSioud article prefers CloudFront in production and keeps a checked-in
+fallback for local and failure-safe rendering:
 
 ```text
 external/AdamSioud/exemplars/compute/feeling_the_compute.html
@@ -414,29 +526,23 @@ external/AdamSioud/exemplars/compute/sandbox-cost.js
 external/AdamSioud/exemplars/compute/sandbox-cost.json
 ```
 
+Focused verification:
+
+```sh
+uv run python -m unittest \
+  tests.test_sandbox_cost \
+  tests.test_adamsioud -v
+
+node --check external/AdamSioud/exemplars/compute/sandbox-cost.js
+```
+
+Browser QA must cover desktop and mobile layout, no page-level horizontal
+overflow, pointer and keyboard tooltips, Safari/CSS-zoom pointer alignment,
+all price and workload audit rows, source links, fallback behavior, and browser
+console/network errors.
+
 Public page:
 
 ```text
 https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html
 ```
-
-## Focused Verification
-
-```sh
-uv run python -m unittest \
-  tests.test_sandbox_cost \
-  tests.test_adamsioud
-
-node --check external/AdamSioud/exemplars/compute/sandbox-cost.js
-```
-
-Browser QA must cover:
-
-- desktop and mobile layout;
-- no page-level horizontal overflow;
-- rate, workload, combined, and coverage charts;
-- pointer and keyboard tooltips;
-- Safari/CSS-zoom pointer alignment;
-- all 33 price observations and 38 workload results;
-- current-rate, rate-event, benchmark-run, and methodology links;
-- browser console errors.

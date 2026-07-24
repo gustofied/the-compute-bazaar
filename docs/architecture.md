@@ -21,9 +21,9 @@ flowchart LR
   Curia --> DataFusion["DataFusion SQL engine"]
   DataFusion --> Curia
   Curia --> Gold["S3 gold: Curia-authored market objects"]
-  SandboxBronze --> SandboxSilver["Sandbox silver: normalized prices and runs"]
+  SandboxBronze --> SandboxSilver["Sandbox silver: prices, batches, jobs, phases"]
   SandboxSilver --> DataFusion
-  DataFusion --> SandboxGold["Sandbox gold: hourly, same-job, base-100"]
+  DataFusion --> SandboxGold["Sandbox gold: rates, workload, base-100"]
   Bronze --> Workspace["Evidence workspace: raw files, notes, investigations"]
   Workspace --> Curia
 
@@ -154,14 +154,20 @@ memory rates plus the StarSling HPC Sandbox Benchmark:
 reviewed price evidence + commit-pinned public benchmark source
   -> bronze
   -> silver/sandbox_hourly_prices
-  -> silver/sandbox_benchmark_runs
+  -> silver/sandbox_benchmark_batches
+  -> silver/sandbox_benchmark_replicates
+  -> silver/sandbox_benchmark_phases
+  -> silver/sandbox_benchmark_run_metadata
   -> DataFusion methodology queries
   -> gold/sandbox_hourly_price_series
   -> gold/sandbox_price_events
   -> gold/sandbox_current_rates
   -> gold/sandbox_fixed_rate
-  -> gold/sandbox_same_job_cost
-  -> gold/sandbox_same_job_summary
+  -> gold/sandbox_workload_batch_history
+  -> gold/sandbox_workload_latest_replicates
+  -> gold/sandbox_workload_latest_phases
+  -> gold/sandbox_workload_phase_summary
+  -> gold/sandbox_workload_service_summary
   -> gold/gpu_h100_daily_coverage
   -> gold/gpu_h100_eligible_history
   -> gold/sandbox_gpu_cpu_common_start
@@ -170,10 +176,19 @@ reviewed price evidence + commit-pinned public benchmark source
 
 The fixed hourly rate uses the same eight services at every event date and
 publishes the cohort median and p25-p75 range; the arithmetic mean remains a
-secondary descriptive field. Same-job cost is
-`runtime_seconds / 3600 * hourly_price`, using only the processor-and-memory
-component. The workload summary retains all raw runs and calculates medians,
-interquartile ranges, and a descriptive lower-left runtime/cost frontier.
+secondary descriptive field. The latest workload product reconstructs 69
+complete individual jobs from 690 phase samples with aligned upstream replicate
+indices and reports three incomplete slots from 72 source slots. Its cost field
+is
+`measured_phase_seconds / 3600 * hourly_price`, using only the public
+processor-and-memory component. It is a marginal rate-card estimate, not a
+provider bill.
+
+The historical workload table retains 38 provider-batch means from seven source
+batches. Those batches cross six harness revisions, so history is stratified by
+methodology rather than rendered as one homogeneous performance series.
+Lifecycle latency, queueing, reliability, and concurrency remain separate
+future measurements.
 
 The combined GPU/sandbox series uses hourly H100 benchmark prints only when at
 least 10 providers contribute. It rebases both compatible series to 100 at the

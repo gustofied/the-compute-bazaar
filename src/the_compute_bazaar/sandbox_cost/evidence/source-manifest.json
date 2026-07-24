@@ -7,12 +7,6 @@
       "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/c7c9abf328430e2b5a01b0a4f57863c0fdd87641/data/dataset/index.json"
     },
     {
-      "path": "docs/methodology.md",
-      "sha256": "e030ff0a1c8ca090b4bb4e65865ce1da843ffaa0f205f37cd1ee599490ce4a64",
-      "size_bytes": 9323,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/c7c9abf328430e2b5a01b0a4f57863c0fdd87641/docs/methodology.md"
-    },
-    {
       "path": "data/dataset/runs/29061549181.json",
       "sha256": "9915a5650192b056a6eea24f3acd9cde0cb2c888f1845a317d375d65c381b4e8",
       "size_bytes": 7675,
@@ -89,13 +83,19 @@
       "sha256": "afe3c150c2193fb7198c0b36e292a1adad4a23d85cdd92f7b6e160b3b6ac3356",
       "size_bytes": 1785760,
       "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/c7c9abf328430e2b5a01b0a4f57863c0fdd87641/data/dataset/runs/30019301067.json"
+    },
+    {
+      "path": "docs/methodology.md",
+      "sha256": "e030ff0a1c8ca090b4bb4e65865ce1da843ffaa0f205f37cd1ee599490ce4a64",
+      "size_bytes": 9323,
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/c7c9abf328430e2b5a01b0a4f57863c0fdd87641/docs/methodology.md"
     }
   ],
   "notes": [
-    "Run files are immutable commit-pinned references. They are fetched into bronze during a network refresh.",
-    "Runs before 29692210375 are retained in the audit manifest to prove why unlike 2-vCPU shapes are rejected."
+    "Raw public files are captured under the commit-pinned bronze prefix.",
+    "Unlike machine shapes are retained in bronze and rejected before silver."
   ],
-  "retrieved_at": "2026-07-24T18:11:31Z",
+  "retrieved_at": "2026-07-24T22:54:29.927273+00:00",
   "schema_version": "sandbox_source_manifest_v1",
   "source_commit": "c7c9abf328430e2b5a01b0a4f57863c0fdd87641",
   "source_repository": "starslingdev/hpc-sandbox-benchmarks"

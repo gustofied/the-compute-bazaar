@@ -15,8 +15,11 @@ from the_compute_bazaar.sandbox_cost.pipeline import (
     validate_evidence,
 )
 from the_compute_bazaar.sandbox_cost.refresh import (
+    TASK_ARGUMENTS,
+    WORKLOAD_APP_VERSION,
     _merge_historical_rows,
     _parse_index,
+    extract_benchmark_evidence,
     extract_benchmark_rows,
 )
 
@@ -27,10 +30,14 @@ class SandboxCostEvidenceTests(unittest.TestCase):
 
         self.assertEqual(summary["price_observation_count"], 33)
         self.assertEqual(summary["price_service_count"], 11)
-        self.assertEqual(summary["benchmark_result_count"], 38)
+        self.assertEqual(summary["benchmark_batch_count"], 38)
+        self.assertEqual(summary["benchmark_replicate_count"], 69)
+        self.assertEqual(summary["benchmark_phase_count"], 690)
         self.assertEqual(summary["benchmark_service_count"], 6)
         self.assertEqual(summary["benchmark_run_count"], 7)
         self.assertEqual(summary["benchmark_calendar_day_count"], 5)
+        self.assertEqual(summary["benchmark_methodology_count"], 6)
+        self.assertEqual(summary["latest_replicate_run_id"], "30019301067")
         self.assertEqual(len(summary["fixed_members"]), 8)
 
     def test_duplicate_hourly_observation_is_rejected(self) -> None:
@@ -45,7 +52,7 @@ class SandboxCostEvidenceTests(unittest.TestCase):
 
     def test_incompatible_benchmark_shape_is_rejected(self) -> None:
         benchmarks = _read_local_json(BENCHMARK_EVIDENCE)
-        benchmarks["rows"][0]["vcpus"] = 2
+        benchmarks["batch_rows"][0]["vcpus"] = 2
 
         with tempfile.TemporaryDirectory() as tmpdir:
             benchmark_path = Path(tmpdir) / "benchmark.json"
@@ -133,17 +140,57 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertEqual(first.row_counts["sandbox_price_events"], 10)
         self.assertEqual(first.row_counts["sandbox_current_rates"], 11)
         self.assertEqual(first.row_counts["sandbox_fixed_rate"], 4)
-        self.assertEqual(first.row_counts["sandbox_same_job_cost"], 38)
-        self.assertEqual(first.row_counts["sandbox_same_job_summary"], 6)
+        self.assertEqual(first.row_counts["sandbox_workload_batch_history"], 38)
+        self.assertEqual(
+            first.row_counts["sandbox_workload_latest_replicates"],
+            69,
+        )
+        self.assertEqual(
+            first.row_counts["sandbox_workload_latest_phases"],
+            690,
+        )
+        self.assertEqual(
+            first.row_counts["sandbox_workload_phase_summary"],
+            60,
+        )
+        self.assertEqual(
+            first.row_counts["sandbox_workload_service_summary"],
+            6,
+        )
         self.assertEqual(first.row_counts["gpu_h100_daily_coverage"], 3)
         self.assertEqual(first.row_counts["gpu_h100_eligible_history"], 2)
         self.assertEqual(first.row_counts["sandbox_gpu_cpu_common_start"], 2)
         self.assertEqual(
-            public["manifest"]["manifest_version"], "sandbox_cost_gold_v2"
+            public["manifest"]["manifest_version"], "sandbox_cost_gold_v3"
         )
-        self.assertEqual(public["same_job_cost"]["comparable_run_count"], 7)
-        self.assertEqual(public["same_job_cost"]["calendar_day_count"], 5)
-        self.assertEqual(len(public["same_job_cost"]["service_summary"]), 6)
+        self.assertEqual(public["workload"]["source_batch_count"], 7)
+        self.assertEqual(public["workload"]["calendar_day_count"], 5)
+        self.assertEqual(public["workload"]["methodology_generation_count"], 6)
+        self.assertEqual(public["workload"]["latest_replicate_count"], 69)
+        self.assertEqual(
+            public["workload"]["latest_source_replicate_slot_count"],
+            12,
+        )
+        self.assertEqual(
+            public["workload"]["latest_incomplete_replicate_count"],
+            3,
+        )
+        self.assertEqual(public["workload"]["latest_phase_count"], 690)
+        self.assertFalse(public["workload"]["lifecycle_included"])
+        self.assertEqual(
+            public["workload"]["claim_scope"],
+            "descriptive_observed_batch",
+        )
+        self.assertEqual(
+            public["workload"]["historical_comparability"],
+            "methodology_stratified",
+        )
+        self.assertIn(
+            "CPU model",
+            public["hourly_price"]["comparison_scope"],
+        )
+        self.assertEqual(len(public["workload"]["service_summary"]), 6)
+        self.assertEqual(len(public["workload"]["phase_summary"]), 60)
         self.assertEqual(public["combined"]["rows"][0]["gpu_base_100"], 100.0)
         self.assertEqual(public["combined"]["rows"][1]["gpu_base_100"], 90.0)
         self.assertFalse(
@@ -157,7 +204,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
             public["hourly_price"]["fixed_cohort_rate"][-1][
                 "median_usd_per_hour"
             ],
-            0.40356,
+            0.4806,
         )
         self.assertEqual(
             public["hourly_price"]["fixed_cohort_rate"][-1]["p25_usd_per_hour"],
@@ -165,18 +212,62 @@ class SandboxCostPipelineTests(unittest.TestCase):
         )
         self.assertEqual(
             public["hourly_price"]["fixed_cohort_rate"][-1]["p75_usd_per_hour"],
-            0.6309,
+            0.6456,
+        )
+        modal = next(
+            row
+            for row in public["hourly_price"]["current_cross_section"]
+            if row["series_id"] == "modal"
+        )
+        self.assertEqual(modal["processor_quantity"], 4.0)
+        self.assertEqual(modal["price_usd_per_hour"], 0.759744)
+        self.assertEqual(
+            modal["processor_meter"],
+            "max_requested_or_actual",
+        )
+        self.assertEqual(
+            modal["billing_basis_label"],
+            "higher of requested or actual use",
+        )
+        fly = next(
+            row
+            for row in public["hourly_price"]["current_cross_section"]
+            if row["series_id"] == "fly-sprites"
+        )
+        self.assertEqual(fly["processor_meter"], "actual_usage")
+        self.assertEqual(fly["memory_meter"], "actual_usage")
+        self.assertEqual(
+            {
+                (
+                    row["series_id"],
+                    row["result_count"],
+                    row["source_replicate_slot_count"],
+                    row["incomplete_replicate_count"],
+                )
+                for row in public["workload"]["service_summary"]
+            },
+            {
+                ("blaxel", 11, 12, 1),
+                ("daytona-vm", 11, 12, 1),
+                ("e2b", 12, 12, 0),
+                ("modal-gvisor", 11, 12, 1),
+                ("modal-vm", 12, 12, 0),
+                ("novita", 12, 12, 0),
+            },
         )
         self.assertEqual(
             {
                 row["series_id"]
-                for row in public["same_job_cost"]["service_summary"]
+                for row in public["workload"]["service_summary"]
                 if row["on_lower_left_frontier"]
             },
             {"daytona-vm", "novita"},
         )
         self.assertTrue(
-            all(row["benchmark_source_url"] for row in public["same_job_cost"]["rows"])
+            all(
+                row["benchmark_source_url"]
+                for row in public["workload"]["batch_history"]
+            )
         )
         self.assertTrue(
             all(
@@ -199,7 +290,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertTrue(
             all(
                 row["benchmark_source_url"].startswith("https://")
-                for row in public["same_job_cost"]["rows"]
+                for row in public["workload"]["latest_replicates"]
             )
         )
         public_text = json.dumps(public)
@@ -292,8 +383,54 @@ class SandboxCostPipelineTests(unittest.TestCase):
         )
         self.assertEqual([row["point_order"] for row in rows], [1, 2])
 
+    def test_aligned_replicates_and_phases_are_retained(self) -> None:
+        prices = _read_local_json(PRICE_EVIDENCE)["rows"]
+        run = _benchmark_run(
+            "run-replicated",
+            "2026-07-23T17:00:00Z",
+            1.5,
+            replicate_values=[1.0, 2.0],
+        )
+
+        evidence = extract_benchmark_evidence(runs=[run], prices=prices)
+
+        self.assertEqual(len(evidence["batch_rows"]), 1)
+        self.assertEqual(len(evidence["replicate_rows"]), 2)
+        self.assertEqual(len(evidence["phase_rows"]), 20)
+        self.assertEqual(
+            [row["runtime_seconds"] for row in evidence["replicate_rows"]],
+            [10.0, 20.0],
+        )
+        self.assertEqual(evidence["batch_rows"][0]["runtime_seconds"], 15.0)
+        self.assertTrue(evidence["batch_rows"][0]["replicate_data_available"])
+        self.assertEqual(
+            evidence["batch_rows"][0]["observation_level"],
+            "provider_batch_summary",
+        )
+
+    def test_workload_version_drift_is_rejected(self) -> None:
+        prices = _read_local_json(PRICE_EVIDENCE)["rows"]
+        run = _benchmark_run("run-drift", "2026-07-23T17:00:00Z", 1.0)
+        run["providers"][0]["metrics"][0]["appVersion"] = "0" * 40
+
+        with self.assertRaisesRegex(ValueError, "Workload drift"):
+            extract_benchmark_evidence(runs=[run], prices=prices)
+
+    def test_misaligned_replicate_indices_are_rejected(self) -> None:
+        prices = _read_local_json(PRICE_EVIDENCE)["rows"]
+        run = _benchmark_run(
+            "run-misaligned",
+            "2026-07-23T17:00:00Z",
+            1.5,
+            replicate_values=[1.0, 2.0],
+        )
+        run["providers"][0]["metrics"][0]["replicates"][1]["index"] = 7
+
+        with self.assertRaisesRegex(ValueError, "not aligned"):
+            extract_benchmark_evidence(runs=[run], prices=prices)
+
     def test_historical_merge_rejects_changed_source_result(self) -> None:
-        row = _read_local_json(BENCHMARK_EVIDENCE)["rows"][0]
+        row = _read_local_json(BENCHMARK_EVIDENCE)["batch_rows"][0]
         changed = copy.deepcopy(row)
         changed["runtime_seconds"] += 1
 
@@ -320,24 +457,46 @@ def _benchmark_run(
     run_id: str,
     generated_at: str,
     task_mean: float,
+    *,
+    replicate_values: list[float] | None = None,
 ) -> dict[str, object]:
-    metrics = [
-        {
+    metrics = []
+    for argument, metric_id in TASK_ARGUMENTS:
+        values = replicate_values or [task_mean]
+        metric: dict[str, object] = {
             "sourceFile": "realworld-better-auth/pts_realworld-better-auth.xml",
-            "metricId": f"realworld_better_auth_task_{index}",
-            "aggregates": {"mean": task_mean},
+            "metricId": metric_id,
+            "appVersion": WORKLOAD_APP_VERSION,
+            "arguments": argument,
+            "aggregates": {
+                "mean": sum(values) / len(values),
+                "n": len(values),
+            },
+            "samples": values,
         }
-        for index in range(10)
-    ]
+        if replicate_values is not None:
+            metric["replicates"] = [
+                {"index": index, "samples": [value]}
+                for index, value in enumerate(values)
+            ]
+        metrics.append(metric)
     return {
         "runId": run_id,
         "generatedAt": generated_at,
+        "sha": "a" * 40,
         "targetSpec": {"vcpus": 4, "memoryGb": 8, "diskGb": 40},
         "providers": [
             {
                 "providerId": "e2b",
                 "validationStatus": "validated",
                 "specMatched": True,
+                "observedSpecs": {
+                    "vcpus": 4,
+                    "memoryGb": 8,
+                    "diskGb": 40,
+                    "cpuModel": "test",
+                },
+                "gaps": [],
                 "metrics": metrics,
             }
         ],
