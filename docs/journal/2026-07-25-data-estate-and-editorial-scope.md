@@ -228,6 +228,24 @@ uv run python -m unittest \
   stale projection warning. The snapshot was 0.046 hours old and the newest
   complete VM observation was 0.066 hours old.
 
+## Deployment Record
+
+- The self-hosted Windmill worker was rebuilt as
+  `compute-bazaar-windmill-worker:2026-07-25-article-cost-v6`, image digest
+  `6c1fba1a322b2617a74d36da7f42f787a3577a3418a1987fb1cd5bce79303ffb`.
+- The deployment recreated only `windmill_worker`; Windmill Postgres, server,
+  Caddy, and their volumes were left running.
+- The first production run using the new worker published gold run
+  `gold-market-20260725T210300-82f47f78` and sandbox publication build
+  `sandbox-cost-65f7252187d836d3` at `2026-07-25T21:04:11Z`.
+- The resulting payload contains 23 complete seven-vendor VM observations, 69
+  latest complete workload jobs, and the retained source/audit tables.
+- AdamSioud commit `beb0a36` was deployed successfully by GitHub Pages and
+  verified at
+  `https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html`.
+- Compute Bazaar commit `786f74f` records the DataFusion query revisions,
+  tests, documentation, and deployed article submodule pointer.
+
 ## Next Data Work
 
 - Add a manifest-oriented inventory command that can summarize the live S3
