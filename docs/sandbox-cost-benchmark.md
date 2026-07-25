@@ -696,6 +696,13 @@ external/AdamSioud/exemplars/compute/sandbox-cost.js
 external/AdamSioud/exemplars/compute/sandbox-cost.json
 ```
 
+The browser does not derive benchmark values from provider rows. DataFusion
+builds the gold median, mean, percentiles, and complete-hour history before the
+sanitized JSON export is written. The article renders that public gold product.
+Its dedicated VM chart uses the v2 observation window so consecutive hourly
+checks remain distinguishable; the adjacent overview keeps the longer
+VM-versus-sandbox time range for context.
+
 Focused verification:
 
 ```sh

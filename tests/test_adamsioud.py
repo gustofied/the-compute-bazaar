@@ -40,10 +40,12 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="sandbox-batch-table-body"', article)
         self.assertIn('id="sandbox-combined-chart"', article)
         self.assertIn('id="sandbox-coverage-chart"', article)
-        self.assertIn('src="./sandbox-cost.js?v=10"', article)
+        self.assertIn('id="vm-hourly-chart"', article)
+        self.assertIn('src="./sandbox-cost.js?v=11"', article)
         self.assertIn("sandbox-cost.json", script)
         self.assertIn('"sandbox_cost_gold_v4"', script)
         self.assertIn("effectiveCssZoom", script)
+        self.assertIn("createVmHourlyChart", script)
         self.assertIn("createRateHistoryChart", script)
         self.assertIn('id="vm-current-rates"', article)
         self.assertIn('id="vm-marketplace-rates"', article)
@@ -68,7 +70,7 @@ class AdamSioudServerTests(unittest.TestCase):
         )
         self.assertGreaterEqual(
             payload["manifest"]["row_counts"]["vm_capacity_observed_rate"],
-            1,
+            2,
         )
         self.assertEqual(
             payload["manifest"]["row_counts"]["vm_capacity_expanded_current"],
