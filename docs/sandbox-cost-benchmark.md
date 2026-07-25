@@ -389,6 +389,24 @@ This follows the general direction of reproducible cloud benchmarking:
 The current result is deliberately presented below those stronger inferential
 standards rather than borrowing their language without their sample design.
 
+## Publication Scope
+
+The maintained data products are broader than the public article. The article
+keeps one VM-versus-sandbox rate view and one latest same-workload
+distribution. Current vendor offers and historical provider-batch summaries
+remain available in collapsed audit tables.
+
+The separate seven-vendor hourly VM chart was removed from the essay while the
+series is young and mostly flat. Its hourly observations remain in silver,
+gold, and `sandbox-cost.json`. The historical provider-batch chart was also
+removed from the main narrative because its 38 rows cross six harness
+methodologies. Those rows remain queryable and auditable; they have not been
+collapsed, averaged by day, or deleted.
+
+This is a presentation decision, not a data-retention rule. A future frontend
+can rebuild either view from gold, provided it preserves the cohort and
+methodology boundaries documented here.
+
 ## Marginal Compute Estimate
 
 For every retained job or batch:

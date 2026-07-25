@@ -80,7 +80,9 @@ See [docs/architecture.md](docs/architecture.md) for the platform model and
 [docs/curia-engine.md](docs/curia-engine.md) for the Curia/DataFusion/Gold
 boundary. See [docs/stage1-review.md](docs/stage1-review.md) for the current
 review boundary and [docs/public-dashboard.md](docs/public-dashboard.md) for the
-public S3/CloudFront dashboard path.
+public S3/CloudFront dashboard path. The maintained
+[data inventory](docs/data-inventory.md) records each dataset's cadence,
+bronze/silver/gold location, history contract, and frontend use.
 
 ## Setup
 
