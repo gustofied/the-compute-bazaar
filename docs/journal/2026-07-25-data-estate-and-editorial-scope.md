@@ -340,7 +340,9 @@ was retained separately, and a DataFusion build consumed that generation.
   Caddy, and their volumes remained running.
 - The Windmill health endpoint reported a healthy database and two live
   workers. The deployed image also passed `sandbox-cost validate`.
-- The controlled daily benchmark schedule remains disabled. Enabling it still
-  requires an owned benchmark repository, protected provider credentials in
-  its `privileged` GitHub environment, and a fine-grained workflow-dispatch
-  token stored as a Windmill secret.
+- The controlled script is installed at
+  `f/compute-bazaar/sandbox_benchmark_daily`; its `06:30 UTC` daily schedule is
+  present and disabled. Enabling it still requires an owned benchmark
+  repository, protected provider credentials in its `privileged` GitHub
+  environment, and a fine-grained workflow-dispatch token stored as a
+  Windmill secret.
