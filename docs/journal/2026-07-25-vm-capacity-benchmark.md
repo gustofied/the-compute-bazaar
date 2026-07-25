@@ -480,3 +480,50 @@ The public article now distinguishes a partial source check from the latest
 complete benchmark timestamp. The hourly GitHub freshness monitor fails if the
 CloudFront snapshot or latest complete VM print exceeds 2.5 hours, or if either
 VM source group reports a partial check.
+
+## Generation Release Verification
+
+The generation-safe worker was deployed as:
+
+```text
+worker image    compute-bazaar-windmill-worker:2026-07-25-generations-v1
+image sha       5c2cbacad7a842d7ca3d6763fa12f26152934ca2edae061de4dccbed70b3a9b9
+market run      market-generation-release-20260725T0825
+VM source run   vm-capacity-20260725T082625Z
+discovery run   vm-discovery-20260725T082625Z
+gold build      sandbox-cost-e6ea6f9d2afe6f9e
+public built at 2026-07-25 08:27:26 UTC
+```
+
+The source runs wrote immutable silver generations under
+`silver/vm_capacity/generations/run_id=...` and
+`silver/vm_discovery/generations/run_id=...`. The DataFusion build wrote its
+publication tables under
+`silver/generations/build_id=sandbox-cost-e6ea6f9d2afe6f9e` and
+`gold/generations/build_id=sandbox-cost-e6ea6f9d2afe6f9e`, then updated the
+latest manifest. The public payload contains four complete seven-vendor
+observations at 06:27, 07:00, 08:00, and 08:26 UTC. The unchanged `$0.072/hour`
+median is intentionally a flat line, not a deduplicated single point.
+
+The current seven offers retained repaired observation metadata:
+
+```text
+provider group                       first observed  observation count
+Linode, Vultr, Scaleway, Azure       05:45 UTC       5
+AWS, OVHcloud, Oracle Cloud          06:27 UTC       4
+```
+
+The production `vm-observed-rate` DataFusion query followed the latest
+manifest and returned the same four rows. The public freshness command reported
+`status=ok`, snapshot age `0.042h`, VM age `0.059h`, and no partial source
+runs. The published article loaded `sandbox-cost.js?v=12`, showed four complete
+VM observations, rendered nine SVG charts, and produced no console warnings or
+errors. Desktop width was 1280 pixels with a 1280-pixel scroll width; mobile
+width was 390 pixels with a 390-pixel scroll width.
+
+The first manual execution of the new GitHub freshness workflow exposed a
+checkout defect before its actual assertion ran: the root checkout omitted the
+public `external/instinct-bench` workspace member, so `uv sync --locked`
+correctly rejected the incomplete workspace. The workflow now checks out that
+specific public submodule, matching the established source-audit workflow. The
+private AdamSioud submodule is not needed by the monitor and is not checked out.
