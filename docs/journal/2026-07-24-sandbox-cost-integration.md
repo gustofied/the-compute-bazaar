@@ -641,3 +641,37 @@ console had no warnings or errors.
 
 Release and live-hourly verification are recorded below when the public
 artifact and worker are promoted.
+
+## V5 Utilization Release Verification (25 July 2026)
+
+The methodology and article release was promoted through both repositories and
+the real recurring worker path:
+
+- AdamSioud methodology commit: `d85b6fe`;
+- AdamSioud live-fallback commit: `8f3e20a`;
+- Compute Bazaar pipeline commit: `36f3a96`;
+- worker image:
+  `sha256:fca0c3cfb6697c792024202956dc4eb8395f233429ad283ee0f7f5050c5ae849`;
+- Windmill run: `market-utilization-v5-20260725T142300Z`;
+- schedule: `f/compute-bazaar/market_hourly_hourly`, enabled hourly in UTC;
+- public build: `sandbox-cost-cf0271e6c58cf540`;
+- S3 object version: `DpSnkZJ_Ilrk3ISCWAY4QlkQYftrRW4I`;
+- public payload SHA-256:
+  `0812879356d072efb075cda3e2a8702e860ad30bcb04302e0f3b3b661fff5d60`.
+
+Every market-run check returned `ok`, including all 18 provider inputs,
+AutoMQ publication, VM capacity, VM discovery, DataFusion gold, dashboard
+export, and sandbox-cost. The run status was `success`. It retained 46 eligible
+H100 prints and added the eleventh complete seven-vendor VM observation while
+preserving all 69 benchmark jobs and 690 phase samples.
+
+The Windmill container validated eight reviewed utilization definitions and
+five public stages after recreation. The CloudFront variant used by
+`https://www.adamsioud.com` returned the exact heartbeat payload bytes, v5
+schema, `methodology_only_no_observed_values` claim scope, and the new
+11-observation VM history.
+
+The initial smoke attempt exposed an unrelated local Python service already
+bound to `127.0.0.1:8081`; the SSH tunnel had only bound the IPv6 loopback and
+the bootstrap client reached the wrong app. That service was left untouched.
+The release tunnel used `127.0.0.1:8082` and reached Windmill CE v1.728.1.
