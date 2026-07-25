@@ -9,6 +9,7 @@ from the_compute_bazaar.sandbox_cost.pipeline import (
     BENCHMARK_EVIDENCE,
     PRICE_EVIDENCE,
     SOURCE_MANIFEST,
+    UTILIZATION_EVIDENCE,
     _read_local_json,
     build_sandbox_cost,
     check_public_payload_freshness,
@@ -89,6 +90,8 @@ class SandboxCostEvidenceTests(unittest.TestCase):
         self.assertEqual(summary["benchmark_methodology_count"], 6)
         self.assertEqual(summary["latest_replicate_run_id"], "30019301067")
         self.assertEqual(len(summary["fixed_members"]), 8)
+        self.assertEqual(summary["utilization_metric_count"], 8)
+        self.assertEqual(summary["utilization_public_stage_count"], 5)
 
     def test_duplicate_hourly_observation_is_rejected(self) -> None:
         prices = _read_local_json(PRICE_EVIDENCE)
@@ -143,6 +146,19 @@ class SandboxCostEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Schema drift"):
             _parse_index(json.dumps(payload).encode())
 
+    def test_ambiguous_utilization_field_name_is_rejected(self) -> None:
+        methodology = _read_local_json(UTILIZATION_EVIDENCE)
+        methodology["rows"][0]["recommended_field_name"] = "utilization"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            methodology_path = Path(tmpdir) / "utilization.json"
+            methodology_path.write_text(
+                json.dumps(methodology),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "ambiguous field name"):
+                validate_evidence(utilization_path=methodology_path)
+
 
 class SandboxCostPipelineTests(unittest.TestCase):
     def test_build_is_deterministic_and_public_payload_retains_all_runs(self) -> None:
@@ -185,7 +201,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
 
         self.assertEqual(first.build_id, second.build_id)
         self.assertIn(
-            f"_manifests/sandbox_cost/date=2026-07-24/build_id={first.build_id}.json",
+            f"_manifests/sandbox_cost/date=2026-07-25/build_id={first.build_id}.json",
             first.manifest_ref,
         )
         self.assertTrue(
@@ -218,7 +234,11 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertEqual(first.row_counts["gpu_h100_daily_coverage"], 3)
         self.assertEqual(first.row_counts["gpu_h100_eligible_history"], 2)
         self.assertEqual(first.row_counts["sandbox_gpu_cpu_common_start"], 2)
-        self.assertEqual(public["manifest"]["manifest_version"], "sandbox_cost_gold_v4")
+        self.assertEqual(
+            first.row_counts["compute_utilization_public_ladder"],
+            5,
+        )
+        self.assertEqual(public["manifest"]["manifest_version"], "sandbox_cost_gold_v5")
         self.assertEqual(public["workload"]["source_batch_count"], 7)
         self.assertEqual(public["workload"]["calendar_day_count"], 5)
         self.assertEqual(public["workload"]["methodology_generation_count"], 6)
@@ -350,6 +370,13 @@ class SandboxCostPipelineTests(unittest.TestCase):
         public_text = json.dumps(public)
         self.assertNotIn("s3://", public_text)
         self.assertNotIn("source_run_ids", public["manifest"]["gpu_source_manifest"])
+        self.assertEqual(
+            [row["stage_id"] for row in public["utilization"]["rows"]],
+            ["available", "rented", "allocated", "active", "productive"],
+        )
+        rented = public["utilization"]["rows"][1]
+        self.assertEqual(rented["recommended_field_name"], "rented_capacity_ratio")
+        self.assertIn("does not show whether kernels", rented["what_it_does_not_support"])
 
     def test_build_id_tracks_public_gpu_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -420,6 +447,18 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertEqual(result["engine"], "datafusion")
         self.assertEqual(len(result["rows"]), 2)
         self.assertEqual(result["rows"][0]["member_count"], 8)
+
+    def test_utilization_ladder_query_runs_through_datafusion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            build_sandbox_cost(output_root=tmpdir)
+            result = query_sandbox_gold(
+                output_root=tmpdir,
+                query_id="utilization-ladder",
+            )
+
+        self.assertEqual(result["engine"], "datafusion")
+        self.assertEqual(len(result["rows"]), 5)
+        self.assertEqual(result["rows"][1]["stage_id"], "rented")
 
     def test_repeated_intraday_runs_are_not_collapsed(self) -> None:
         prices = _read_local_json(PRICE_EVIDENCE)["rows"]

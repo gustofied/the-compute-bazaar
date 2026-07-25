@@ -601,7 +601,7 @@ class VmCapacityGoldTests(unittest.TestCase):
 
         self.assertEqual(
             public["manifest"]["manifest_version"],
-            "sandbox_cost_gold_v4",
+            "sandbox_cost_gold_v5",
         )
         self.assertEqual(result.row_counts["vm_capacity_current"], 4)
         self.assertEqual(result.row_counts["vm_capacity_fixed_rate"], 2)

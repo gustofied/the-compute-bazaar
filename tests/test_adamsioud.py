@@ -40,12 +40,13 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="sandbox-batch-table-body"', article)
         self.assertIn('id="sandbox-combined-chart"', article)
         self.assertIn('id="sandbox-coverage-chart"', article)
+        self.assertIn('id="sandbox-utilization-ladder"', article)
         self.assertIn('id="vm-hourly-chart"', article)
         self.assertIn("all seven prices", article)
         self.assertIn("sandbox-band-vm-range", script)
-        self.assertIn('src="./sandbox-cost.js?v=13"', article)
+        self.assertIn('src="./sandbox-cost.js?v=14"', article)
         self.assertIn("sandbox-cost.json", script)
-        self.assertIn('"sandbox_cost_gold_v4"', script)
+        self.assertIn('"sandbox_cost_gold_v5"', script)
         self.assertIn("effectiveCssZoom", script)
         self.assertIn("createVmHourlyChart", script)
         self.assertIn("createRateHistoryChart", script)
@@ -56,9 +57,10 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="vm-capacity-table-body"', article)
         self.assertIn("createJobDistributionChart", script)
         self.assertIn("createBatchHistoryChart", script)
+        self.assertIn("renderUtilizationLadder", script)
         self.assertEqual(
             payload["manifest"]["manifest_version"],
-            "sandbox_cost_gold_v4",
+            "sandbox_cost_gold_v5",
         )
         self.assertEqual(
             payload["manifest"]["row_counts"]["vm_capacity_current"],
@@ -128,6 +130,16 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertEqual(len(payload["workload"]["batch_history"]), 38)
         self.assertEqual(len(payload["workload"]["latest_replicates"]), 69)
         self.assertFalse(payload["workload"]["lifecycle_included"])
+        self.assertEqual(
+            payload["manifest"]["row_counts"][
+                "compute_utilization_public_ladder"
+            ],
+            5,
+        )
+        self.assertEqual(
+            [row["stage_id"] for row in payload["utilization"]["rows"]],
+            ["available", "rented", "allocated", "active", "productive"],
+        )
 
 
 if __name__ == "__main__":

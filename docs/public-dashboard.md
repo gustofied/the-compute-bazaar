@@ -76,7 +76,7 @@ coverage counts. Each export merges the newest observations into the existing hi
 hourly job does not need to rescan the full lake. Use it instead of downloading the much larger
 all-product `index-history.json` on public story pages.
 
-`sandbox-cost.json` is the version 4 public article payload for the sandbox and
+`sandbox-cost.json` is the version 5 public article payload for the sandbox and
 underlying-capacity benchmark. It contains the current exact-shape,
 four-provider VM offer cohort; its retained fixed-membership median/p25-p75
 history; the current VM/sandbox cohort comparison; 33 dated managed-sandbox

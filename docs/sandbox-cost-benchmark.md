@@ -483,6 +483,71 @@ sandbox concurrency; and record queue time, completions, failures, plus
 SM activity, tensor activity, memory activity, and power over the same job
 window. Provider scale claims are not substituted for those measurements.
 
+## Utilization Metric Contract
+
+The word `utilization` is prohibited as an unqualified field name. The
+maintained metric dictionary separates five stages:
+
+```text
+available -> rented -> allocated -> active -> productive
+```
+
+They answer different questions:
+
+| Stage | Numerator | Denominator | Current Compute Bazaar coverage |
+| --- | --- | --- | --- |
+| Available | checks with an eligible rentable offer | scheduled checks | GPU and VM offer checks only |
+| Rented | eligible units currently rented | eligible tracked population | not currently observed |
+| Allocated | resource units assigned to workloads | schedulable units | not currently observed across providers |
+| Active | time or cycles with a selected engine active | sampled time or cycles | not currently observed comparably |
+| Productive | completed units meeting a declared objective | elapsed time | sandbox completions and runtime are retained, but no cross-provider SLO goodput is claimed |
+
+[Ornn's volume-metrics API](https://data.ornn.com/docs) defines its utilization
+ratio as the percentage of measured GPUs currently rented. That is a rental
+occupancy measure. It is not NVIDIA GPU-engine, SM, tensor, or memory activity.
+The public Ornn endpoint description does not fully disclose construction of
+the eligible population, so Compute Bazaar would retain that limitation even
+if a licensed series were added.
+
+[NVIDIA DCGM](https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html)
+defines separate engine, SM, tensor, and DRAM activity metrics and warns that
+occupancy alone does not prove effective use. [Amazon
+EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/burstable-credits-baseline-concepts.html)
+defines CPU utilization against the compute units allocated to one instance.
+[Kubernetes](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
+schedules against requests even when actual CPU or memory use is low.
+[E2B](https://e2b.dev/docs/sandbox/metrics) exposes per-sandbox CPU, memory,
+and disk samples, while [Modal](https://modal.com/docs/guide/sandbox-resources)
+can bill the higher of requested and actual resource use. These are related
+measurements, not interchangeable definitions.
+
+The reviewed source register is
+`src/the_compute_bazaar/sandbox_cost/evidence/utilization-methodology.json`.
+Builds copy it into bronze, validate exact fields and source URLs, normalize
+all definitions into
+`silver/compute_utilization_metric_definitions.parquet`, and use DataFusion to
+publish `gold/compute_utilization_public_ladder.parquet`. The public JSON marks
+the result `methodology_only_no_observed_values`.
+
+Any future observed utilization fact must retain at least:
+
+```text
+metric_id
+numerator
+denominator
+window_start
+window_end
+sampling_interval
+aggregation
+resource_scope
+source_type
+methodology_version
+```
+
+An offer disappearing between polls is not evidence that it was rented. A
+running lease is not evidence of processor activity. Processor activity is not
+evidence that useful work met its latency or correctness objective.
+
 ## Evidence Hierarchy
 
 The project prefers inputs in this order:
@@ -600,6 +665,7 @@ vm-sandbox-current
 gpu-daily-coverage
 gpu-eligible-history
 combined-common-start
+utilization-ladder
 ```
 
 Check the public StarSling source without changing reviewed evidence:
@@ -673,10 +739,10 @@ The public-safe artifact is:
 dashboard/compute-bazaar/sandbox-cost.json
 ```
 
-The version 4 payload contains the public VM current cohort, hourly observed
+The version 5 payload contains the public VM current cohort, hourly observed
 history, current VM/sandbox comparison, managed-sandbox rate history, workload
-results, and GPU comparison. Raw S3 refs and private manifests are removed at
-the public boundary.
+results, GPU comparison, and the source-linked utilization metric dictionary.
+Raw S3 refs and private manifests are removed at the public boundary.
 
 The AdamSioud article prefers CloudFront in production and keeps a checked-in
 fallback for local and failure-safe rendering:

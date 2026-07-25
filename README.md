@@ -222,10 +222,13 @@ The maintained sandbox benchmark follows the same evidence-to-product model:
 
 ```text
 exact VM catalog APIs + reviewed sandbox prices + StarSling benchmark runs
+  + reviewed utilization definitions
   -> bronze raw VM checks and reviewed source records
-  -> silver VM offers, sandbox prices, batches, jobs, phases, and run metadata
+  -> silver VM offers, sandbox prices, batches, jobs, phases, run metadata,
+     and a source-linked utilization metric dictionary
   -> named DataFusion queries
-  -> gold VM and sandbox cohorts, workload summaries, and coverage-gated comparison
+  -> gold VM and sandbox cohorts, workload summaries, coverage-gated comparison,
+     and a publication-safe utilization ladder
   -> sandbox-cost.json
   -> AdamSioud Compute article
 ```
@@ -256,6 +259,14 @@ low-coverage observations stay in the coverage table; they are not connected
 into a misleading continuous price line. Provider count is coverage, not
 transaction volume or GPU utilization.
 
+The project does not use a generic `utilization` field. Availability, rented
+share, scheduler allocation, processor activity, and useful output have
+different numerators and denominators. The current feed measures advertised
+GPU offers, VM offer rates, and sandbox workload time; it does not infer
+rented capacity or processor activity from those observations. The reviewed
+definitions are built into
+`gold/compute_utilization_public_ladder.parquet` and the public payload.
+
 ```sh
 uv run sandbox-cost validate
 
@@ -280,7 +291,7 @@ uv run sandbox-cost build \
 
 uv run sandbox-cost query \
   --output-root data/lake/sandbox_cost \
-  --query vm-observed-rate \
+  --query utilization-ladder \
   --limit 10
 
 uv run sandbox-cost refresh-benchmark \

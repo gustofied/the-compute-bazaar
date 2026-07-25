@@ -43,6 +43,7 @@ EVIDENCE_ROOT = Path(__file__).with_name("evidence")
 PRICE_EVIDENCE = EVIDENCE_ROOT / "hourly-price-observations.json"
 BENCHMARK_EVIDENCE = EVIDENCE_ROOT / "benchmark-observations.json"
 SOURCE_MANIFEST = EVIDENCE_ROOT / "source-manifest.json"
+UTILIZATION_EVIDENCE = EVIDENCE_ROOT / "utilization-methodology.json"
 
 TARGET_SHAPE = {"vcpus": 4, "memory_gib": 8, "disk_gb": 40}
 FIXED_COHORT = "2026"
@@ -66,6 +67,7 @@ VM_EXPANDED_RATE_QUERY_ID = "vm_capacity_expanded_hourly_rate_v1"
 VM_MARKETPLACE_CURRENT_QUERY_ID = "vm_capacity_marketplace_current_v1"
 VM_SANDBOX_COMPARISON_QUERY_ID = "vm_sandbox_current_rate_comparison_v2"
 VM_DISCOVERY_CURRENT_QUERY_ID = "vm_capacity_discovery_current_v1"
+UTILIZATION_LADDER_QUERY_ID = "compute_utilization_public_ladder_v1"
 NUMERIC_DECIMAL_PLACES = 12
 
 RUNTIME_PRICE_SERIES = {
@@ -133,6 +135,38 @@ RATE_METERING = {
         "memory_meter": "reserved_capacity",
         "billing_basis_label": "active CPU and provisioned memory",
     },
+}
+
+UTILIZATION_FIELDS = {
+    "definition",
+    "denominator",
+    "denominator_disclosure",
+    "domain",
+    "examples",
+    "measurement_family",
+    "measurement_window",
+    "metric_id",
+    "metric_label",
+    "numerator",
+    "publication_order",
+    "recommended_field_name",
+    "source_id",
+    "source_kind",
+    "source_label",
+    "source_url",
+    "stage_id",
+    "stage_label",
+    "what_it_does_not_support",
+    "what_it_supports",
+}
+
+UTILIZATION_FAMILIES = {
+    "availability",
+    "rental_occupancy",
+    "allocation",
+    "hardware_activity",
+    "productive_output",
+    "billing_exposure",
 }
 
 PRICE_FIELDS = {
@@ -912,6 +946,33 @@ from latest_vm vm
 cross join latest_sandbox sandbox
 """
 
+UTILIZATION_LADDER_SQL = """
+select
+  publication_order as stage_order,
+  stage_id,
+  stage_label,
+  metric_id,
+  metric_label,
+  domain,
+  measurement_family,
+  definition,
+  numerator,
+  denominator,
+  denominator_disclosure,
+  measurement_window,
+  recommended_field_name,
+  examples,
+  what_it_supports,
+  what_it_does_not_support,
+  source_id,
+  source_label,
+  source_url,
+  source_kind
+from compute_utilization_metric_definitions
+where publication_order is not null
+order by publication_order
+"""
+
 GOLD_QUERIES = {
     "hourly-prices": """
 select *
@@ -1008,6 +1069,11 @@ select *
 from vm_capacity_discovery_current
 order by series_order, provider_label
 """,
+    "utilization-ladder": """
+select *
+from compute_utilization_public_ladder
+order by stage_order
+""",
 }
 
 
@@ -1026,11 +1092,13 @@ def validate_evidence(
     price_path: Path = PRICE_EVIDENCE,
     benchmark_path: Path = BENCHMARK_EVIDENCE,
     source_manifest_path: Path = SOURCE_MANIFEST,
+    utilization_path: Path = UTILIZATION_EVIDENCE,
 ) -> dict[str, Any]:
     """Validate formulas, matching rules, uniqueness, shape, and source retention."""
     prices_payload = _read_local_json(price_path)
     benchmarks_payload = _read_local_json(benchmark_path)
     source_manifest = _read_local_json(source_manifest_path)
+    utilization_payload = _read_local_json(utilization_path)
     _require_schema(
         prices_payload,
         "sandbox_hourly_price_evidence_v1",
@@ -1046,8 +1114,16 @@ def validate_evidence(
         "sandbox_source_manifest_v1",
         source_manifest_path,
     )
+    _require_schema(
+        utilization_payload,
+        "compute_utilization_methodology_v1",
+        utilization_path,
+    )
 
     prices = _validate_prices(prices_payload.get("rows"))
+    utilization_rows = _validate_utilization_metric_definitions(
+        utilization_payload.get("rows")
+    )
     batches = _validate_batches(benchmarks_payload.get("batch_rows"), prices)
     replicates = _validate_replicates(
         benchmarks_payload.get("replicate_rows"),
@@ -1085,6 +1161,10 @@ def validate_evidence(
             {row["series_id"] for row in prices if row["index_cohort"] == FIXED_COHORT}
         ),
         "source_file_count": len(source_manifest["files"]),
+        "utilization_metric_count": len(utilization_rows),
+        "utilization_public_stage_count": len(
+            [row for row in utilization_rows if row["publication_order"] is not None]
+        ),
     }
 
 
@@ -1102,6 +1182,7 @@ def build_sandbox_cost(
     price_path: Path = PRICE_EVIDENCE,
     benchmark_path: Path = BENCHMARK_EVIDENCE,
     source_manifest_path: Path = SOURCE_MANIFEST,
+    utilization_path: Path = UTILIZATION_EVIDENCE,
 ) -> SandboxCostBuild:
     """Build deterministic bronze, silver, gold, and optional public JSON."""
     with exclusive_lease(_join(output_root, "_locks/sandbox-cost-build.json")):
@@ -1118,6 +1199,7 @@ def build_sandbox_cost(
             price_path=price_path,
             benchmark_path=benchmark_path,
             source_manifest_path=source_manifest_path,
+            utilization_path=utilization_path,
         )
 
 
@@ -1135,16 +1217,22 @@ def _build_sandbox_cost_unlocked(
     price_path: Path,
     benchmark_path: Path,
     source_manifest_path: Path,
+    utilization_path: Path,
 ) -> SandboxCostBuild:
     summary = validate_evidence(
         price_path=price_path,
         benchmark_path=benchmark_path,
         source_manifest_path=source_manifest_path,
+        utilization_path=utilization_path,
     )
     prices_payload = _read_local_json(price_path)
     benchmarks_payload = _read_local_json(benchmark_path)
     source_manifest = _read_local_json(source_manifest_path)
+    utilization_payload = _read_local_json(utilization_path)
     price_rows = _validate_prices(prices_payload["rows"])
+    utilization_rows = _validate_utilization_metric_definitions(
+        utilization_payload["rows"]
+    )
     batch_rows = list(benchmarks_payload["batch_rows"])
     replicate_rows = list(benchmarks_payload["replicate_rows"])
     phase_rows = list(benchmarks_payload["phase_rows"])
@@ -1195,10 +1283,14 @@ def _build_sandbox_cost_unlocked(
         ),
         "benchmark_evidence": _join(output_root, "bronze/benchmark-evidence.json"),
         "source_manifest": _join(output_root, "bronze/source-manifest.json"),
+        "utilization_methodology": _join(
+            output_root, "bronze/utilization-methodology.json"
+        ),
     }
     write_json(bronze_refs["hourly_price_evidence"], prices_payload)
     write_json(bronze_refs["benchmark_evidence"], benchmarks_payload)
     write_json(bronze_refs["source_manifest"], source_manifest)
+    write_json(bronze_refs["utilization_methodology"], utilization_payload)
 
     silver_refs = {
         "sandbox_hourly_prices": _join(
@@ -1215,6 +1307,9 @@ def _build_sandbox_cost_unlocked(
         ),
         "sandbox_benchmark_run_metadata": _join(
             output_root, "silver/sandbox_benchmark_run_metadata.parquet"
+        ),
+        "compute_utilization_metric_definitions": _join(
+            output_root, "silver/compute_utilization_metric_definitions.parquet"
         ),
     }
     if vm_history_rows:
@@ -1263,6 +1358,10 @@ def _build_sandbox_cost_unlocked(
     write_parquet_rows(
         silver_refs["sandbox_benchmark_run_metadata"],
         run_metadata,
+    )
+    write_parquet_rows(
+        silver_refs["compute_utilization_metric_definitions"],
+        utilization_rows,
     )
     if vm_history_rows:
         write_parquet_rows(
@@ -1375,6 +1474,16 @@ order by series_order, observed_date, point_order
         query_tables(
             tables={"sandbox_workload_latest_phases": latest_phases_ref},
             sql=WORKLOAD_PHASE_SUMMARY_SQL,
+        )
+    )
+    utilization_ladder = _canonicalize_numeric_rows(
+        query_tables(
+            tables={
+                "compute_utilization_metric_definitions": silver_refs[
+                    "compute_utilization_metric_definitions"
+                ]
+            },
+            sql=UTILIZATION_LADDER_SQL,
         )
     )
 
@@ -1533,6 +1642,9 @@ order by series_order, observed_date, point_order
         "sandbox_gpu_cpu_common_start": _join(
             output_root, "gold/sandbox_gpu_cpu_common_start.parquet"
         ),
+        "compute_utilization_public_ladder": _join(
+            output_root, "gold/compute_utilization_public_ladder.parquet"
+        ),
     }
     if vm_history_rows:
         table_refs.update(
@@ -1610,6 +1722,10 @@ order by series_order, observed_date, point_order
     write_parquet_rows(table_refs["gpu_h100_daily_coverage"], gpu_daily_coverage)
     write_parquet_rows(table_refs["gpu_h100_eligible_history"], gpu_eligible_history)
     write_parquet_rows(table_refs["sandbox_gpu_cpu_common_start"], combined)
+    write_parquet_rows(
+        table_refs["compute_utilization_public_ladder"],
+        utilization_ladder,
+    )
     if vm_history_rows:
         write_parquet_rows(table_refs["vm_capacity_current"], vm_current)
         write_parquet_rows(
@@ -1668,12 +1784,14 @@ order by series_order, observed_date, point_order
         "vm_discovery_current": _sha256_text(VM_DISCOVERY_CURRENT_SQL),
         "vm_marketplace_current": _sha256_text(VM_MARKETPLACE_CURRENT_SQL),
         "vm_sandbox_comparison": _sha256_text(VM_SANDBOX_COMPARISON_SQL),
+        "utilization_ladder": _sha256_text(UTILIZATION_LADDER_SQL),
     }
     input_hash = _content_hash(
         {
             "prices": prices_payload,
             "benchmarks": benchmarks_payload,
             "source_manifest": source_manifest,
+            "utilization_methodology": utilization_payload,
             "gpu_rows": gpu_rows,
             "gpu_source_manifest": _public_gpu_source_manifest(gpu_manifest),
             "vm_capacity_history": vm_history_rows,
@@ -1706,6 +1824,7 @@ order by series_order, observed_date, point_order
     built_at = _latest_timestamp(
         prices_payload.get("retrieved_at"),
         benchmarks_payload.get("retrieved_at"),
+        utilization_payload.get("retrieved_at"),
         gpu_manifest.get("dashboard_exported_at"),
         gpu_manifest.get("observed_at"),
         vm_source_manifest.get("checked_at"),
@@ -1745,13 +1864,14 @@ order by series_order, observed_date, point_order
         "vm_capacity_discovery_current": len(vm_discovery_current_rows),
         "vm_capacity_observed_rate": len(vm_observed_rate),
         "vm_sandbox_current_comparison": len(vm_sandbox_comparison),
+        "compute_utilization_public_ladder": len(utilization_ladder),
     }
     manifest_ref = _join(
         output_root,
         (f"_manifests/sandbox_cost/date={built_at[:10]}/build_id={build_id}.json"),
     )
     manifest = {
-        "manifest_version": "sandbox_cost_gold_v4",
+        "manifest_version": "sandbox_cost_gold_v5",
         "manifest_ref": manifest_ref,
         "build_id": build_id,
         "built_at": built_at,
@@ -1792,6 +1912,7 @@ order by series_order, observed_date, point_order
             "vm_discovery_current": VM_DISCOVERY_CURRENT_QUERY_ID,
             "vm_marketplace_current": VM_MARKETPLACE_CURRENT_QUERY_ID,
             "vm_sandbox_comparison": VM_SANDBOX_COMPARISON_QUERY_ID,
+            "utilization_ladder": UTILIZATION_LADDER_QUERY_ID,
         },
         "query_hashes": query_hashes,
         "bronze_refs": bronze_refs,
@@ -1839,6 +1960,7 @@ order by series_order, observed_date, point_order
                 vm_marketplace_current=vm_marketplace_current,
                 vm_marketplace_history=vm_marketplace_history,
                 vm_sandbox_comparison=vm_sandbox_comparison,
+                utilization_ladder=utilization_ladder,
             ),
         )
 
@@ -1974,6 +2096,76 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _validate_utilization_metric_definitions(
+    raw_rows: Any,
+) -> list[dict[str, Any]]:
+    if not isinstance(raw_rows, list) or not raw_rows:
+        raise ValueError("Utilization methodology must contain a non-empty rows list")
+    rows: list[dict[str, Any]] = []
+    metric_ids: set[str] = set()
+    source_ids: set[str] = set()
+    publication_orders: set[int] = set()
+    publication_stages: dict[int, str] = {}
+    required_text = UTILIZATION_FIELDS - {"publication_order"}
+    for position, raw in enumerate(raw_rows):
+        row = _strict_row(
+            raw,
+            UTILIZATION_FIELDS,
+            f"utilization metric row {position}",
+        )
+        for field in required_text:
+            if not isinstance(row[field], str) or not row[field].strip():
+                raise ValueError(
+                    f"Utilization metric row {position} has no {field}"
+                )
+        metric_id = str(row["metric_id"])
+        if metric_id in metric_ids:
+            raise ValueError(f"Duplicate utilization metric ID: {metric_id}")
+        metric_ids.add(metric_id)
+        source_id = str(row["source_id"])
+        if source_id in source_ids:
+            raise ValueError(f"Duplicate utilization source ID: {source_id}")
+        source_ids.add(source_id)
+        if row["measurement_family"] not in UTILIZATION_FAMILIES:
+            raise ValueError(
+                f"Unknown utilization measurement family for {metric_id}: "
+                f"{row['measurement_family']}"
+            )
+        if not str(row["source_url"]).startswith("https://"):
+            raise ValueError(f"Utilization metric {metric_id} has no HTTPS source")
+        if row["recommended_field_name"] == "utilization":
+            raise ValueError(
+                f"Utilization metric {metric_id} uses an ambiguous field name"
+            )
+        order = row["publication_order"]
+        if order is not None:
+            if not isinstance(order, int) or isinstance(order, bool) or order < 1:
+                raise ValueError(
+                    f"Invalid utilization publication order for {metric_id}"
+                )
+            if order in publication_orders:
+                raise ValueError(
+                    f"Duplicate utilization publication order: {order}"
+                )
+            publication_orders.add(order)
+            publication_stages[order] = str(row["stage_id"])
+        rows.append(row)
+
+    expected_stages = {
+        1: "available",
+        2: "rented",
+        3: "allocated",
+        4: "active",
+        5: "productive",
+    }
+    if publication_stages != expected_stages:
+        raise ValueError(
+            "Utilization publication ladder must be exactly "
+            "available, rented, allocated, active, productive"
+        )
+    return rows
 
 
 def _validate_prices(raw_rows: Any) -> list[dict[str, Any]]:
@@ -2350,6 +2542,7 @@ def _public_payload(
     vm_marketplace_current: list[dict[str, Any]],
     vm_marketplace_history: list[dict[str, Any]],
     vm_sandbox_comparison: list[dict[str, Any]],
+    utilization_ladder: list[dict[str, Any]],
 ) -> dict[str, Any]:
     expanded_provider_ids = {
         str(row.get("provider_id") or "") for row in vm_expanded_current
@@ -2407,6 +2600,11 @@ def _public_payload(
         source_rows[row["spec_url"]] = {
             "label": f"{row['provider_label']} request specification",
             "url": row["spec_url"],
+        }
+    for row in utilization_ladder:
+        source_rows[row["source_url"]] = {
+            "label": row["source_label"],
+            "url": row["source_url"],
         }
     latest_run = max(run_metadata, key=lambda row: row["generated_at"])
     return {
@@ -2590,6 +2788,33 @@ def _public_payload(
             ),
             "coverage_history": gpu_daily_coverage,
             "rows": combined,
+        },
+        "utilization": {
+            "title": "From available capacity to useful work",
+            "claim_scope": "methodology_only_no_observed_values",
+            "summary": (
+                "Available, rented, allocated, active, and productive are "
+                "different measurements with different numerators and "
+                "denominators."
+            ),
+            "current_project_boundary": {
+                "gpu": (
+                    "Compute Bazaar currently observes advertised offers, "
+                    "prices, and provider coverage; it does not infer rented "
+                    "capacity or accelerator activity."
+                ),
+                "vm": (
+                    "The VM series records public offer rates and successful "
+                    "source checks; it does not expose vendor fleet occupancy "
+                    "or customer CPU activity."
+                ),
+                "sandbox": (
+                    "The workload study records selected phase wall time and "
+                    "a rate-card estimate; it does not record provider fleet "
+                    "occupancy or comparable cross-provider CPU telemetry."
+                ),
+            },
+            "rows": utilization_ladder,
         },
         "sources": sorted(source_rows.values(), key=lambda row: row["label"]),
     }
