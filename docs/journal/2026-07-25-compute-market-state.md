@@ -225,3 +225,40 @@ Its public payload proved the sanitization fix: no `s3://` string or private
 dashboard output root remained. Worker v5 and the final schedule release then
 removed the unconfigured Clore source from the active scope; the final
 production heartbeat completed successfully.
+
+## Final Publication Verification
+
+The implementation was published as:
+
+```text
+AdamSioud article commit       4190af4
+Compute Bazaar pipeline commit 9147545
+GitHub Pages run               30171769554
+```
+
+The Pages run completed successfully. The live article at
+`https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html` loaded
+the production CloudFront state for
+`gold-market-state-final-20260725T1928`: 46 current public rows and eight
+aggregate occupancy-history rows. Serialized inspection found no `s3://`
+value.
+
+Public browser QA at 1280 x 720 and 390 x 844 confirmed:
+
+- document width exactly matched the viewport at both breakpoints;
+- the current Akash occupancy row rendered from live data;
+- 16 current model-availability rows rendered separately;
+- the history chart rendered eight data observations and its focus marker;
+- the chart exposed a focusable `role=slider` control with a plain-language
+  accessible label;
+- no waiting/fallback state remained.
+
+Final verification commands:
+
+```text
+uv run --with pytest pytest tests                  85 passed
+focused article/Windmill/GPU tests                49 passed
+Ruff blocking-error selection                     passed
+JavaScript syntax (article and operator board)    passed
+git diff --check (both repositories)              passed
+```
