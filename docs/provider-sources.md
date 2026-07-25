@@ -24,8 +24,7 @@ as `provider`. Gold benchmark floors are deduplicated at the seller level.
 | Scaleway | Public per-zone instance prices and stock status | One deployable bundle per `available` or `scarce` type; `shortage` remains evidence only |
 | Oracle Cloud | Public GPU pay-as-you-go price-list API | Current published rate only; no capacity claim |
 | OVHcloud | Public hourly GPU instance catalog | Current published rate only; no capacity claim |
-| Clore | Direct authenticated live marketplace | Available server or partial-rental GPUs |
-| Akash | Public live price and availability summary | Provider-reported available GPU units |
+| Akash | Public live price, availability, and provider-capacity APIs | Active, available, pending, and total CPU, GPU, memory, and storage capacity across online Akash providers |
 | RunPod | Public current GPU-type price and stock status | One-GPU lower bound, not exact stock |
 | Verda | Public catalog; live stock only with OAuth credentials | One bundle per available location when authenticated |
 | AWS Spot | Current spot-price observations | No capacity claim |
@@ -79,7 +78,8 @@ The hourly provider scope expands automatically when a credential exists:
 
 | Connector | Environment variable | Evidence |
 | --- | --- | --- |
-| Prime Intellect | `PRIME_INTELLECT_API_KEY` | Live multi-cloud availability |
+| Clore | `CLORE_API_KEY` | Public-marketplace servers with on-demand rented state; the official API contract requires auth |
+| Prime Intellect | `PRIME_INTELLECT_API_KEY` | Live multi-cloud configuration availability with upstream provider and stock status |
 | Shadeform | `SHADEFORM_API_KEY` | Live multi-cloud instance inventory |
 | Sesterce | `SESTERCE_API_KEY` | Live GPU Cloud offers |
 | TensorDock | `TENSORDOCK_API_KEY` | Live hostnode stock and GPU component rates |

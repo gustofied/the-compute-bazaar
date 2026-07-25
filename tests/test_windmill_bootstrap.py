@@ -48,92 +48,53 @@ class WindmillScheduleTests(unittest.TestCase):
         self.assertEqual(post.call_args_list[2].args[1], {"enabled": False})
         self.assertEqual(post.call_args_list[2].kwargs["ok_statuses"], {200})
 
-    def test_sandbox_schedule_keeps_provider_credentials_out_of_windmill(
-        self,
-    ) -> None:
+    def test_sandbox_schedule_is_source_only(self) -> None:
         args = schedule_args(
             "compute-bazaar",
             source_ref="main",
-            dispatch=True,
-            providers="e2b,daytona-vm",
-            suites="realworld",
-            replicas="12",
-            pts_passes="",
+            aws_region="eu-west-3",
         )
 
         self.assertEqual(
-            args["github_token"],
-            "$var:f/compute-bazaar/sandbox_benchmark_github_token",
+            args,
+            {
+                "source_repository": (
+                    "$var:f/compute-bazaar/"
+                    "sandbox_benchmark_source_repository"
+                ),
+                "source_ref": "main",
+                "lake_root": "$var:f/compute-bazaar/lake_root",
+                "aws_region": "eu-west-3",
+            },
         )
-        self.assertNotIn("e2b_api_key", args)
-        self.assertNotIn("daytona_api_key", args)
-        self.assertNotIn("modal_token_secret", args)
 
-    def test_daily_script_publishes_operational_source_before_dispatch(
-        self,
-    ) -> None:
+    def test_daily_script_publishes_operational_source(self) -> None:
         completed = SimpleNamespace(
             stdout='{"operational_manifest_ref":"s3://bucket/latest.json"}'
         )
-        with (
-            patch.object(
-                sandbox_benchmark_daily.subprocess,
-                "run",
-                return_value=completed,
-            ) as run,
-            patch.object(
-                sandbox_benchmark_daily,
-                "_dispatch_benchmark",
-                return_value={"requested": True},
-            ) as dispatch,
-        ):
+        with patch.object(
+            sandbox_benchmark_daily.subprocess,
+            "run",
+            return_value=completed,
+        ) as run:
             result = sandbox_benchmark_daily.main(
                 source_repository="owner/benchmark",
                 lake_root="s3://bucket/lake",
-                dispatch_repository="owner/benchmark",
-                github_token="secret",
-                dispatch=True,
+                aws_region="eu-west-3",
             )
 
         command = run.call_args.args[0]
         self.assertIn("--publish-operational", command)
         self.assertIn("s3://bucket/lake/sandbox_cost", command)
-        self.assertNotIn("secret", command)
-        dispatch.assert_called_once()
-        self.assertTrue(result["dispatch"]["requested"])
-
-    def test_daily_script_requires_dispatch_token(self) -> None:
-        completed = SimpleNamespace(stdout="{}")
-        with patch.object(
-            sandbox_benchmark_daily.subprocess,
-            "run",
-            return_value=completed,
-        ):
-            with self.assertRaisesRegex(ValueError, "github_token"):
-                sandbox_benchmark_daily.main(
-                    source_repository="owner/benchmark",
-                    lake_root="s3://bucket/lake",
-                    dispatch_repository="owner/benchmark",
-                    dispatch=True,
-                )
-
-    def test_dispatch_rejects_invalid_replica_count_before_http(self) -> None:
-        with (
-            patch.object(sandbox_benchmark_daily, "urlopen") as urlopen,
-            self.assertRaisesRegex(ValueError, "replicas must be"),
-        ):
-            sandbox_benchmark_daily._dispatch_benchmark(
-                repository="owner/benchmark",
-                workflow_id="bench-matrix.yml",
-                ref="main",
-                token="secret",
-                providers="e2b",
-                suites="realworld",
-                replicas="",
-                pts_passes="",
-            )
-
-        urlopen.assert_not_called()
+        self.assertNotIn("github", " ".join(command).lower())
+        self.assertEqual(
+            run.call_args.kwargs["env"]["AWS_DEFAULT_REGION"],
+            "eu-west-3",
+        )
+        self.assertEqual(
+            result["source_refresh"]["operational_manifest_ref"],
+            "s3://bucket/latest.json",
+        )
 
 
 if __name__ == "__main__":

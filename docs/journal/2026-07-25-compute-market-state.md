@@ -13,9 +13,10 @@ activity remain separate measurements.
 
 The live source audit on 25 July 2026 found:
 
-- Akash `/v1/providers` reports `stats.gpu.active`, `available`, `pending`, and
-  `total` for each provider. Official documentation defines active GPU units as
-  currently leased.
+- Akash `/v1/providers` reports active, available, pending, and total CPU, GPU,
+  memory, ephemeral-storage, persistent-storage, and aggregate-storage
+  capacity for each provider. Official documentation defines active GPU units
+  as currently leased and active inventory as consumed by deployments.
 - Akash `/v1/gpu-prices` reports model-level available and total GPU units. It
   does not split unavailable model units into active and pending.
 - Clore `/v1/marketplace` reports a server-level `rented` boolean, documented
@@ -24,8 +25,9 @@ The live source audit on 25 July 2026 found:
   an `auth` header, so the recurring connector is enabled only with
   `CLORE_API_KEY`.
 - RunPod exposes stock status and deployable bundle sizes, not total fleet.
-- Prime Intellect exposes upstream provider and stock/configuration data. It is
-  an aggregate observation, not an independent fleet.
+- Prime Intellect exposes upstream provider and stock/configuration data. The
+  returned configuration set is a denominator for configuration availability,
+  but not an independent physical-fleet denominator.
 - Hyperstack exposes overlapping deployable configurations. The safe count is
   a maximum deployable GPU-unit lower bound, not a sum or total fleet.
 - Current VM and managed-sandbox sources expose prices and workload timing, but
@@ -204,6 +206,22 @@ uv run --with pytest pytest tests
 Do not synthesize historical rental occupancy from old Akash model
 availability. A source must expose the matching rented numerator and total
 denominator in the captured response before an occupancy row can be admitted.
+
+## 26 July Capacity Correction
+
+Inspection of the installed Prime CLI showed that its JSON `total_count`
+describes returned configurations after CLI filtering/grouping. Prime rows now
+store available configurations divided by all returned configurations for the
+same upstream provider and GPU product. They remain availability-pressure
+observations, not rented GPU-unit occupancy.
+
+Akash normalization now also writes aggregate active/total rows for CPU,
+memory, total storage, ephemeral storage, and persistent storage. The same
+provider response was already retained in bronze; the new rows make those
+source fields queryable in silver and gold without frontend arithmetic.
+
+The public history allowlist now includes only aggregate CPU, GPU, memory, and
+storage resource types. Per-model history remains in gold.
 
 ## Clore Authentication Correction
 

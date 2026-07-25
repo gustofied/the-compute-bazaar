@@ -222,11 +222,12 @@ H100 history remains in the coverage table, including excluded low-coverage
 periods. This view does not combine raw dollar levels or claim demand or
 transaction volume.
 
-The market-state product separately publishes source-reported rental
-occupancy where both numerator and denominator exist. Akash GPU units and
-Clore public servers remain distinct series. The article pairs each selected
-rented-share line with its source-reported rented and total capacity counts;
-those counts are capacity, not volume, and no statistical band is inferred.
+The market-state product separately publishes source-reported active or rented
+capacity where numerator and denominator exist. Akash CPU, GPU, memory, and
+storage units, Clore public servers, and Prime configurations remain distinct
+series. The article pairs each selected share with its source numerator,
+denominator, unit, and scope; those counts are capacity observations, not
+transaction volume, and no statistical band is inferred.
 
 The hourly Windmill heartbeat checks the exact VM APIs and rebuilds this gold
 product after GPU dashboard history is exported. A separate daily source check
@@ -307,23 +308,27 @@ The capacity-state path has two gold tables:
 - `fact_compute_market_state_history` cumulatively retains hourly observations
   by stable observation ID.
 
-Akash's network row is GPU-unit weighted: active GPU units divided by total GPU
-units from the same online providers. Clore's row is server weighted and
+Akash's network rows divide active capacity by total capacity from the same
+online providers for CPU (millicores), GPU units, memory bytes, and storage
+bytes. Official Akash operations documentation describes active inventory as
+resources consumed by deployments. Clore's row is server weighted and
 on-demand only: public servers with `rented=true` divided by public servers
-with that flag. Those rows share a percentage scale for display but are not
-pooled because their units and market scopes differ. Prime Intellect keeps the
-upstream seller in `provider`; when the same provider/model is available from a
-direct connector, the aggregate observation stays auditable but is marked
-ineligible for aggregation.
+with that flag. Prime divides configurations carrying an available stock
+status by all configurations returned for the same upstream provider and GPU
+product. These rows can share a percentage scale but are not pooled because
+their units and market scopes differ. Prime Intellect keeps the upstream seller
+in `provider`; when the same provider/model is available from a direct
+connector, the aggregate observation stays auditable but is marked ineligible
+for aggregation.
 
 Clore requires `CLORE_API_KEY`. If that key is absent, it is omitted from the
 hourly provider scope; previous source observations remain in historical gold.
 
 The full model-level state stays in these gold tables and remains queryable
 through DataFusion. The public `market-state.json` export contains the current
-occupancy and availability cross-section, but limits public history to aggregate
-`ALL_GPU` rental-occupancy rows. That keeps the static article payload bounded
-without making the publication file the system of record.
+occupancy and availability cross-section, but limits public history to
+aggregate CPU, GPU, memory, and storage rows. That keeps the static article
+payload bounded without making the publication file the system of record.
 
 ## Direct Provider Example
 

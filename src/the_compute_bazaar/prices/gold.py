@@ -29,6 +29,14 @@ GOLD_MANIFEST_TABLE = "gold_market"
 GOLD_MANIFEST_VERSION = "v1"
 GOLD_METHODOLOGY_VERSION = "gold_gpu_market_v2"
 MARKET_STATE_METHODOLOGY_VERSION = "compute_market_state_gold_v1"
+PUBLIC_MARKET_STATE_HISTORY_RESOURCES = {
+    "ALL_GPU",
+    "ALL_CPU",
+    "ALL_MEMORY",
+    "ALL_STORAGE",
+    "ALL_EPHEMERAL_STORAGE",
+    "ALL_PERSISTENT_STORAGE",
+}
 
 GOLD_TABLES = {
     "fact_gpu_listings": "listings.parquet",
@@ -941,7 +949,8 @@ def export_gold_dashboard_snapshot(
             _public_market_state_row(row)
             for row in market_state_history_payload["rows"]
             if row.get("measurement_kind") == "rental_occupancy"
-            and row.get("resource_type") == "ALL_GPU"
+            and row.get("resource_type")
+            in PUBLIC_MARKET_STATE_HISTORY_RESOURCES
             and row.get("aggregation_eligible") is not False
         ],
     )
@@ -1846,7 +1855,7 @@ def _merge_public_market_state_history(
         for row in (existing_rows if isinstance(existing_rows, list) else [])
         if isinstance(row, dict)
         and row.get("measurement_kind") == "rental_occupancy"
-        and row.get("resource_type") == "ALL_GPU"
+        and row.get("resource_type") in PUBLIC_MARKET_STATE_HISTORY_RESOURCES
         and row.get("aggregation_eligible") is not False
     ]
     candidates.extend(current_rows)

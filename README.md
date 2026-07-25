@@ -259,12 +259,14 @@ low-coverage observations stay in the coverage table; they are not connected
 into a misleading continuous price line. Provider count is coverage, not
 transaction volume or GPU utilization.
 
-The project does not use a generic `utilization` field. Availability, rental
-occupancy, scheduler allocation, processor activity, and useful output have
-different numerators and denominators. The GPU market feed records rental
-occupancy only where both rented and total rentable capacity are present. VM
-and sandbox feeds expose prices and workload timing, not a comparable public
-fleet denominator.
+The project does not use a generic `utilization` field. Availability, active
+capacity, rental occupancy, scheduler allocation, processor activity, and
+useful output have different numerators and denominators. Akash reports active,
+available, pending, and total CPU, GPU, memory, and storage capacity across its
+online provider network. Prime reports available configurations over returned
+configurations by upstream provider and GPU product. Direct VM catalogs and
+managed-sandbox feeds expose prices and workload timing, not a comparable
+public fleet denominator.
 
 ```sh
 uv run sandbox-cost validate
@@ -301,10 +303,10 @@ and new or structurally changed public benchmark runs. Managed-sandbox price
 pages remain a manual reviewed input because their billing semantics and markup
 are not one stable API.
 
-A controlled recurring workload uses the maintained StarSling execution
-harness rather than duplicating its provider SDKs here. An explicit trusted
-refresh writes immutable source captures and a versioned operational silver
-generation:
+The recurring workload input is a public source poll of the maintained
+StarSling repository. Compute Bazaar does not run paid benchmark jobs. An
+explicit trusted refresh writes immutable source captures and a versioned
+operational silver generation:
 
 ```sh
 uv run sandbox-cost refresh-benchmark \
@@ -315,16 +317,15 @@ uv run sandbox-cost refresh-benchmark \
 ```
 
 The next hourly build validates that generation, preserves all reviewed
-history, and rebuilds workload gold with DataFusion. The disabled-by-default
-Windmill job can ingest the prior committed result and dispatch the next
-`realworld` run:
+history, and rebuilds workload gold with DataFusion. The daily Windmill job
+polls committed public results and is enabled by default:
 
 ```sh
 uv run python infra/windmill/bootstrap_sandbox_benchmark_schedule.py
 ```
 
-Only use `--dispatch --enable` after the owned benchmark repository has its
-protected provider secrets and publication workflow configured.
+An unchanged upstream commit produces no false runtime observation. Workload
+history changes only after StarSling publishes a new compatible run.
 
 See [docs/sandbox-cost-benchmark.md](docs/sandbox-cost-benchmark.md) for source
 semantics, formulas, layer paths, review rules, and refresh instructions.
@@ -349,12 +350,14 @@ uv run gpu-prices export-gold-dashboard --limit 100
 
 `gold.fact_compute_market_state` is the latest capacity-state cross-section.
 `gold.fact_compute_market_state_history` is the cumulative, deduplicated hourly
-history. Akash contributes GPU-unit rental occupancy from reported active and
-total units. Clore contributes server-weighted on-demand rental occupancy.
-RunPod, Prime Intellect, and Hyperstack contribute availability observations
-only; they do not expose a compatible total fleet denominator. Prime preserves
-the upstream provider identity, and matching direct observations are preferred
-without deleting the aggregate row.
+history. Akash contributes active-capacity shares from reported active and
+total CPU, GPU, memory, and storage units. Clore contributes server-weighted
+on-demand rental occupancy. Prime Intellect contributes configuration
+availability using returned configurations as its denominator; that is useful
+stock evidence, not physical fleet occupancy. RunPod and Hyperstack contribute
+availability observations without a compatible fleet denominator. Prime
+preserves the upstream provider identity, and matching direct observations are
+preferred without deleting the aggregate row.
 
 Clore's marketplace endpoint requires a read API key. Without
 `CLORE_API_KEY`, the hourly scope omits the source while retaining prior Clore
@@ -362,9 +365,9 @@ history in gold.
 
 The complete per-model state remains in gold and is available through the
 DataFusion operator query. The public `market-state.json` export is deliberately
-smaller: it publishes the current occupancy and availability cross-section, but
-only aggregate `ALL_GPU` rental-occupancy history. This keeps the article
-payload bounded while preserving every model-level observation in the lake.
+smaller: it publishes the current occupancy and availability cross-section,
+plus aggregate CPU, GPU, memory, and storage occupancy history. Model-level
+history remains in the lake.
 
 The provider comparison and price-index commands filter to available live offers and published-rate
 observations.

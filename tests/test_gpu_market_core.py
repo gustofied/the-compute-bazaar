@@ -1777,12 +1777,44 @@ class GpuNormalizationTests(unittest.TestCase):
                             }
                         ],
                         "stats": {
+                            "cpu": {
+                                "active": 60000,
+                                "available": 12000,
+                                "pending": 450,
+                                "total": 72450,
+                            },
                             "gpu": {
                                 "active": 42,
                                 "available": 29,
                                 "pending": 0,
                                 "total": 71,
-                            }
+                            },
+                            "memory": {
+                                "active": 111154125824,
+                                "available": 25769803776,
+                                "pending": 0,
+                                "total": 136923929600,
+                            },
+                            "storage": {
+                                "ephemeral": {
+                                    "active": 206537178112,
+                                    "available": 100000000000,
+                                    "pending": 0,
+                                    "total": 306537178112,
+                                },
+                                "persistent": {
+                                    "active": 50000000000,
+                                    "available": 25000000000,
+                                    "pending": 0,
+                                    "total": 75000000000,
+                                },
+                                "total": {
+                                    "active": 256537178112,
+                                    "available": 125000000000,
+                                    "pending": 0,
+                                    "total": 381537178112,
+                                },
+                            },
                         },
                     }
                 ],
@@ -1820,6 +1852,63 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertAlmostEqual(occupancy.rented_share or 0, 42 / 71)
         self.assertEqual(h100.measurement_kind, "availability_pressure")
         self.assertAlmostEqual(h100.available_share or 0, 29 / 71)
+        by_resource = {row.resource_type: row for row in state}
+        self.assertEqual(by_resource["ALL_CPU"].unit, "millicpu")
+        self.assertEqual(by_resource["ALL_CPU"].rented_units, 60000)
+        self.assertAlmostEqual(
+            by_resource["ALL_CPU"].rented_share or 0,
+            60000 / 72450,
+        )
+        self.assertEqual(by_resource["ALL_MEMORY"].resource_market, "memory")
+        self.assertEqual(
+            by_resource["ALL_EPHEMERAL_STORAGE"].available_units,
+            100000000000,
+        )
+        self.assertEqual(
+            by_resource["ALL_PERSISTENT_STORAGE"].total_units,
+            75000000000,
+        )
+        self.assertEqual(
+            by_resource["ALL_STORAGE"].total_units,
+            381537178112,
+        )
+
+    def test_prime_market_state_uses_cli_configuration_denominator(self) -> None:
+        state = normalize_prime_market_state(
+            [
+                {
+                    "provider": "runpod",
+                    "gpuType": "H100_80GB",
+                    "gpuMemory": 80,
+                    "gpuCount": 8,
+                    "stockStatus": "Available",
+                },
+                {
+                    "provider": "runpod",
+                    "gpuType": "H100_80GB",
+                    "gpuMemory": 80,
+                    "gpuCount": 1,
+                    "stockStatus": "Low",
+                },
+                {
+                    "provider": "runpod",
+                    "gpuType": "H100_80GB",
+                    "gpuMemory": 80,
+                    "gpuCount": 2,
+                    "stockStatus": "Unavailable",
+                },
+            ],
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/prime.json",
+        )
+
+        self.assertEqual(len(state), 1)
+        row = state[0]
+        self.assertEqual(row.total_units, 3)
+        self.assertEqual(row.available_units, 2)
+        self.assertAlmostEqual(row.available_share or 0, 2 / 3)
+        self.assertEqual(row.unit, "configurations")
+        self.assertIn("not physical GPU-fleet", row.notes or "")
 
     def test_clore_market_state_is_server_weighted_and_on_demand_scoped(self) -> None:
         state = normalize_clore_market_state(

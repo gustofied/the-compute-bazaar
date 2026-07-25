@@ -26,10 +26,10 @@ Use this order when two copies disagree:
 | Dataset | Cadence | Bronze | Silver | Gold | Publication use |
 | --- | --- | --- | --- | --- | --- |
 | GPU provider offers | Hourly Windmill market run | One immutable provider response and manifest per run under `raw/provider=.../date=.../run_id=...` | Per-run normalized offers under `lake/silver/gpu_offers/...` | Listings, provider/GPU/region dimensions, index values and constituents, benchmark values and constituents | GPU cards, price history, provider comparison, future search/API |
-| GPU market state | Hourly where the source exposes a usable numerator and denominator | Provider response retained with the provider run | `lake/silver/compute_market_state/...` | `fact_compute_market_state` and cumulative deduplicated `fact_compute_market_state_history` | Current availability or rental occupancy and its history |
+| Compute market state | Hourly where the source exposes a usable measure | Provider response retained with the provider run | `lake/silver/compute_market_state/...` | `fact_compute_market_state` and cumulative deduplicated `fact_compute_market_state_history` | Akash active/total CPU, GPU, memory, and storage capacity; Clore rental occupancy; Prime and direct-provider availability |
 | Exact-shape VM offers | Hourly Windmill market run | Official catalog responses under `raw/sandbox-cost/vm-capacity/...` and discovery prefixes, with retrieval time and checksum | Cumulative offer, discovery, marketplace, current, and expanded-cohort Parquet tables under `lake/sandbox_cost/silver/` | Current seven-vendor cross-section; hourly median/p25/p75/min/max in USD and base-100 form; legacy four-vendor history; separate marketplace indication | VM-versus-sandbox reference, relative-price comparison, and source audit |
 | Managed sandbox rate cards | Manual reviewed evidence; gold rebuilt hourly | Versioned source register, archived URLs, dates, and arithmetic in package evidence and `lake/sandbox_cost/bronze/` | `sandbox_hourly_prices.parquet` | Current rates, fixed eight-service median/p25/p75, and dated price events | Public sandbox rate comparison |
-| StarSling workload runs | Daily source poll; controlled execution after credentials | One immutable retrieval capture and checksum ledger per poll | Content-addressed run metadata, provider-batch summaries, replicate-aligned jobs, and task phases | Latest job distribution, service summaries, phase summaries, and all compatible historical provider-batch summaries | Same-workload estimated processor-and-memory cost, with runtime audit |
+| StarSling workload runs | Daily public source poll; upstream publication cadence | One immutable retrieval capture and checksum ledger per poll | Content-addressed run metadata, provider-batch summaries, replicate-aligned jobs, and task phases | Latest job distribution, service summaries, phase summaries, and all compatible historical provider-batch summaries | Same-workload estimated processor-and-memory cost, with runtime audit |
 | GPU/VM/sandbox relative prices | Rebuilt after each market run | Uses retained GPU, VM, and sandbox evidence above | Uses eligible GPU benchmark history, exact VM offer history, and normalized sandbox prices | H100/sandbox common-start series, independently based VM series, and H100 coverage history | Exploratory relative advertised-rate chart only |
 
 ## History Contracts
@@ -76,8 +76,8 @@ Use this order when two copies disagree:
 - Those 38 rows are durable audit history, not one homogeneous performance
   time series. A frontend may inspect or group them by methodology, but must
   not draw one smooth line across harness revisions.
-- The recurring execution plane is the maintained StarSling harness. Compute
-  Bazaar does not duplicate its provider SDKs or timing code.
+- Workload execution belongs to the upstream StarSling project. Compute Bazaar
+  only polls public committed results and does not pay for or dispatch runs.
 - `--publish-operational` is an explicit trust boundary. It accepts only the
   pinned target shape and workload signature, rejects source rewrites, retains
   every source poll, writes a content-addressed silver generation, and refuses
@@ -158,12 +158,10 @@ uv run sandbox-cost check-public \
 
 The daily `.github/workflows/sandbox-cost-sources.yml` job validates canonical
 evidence, detects new or changed public StarSling runs, checks the first
-exact-shape VM source schemas, and runs focused tests. A separate
-disabled-by-default Windmill job is the controlled recurring path: it ingests
-the last committed dataset and can dispatch the next credentialed `realworld`
-run in an owned benchmark repository. Provider credentials stay in that
-repository's protected GitHub environment. Windmill remains responsible for
-the full hourly source set and S3 history. The hourly
+exact-shape VM source schemas, and runs focused tests. A separate daily
+Windmill source poll promotes compatible public commits into operational
+bronze and silver. It has no benchmark credentials and launches no workloads.
+Windmill remains responsible for the full hourly source set and S3 history. The hourly
 `.github/workflows/public-feed-freshness.yml` job checks that the public
 projection and latest complete VM observation have not gone stale.
 
