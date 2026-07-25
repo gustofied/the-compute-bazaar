@@ -685,3 +685,27 @@ stages from the CloudFront v5 payload. Final live checks at 1280 by 720 and 390
 by 844 found no page-level horizontal overflow or console warnings/errors.
 Keyboard inspection exposed the exact latest median and provider range, with
 the tooltip contained inside the mobile viewport.
+
+### Timestamp correction
+
+The final freshness command caught that the reviewed methodology record had
+been entered as 15:00 UTC while the release was still in the 14:00 UTC hour.
+That made the first v5 payload appear about half an hour in the future. No
+market observation, formula, or source row was wrong, but a future-dated build
+is unacceptable evidence metadata.
+
+The review timestamp was corrected to 14:00 UTC and worker v5.1 republished the
+same heartbeat inputs through the S3 lake and public boundary:
+
+- source/fallback commit: `9a365f3` / `3fa0ec4`;
+- worker image:
+  `sha256:0d4ce666a0e92cb297c8e725a3b8745073fd5c96656f8431ab54f9874aa2231e`;
+- corrected build: `sandbox-cost-fadb62be87153f7f`;
+- built at: `2026-07-25T14:22:38.009429+00:00`;
+- S3 object version: `1HHTr1FyzPHyPzGy5CUEZcjfl8_S87hW`;
+- payload SHA-256:
+  `138c7ce193f0668eb3e733d17c29e7e54cc61671c89c41f90428121fb0b38612`.
+
+The S3 object and checked-in fallback are byte-identical. The correction
+preserved all row counts, including 11 complete seven-vendor VM observations
+and five utilization stages.
