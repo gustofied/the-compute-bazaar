@@ -24,6 +24,9 @@ class AdamSioudServerTests(unittest.TestCase):
         payload = json.loads(
             (article_root / "sandbox-cost.json").read_text(encoding="utf-8")
         )
+        market_state = json.loads(
+            (article_root / "market-state.json").read_text(encoding="utf-8")
+        )
 
         self.assertIn("data-sandbox-cost", article)
         self.assertIn(
@@ -40,11 +43,13 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="sandbox-batch-table-body"', article)
         self.assertIn('id="sandbox-combined-chart"', article)
         self.assertIn('id="sandbox-coverage-chart"', article)
-        self.assertIn('id="sandbox-utilization-ladder"', article)
+        self.assertIn('id="market-state-current"', article)
+        self.assertIn('id="market-occupancy-chart"', article)
+        self.assertIn('id="market-state-availability"', article)
         self.assertIn('id="vm-hourly-chart"', article)
         self.assertIn("all seven prices", article)
         self.assertIn("sandbox-band-vm-range", script)
-        self.assertIn('src="./sandbox-cost.js?v=14"', article)
+        self.assertIn('src="./sandbox-cost.js?v=16"', article)
         self.assertIn("sandbox-cost.json", script)
         self.assertIn('"sandbox_cost_gold_v5"', script)
         self.assertIn("effectiveCssZoom", script)
@@ -57,7 +62,37 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="vm-capacity-table-body"', article)
         self.assertIn("createJobDistributionChart", script)
         self.assertIn("createBatchHistoryChart", script)
-        self.assertIn("renderUtilizationLadder", script)
+        self.assertIn("renderMarketStateSummary", script)
+        self.assertIn("createMarketOccupancyChart", script)
+        self.assertIn("market-state.json", script)
+        self.assertEqual(
+            market_state["schema_version"],
+            "compute_market_state_public_v1",
+        )
+        self.assertEqual(
+            market_state["current_row_count"],
+            len(market_state["current_rows"]),
+        )
+        self.assertEqual(
+            market_state["history_row_count"],
+            len(market_state["history_rows"]),
+        )
+        self.assertEqual(
+            {
+                row["measurement_kind"]
+                for row in market_state["current_rows"]
+            },
+            {"rental_occupancy", "availability_pressure"},
+        )
+        self.assertTrue(
+            all(
+                row["measurement_kind"] == "rental_occupancy"
+                and row["resource_type"] == "ALL_GPU"
+                for row in market_state["history_rows"]
+            )
+        )
+        self.assertNotIn("raw_ref", json.dumps(market_state))
+        self.assertNotIn("s3://", json.dumps(market_state))
         self.assertEqual(
             payload["manifest"]["manifest_version"],
             "sandbox_cost_gold_v5",

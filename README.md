@@ -110,13 +110,14 @@ export AWS_REGION=YOUR_AWS_REGION
 
 The default heartbeat also uses public APIs from Spheron, Inference.sh,
 GridStackHub, Cloud GPU Prices, Thunder Compute, Vultr, Scaleway, Oracle
-Cloud, OVHcloud, Clore, Akash, RunPod, and Verda, plus AWS Spot and Azure
+Cloud, OVHcloud, Akash, RunPod, and Verda, plus AWS Spot and Azure
 retail-price APIs. External aggregators are labeled and excluded from benchmark
 constituents.
 Optional authenticated live sources are enabled automatically when their
 credential is present:
 
 ```sh
+export CLORE_API_KEY=...
 export PRIME_INTELLECT_API_KEY=...
 export SHADEFORM_API_KEY=...
 export SESTERCE_API_KEY=...
@@ -222,13 +223,10 @@ The maintained sandbox benchmark follows the same evidence-to-product model:
 
 ```text
 exact VM catalog APIs + reviewed sandbox prices + StarSling benchmark runs
-  + reviewed utilization definitions
   -> bronze raw VM checks and reviewed source records
-  -> silver VM offers, sandbox prices, batches, jobs, phases, run metadata,
-     and a source-linked utilization metric dictionary
+  -> silver VM offers, sandbox prices, batches, jobs, phases, and run metadata
   -> named DataFusion queries
-  -> gold VM and sandbox cohorts, workload summaries, coverage-gated comparison,
-     and a publication-safe utilization ladder
+  -> gold VM and sandbox cohorts, workload summaries, and coverage-gated comparison
   -> sandbox-cost.json
   -> AdamSioud Compute article
 ```
@@ -259,13 +257,12 @@ low-coverage observations stay in the coverage table; they are not connected
 into a misleading continuous price line. Provider count is coverage, not
 transaction volume or GPU utilization.
 
-The project does not use a generic `utilization` field. Availability, rented
-share, scheduler allocation, processor activity, and useful output have
-different numerators and denominators. The current feed measures advertised
-GPU offers, VM offer rates, and sandbox workload time; it does not infer
-rented capacity or processor activity from those observations. The reviewed
-definitions are built into
-`gold/compute_utilization_public_ladder.parquet` and the public payload.
+The project does not use a generic `utilization` field. Availability, rental
+occupancy, scheduler allocation, processor activity, and useful output have
+different numerators and denominators. The GPU market feed records rental
+occupancy only where both rented and total rentable capacity are present. VM
+and sandbox feeds expose prices and workload timing, not a comparable public
+fleet denominator.
 
 ```sh
 uv run sandbox-cost validate
@@ -288,11 +285,6 @@ uv run sandbox-cost build \
   --vm-discovery-history-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_history.parquet \
   --vm-discovery-current-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_current.parquet \
   --vm-discovery-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_manifest.json
-
-uv run sandbox-cost query \
-  --output-root data/lake/sandbox_cost \
-  --query utilization-ladder \
-  --limit 10
 
 uv run sandbox-cost refresh-benchmark \
   --output-root data/lake/sandbox_cost \
@@ -324,8 +316,28 @@ uv run gpu-prices gold-index-constituents --limit 50
 uv run gpu-prices gold-benchmarks --limit 10
 uv run gpu-prices gold-benchmark-constituents --benchmark-family-id H100 --limit 50
 uv run gpu-prices gold-provider-comparison --limit 20
+uv run gpu-prices operator-query compute_market_state --version v1 --limit 200
 uv run gpu-prices export-gold-dashboard --limit 100
 ```
+
+`gold.fact_compute_market_state` is the latest capacity-state cross-section.
+`gold.fact_compute_market_state_history` is the cumulative, deduplicated hourly
+history. Akash contributes GPU-unit rental occupancy from reported active and
+total units. Clore contributes server-weighted on-demand rental occupancy.
+RunPod, Prime Intellect, and Hyperstack contribute availability observations
+only; they do not expose a compatible total fleet denominator. Prime preserves
+the upstream provider identity, and matching direct observations are preferred
+without deleting the aggregate row.
+
+Clore's marketplace endpoint requires a read API key. Without
+`CLORE_API_KEY`, the hourly scope omits the source while retaining prior Clore
+history in gold.
+
+The complete per-model state remains in gold and is available through the
+DataFusion operator query. The public `market-state.json` export is deliberately
+smaller: it publishes the current occupancy and availability cross-section, but
+only aggregate `ALL_GPU` rental-occupancy history. This keeps the article
+payload bounded while preserving every model-level observation in the lake.
 
 The provider comparison and price-index commands filter to available live offers and published-rate
 observations.

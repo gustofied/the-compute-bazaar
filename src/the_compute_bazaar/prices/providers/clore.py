@@ -1,4 +1,4 @@
-"""Clore.ai public live GPU marketplace adapter."""
+"""Clore.ai authenticated live GPU marketplace adapter."""
 
 from __future__ import annotations
 
@@ -26,9 +26,13 @@ class CloreClient:
     def __init__(
         self,
         *,
+        api_key: str,
         marketplace_url: str = DEFAULT_CLORE_MARKETPLACE_URL,
         session: requests.Session | None = None,
     ) -> None:
+        if not api_key:
+            raise ValueError("Clore marketplace API key is required")
+        self.api_key = api_key
         self.marketplace_url = marketplace_url
         self.session = session or requests.Session()
 
@@ -36,7 +40,7 @@ class CloreClient:
         response = self.session.get(
             self.marketplace_url,
             params={},
-            headers={"Accept": "application/json"},
+            headers={"Accept": "application/json", "auth": self.api_key},
             timeout=60,
         )
         response.raise_for_status()
@@ -57,7 +61,7 @@ class CloreClient:
         )
         return CloreMarketplaceFetch(
             raw_payload={
-                "mode": "public_live_marketplace",
+                "mode": "authenticated_live_marketplace",
                 "source_url": self.marketplace_url,
                 "server_count": len(servers),
                 "payload": dict(payload),

@@ -48,6 +48,15 @@
       "default_limit": 100
     },
     {
+      "query_id": "compute_market_state",
+      "version": "v1",
+      "title": "Compute Market State",
+      "description": "Rental occupancy, availability pressure, and listed-offer depth with explicit source denominators.",
+      "tables": ["fact_compute_market_state"],
+      "sql_path": "compute_market_state_v1.sql",
+      "default_limit": 200
+    },
+    {
       "query_id": "gold_table_counts",
       "version": "v0",
       "title": "Gold Table Counts",
@@ -58,6 +67,8 @@
         "fact_index_constituents",
         "fact_benchmark_values",
         "fact_benchmark_constituents",
+        "fact_compute_market_state",
+        "fact_compute_market_state_history",
         "dim_gpu_products",
         "dim_providers",
         "dim_regions"

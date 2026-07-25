@@ -502,13 +502,6 @@ They answer different questions:
 | Active | time or cycles with a selected engine active | sampled time or cycles | not currently observed comparably |
 | Productive | completed units meeting a declared objective | elapsed time | sandbox completions and runtime are retained, but no cross-provider SLO goodput is claimed |
 
-[Ornn's volume-metrics API](https://data.ornn.com/docs) defines its utilization
-ratio as the percentage of measured GPUs currently rented. That is a rental
-occupancy measure. It is not NVIDIA GPU-engine, SM, tensor, or memory activity.
-The public Ornn endpoint description does not fully disclose construction of
-the eligible population, so Compute Bazaar would retain that limitation even
-if a licensed series were added.
-
 [NVIDIA DCGM](https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html)
 defines separate engine, SM, tensor, and DRAM activity metrics and warns that
 occupancy alone does not prove effective use. [Amazon

@@ -250,10 +250,10 @@ Stage 1 is live:
   AWS VPC.
 - The default source set is Vast, Lium, Spheron, Inference.sh, GridStackHub,
   Cloud GPU Prices, Thunder Compute, Vultr, Scaleway, Oracle Cloud, OVHcloud,
-  Clore, Akash, RunPod, and Verda. AWS Spot and Azure retail are current price
+  Akash, RunPod, and Verda. AWS Spot and Azure retail are current price
   observations but are not proof of deployable capacity. External aggregators
   are retained for discovery and comparison but cannot vote in the benchmark.
-- Optional authenticated connectors cover Prime Intellect, Shadeform,
+- Optional authenticated connectors cover Clore, Prime Intellect, Shadeform,
   Sesterce, TensorDock, Hyperstack, Lambda Cloud, DigitalOcean, GPUs.io,
   JarvisLabs, and Verda availability.
 - The heartbeat can also ingest official published rate cards from Runpod, Lambda, Hyperstack,
@@ -263,7 +263,11 @@ Stage 1 is live:
 - Raw provider responses are written to S3 bronze. Lium stores a raw pagination envelope so the
   bronze layer contains page-level provider evidence, not just extracted rows.
 - Normalized offers are written to S3 silver.
+- Source-defined capacity observations are written to
+  `silver/compute_market_state`. Rental occupancy is admitted only when a
+  source supplies both the rented numerator and matching total denominator.
 - AutoMQ receives provider snapshot and normalized offer events.
+- AutoMQ also receives `gpu.market_state_observation.v1` events.
 - Curia can use DataFusion to query the latest silver/gold manifests and Parquet files.
 
 Stage 1.5 is now started:
@@ -275,6 +279,8 @@ Stage 1.5 is now started:
 - `gpu-prices gold-provider-comparison` queries provider floors from `gold.fact_gpu_listings`.
 - `gpu-prices gold-benchmarks` queries the materialized benchmark values.
 - `gpu-prices gold-benchmark-constituents` exposes benchmark evidence rows.
+- `operator-query compute_market_state --version v1` queries current
+  occupancy, availability pressure, and offer depth through DataFusion.
 - `gpu-prices export-gold-dashboard` writes public-safe JSON snapshots for static D3 sections.
 - `gpu-prices market-hourly` runs the complete provider-to-dashboard heartbeat and writes
   `gold/_manifests/market_runs/latest.json`.
@@ -285,6 +291,30 @@ history updates with conditional S3 leases. Operational status now describes
 whether ingestion and publication worked; unknown GPU aliases are retained
 separately as normalization/data-quality debt. An hourly external freshness
 check watches the public snapshot and latest complete VM observation.
+
+The capacity-state path has two gold tables:
+
+- `fact_compute_market_state` is the latest cross-section.
+- `fact_compute_market_state_history` cumulatively retains hourly observations
+  by stable observation ID.
+
+Akash's network row is GPU-unit weighted: active GPU units divided by total GPU
+units from the same online providers. Clore's row is server weighted and
+on-demand only: public servers with `rented=true` divided by public servers
+with that flag. Those rows share a percentage scale for display but are not
+pooled because their units and market scopes differ. Prime Intellect keeps the
+upstream seller in `provider`; when the same provider/model is available from a
+direct connector, the aggregate observation stays auditable but is marked
+ineligible for aggregation.
+
+Clore requires `CLORE_API_KEY`. If that key is absent, it is omitted from the
+hourly provider scope; previous source observations remain in historical gold.
+
+The full model-level state stays in these gold tables and remains queryable
+through DataFusion. The public `market-state.json` export contains the current
+occupancy and availability cross-section, but limits public history to aggregate
+`ALL_GPU` rental-occupancy rows. That keeps the static article payload bounded
+without making the publication file the system of record.
 
 ## Direct Provider Example
 

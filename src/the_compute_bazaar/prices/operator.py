@@ -41,6 +41,9 @@ def read_operator_manifest(*, lake_root: str) -> dict[str, Any]:
         "source_manifest_refs": dict(manifest.get("source_manifest_refs") or {}),
         "source_run_ids": dict(manifest.get("source_run_ids") or {}),
         "source_normalized_refs": dict(manifest.get("source_normalized_refs") or {}),
+        "source_market_state_refs": dict(
+            manifest.get("source_market_state_refs") or {}
+        ),
     }
 
 
@@ -111,6 +114,7 @@ def trace_operator_row(
     silver_refs = _dedupe(
         [
             *_split_refs(row.get("source_normalized_ref")),
+            *_split_refs(row.get("source_market_state_ref")),
             *[
                 str(provider_run.get("normalized_ref"))
                 for provider_run in (matching_provider_runs or provider_runs)
@@ -148,6 +152,7 @@ def trace_operator_row(
             "raw_ref": row.get("raw_ref"),
             "source_manifest_ref": row.get("source_manifest_ref"),
             "source_normalized_ref": row.get("source_normalized_ref"),
+            "source_market_state_ref": row.get("source_market_state_ref"),
         },
         "trajectory": [
             {
@@ -284,6 +289,7 @@ def _provider_runs(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     source_manifest_refs = dict(manifest.get("source_manifest_refs") or {})
     source_run_ids = dict(manifest.get("source_run_ids") or {})
     source_normalized_refs = dict(manifest.get("source_normalized_refs") or {})
+    source_market_state_refs = dict(manifest.get("source_market_state_refs") or {})
     runs = []
     for provider in provider_scope:
         manifest_ref = source_manifest_refs.get(provider)
@@ -301,6 +307,11 @@ def _provider_runs(manifest: dict[str, Any]) -> list[dict[str, Any]]:
                 "manifest_ref": manifest_ref,
                 "raw_ref": source_manifest.get("raw_ref"),
                 "normalized_ref": source_manifest.get("normalized_ref") or source_normalized_refs.get(provider),
+                "market_state_ref": source_manifest.get("market_state_ref")
+                or source_market_state_refs.get(provider),
+                "market_state_observation_count": source_manifest.get(
+                    "market_state_observation_count"
+                ),
                 "raw_offer_count": source_manifest.get("raw_offer_count"),
                 "normalized_offer_count": source_manifest.get("normalized_offer_count"),
                 "published_events": source_manifest.get("published_events"),
@@ -318,11 +329,12 @@ def _allowed_refs(manifest: dict[str, Any]) -> set[str]:
             *dict(manifest.get("table_refs") or {}).values(),
             *dict(manifest.get("source_manifest_refs") or {}).values(),
             *dict(manifest.get("source_normalized_refs") or {}).values(),
+            *dict(manifest.get("source_market_state_refs") or {}).values(),
         ]
         if ref
     }
     for provider_run in _provider_runs(manifest):
-        for key in ["manifest_ref", "raw_ref", "normalized_ref"]:
+        for key in ["manifest_ref", "raw_ref", "normalized_ref", "market_state_ref"]:
             value = provider_run.get(key)
             if value:
                 refs.add(str(value))

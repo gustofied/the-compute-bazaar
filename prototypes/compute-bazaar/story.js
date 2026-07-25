@@ -31,6 +31,7 @@ async function loadAndRenderDashboard(dataBase, sourceNote) {
       constituentPayload,
       comparisonPayload,
       listingsPayload,
+      marketStatePayload,
     ] = await Promise.all([
       loadJson(`${dataBase}/manifest.json`),
       loadOptionalJson(`${dataBase}/market-run.json`),
@@ -41,6 +42,7 @@ async function loadAndRenderDashboard(dataBase, sourceNote) {
       loadOptionalJson(`${dataBase}/index-constituents.json`),
       loadJson(`${dataBase}/provider-comparison.json`),
       loadJson(`${dataBase}/listings-sample.json`),
+      loadOptionalJson(`${dataBase}/market-state.json`),
     ]);
 
     renderStats(manifest);
@@ -49,6 +51,10 @@ async function loadAndRenderDashboard(dataBase, sourceNote) {
     renderQuality(marketRun, indexQualityPayload?.rows || []);
     renderFloorChart(indexPayload.rows || []);
     renderIndexHistoryChart(indexHistoryPayload?.rows || []);
+    renderMarketState(
+      marketStatePayload?.history_rows || [],
+      marketStatePayload?.current_rows || [],
+    );
     renderConstituentTable(constituentPayload?.rows || []);
     renderProviderTable(comparisonPayload.rows || []);
     renderHistoryTable(marketHistory?.rows || []);
@@ -480,6 +486,169 @@ function selectHistorySeries(points) {
   return grouped.slice(0, 5);
 }
 
+function renderMarketState(historyRows, currentRows) {
+  const container = d3.select("#market-state-chart");
+  const ledger = d3.select("#market-state-ledger");
+  container.selectAll("*").remove();
+  ledger.selectAll("*").remove();
+
+  const points = historyRows
+    .filter(
+      (row) =>
+        row.measurement_kind === "rental_occupancy" &&
+        row.resource_type === "ALL_GPU" &&
+        row.rented_share != null &&
+        Number(row.total_units) > 0,
+    )
+    .map((row) => ({
+      ...row,
+      observed: new Date(row.gold_observed_at || row.observed_at),
+      rentedShare: Number(row.rented_share),
+      rentedUnits: Number(row.rented_units),
+      totalUnits: Number(row.total_units),
+      seriesId: `${row.provider}:${row.measurement_scope}:${row.unit}`,
+    }))
+    .filter(
+      (row) =>
+        !Number.isNaN(row.observed.getTime()) &&
+        Number.isFinite(row.rentedShare),
+    )
+    .sort((left, right) => d3.ascending(left.observed, right.observed));
+
+  const availability = currentRows
+    .filter(
+      (row) =>
+        row.measurement_kind === "availability_pressure" &&
+        row.aggregation_eligible !== false,
+    )
+    .sort(
+      (left, right) =>
+        d3.descending(
+          Number(left.available_units || 0),
+          Number(right.available_units || 0),
+        ) || d3.ascending(left.provider, right.provider),
+    )
+    .slice(0, 12);
+
+  if (!points.length) {
+    container
+      .append("p")
+      .attr("class", "empty-cell")
+      .text("Waiting for the first rented-and-total market observation.");
+  } else {
+    const width = Math.max(620, container.node().clientWidth || 620);
+    const height = 280;
+    const margin = { top: 18, right: 125, bottom: 38, left: 62 };
+    let [minimumDate, maximumDate] = d3.extent(
+      points,
+      (row) => row.observed,
+    );
+    if (minimumDate.getTime() === maximumDate.getTime()) {
+      minimumDate = new Date(minimumDate.getTime() - 30 * 60 * 1000);
+      maximumDate = new Date(maximumDate.getTime() + 30 * 60 * 1000);
+    }
+    const x = d3
+      .scaleUtc()
+      .domain([minimumDate, maximumDate])
+      .range([margin.left, width - margin.right]);
+    const y = d3
+      .scaleLinear()
+      .domain([0, 1])
+      .range([height - margin.bottom, margin.top]);
+    const series = Array.from(
+      d3.group(points, (row) => row.seriesId),
+      ([seriesId, values]) => ({
+        seriesId,
+        provider: values[0].provider,
+        values,
+      }),
+    );
+    const color = d3
+      .scaleOrdinal()
+      .domain(series.map((entry) => entry.provider))
+      .range(["#2c5f2d", "#9a463e", "#586f8d", "#876d92"]);
+    const svg = container
+      .append("svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("width", "100%")
+      .attr("height", height);
+    svg
+      .append("g")
+      .attr("transform", `translate(0,${height - margin.bottom})`)
+      .call(d3.axisBottom(x).ticks(5).tickSizeOuter(0))
+      .call((group) => group.selectAll("text").attr("class", "axis-label"));
+    svg
+      .append("g")
+      .attr("transform", `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y).ticks(4).tickFormat(d3.format(".0%")))
+      .call((group) => group.selectAll("text").attr("class", "axis-label"))
+      .call((group) =>
+        group
+          .selectAll(".tick line")
+          .clone()
+          .attr("x2", width - margin.left - margin.right)
+          .attr("stroke", "#eee"),
+      );
+    const line = d3
+      .line()
+      .x((row) => x(row.observed))
+      .y((row) => y(row.rentedShare))
+      .curve(d3.curveMonotoneX);
+    const groups = svg
+      .append("g")
+      .selectAll("g")
+      .data(series)
+      .join("g");
+    groups
+      .append("path")
+      .attr("class", "history-line")
+      .attr("stroke", (entry) => color(entry.provider))
+      .attr("d", (entry) => line(entry.values));
+    groups
+      .selectAll("circle")
+      .data((entry) =>
+        entry.values.map((row) => ({ ...row, color: color(entry.provider) })),
+      )
+      .join("circle")
+      .attr("class", "history-dot")
+      .attr("cx", (row) => x(row.observed))
+      .attr("cy", (row) => y(row.rentedShare))
+      .attr("r", 3)
+      .attr("fill", (row) => row.color)
+      .append("title")
+      .text(
+        (row) =>
+          `${formatProvider(row.provider)} ${d3.format(".1%")(row.rentedShare)} rented\n${row.rentedUnits} of ${row.totalUnits} ${formatUnit(row.unit)}\n${formatDate(row.observed)}`,
+      );
+    groups
+      .append("text")
+      .attr("class", "line-label")
+      .attr("x", width - margin.right + 10)
+      .attr("y", (entry) => y(entry.values.at(-1).rentedShare))
+      .attr("dy", "0.32em")
+      .attr("fill", (entry) => color(entry.provider))
+      .text((entry) => formatProvider(entry.provider));
+  }
+
+  ledger
+    .selectAll("div")
+    .data(availability)
+    .join("div")
+    .html(
+      (row) => `
+        <span>${escapeHtml(formatProvider(row.provider))} · ${escapeHtml(formatGpu(row.resource_type))}</span>
+        <strong>${escapeHtml(formatAvailability(row))}</strong>
+        <em>${escapeHtml(row.source_role === "aggregator" ? `via ${formatProvider(row.source_connector)}` : "direct source")}</em>
+      `,
+    );
+  if (!availability.length) {
+    ledger
+      .append("p")
+      .attr("class", "empty-cell")
+      .text("No current source-specific availability observations.");
+  }
+}
+
 function renderConstituentTable(rows) {
   const tbody = d3.select("#constituent-table tbody");
   const data = rows.slice(0, 18);
@@ -600,7 +769,38 @@ function formatProvider(value) {
   const text = String(value || "");
   if (text.toLowerCase() === "lium") return "Lium";
   if (text.toLowerCase() === "vast") return "Vast";
-  return text;
+  if (text.toLowerCase() === "akash") return "Akash";
+  if (text.toLowerCase() === "clore") return "Clore";
+  if (text.toLowerCase() === "runpod") return "RunPod";
+  if (text.toLowerCase() === "prime_intellect") return "Prime Intellect";
+  if (text.toLowerCase() === "hyperstack") return "Hyperstack";
+  return text.replaceAll("_", " ");
+}
+
+function formatGpu(value) {
+  if (value === "ALL_GPU") return "all GPUs";
+  return String(value || "GPU").replaceAll("_", " ");
+}
+
+function formatUnit(value) {
+  const labels = {
+    gpu_units: "GPU units",
+    servers: "public servers",
+    bundle_sizes: "bundle sizes",
+    configurations: "configurations",
+    gpu_units_lower_bound: "deployable GPU units",
+  };
+  return labels[value] || String(value || "units").replaceAll("_", " ");
+}
+
+function formatAvailability(row) {
+  const share = Number(row.available_share);
+  if (Number.isFinite(share)) return `${d3.format(".0%")(share)} available`;
+  const count = Number(row.available_units);
+  if (Number.isFinite(count)) {
+    return `${d3.format(",.0f")(count)} ${formatUnit(row.unit)}`;
+  }
+  return String(row.stock_status || "observed").toLowerCase();
 }
 
 function formatLocation(country, region) {

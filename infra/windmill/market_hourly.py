@@ -9,7 +9,7 @@ import subprocess
 
 DEFAULT_PROVIDER_SCOPE = (
     "vast,lium,spheron,inference_sh,gridstackhub,cloud_gpu_prices,"
-    "thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,clore,akash,aws_spot,"
+    "thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,akash,aws_spot,"
     "azure,runpod,verda,published_rate_cards"
 )
 
@@ -17,6 +17,7 @@ DEFAULT_PROVIDER_SCOPE = (
 def main(
     vast_api_key: str | None = None,
     lium_api_key: str | None = None,
+    clore_api_key: str | None = None,
     prime_intellect_api_key: str | None = None,
     shadeform_api_key: str | None = None,
     sesterce_api_key: str | None = None,
@@ -50,6 +51,7 @@ def main(
     env = os.environ.copy()
     _set_env_if_present(env, "VAST_API_KEY", vast_api_key)
     _set_env_if_present(env, "LIUM_API_KEY", lium_api_key)
+    _set_env_if_present(env, "CLORE_API_KEY", clore_api_key)
     _set_env_if_present(env, "PRIME_INTELLECT_API_KEY", prime_intellect_api_key)
     _set_env_if_present(env, "SHADEFORM_API_KEY", shadeform_api_key)
     _set_env_if_present(env, "SESTERCE_API_KEY", sesterce_api_key)
@@ -78,6 +80,7 @@ def main(
     _set_env_if_present(env, "AWS_REGION", aws_region)
     _set_env_if_present(env, "AWS_DEFAULT_REGION", aws_region)
     provider_scope = providers or _default_provider_scope(
+        clore_api_key=clore_api_key,
         prime_intellect_api_key=prime_intellect_api_key,
         shadeform_api_key=shadeform_api_key,
         sesterce_api_key=sesterce_api_key,
@@ -132,6 +135,7 @@ def _set_env_if_present(env: dict[str, str], name: str, value: str | None) -> No
 
 def _default_provider_scope(
     *,
+    clore_api_key: str | None,
     prime_intellect_api_key: str | None,
     shadeform_api_key: str | None,
     sesterce_api_key: str | None,
@@ -145,6 +149,7 @@ def _default_provider_scope(
 ) -> str:
     providers = DEFAULT_PROVIDER_SCOPE.split(",")
     for provider, key in (
+        ("clore", clore_api_key),
         ("prime_intellect", prime_intellect_api_key),
         ("shadeform", shadeform_api_key),
         ("sesterce", sesterce_api_key),

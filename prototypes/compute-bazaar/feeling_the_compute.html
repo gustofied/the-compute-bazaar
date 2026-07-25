@@ -162,6 +162,25 @@
           <div id="index-history-chart" class="chart" role="img" aria-label="GPU floor price history chart"></div>
         </figure>
 
+        <figure class="viz-block">
+          <figcaption>
+            <span>Capacity state</span>
+            <strong>Observed commercial rental occupancy</strong>
+          </figcaption>
+          <div
+            id="market-state-chart"
+            class="chart market-state-chart"
+            role="img"
+            aria-label="Source-reported GPU rental occupancy history"
+          ></div>
+          <div class="market-state-ledger" id="market-state-ledger"></div>
+          <p class="figure-note">
+            Occupancy is calculated only where a source supplies both rented and total rentable
+            capacity. Availability-only feeds remain separate and are not converted into an
+            occupancy percentage.
+          </p>
+        </figure>
+
         <figure class="viz-block compact">
           <figcaption>
             <span>Evidence trail</span>
@@ -272,6 +291,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-    <script src="./story.js"></script>
+    <script src="./story.js?v=2"></script>
   </body>
 </html>

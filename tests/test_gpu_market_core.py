@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -16,7 +17,10 @@ from the_compute_bazaar.prices.gold import (
     query_gold_index_constituents,
     query_gold_index_history,
     query_gold_listings,
+    query_gold_market_state,
+    query_gold_market_state_history,
     query_gold_provider_comparison,
+    read_latest_gold_manifest,
 )
 from the_compute_bazaar.prices.coverage import query_frontier_coverage
 from the_compute_bazaar.prices.market_run import (
@@ -27,6 +31,12 @@ from the_compute_bazaar.prices.market_run import (
     write_market_run_manifest,
 )
 from the_compute_bazaar.prices.normalize import canonical_gpu_model
+from the_compute_bazaar.prices.market_state import (
+    normalize_akash_market_state,
+    normalize_clore_market_state,
+    normalize_prime_market_state,
+    normalize_runpod_market_state,
+)
 from the_compute_bazaar.prices.operator import (
     list_operator_queries,
     preview_operator_ref,
@@ -130,11 +140,12 @@ from the_compute_bazaar.prices.providers.vultr import (
     VultrClient,
     normalize_gpu_plans as normalize_vultr_gpu_plans,
 )
-from the_compute_bazaar.prices.schemas import GpuOffer
+from the_compute_bazaar.prices.schemas import ComputeMarketState, GpuOffer
 from the_compute_bazaar.prices.storage import (
     read_json,
     write_json,
     write_offers_parquet,
+    write_parquet_rows,
 )
 
 
@@ -1026,7 +1037,7 @@ class GpuNormalizationTests(unittest.TestCase):
                             ],
                         }
                     ],
-                }
+                },
             ]
         )
         fetched = CloudGpuPricesClient(
@@ -1151,6 +1162,7 @@ class GpuNormalizationTests(unittest.TestCase):
         with patch.dict(
             "os.environ",
             {
+                "CLORE_API_KEY": "configured",
                 "JL_API_KEY": "configured",
                 "GETDEPLOYING_API_KEY": "configured",
             },
@@ -1165,7 +1177,9 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertIn("ovhcloud", public_scope)
         self.assertIn("gridstackhub", public_scope)
         self.assertIn("cloud_gpu_prices", public_scope)
+        self.assertNotIn("clore", public_scope)
         self.assertNotIn("jarvislabs", public_scope)
+        self.assertIn("clore", authenticated_scope)
         self.assertIn("jarvislabs", authenticated_scope)
         self.assertIn("getdeploying", authenticated_scope)
 
@@ -1326,7 +1340,7 @@ class GpuNormalizationTests(unittest.TestCase):
                             ],
                         }
                     }
-                }
+                },
             ]
         )
         fetched = LambdaCloudClient(
@@ -1574,6 +1588,7 @@ class GpuNormalizationTests(unittest.TestCase):
             ]
         )
         fetched = CloreClient(
+            api_key="clore-key",
             marketplace_url="https://example.test/v1/marketplace",
             session=session,
         ).fetch_marketplace()
@@ -1585,6 +1600,7 @@ class GpuNormalizationTests(unittest.TestCase):
 
         self.assertEqual(unknown, [])
         self.assertEqual(fetched.raw_payload["server_count"], 2)
+        self.assertEqual(session.calls[0]["headers"]["auth"], "clore-key")
         self.assertEqual(len(offers), 1)
         self.assertEqual(offers[0].provider, "clore")
         self.assertEqual(offers[0].gpu_model, "H100_80GB_x8")
@@ -1747,7 +1763,29 @@ class GpuNormalizationTests(unittest.TestCase):
                             },
                         }
                     ],
-                }
+                },
+                [
+                    {
+                        "owner": "akash1provider",
+                        "isOnline": True,
+                        "gpuModels": [
+                            {
+                                "vendor": "nvidia",
+                                "model": "h100",
+                                "ram": "80Gi",
+                                "interface": "SXM5",
+                            }
+                        ],
+                        "stats": {
+                            "gpu": {
+                                "active": 42,
+                                "available": 29,
+                                "pending": 0,
+                                "total": 71,
+                            }
+                        },
+                    }
+                ],
             ]
         )
         fetched = AkashClient(
@@ -1767,6 +1805,46 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertEqual(offers[0].metadata["available_gpu_units"], 29)
         self.assertEqual(offers[0].available_gpu_count, 29)
         self.assertEqual(offers[0].metadata["available_provider_count"], 4)
+        state = normalize_akash_market_state(
+            models=fetched.models,
+            providers=fetched.providers,
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/akash.json",
+        )
+        occupancy = next(
+            row for row in state if row.measurement_kind == "rental_occupancy"
+        )
+        h100 = next(row for row in state if row.resource_type == "H100_80GB")
+        self.assertEqual(occupancy.unit, "gpu_units")
+        self.assertEqual(occupancy.rented_units, 42)
+        self.assertAlmostEqual(occupancy.rented_share or 0, 42 / 71)
+        self.assertEqual(h100.measurement_kind, "availability_pressure")
+        self.assertAlmostEqual(h100.available_share or 0, 29 / 71)
+
+    def test_clore_market_state_is_server_weighted_and_on_demand_scoped(self) -> None:
+        state = normalize_clore_market_state(
+            [
+                {
+                    "rented": False,
+                    "gpu_array": ["H100 80GB"],
+                    "specs": {"gpuram": 80},
+                },
+                {
+                    "rented": True,
+                    "gpu_array": ["H100 80GB"] * 8,
+                    "specs": {"gpuram": 80},
+                },
+            ],
+            observed_at=OBSERVED_AT,
+            raw_ref="s3://bucket/raw/clore.json",
+        )
+
+        aggregate = next(row for row in state if row.resource_type == "ALL_GPU")
+        self.assertEqual(aggregate.unit, "servers")
+        self.assertEqual(aggregate.total_units, 2)
+        self.assertEqual(aggregate.rented_units, 1)
+        self.assertEqual(aggregate.rented_share, 0.5)
+        self.assertIn("on-demand only", aggregate.notes or "")
 
     def test_published_rate_cards_normalize_as_provider_observations(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1865,6 +1943,184 @@ class GpuNormalizationTests(unittest.TestCase):
 
 
 class GoldQueryTests(unittest.TestCase):
+    def test_market_state_history_accumulates_without_rewriting_prior_rows(self) -> None:
+        first_observed = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+        second_observed = datetime(2026, 7, 25, 13, 0, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            dashboard_root = str(Path(tmpdir) / "dashboard")
+            offer = _offer(
+                provider="runpod",
+                source_offer_id="runpod-h100",
+                price_usd_hr=2.5,
+                gpu_raw_name="H100",
+                gpu_model="H100_80GB",
+                vram_gb=80,
+            )
+            for run_id, observed_at, stock_status in [
+                ("runpod-state-1200", first_observed, "Low"),
+                ("runpod-state-1300", second_observed, "High"),
+            ]:
+                state = normalize_runpod_market_state(
+                    [
+                        {
+                            "id": "NVIDIA H100 80GB HBM3",
+                            "displayName": "H100",
+                            "memoryInGb": 80,
+                            "lowestPrice": {
+                                "stockStatus": stock_status,
+                                "availableGpuCounts": [1, 2, 4, 8],
+                            },
+                        }
+                    ],
+                    observed_at=observed_at,
+                    raw_ref=f"raw/{run_id}.json",
+                )
+                _write_provider_run(
+                    lake_root=lake_root,
+                    raw_root=raw_root,
+                    provider="runpod",
+                    run_id=run_id,
+                    offers=[offer],
+                    market_state=state,
+                )
+                build_gold_market_tables(
+                    lake_root=lake_root,
+                    providers=["runpod"],
+                    run_id=f"gold-{run_id}",
+                )
+
+            history = query_gold_market_state_history(lake_root=lake_root)
+            export = export_gold_dashboard_snapshot(
+                lake_root=lake_root,
+                output_root=dashboard_root,
+            )
+            public_state = read_json(export["output_refs"]["market_state"])
+            state_rows = [
+                row
+                for row in history["rows"]
+                if row["provider"] == "runpod"
+                and row["resource_type"] == "H100_80GB"
+            ]
+            latest = read_latest_gold_manifest(lake_root)
+
+        self.assertEqual(len(state_rows), 2)
+        self.assertEqual(
+            {row["stock_status"] for row in state_rows},
+            {"Low", "High"},
+        )
+        self.assertEqual(history["history_manifest_count"], 2)
+        self.assertEqual(
+            latest["row_counts"]["fact_compute_market_state_history"],
+            4,
+        )
+        self.assertEqual(public_state["current_row_count"], 1)
+        self.assertEqual(public_state["history_row_count"], 0)
+        self.assertEqual(
+            {
+                row["measurement_kind"]
+                for row in public_state["current_rows"]
+            },
+            {"availability_pressure"},
+        )
+        self.assertNotIn("dashboard_output_root", public_state["manifest"])
+        self.assertNotIn("s3://", json.dumps(public_state))
+
+    def test_market_state_keeps_prime_but_prefers_matching_direct_source(self) -> None:
+        direct_state = normalize_runpod_market_state(
+            [
+                {
+                    "id": "NVIDIA H100 80GB HBM3",
+                    "displayName": "H100",
+                    "memoryInGb": 80,
+                    "lowestPrice": {
+                        "stockStatus": "High",
+                        "availableGpuCounts": [1, 2, 4, 8],
+                    },
+                }
+            ],
+            observed_at=OBSERVED_AT,
+            raw_ref="raw/runpod.json",
+        )
+        aggregate_state = normalize_prime_market_state(
+            [
+                {
+                    "provider": "runpod",
+                    "gpuType": "H100_80GB",
+                    "gpuMemory": 80,
+                    "gpuCount": 8,
+                    "stockStatus": "Low",
+                }
+            ],
+            observed_at=OBSERVED_AT,
+            raw_ref="raw/prime_intellect.json",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="runpod",
+                run_id="runpod-state",
+                offers=[
+                    _offer(
+                        provider="runpod",
+                        source_offer_id="runpod-h100",
+                        price_usd_hr=2.5,
+                        gpu_raw_name="H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                    )
+                ],
+                market_state=direct_state,
+            )
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="prime_intellect",
+                run_id="prime-state",
+                offers=[
+                    _offer(
+                        provider="runpod",
+                        source_connector="prime_intellect",
+                        source_offer_id="prime-runpod-h100",
+                        price_usd_hr=2.6,
+                        gpu_raw_name="H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                    )
+                ],
+                market_state=aggregate_state,
+            )
+
+            build = build_gold_market_tables(
+                lake_root=lake_root,
+                providers=["runpod", "prime_intellect"],
+                run_id="gold-market-20260725T120000-1234abcd",
+            )
+            rows = query_gold_market_state(lake_root=lake_root)["rows"]
+
+        availability = [
+            row
+            for row in rows
+            if row["measurement_kind"] == "availability_pressure"
+            and row["provider"] == "runpod"
+            and row["resource_type"] == "H100_80GB"
+        ]
+        self.assertEqual(build.row_counts["fact_compute_market_state"], 4)
+        self.assertEqual(len(availability), 2)
+        by_connector = {row["source_connector"]: row for row in availability}
+        self.assertTrue(by_connector["runpod"]["aggregation_eligible"])
+        self.assertFalse(
+            by_connector["prime_intellect"]["aggregation_eligible"]
+        )
+        self.assertEqual(
+            by_connector["prime_intellect"]["aggregation_exclusion_reason"],
+            "matching_direct_provider_source",
+        )
+
     def test_provider_comparison_uses_available_offers_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             lake_root = str(Path(tmpdir) / "lake")
@@ -2627,6 +2883,7 @@ def _write_provider_run(
     provider: str,
     run_id: str,
     offers: list[GpuOffer],
+    market_state: list[ComputeMarketState] | None = None,
 ) -> None:
     raw_ref = (
         f"{raw_root}/provider={provider}/date=2026-06-17/run_id={run_id}/offers.json"
@@ -2634,6 +2891,12 @@ def _write_provider_run(
     normalized_ref = f"{lake_root}/silver/gpu_offers/date=2026-06-17/provider={provider}/run_id={run_id}/offers.parquet"
     manifest_ref = f"{lake_root}/_manifests/gpu_offers/provider={provider}/date=2026-06-17/run_id={run_id}.json"
     latest_ref = f"{lake_root}/_manifests/gpu_offers/provider={provider}/latest.json"
+    market_state_ref = (
+        f"{lake_root}/silver/compute_market_state/date=2026-06-17/"
+        f"provider={provider}/run_id={run_id}/observations.parquet"
+        if market_state
+        else None
+    )
     manifest = {
         "manifest_version": "v1",
         "table": "gpu_offers",
@@ -2647,10 +2910,26 @@ def _write_provider_run(
         "published_events": len(offers) + 1,
         "publish_mode": "test",
         "unknown_gpu_names": [],
+        "market_state_ref": market_state_ref,
+        "market_state_observation_count": len(market_state or []),
         "manifest_ref": manifest_ref,
     }
     write_json(raw_ref, [offer.to_dict() for offer in offers])
     write_offers_parquet(normalized_ref, offers)
+    if market_state_ref:
+        write_parquet_rows(
+            market_state_ref,
+            [
+                {
+                    **observation.to_dict(),
+                    "source_run_id": run_id,
+                    "source_manifest_ref": manifest_ref,
+                    "source_normalized_ref": normalized_ref,
+                    "source_market_state_ref": market_state_ref,
+                }
+                for observation in market_state or []
+            ],
+        )
     write_json(manifest_ref, manifest)
     write_json(latest_ref, manifest)
 

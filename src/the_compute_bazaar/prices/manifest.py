@@ -25,6 +25,8 @@ class GpuOffersRunManifest:
     published_events: int
     unknown_gpu_names: list[str]
     publish_mode: str = "kafka"
+    market_state_ref: str | None = None
+    market_state_observation_count: int = 0
     manifest_ref: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -41,6 +43,8 @@ class GpuOffersRunManifest:
             "published_events": self.published_events,
             "publish_mode": self.publish_mode,
             "unknown_gpu_names": self.unknown_gpu_names,
+            "market_state_ref": self.market_state_ref,
+            "market_state_observation_count": self.market_state_observation_count,
             "manifest_ref": self.manifest_ref,
         }
 
@@ -83,6 +87,8 @@ def write_run_manifest(
     published_events: int,
     unknown_gpu_names: list[str],
     publish_mode: str = "kafka",
+    market_state_ref: str | None = None,
+    market_state_observation_count: int = 0,
 ) -> GpuOffersRunManifest:
     manifest_ref = run_manifest_ref(
         lake_root,
@@ -101,6 +107,8 @@ def write_run_manifest(
         published_events=published_events,
         unknown_gpu_names=unknown_gpu_names,
         publish_mode=publish_mode,
+        market_state_ref=market_state_ref,
+        market_state_observation_count=market_state_observation_count,
         manifest_ref=manifest_ref,
     )
     payload = manifest.to_dict()

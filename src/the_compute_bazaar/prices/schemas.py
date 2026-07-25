@@ -88,6 +88,44 @@ class GpuOffer:
 
 
 @dataclass(frozen=True)
+class ComputeMarketState:
+    """A source-defined observation about rental or deployable capacity."""
+
+    observation_id: str
+    observed_at: datetime
+    resource_market: str
+    resource_type: str
+    provider: str
+    source_connector: str
+    source_role: str
+    measurement_kind: str
+    measurement_scope: str
+    unit: str
+    total_units: float | None
+    rented_units: float | None
+    available_units: float | None
+    pending_units: float | None
+    rented_share: float | None
+    available_share: float | None
+    stock_status: str | None
+    count_precision: str
+    numerator_definition: str
+    denominator_definition: str
+    aggregation_eligible: bool
+    aggregation_exclusion_reason: str | None
+    source_url: str
+    raw_ref: str | None
+    methodology_version: str = "compute_market_state_v1"
+    notes: str | None = None
+
+    def event_key(self) -> str:
+        return self.observation_id
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_jsonable(self)
+
+
+@dataclass(frozen=True)
 class GpuIndexPrice:
     index_symbol: str
     window_start: datetime

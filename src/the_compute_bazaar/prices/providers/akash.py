@@ -15,12 +15,14 @@ from ..schemas import GpuOffer
 
 
 DEFAULT_AKASH_GPU_PRICES_URL = "https://console-api.akash.network/v1/gpu-prices"
+DEFAULT_AKASH_PROVIDERS_URL = "https://console-api.akash.network/v1/providers"
 
 
 @dataclass(frozen=True)
 class AkashGpuPricesFetch:
     raw_payload: dict[str, Any]
     models: list[dict[str, Any]]
+    providers: list[dict[str, Any]]
 
 
 class AkashClient:
@@ -28,9 +30,11 @@ class AkashClient:
         self,
         *,
         prices_url: str = DEFAULT_AKASH_GPU_PRICES_URL,
+        providers_url: str = DEFAULT_AKASH_PROVIDERS_URL,
         session: requests.Session | None = None,
     ) -> None:
         self.prices_url = prices_url
+        self.providers_url = providers_url
         self.session = session or requests.Session()
 
     def fetch_gpu_prices(self) -> AkashGpuPricesFetch:
@@ -42,20 +46,38 @@ class AkashClient:
         )
         response.raise_for_status()
         payload = response.json()
+        providers_response = self.session.get(
+            self.providers_url,
+            params={},
+            headers={"Accept": "application/json"},
+            timeout=60,
+        )
+        providers_response.raise_for_status()
+        providers_payload = providers_response.json()
         models = (
             [dict(row) for row in payload.get("models", []) if isinstance(row, Mapping)]
             if isinstance(payload, Mapping)
             else []
         )
+        providers = (
+            [dict(row) for row in providers_payload if isinstance(row, Mapping)]
+            if isinstance(providers_payload, list)
+            else []
+        )
         return AkashGpuPricesFetch(
             raw_payload={
-                "mode": "live_gpu_price_and_availability_summary",
-                "source_url": self.prices_url,
-                "payload": payload,
+                "mode": "live_gpu_price_availability_and_provider_capacity",
+                "prices_source_url": self.prices_url,
+                "providers_source_url": self.providers_url,
+                "prices_payload": payload,
+                "providers_payload": providers_payload,
                 "model_count": len(models),
+                "provider_count": len(providers),
                 "models": models,
+                "providers": providers,
             },
             models=models,
+            providers=providers,
         )
 
 

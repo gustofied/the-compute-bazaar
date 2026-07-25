@@ -10,7 +10,14 @@ from typing import Any
 
 from .automq import DryRunPublisher, KafkaPublisher, Publisher, kafka_config_from_env
 from .events import make_event, new_run_id, sha256_json
-from .manifest import write_run_manifest
+from .manifest import run_manifest_ref, write_run_manifest
+from .market_state import (
+    normalize_akash_market_state,
+    normalize_clore_market_state,
+    normalize_hyperstack_market_state,
+    normalize_prime_market_state,
+    normalize_runpod_market_state,
+)
 from .providers.akash import AkashClient, normalize_gpu_prices
 from .providers.aws_spot import AwsSpotClient, normalize_spot_prices
 from .providers.azure_retail import AzureRetailClient, normalize_retail_prices
@@ -80,8 +87,14 @@ from .providers.thunder_compute import ThunderComputeClient, normalize_catalog
 from .providers.verda import VerdaClient, normalize_instance_catalog
 from .providers.vast import VastClient, extract_offers, normalize_offers
 from .providers.vultr import VultrClient, normalize_gpu_plans
-from .schemas import GpuOffer, ProviderSnapshot, utc_now
-from .storage import date_partition, table_partition, write_json, write_offers_parquet
+from .schemas import ComputeMarketState, GpuOffer, ProviderSnapshot, utc_now
+from .storage import (
+    date_partition,
+    table_partition,
+    write_json,
+    write_offers_parquet,
+    write_parquet_rows,
+)
 
 
 @dataclass(frozen=True)
@@ -95,6 +108,8 @@ class IngestResult:
     unknown_gpu_names: list[str]
     published_events: int
     publish_mode: str
+    market_state_ref: str | None = None
+    market_state_observation_count: int = 0
     manifest_ref: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -108,6 +123,8 @@ class IngestResult:
             "unknown_gpu_names": self.unknown_gpu_names,
             "published_events": self.published_events,
             "publish_mode": self.publish_mode,
+            "market_state_ref": self.market_state_ref,
+            "market_state_observation_count": self.market_state_observation_count,
             "manifest_ref": self.manifest_ref,
         }
 
@@ -633,6 +650,7 @@ def ingest_akash(
     run_id: str | None = None,
     trace_id: str | None = None,
     prices_url: str | None = None,
+    providers_url: str | None = None,
 ) -> IngestResult:
     provider = "akash"
     run_id = run_id or new_run_id(provider)
@@ -646,10 +664,19 @@ def ingest_akash(
         run_id=run_id,
         filename="gpu-prices.json",
     )
-    client = AkashClient(**({"prices_url": prices_url} if prices_url else {}))
+    client = AkashClient(
+        **({"prices_url": prices_url} if prices_url else {}),
+        **({"providers_url": providers_url} if providers_url else {}),
+    )
     fetched = client.fetch_gpu_prices()
     normalized, unknown_gpu_names = normalize_gpu_prices(
         fetched.models,
+        observed_at=observed_at,
+        raw_ref=raw_ref,
+    )
+    market_state = normalize_akash_market_state(
+        models=fetched.models,
+        providers=fetched.providers,
         observed_at=observed_at,
         raw_ref=raw_ref,
     )
@@ -669,6 +696,7 @@ def ingest_akash(
         automq_config=automq_config,
         topic_prefix=topic_prefix,
         dry_run=dry_run,
+        market_state=market_state,
     )
 
 
@@ -708,6 +736,11 @@ def ingest_prime_intellect(
         observed_at=observed_at,
         raw_ref=raw_ref,
     )
+    market_state = normalize_prime_market_state(
+        fetched.items,
+        observed_at=observed_at,
+        raw_ref=raw_ref,
+    )
     return _persist_publish_snapshot(
         provider=provider,
         run_id=run_id,
@@ -728,6 +761,7 @@ def ingest_prime_intellect(
         automq_config=automq_config,
         topic_prefix=topic_prefix,
         dry_run=dry_run,
+        market_state=market_state,
     )
 
 
@@ -1039,6 +1073,11 @@ def ingest_runpod(
         observed_at=observed_at,
         raw_ref=raw_ref,
     )
+    market_state = normalize_runpod_market_state(
+        fetched.gpu_types,
+        observed_at=observed_at,
+        raw_ref=raw_ref,
+    )
     return _persist_publish_snapshot(
         provider=provider,
         run_id=run_id,
@@ -1055,11 +1094,13 @@ def ingest_runpod(
         automq_config=automq_config,
         topic_prefix=topic_prefix,
         dry_run=dry_run,
+        market_state=market_state,
     )
 
 
 def ingest_clore(
     *,
+    api_key: str | None = None,
     raw_root: str = "data/raw",
     lake_root: str = "data/lake",
     automq_bootstrap_servers: str | None = None,
@@ -1083,10 +1124,16 @@ def ingest_clore(
         filename="marketplace.json",
     )
     client = CloreClient(
+        api_key=api_key or os.getenv("CLORE_API_KEY", ""),
         **({"marketplace_url": marketplace_url} if marketplace_url else {}),
     )
     fetched = client.fetch_marketplace()
     normalized, unknown_gpu_names = normalize_servers(
+        fetched.servers,
+        observed_at=observed_at,
+        raw_ref=raw_ref,
+    )
+    market_state = normalize_clore_market_state(
         fetched.servers,
         observed_at=observed_at,
         raw_ref=raw_ref,
@@ -1103,13 +1150,14 @@ def ingest_clore(
         normalized=normalized,
         unknown_gpu_names=unknown_gpu_names,
         snapshot_query={
-            "source_type": "public_live_gpu_marketplace",
+            "source_type": "authenticated_live_gpu_marketplace",
             "available_only": True,
         },
         automq_bootstrap_servers=automq_bootstrap_servers,
         automq_config=automq_config,
         topic_prefix=topic_prefix,
         dry_run=dry_run,
+        market_state=market_state,
     )
 
 
@@ -1273,6 +1321,11 @@ def ingest_hyperstack(
         observed_at=observed_at,
         raw_ref=raw_ref,
     )
+    market_state = normalize_hyperstack_market_state(
+        fetched.stocks,
+        observed_at=observed_at,
+        raw_ref=raw_ref,
+    )
     return _persist_publish_snapshot(
         provider=provider,
         run_id=run_id,
@@ -1295,6 +1348,7 @@ def ingest_hyperstack(
         automq_config=automq_config,
         topic_prefix=topic_prefix,
         dry_run=dry_run,
+        market_state=market_state,
     )
 
 
@@ -1945,6 +1999,7 @@ def _persist_publish_snapshot(
     automq_config: dict[str, str] | None,
     topic_prefix: str,
     dry_run: bool,
+    market_state: list[ComputeMarketState] | None = None,
 ) -> IngestResult:
     observed_date = observed_at.date().isoformat()
     write_json(raw_ref, raw_payload)
@@ -1959,6 +2014,36 @@ def _persist_publish_snapshot(
             filename="offers.parquet",
         )
         write_offers_parquet(normalized_ref, normalized)
+    market_state_rows = list(market_state or [])
+    market_state_ref: str | None = None
+    if market_state_rows:
+        market_state_ref = table_partition(
+            lake_root,
+            table="silver/compute_market_state",
+            observed_date=observed_date,
+            provider=provider,
+            run_id=run_id,
+            filename="observations.parquet",
+        )
+        state_manifest_ref = run_manifest_ref(
+            lake_root,
+            provider=provider,
+            observed_date=observed_date,
+            run_id=run_id,
+        )
+        write_parquet_rows(
+            market_state_ref,
+            [
+                {
+                    **observation.to_dict(),
+                    "source_run_id": run_id,
+                    "source_manifest_ref": state_manifest_ref,
+                    "source_normalized_ref": normalized_ref,
+                    "source_market_state_ref": market_state_ref,
+                }
+                for observation in market_state_rows
+            ],
+        )
 
     publisher = _publisher(
         automq_bootstrap_servers=automq_bootstrap_servers,
@@ -2002,6 +2087,21 @@ def _persist_publish_snapshot(
             key=offer.event_key(),
         )
         published_events += 1
+    for observation in market_state_rows:
+        publisher.publish(
+            f"{topic_prefix}.market_state_observation.v1",
+            make_event(
+                event_type="gpu.market_state_observation.v1",
+                provider=provider,
+                payload=observation.to_dict(),
+                run_id=run_id,
+                trace_id=trace_id,
+                raw_ref=raw_ref,
+                event_time=observation.observed_at,
+            ),
+            key=observation.event_key(),
+        )
+        published_events += 1
     publisher.flush()
 
     publish_mode = "dry_run" if dry_run or not automq_bootstrap_servers else "kafka"
@@ -2017,6 +2117,8 @@ def _persist_publish_snapshot(
         published_events=published_events,
         unknown_gpu_names=unknown_gpu_names,
         publish_mode=publish_mode,
+        market_state_ref=market_state_ref,
+        market_state_observation_count=len(market_state_rows),
     )
     return IngestResult(
         provider=provider,
@@ -2028,6 +2130,8 @@ def _persist_publish_snapshot(
         unknown_gpu_names=unknown_gpu_names,
         published_events=published_events,
         publish_mode=publish_mode,
+        market_state_ref=market_state_ref,
+        market_state_observation_count=len(market_state_rows),
         manifest_ref=manifest.manifest_ref,
     )
 

@@ -42,6 +42,7 @@ SNAPSHOT_FILES = {
     "benchmark-constituents": "benchmark-constituents.json",
     "provider-comparison": "provider-comparison.json",
     "listings-sample": "listings-sample.json",
+    "market-state": "market-state.json",
 }
 
 

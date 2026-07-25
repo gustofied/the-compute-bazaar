@@ -10,7 +10,7 @@ independent seller.
 | --- | --- | --- | --- |
 | Vast.ai | Marketplace | Live authenticated API | Eligible live seller offers |
 | Lium | Marketplace | Live authenticated API | Eligible live seller offers |
-| Clore.ai | Marketplace | Public live API | Eligible live seller offers |
+| Clore.ai | Marketplace | Authenticated live API | Eligible live seller offers |
 | Akash | Marketplace | Public live price/capacity summary | Eligible live seller summary |
 | RunPod | GPU cloud | Public current catalog/stock | Eligible when currently available |
 | Verda | GPU cloud | Public catalog; OAuth live regions | Catalog price or eligible live region |
@@ -40,6 +40,23 @@ The official rate-card feed adds advertised observations from Civo, Crusoe,
 Denvr, DigitalOcean, GMI Cloud, Hyperbolic, Hyperstack, Koyeb, Lambda, Massed
 Compute, Nebius, RunPod, TensorDock, Verda, VESSL, and Voltage Park. Rate-card
 rows are price evidence, not proof of immediate capacity.
+
+## Capacity-State Signals
+
+Capacity signals remain separate from price-index constituents:
+
+| Source | Published signal | Compute Bazaar measurement |
+| --- | --- | --- |
+| Akash providers API | active, available, pending, and total GPU units | GPU-unit rental occupancy plus pending/available shares |
+| Akash GPU prices API | available and total units by GPU model | model-level availability pressure |
+| Clore marketplace API | authenticated server `rented` boolean | server-weighted on-demand rental occupancy |
+| RunPod GraphQL | stock status and deployable GPU-count bundle sizes | availability pressure; no fleet denominator |
+| Prime Intellect availability API | upstream provider, stock status, configurations | upstream-preserving aggregate availability; direct source preferred |
+| Hyperstack stock API | deployable configurations by model and region | maximum deployable GPU-unit lower bound; no fleet denominator |
+
+The system does not infer a rental from a disappearing listing. It does not
+turn availability into occupancy without a denominator, and it does not call
+commercial rental occupancy GPU engine activity.
 
 ## Next Direct Connectors
 

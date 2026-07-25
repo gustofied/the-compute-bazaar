@@ -58,6 +58,7 @@ from .storage import list_refs, read_json, write_json
 MARKET_RUN_MANIFEST_VERSION = "v1"
 MARKET_RUN_TABLE = "market_runs"
 OPTIONAL_API_PROVIDERS = {
+    "clore": "CLORE_API_KEY",
     "prime_intellect": "PRIME_INTELLECT_API_KEY",
     "shadeform": "SHADEFORM_API_KEY",
     "sesterce": "SESTERCE_API_KEY",
@@ -84,7 +85,6 @@ def default_market_providers() -> list[str]:
         "scaleway",
         "oracle_cloud",
         "ovhcloud",
-        "clore",
         "akash",
         "aws_spot",
         "azure",
@@ -112,6 +112,7 @@ class MarketRunResult:
     provider_runs: dict[str, str]
     provider_raw_refs: dict[str, str]
     provider_normalized_refs: dict[str, str | None]
+    provider_market_state_refs: dict[str, str | None]
     gold_run_id: str
     dashboard_export_id: str
     row_counts: dict[str, int]
@@ -185,6 +186,7 @@ def run_market_hourly(
             "normalization_status": ("warning" if result.unknown_gpu_names else "ok"),
             "publish_mode": result.publish_mode,
             "published_events": result.published_events,
+            "market_state_observation_count": result.market_state_observation_count,
         }
         data_quality["providers"][provider] = provider_quality
         checks[provider] = _provider_check_status(result)
@@ -323,6 +325,9 @@ def run_market_hourly(
         "gpu_products": gold_result.row_counts.get("dim_gpu_products", 0),
         "index_values": gold_result.row_counts.get("fact_price_index_values", 0),
         "index_constituents": gold_result.row_counts.get("fact_index_constituents", 0),
+        "compute_market_state": gold_result.row_counts.get(
+            "fact_compute_market_state", 0
+        ),
         "sandbox_price_observations": sandbox_cost.row_counts.get(
             "sandbox_hourly_price_series", 0
         ),
@@ -374,6 +379,10 @@ def run_market_hourly(
             provider: result.normalized_ref
             for provider, result in provider_results.items()
         },
+        "provider_market_state_refs": {
+            provider: result.market_state_ref
+            for provider, result in provider_results.items()
+        },
         "provider_manifest_refs": {
             provider: result.manifest_ref
             for provider, result in provider_results.items()
@@ -416,6 +425,10 @@ def run_market_hourly(
         },
         provider_normalized_refs={
             provider: result.normalized_ref
+            for provider, result in provider_results.items()
+        },
+        provider_market_state_refs={
+            provider: result.market_state_ref
             for provider, result in provider_results.items()
         },
         gold_run_id=gold_result.run_id,

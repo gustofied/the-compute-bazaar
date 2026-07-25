@@ -263,6 +263,7 @@ def main() -> None:
         help="Fetch Akash's public live GPU pricing and availability summary",
     )
     ingest_akash_parser.add_argument("--prices-url")
+    ingest_akash_parser.add_argument("--providers-url")
     _add_ingest_storage_args(ingest_akash_parser)
 
     ingest_shadeform_parser = subparsers.add_parser(
@@ -950,6 +951,7 @@ def main() -> None:
     if args.command == "ingest-akash":
         result = ingest_akash(
             prices_url=args.prices_url,
+            providers_url=args.providers_url,
             raw_root=args.raw_root,
             lake_root=args.lake_root,
             automq_bootstrap_servers=args.automq_bootstrap_servers,

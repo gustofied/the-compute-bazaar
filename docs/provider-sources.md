@@ -24,7 +24,7 @@ as `provider`. Gold benchmark floors are deduplicated at the seller level.
 | Scaleway | Public per-zone instance prices and stock status | One deployable bundle per `available` or `scarce` type; `shortage` remains evidence only |
 | Oracle Cloud | Public GPU pay-as-you-go price-list API | Current published rate only; no capacity claim |
 | OVHcloud | Public hourly GPU instance catalog | Current published rate only; no capacity claim |
-| Clore | Direct public live marketplace | Available server or partial-rental GPUs |
+| Clore | Direct authenticated live marketplace | Available server or partial-rental GPUs |
 | Akash | Public live price and availability summary | Provider-reported available GPU units |
 | RunPod | Public current GPU-type price and stock status | One-GPU lower bound, not exact stock |
 | Verda | Public catalog; live stock only with OAuth credentials | One bundle per available location when authenticated |

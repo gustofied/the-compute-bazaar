@@ -27,7 +27,8 @@ from .storage import (
 
 GOLD_MANIFEST_TABLE = "gold_market"
 GOLD_MANIFEST_VERSION = "v1"
-GOLD_METHODOLOGY_VERSION = "gold_gpu_market_v1"
+GOLD_METHODOLOGY_VERSION = "gold_gpu_market_v2"
+MARKET_STATE_METHODOLOGY_VERSION = "compute_market_state_gold_v1"
 
 GOLD_TABLES = {
     "fact_gpu_listings": "listings.parquet",
@@ -38,6 +39,8 @@ GOLD_TABLES = {
     "fact_index_constituents": "index_constituents.parquet",
     "fact_benchmark_values": "benchmark_values.parquet",
     "fact_benchmark_constituents": "benchmark_constituents.parquet",
+    "fact_compute_market_state": "compute_market_state.parquet",
+    "fact_compute_market_state_history": "compute_market_state_history.parquet",
 }
 
 FEATURED_INDEX_PRODUCTS = [
@@ -54,6 +57,7 @@ class GoldBuildResult:
     provider_scope: list[str]
     source_run_ids: dict[str, str]
     source_normalized_refs: dict[str, str]
+    source_market_state_refs: dict[str, str]
     observed_date: str
     table_refs: dict[str, str]
     row_counts: dict[str, int]
@@ -71,12 +75,25 @@ def build_gold_market_tables(
     run_id: str | None = None,
 ) -> GoldBuildResult:
     """Build gold market tables from latest silver provider manifests."""
+    try:
+        previous_gold_manifest = read_latest_gold_manifest(lake_root)
+    except (FileNotFoundError, OSError):
+        previous_gold_manifest = {}
+    except Exception as exc:  # noqa: BLE001 - S3 returns provider-specific not-found errors.
+        error_code = (
+            getattr(exc, "response", {}).get("Error", {}).get("Code")
+        )
+        if str(error_code or "") not in {"404", "NoSuchKey", "NotFound"}:
+            raise
+        previous_gold_manifest = {}
+
     provider_scope = providers or [provider]
     source_manifests = {
         source_provider: read_latest_manifest(lake_root, provider=source_provider)
         for source_provider in provider_scope
     }
     source_normalized_refs: dict[str, str] = {}
+    source_market_state_refs: dict[str, str] = {}
     source_run_ids: dict[str, str] = {}
     for source_provider, manifest in source_manifests.items():
         normalized_ref = manifest.get("normalized_ref")
@@ -85,6 +102,9 @@ def build_gold_market_tables(
                 f"Latest {source_provider} manifest has no normalized_ref"
             )
         source_normalized_refs[source_provider] = str(normalized_ref)
+        market_state_ref = manifest.get("market_state_ref")
+        if market_state_ref:
+            source_market_state_refs[source_provider] = str(market_state_ref)
         source_run_ids[source_provider] = str(manifest["run_id"])
 
     observed_date = max(
@@ -119,6 +139,13 @@ def build_gold_market_tables(
         "source_normalized_ref": ",".join(
             source_normalized_refs[name] for name in provider_scope
         ),
+        "source_market_state_ref": ",".join(
+            source_market_state_refs[name]
+            for name in provider_scope
+            if name in source_market_state_refs
+        ),
+        "gold_run_id": gold_run_id,
+        "gold_observed_date": observed_date,
         "calculated_at": utc_now().isoformat(),
     }
 
@@ -149,6 +176,27 @@ def build_gold_market_tables(
             sql=_fact_index_constituents_sql(query_context, silver_source_cte),
         ),
     }
+    market_state_tables = {
+        f"silver_compute_market_state_{index}": source_market_state_refs[source_provider]
+        for index, source_provider in enumerate(provider_scope)
+        if source_provider in source_market_state_refs
+    }
+    rows_by_table["fact_compute_market_state"] = query_tables(
+        tables={**tables, **market_state_tables},
+        sql=_fact_compute_market_state_sql(
+            query_context,
+            silver_source_cte,
+            _silver_state_source_cte(list(market_state_tables)),
+        ),
+    )
+    rows_by_table["fact_compute_market_state_history"] = (
+        _merge_compute_market_state_history(
+            previous_ref=previous_gold_manifest.get("table_refs", {}).get(
+                "fact_compute_market_state_history"
+            ),
+            current_rows=rows_by_table["fact_compute_market_state"],
+        )
+    )
 
     for table_name, rows in rows_by_table.items():
         write_parquet_rows(table_refs[table_name], rows)
@@ -180,6 +228,7 @@ def build_gold_market_tables(
         provider_scope=provider_scope,
         source_run_ids=source_run_ids,
         source_normalized_refs=source_normalized_refs,
+        source_market_state_refs=source_market_state_refs,
         observed_date=observed_date,
         table_refs=table_refs,
         row_counts=row_counts,
@@ -219,6 +268,11 @@ def write_gold_manifest(
         "source_normalized_refs": {
             source_provider: manifest.get("normalized_ref")
             for source_provider, manifest in source_manifests.items()
+        },
+        "source_market_state_refs": {
+            source_provider: manifest.get("market_state_ref")
+            for source_provider, manifest in source_manifests.items()
+            if manifest.get("market_state_ref")
         },
         "table_refs": table_refs,
         "row_counts": row_counts,
@@ -738,6 +792,68 @@ order by included_count desc, candidate_count desc, gpu_model
     return {"manifest": manifest, "rows": rows}
 
 
+def query_gold_market_state(
+    *, lake_root: str, limit: int | None = None
+) -> dict[str, Any]:
+    manifest = read_latest_gold_manifest(lake_root)
+    table_ref = manifest["table_refs"]["fact_compute_market_state"]
+    rows = query_parquet(
+        parquet_uri=table_ref,
+        table_name="fact_compute_market_state",
+        sql=_with_limit(
+            """
+select *
+from fact_compute_market_state
+order by
+  case measurement_kind
+    when 'rental_occupancy' then 0
+    when 'availability_pressure' then 1
+    else 2
+  end,
+  provider,
+  resource_type,
+  source_connector
+""",
+            limit,
+        ),
+    )
+    return {"manifest": manifest, "rows": rows}
+
+
+def query_gold_market_state_history(
+    *,
+    lake_root: str,
+) -> dict[str, Any]:
+    manifest = read_latest_gold_manifest(lake_root)
+    table_ref = manifest.get("table_refs", {}).get(
+        "fact_compute_market_state_history"
+    )
+    if not table_ref:
+        table_ref = manifest.get("table_refs", {}).get("fact_compute_market_state")
+    if not table_ref:
+        return {"manifest": manifest, "history_manifest_count": 0, "rows": []}
+    rows = query_parquet(
+        parquet_uri=str(table_ref),
+        table_name="fact_compute_market_state_history",
+        sql="""
+select *
+from fact_compute_market_state_history
+where measurement_kind in ('rental_occupancy', 'availability_pressure')
+order by gold_observed_at, measurement_kind, provider, resource_type, source_connector
+""",
+    )
+    run_ids = {
+        str(row.get("gold_run_id") or "")
+        for row in rows
+        if row.get("gold_run_id")
+    }
+    return {
+        "manifest": manifest,
+        "history_manifest_count": len(run_ids),
+        "rows": rows,
+    }
+
+
 def export_gold_dashboard_snapshot(
     *,
     lake_root: str,
@@ -750,7 +866,6 @@ def export_gold_dashboard_snapshot(
     public_manifest = _public_gold_manifest(
         manifest,
         dashboard_exported_at=utc_now().isoformat(),
-        dashboard_output_root=output_root,
     )
     warnings = []
     index = query_gold_price_index(lake_root=lake_root, limit=limit)["rows"]
@@ -805,6 +920,31 @@ def export_gold_dashboard_snapshot(
         lake_root=lake_root, limit=limit
     )["rows"]
     listings = query_gold_listings(lake_root=lake_root, limit=limit)["rows"]
+    market_state = query_gold_market_state(lake_root=lake_root)["rows"]
+    market_state_ref = "/".join([output_root.rstrip("/"), "market-state.json"])
+    try:
+        market_state_history_payload = query_gold_market_state_history(
+            lake_root=lake_root,
+        )
+    except Exception as exc:  # noqa: BLE001 - current market state should still publish.
+        market_state_history_payload = {"history_manifest_count": 0, "rows": []}
+        warnings.append(f"market-state history export skipped: {exc}")
+    public_market_state = [
+        _public_market_state_row(row)
+        for row in market_state
+        if row.get("measurement_kind")
+        in {"rental_occupancy", "availability_pressure"}
+    ]
+    public_market_state_history = _merge_public_market_state_history(
+        _read_existing_market_state_history(market_state_ref),
+        [
+            _public_market_state_row(row)
+            for row in market_state_history_payload["rows"]
+            if row.get("measurement_kind") == "rental_occupancy"
+            and row.get("resource_type") == "ALL_GPU"
+            and row.get("aggregation_eligible") is not False
+        ],
+    )
     try:
         constituents = query_gold_index_constituents(lake_root=lake_root, limit=limit)[
             "rows"
@@ -837,6 +977,7 @@ def export_gold_dashboard_snapshot(
             [output_root.rstrip("/"), "provider-comparison.json"]
         ),
         "listings_sample": "/".join([output_root.rstrip("/"), "listings-sample.json"]),
+        "market_state": market_state_ref,
     }
     write_json(output_refs["manifest"], public_manifest)
     write_json(
@@ -910,6 +1051,29 @@ def export_gold_dashboard_snapshot(
     write_json(
         output_refs["listings_sample"], {"manifest": public_manifest, "rows": listings}
     )
+    write_json(
+        output_refs["market_state"],
+        {
+            "schema_version": "compute_market_state_public_v1",
+            "manifest": public_manifest,
+            "methodology_version": MARKET_STATE_METHODOLOGY_VERSION,
+            "measurement_kinds": {
+                "rental_occupancy": "Rented units divided by a source-defined total.",
+                "availability_pressure": "Current deployability or free stock; not rented share unless a denominator is present.",
+            },
+            "current_row_count": len(public_market_state),
+            "current_rows": public_market_state,
+            "history_manifest_count": market_state_history_payload[
+                "history_manifest_count"
+            ],
+            "history_row_count": len(public_market_state_history),
+            "history_rows": public_market_state_history,
+            "vm_and_sandbox": {
+                "status": "price_and_workload_only",
+                "note": "Current VM and sandbox sources expose prices or workload timing, but no comparable public rented-and-total fleet denominator.",
+            },
+        },
+    )
 
     return {
         "output_refs": output_refs,
@@ -924,6 +1088,8 @@ def export_gold_dashboard_snapshot(
             "benchmark_constituents": len(benchmark_constituents),
             "provider_comparison": len(provider_comparison),
             "listings_sample": len(listings),
+            "market_state": len(public_market_state),
+            "market_state_history": len(public_market_state_history),
         },
         "source_gold_manifest_ref": manifest.get("manifest_ref"),
         "warnings": warnings,
@@ -1243,6 +1409,190 @@ def _observed_date(manifest: dict[str, Any]) -> str:
     return utc_now().date().isoformat()
 
 
+def _fact_compute_market_state_sql(
+    context: dict[str, str],
+    silver_source_cte: str,
+    silver_state_source_cte: str | None,
+) -> str:
+    state_cte = f",\n{silver_state_source_cte}" if silver_state_source_cte else ""
+    state_union = (
+        """
+  union all
+  select
+    observation_id,
+    observed_at,
+    resource_market,
+    resource_type,
+    provider,
+    source_connector,
+    source_role,
+    measurement_kind,
+    measurement_scope,
+    unit,
+    total_units,
+    rented_units,
+    available_units,
+    pending_units,
+    rented_share,
+    available_share,
+    stock_status,
+    count_precision,
+    numerator_definition,
+    denominator_definition,
+    aggregation_eligible,
+    aggregation_exclusion_reason,
+    source_url,
+    raw_ref,
+    methodology_version,
+    notes,
+    source_run_id,
+    source_manifest_ref,
+    source_normalized_ref,
+    source_market_state_ref
+  from silver_compute_market_state
+"""
+        if silver_state_source_cte
+        else ""
+    )
+    return f"""
+with {silver_source_cte}{state_cte},
+listing_depth as (
+  select
+    concat(
+      'listing-depth:',
+      provider,
+      ':',
+      coalesce(source_connector, provider),
+      ':',
+      gpu_model,
+      ':',
+      {_sql_literal(context["calculated_at"])}
+    ) as observation_id,
+    max(observed_at) as observed_at,
+    'gpu' as resource_market,
+    gpu_model as resource_type,
+    provider,
+    coalesce(source_connector, provider) as source_connector,
+    case
+      when coalesce(source_connector, provider) <> provider then 'aggregator'
+      else 'direct'
+    end as source_role,
+    'listed_offer_depth' as measurement_kind,
+    'normalized_current_offers' as measurement_scope,
+    'offers' as unit,
+    cast(count(*) as double) as total_units,
+    cast(null as double) as rented_units,
+    cast(
+      sum(
+        case
+          when availability_status in (
+            'available',
+            'spot_available',
+            'available_component_rate',
+            'published_rate'
+          ) then 1
+          else 0
+        end
+      ) as double
+    ) as available_units,
+    cast(null as double) as pending_units,
+    cast(null as double) as rented_share,
+    cast(
+      sum(
+        case
+          when availability_status in (
+            'available',
+            'spot_available',
+            'available_component_rate',
+            'published_rate'
+          ) then 1
+          else 0
+        end
+      ) as double
+    ) / cast(count(*) as double) as available_share,
+    cast(null as varchar) as stock_status,
+    'normalized_offer_count' as count_precision,
+    'Normalized listings currently marked available.' as numerator_definition,
+    'All normalized current listings from the same provider connector and GPU product.' as denominator_definition,
+    true as aggregation_eligible,
+    cast(null as varchar) as aggregation_exclusion_reason,
+    cast(null as varchar) as source_url,
+    min(raw_ref) as raw_ref,
+    'compute_market_state_gold_v1' as methodology_version,
+    'Offer depth is a listing-surface measure, not physical fleet capacity or rented share.' as notes,
+    {_sql_literal(context["source_run_id"])} as source_run_id,
+    {_sql_literal(context["source_manifest_ref"])} as source_manifest_ref,
+    {_sql_literal(context["source_normalized_ref"])} as source_normalized_ref,
+    cast(null as varchar) as source_market_state_ref
+  from silver_gpu_offers
+  group by provider, coalesce(source_connector, provider), gpu_model
+),
+all_state as (
+  select * from listing_depth
+  {state_union}
+),
+direct_keys as (
+  select distinct provider, resource_type, measurement_kind
+  from all_state
+  where source_role = 'direct'
+),
+ranked_state as (
+  select
+    state.*,
+    direct_keys.provider is not null as matching_direct_source
+  from all_state state
+  left join direct_keys
+    on state.provider = direct_keys.provider
+   and state.resource_type = direct_keys.resource_type
+   and state.measurement_kind = direct_keys.measurement_kind
+)
+select
+  observation_id,
+  observed_at,
+  resource_market,
+  resource_type,
+  provider,
+  source_connector,
+  source_role,
+  measurement_kind,
+  measurement_scope,
+  unit,
+  total_units,
+  rented_units,
+  available_units,
+  pending_units,
+  rented_share,
+  available_share,
+  stock_status,
+  count_precision,
+  numerator_definition,
+  denominator_definition,
+  case
+    when source_role = 'aggregator' and matching_direct_source then false
+    else aggregation_eligible
+  end as aggregation_eligible,
+  case
+    when source_role = 'aggregator' and matching_direct_source
+      then 'matching_direct_provider_source'
+    else aggregation_exclusion_reason
+  end as aggregation_exclusion_reason,
+  source_url,
+  raw_ref,
+  methodology_version,
+  notes,
+  source_run_id,
+  source_manifest_ref,
+  source_normalized_ref,
+  source_market_state_ref,
+  {_sql_literal(context["calculated_at"])} as calculated_at,
+  {_sql_literal(context["gold_run_id"])} as gold_run_id,
+  {_sql_literal(context["calculated_at"])} as gold_observed_at,
+  {_sql_literal(context["gold_observed_date"])} as gold_observed_date
+from ranked_state
+order by measurement_kind, provider, resource_type, source_connector
+"""
+
+
 def _silver_source_cte(table_names: list[str]) -> str:
     columns = """
       provider,
@@ -1267,6 +1617,43 @@ def _silver_source_cte(table_names: list[str]) -> str:
     return f"silver_gpu_offers as ({' union all '.join(selects)})"
 
 
+def _silver_state_source_cte(table_names: list[str]) -> str | None:
+    if not table_names:
+        return None
+    selects = [f"select * from {table_name}" for table_name in table_names]
+    return f"silver_compute_market_state as ({' union all '.join(selects)})"
+
+
+def _merge_compute_market_state_history(
+    *,
+    previous_ref: Any,
+    current_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    previous_rows: list[dict[str, Any]] = []
+    if previous_ref:
+        previous_rows = query_parquet(
+            parquet_uri=str(previous_ref),
+            table_name="fact_compute_market_state_history",
+            sql="select * from fact_compute_market_state_history",
+        )
+    merged: dict[str, dict[str, Any]] = {}
+    for row in [*previous_rows, *current_rows]:
+        observation_id = str(row.get("observation_id") or "")
+        if not observation_id:
+            raise ValueError("Compute market-state history row has no observation_id")
+        merged[observation_id] = row
+    return sorted(
+        merged.values(),
+        key=lambda row: (
+            str(row.get("gold_observed_at") or row.get("observed_at") or ""),
+            str(row.get("measurement_kind") or ""),
+            str(row.get("provider") or ""),
+            str(row.get("resource_type") or ""),
+            str(row.get("source_connector") or ""),
+        ),
+    )
+
+
 def _sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
@@ -1281,7 +1668,6 @@ def _public_gold_manifest(
     manifest: dict[str, Any],
     *,
     dashboard_exported_at: str | None = None,
-    dashboard_output_root: str | None = None,
 ) -> dict[str, Any]:
     return {
         "manifest_version": manifest.get("manifest_version"),
@@ -1293,7 +1679,6 @@ def _public_gold_manifest(
         "row_counts": manifest.get("row_counts"),
         "source_run_ids": manifest.get("source_run_ids"),
         "dashboard_exported_at": dashboard_exported_at,
-        "dashboard_output_root": dashboard_output_root,
     }
 
 
@@ -1412,6 +1797,91 @@ def _read_existing_benchmark_history(ref: str) -> Any:
             return []
         raise
     return payload.get("rows", []) if isinstance(payload, dict) else []
+
+
+def _public_market_state_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: row.get(key)
+        for key in [
+            "observation_id",
+            "observed_at",
+            "resource_market",
+            "resource_type",
+            "provider",
+            "source_connector",
+            "source_role",
+            "measurement_kind",
+            "measurement_scope",
+            "unit",
+            "total_units",
+            "rented_units",
+            "available_units",
+            "pending_units",
+            "rented_share",
+            "available_share",
+            "stock_status",
+            "count_precision",
+            "numerator_definition",
+            "denominator_definition",
+            "aggregation_eligible",
+            "aggregation_exclusion_reason",
+            "source_url",
+            "methodology_version",
+            "notes",
+            "calculated_at",
+            "gold_run_id",
+            "gold_observed_at",
+            "gold_observed_date",
+        ]
+    }
+
+
+def _merge_public_market_state_history(
+    existing_rows: Any,
+    current_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    candidates = [
+        row
+        for row in (existing_rows if isinstance(existing_rows, list) else [])
+        if isinstance(row, dict)
+        and row.get("measurement_kind") == "rental_occupancy"
+        and row.get("resource_type") == "ALL_GPU"
+        and row.get("aggregation_eligible") is not False
+    ]
+    candidates.extend(current_rows)
+    for row in candidates:
+        observation_id = str(row.get("observation_id") or "")
+        observed_at = str(
+            row.get("gold_observed_at") or row.get("observed_at") or ""
+        )
+        run_id = str(row.get("gold_run_id") or "")
+        if not observation_id or not observed_at:
+            continue
+        merged[(run_id or observed_at, observation_id)] = row
+    return sorted(
+        merged.values(),
+        key=lambda row: (
+            str(row.get("gold_observed_at") or row.get("observed_at") or ""),
+            str(row.get("measurement_kind") or ""),
+            str(row.get("provider") or ""),
+            str(row.get("resource_type") or ""),
+            str(row.get("source_connector") or ""),
+        ),
+    )
+
+
+def _read_existing_market_state_history(ref: str) -> Any:
+    try:
+        payload = read_json(ref)
+    except FileNotFoundError:
+        return []
+    except Exception as exc:
+        error = getattr(exc, "response", {}).get("Error", {})
+        if str(error.get("Code") or "") in {"404", "NoSuchKey", "NotFound"}:
+            return []
+        raise
+    return payload.get("history_rows", []) if isinstance(payload, dict) else []
 
 
 def _public_benchmark_constituent(row: dict[str, Any]) -> dict[str, Any]:

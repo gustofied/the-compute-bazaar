@@ -23,10 +23,11 @@ from bootstrap_provider_schedule import (
 
 DEFAULT_PROVIDER_SCOPE = (
     "vast,lium,spheron,inference_sh,gridstackhub,cloud_gpu_prices,"
-    "thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,clore,akash,aws_spot,"
+    "thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,akash,aws_spot,"
     "azure,runpod,verda,published_rate_cards"
 )
 OPTIONAL_PROVIDER_VARIABLES = (
+    ("CLORE_API_KEY", "clore_api_key", "Clore marketplace read API key"),
     (
         "PRIME_INTELLECT_API_KEY",
         "prime_intellect_api_key",
@@ -278,6 +279,7 @@ def _provider_scope() -> str:
     providers.extend(
         provider
         for provider, env_name in (
+            ("clore", "CLORE_API_KEY"),
             ("prime_intellect", "PRIME_INTELLECT_API_KEY"),
             ("shadeform", "SHADEFORM_API_KEY"),
             ("sesterce", "SESTERCE_API_KEY"),
