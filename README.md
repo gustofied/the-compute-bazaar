@@ -525,12 +525,13 @@ gpu-prices stage1-check --check-automq --require-ingest-env
 
 ## Current Limitations
 
-- `market_hourly` is now the main loop and has run from the VPC Windmill worker. Keep watching
-  the hourly runs before we call it boring.
+- `market_hourly` is the main loop. Immutable generation manifests and an
+  independent public freshness check now protect its hourly publication path.
 - Lium ingestion paginates and dedupes by default in the Windmill path, but the provider API shape
   should still be observed over real runs before we assume complete-market coverage.
 - The dev Windmill worker is a baked EC2 Docker image. Tighten this with a
   registry-built worker image, narrower IAM, and production Windmill sandboxing
   before exposing it beyond the current private setup.
-- Public dashboard JSON is available through the CloudFront stack; keep the cache short while the
-  hourly feed is young and add immutable run snapshots once we need audit-grade public history.
+- Public dashboard JSON is available through the CloudFront stack with a short
+  cache. The lake retains immutable source and table generations; the public
+  JSON remains a sanitized latest-product snapshot rather than a raw-data API.

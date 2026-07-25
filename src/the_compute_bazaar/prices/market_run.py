@@ -9,9 +9,11 @@ from typing import Any
 from the_compute_bazaar.sandbox_cost.pipeline import build_sandbox_cost
 from the_compute_bazaar.sandbox_cost.vm_capacity import (
     refresh_vm_capacity_sources,
+    resolve_vm_capacity_state_refs,
 )
 from the_compute_bazaar.sandbox_cost.vm_discovery import (
     refresh_vm_capacity_discovery_sources,
+    resolve_vm_discovery_state_refs,
 )
 
 from .coverage import query_frontier_coverage_ref
@@ -102,6 +104,7 @@ def default_market_providers() -> list[str]:
 class MarketRunResult:
     market_run_id: str
     status: str
+    data_quality_status: str
     observed_at: str
     providers: list[str]
     successful_providers: list[str]
@@ -178,6 +181,8 @@ def run_market_hourly(
             "raw_offer_count": result.raw_offer_count,
             "normalized_offer_count": result.normalized_offer_count,
             "unknown_gpu_names": result.unknown_gpu_names,
+            "operational_status": "ok",
+            "normalization_status": ("warning" if result.unknown_gpu_names else "ok"),
             "publish_mode": result.publish_mode,
             "published_events": result.published_events,
         }
@@ -196,6 +201,14 @@ def run_market_hourly(
     ]
     data_quality["successful_providers"] = successful_providers
     data_quality["failed_providers"] = failed_providers
+    normalization_warnings = {
+        provider: quality["unknown_gpu_names"]
+        for provider, quality in data_quality["providers"].items()
+        if quality.get("unknown_gpu_names")
+    }
+    data_quality_status = "warning" if normalization_warnings else "ok"
+    data_quality["status"] = data_quality_status
+    data_quality["normalization_warnings"] = normalization_warnings
     if not successful_providers:
         raise RuntimeError(
             "All market providers failed or returned no normalized offers"
@@ -217,42 +230,14 @@ def run_market_hourly(
         limit=dashboard_limit,
     )
     sandbox_output_root = "/".join([lake_root.rstrip("/"), "sandbox_cost"])
-    vm_history_ref = "/".join(
-        [
-            sandbox_output_root.rstrip("/"),
-            "silver/vm_capacity_offer_history.parquet",
-        ]
-    )
-    vm_current_ref = "/".join(
-        [
-            sandbox_output_root.rstrip("/"),
-            "silver/vm_capacity_current.parquet",
-        ]
-    )
-    vm_manifest_ref = "/".join(
-        [
-            sandbox_output_root.rstrip("/"),
-            "silver/vm_capacity_source_manifest.json",
-        ]
-    )
-    vm_discovery_history_ref = "/".join(
-        [
-            sandbox_output_root.rstrip("/"),
-            "silver/vm_capacity_discovery_history.parquet",
-        ]
-    )
-    vm_discovery_current_ref = "/".join(
-        [
-            sandbox_output_root.rstrip("/"),
-            "silver/vm_capacity_discovery_current.parquet",
-        ]
-    )
-    vm_discovery_manifest_ref = "/".join(
-        [
-            sandbox_output_root.rstrip("/"),
-            "silver/vm_capacity_discovery_manifest.json",
-        ]
-    )
+    vm_state_refs = resolve_vm_capacity_state_refs(sandbox_output_root)
+    vm_history_ref = vm_state_refs["history_ref"]
+    vm_current_ref = vm_state_refs["current_ref"]
+    vm_manifest_ref = vm_state_refs["manifest_ref"]
+    vm_discovery_state_refs = resolve_vm_discovery_state_refs(sandbox_output_root)
+    vm_discovery_history_ref = vm_discovery_state_refs["history_ref"]
+    vm_discovery_current_ref = vm_discovery_state_refs["current_ref"]
+    vm_discovery_manifest_ref = vm_discovery_state_refs["manifest_ref"]
     try:
         if dry_run:
             raise RuntimeError("VM-capacity source refresh skipped in dry-run mode")
@@ -261,6 +246,9 @@ def run_market_hourly(
             raw_root=raw_root,
             observed_at=observed_at,
         )
+        vm_history_ref = vm_capacity.history_ref
+        vm_current_ref = vm_capacity.current_ref
+        vm_manifest_ref = vm_capacity.manifest_ref
         checks["vm_capacity"] = vm_capacity.status
         data_quality["vm_capacity"] = {
             "run_id": vm_capacity.run_id,
@@ -289,6 +277,9 @@ def run_market_hourly(
             raw_root=raw_root,
             observed_at=observed_at,
         )
+        vm_discovery_history_ref = vm_discovery.history_ref
+        vm_discovery_current_ref = vm_discovery.current_ref
+        vm_discovery_manifest_ref = vm_discovery.manifest_ref
         checks["vm_capacity_discovery"] = vm_discovery.status
         data_quality["vm_capacity_discovery"] = {
             "run_id": vm_discovery.run_id,
@@ -367,6 +358,7 @@ def run_market_hourly(
         "table": MARKET_RUN_TABLE,
         "market_run_id": market_run_id,
         "status": status,
+        "data_quality_status": data_quality_status,
         "observed_at": observed_at.isoformat(),
         "observed_date": observed_date,
         "providers": provider_scope,
@@ -411,6 +403,7 @@ def run_market_hourly(
     return MarketRunResult(
         market_run_id=market_run_id,
         status=status,
+        data_quality_status=data_quality_status,
         observed_at=observed_at.isoformat(),
         providers=provider_scope,
         successful_providers=successful_providers,
@@ -631,8 +624,6 @@ def market_run_manifest_ref(
 def _provider_check_status(result: IngestResult) -> str:
     if result.normalized_offer_count <= 0 or result.published_events <= 0:
         return "error"
-    if result.unknown_gpu_names:
-        return "warning"
     return "ok"
 
 
@@ -654,6 +645,7 @@ def _public_market_run_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "manifest_version": payload.get("manifest_version"),
         "market_run_id": payload.get("market_run_id"),
         "status": payload.get("status"),
+        "data_quality_status": payload.get("data_quality_status"),
         "observed_at": payload.get("observed_at"),
         "observed_date": payload.get("observed_date"),
         "providers": payload.get("providers"),

@@ -279,8 +279,12 @@ Stage 1.5 is now started:
 - `gpu-prices market-hourly` runs the complete provider-to-dashboard heartbeat and writes
   `gold/_manifests/market_runs/latest.json`.
 
-The Windmill schedule is active. The next operational step is to watch the first few cycles for
-provider/API, Kafka, S3, and data-quality behavior.
+The Windmill schedule is active. GPU and sandbox gold manifests point to
+immutable run/build generations, and the VM collectors serialize cumulative
+history updates with conditional S3 leases. Operational status now describes
+whether ingestion and publication worked; unknown GPU aliases are retained
+separately as normalization/data-quality debt. An hourly external freshness
+check watches the public snapshot and latest complete VM observation.
 
 ## Direct Provider Example
 

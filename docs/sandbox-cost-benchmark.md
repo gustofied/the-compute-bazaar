@@ -88,51 +88,31 @@ bronze/benchmark-evidence.json
 bronze/source-manifest.json
 bronze/hpc-sandbox-benchmarks/commit=<sha>/...
 
-silver/vm_capacity_offer_history.parquet
-silver/vm_capacity_current.parquet
-silver/vm_capacity_source_manifest.json
-silver/vm_capacity_discovery_history.parquet
-silver/vm_capacity_discovery_current.parquet
-silver/vm_capacity_discovery_manifest.json
-silver/vm_capacity_expanded_history.parquet
-silver/vm_capacity_expanded_current.parquet
-silver/vm_capacity_marketplace_history.parquet
-silver/vm_capacity_marketplace_current.parquet
-silver/sandbox_hourly_prices.parquet
-silver/sandbox_benchmark_batches.parquet
-silver/sandbox_benchmark_replicates.parquet
-silver/sandbox_benchmark_phases.parquet
-silver/sandbox_benchmark_run_metadata.parquet
-silver/gpu_benchmark_history.parquet
+silver/vm_capacity/generations/run_id=<run>/...
+silver/vm_discovery/generations/run_id=<run>/...
+silver/_manifests/vm_capacity/latest.json
+silver/_manifests/vm_discovery/latest.json
 
-gold/sandbox_hourly_price_series.parquet
-gold/sandbox_price_events.parquet
-gold/sandbox_current_rates.parquet
-gold/sandbox_fixed_rate.parquet
-gold/sandbox_workload_batch_history.parquet
-gold/sandbox_workload_latest_replicates.parquet
-gold/sandbox_workload_latest_phases.parquet
-gold/sandbox_workload_phase_summary.parquet
-gold/sandbox_workload_service_summary.parquet
-gold/vm_capacity_current.parquet
-gold/vm_capacity_fixed_rate.parquet
-gold/vm_capacity_expanded_current.parquet
-gold/vm_capacity_expanded_rate.parquet
-gold/vm_capacity_observed_rate.parquet
-gold/vm_capacity_discovery_current.parquet
-gold/vm_capacity_marketplace_current.parquet
-gold/vm_capacity_marketplace_history.parquet
-gold/vm_sandbox_current_comparison.parquet
-gold/gpu_h100_daily_coverage.parquet
-gold/gpu_h100_eligible_history.parquet
-gold/sandbox_gpu_cpu_common_start.parquet
+silver/generations/build_id=<build>/<table>.parquet
+gold/generations/build_id=<build>/<table>.parquet
+_manifests/sandbox_cost/date=<date>/build_id=<build>.json
+_manifests/sandbox_cost/latest.json
 gold/manifest.json
 ```
 
 Bronze preserves source records, retrieval metadata, and checksums. Silver
 standardizes units, machine shapes, timestamps, observation levels, timing
 bases, and provenance. Gold contains publication-ready products computed by
-named, hashed DataFusion queries.
+named, hashed DataFusion queries. The latest manifests are the authoritative
+catalog: agents and CLI queries follow their immutable table refs. Stable
+silver/gold filenames are build staging aliases only and must not be used as
+cross-run catalog pointers.
+
+Each VM refresh holds a conditional S3 lease around its read/merge/publish
+transaction. Manual and scheduled runs therefore cannot overwrite one
+another's cumulative history. A successful run writes a new immutable
+generation and updates its latest manifest last. Local runs use the same
+contract with an operating-system file lock.
 
 The VM source captures live below `--raw-root`:
 
@@ -663,6 +643,17 @@ Price List input and the full seven-vendor cohort are checked by the
 IAM-enabled Windmill worker each hour. The CI VM check writes only to `/tmp`;
 Windmill owns durable hourly history. A failed source check is a review
 request, not permission to publish.
+
+`.github/workflows/public-feed-freshness.yml` checks CloudFront every hour and
+fails when either the public snapshot or the latest complete seven-vendor VM
+print is more than 2.5 hours old. It also fails on a partial VM source check.
+The same check is available locally:
+
+```sh
+uv run sandbox-cost check-public \
+  --url https://d3n0n6h709c83f.cloudfront.net/sandbox-cost.json \
+  --max-age-hours 2.5
+```
 
 Manual managed-sandbox price review is intentional:
 

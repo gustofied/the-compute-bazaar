@@ -15,10 +15,16 @@ import requests
 from the_compute_bazaar.prices.providers.ecb import fetch_latest_eur_usd_rate
 from the_compute_bazaar.prices.providers.http import retrying_session
 from the_compute_bazaar.prices.storage import (
+    exclusive_lease,
+    read_optional_json,
     read_parquet_rows,
     write_bytes,
     write_json,
     write_parquet_rows,
+)
+from the_compute_bazaar.sandbox_cost.vm_capacity import (
+    latest_observation_rows,
+    repair_observation_history,
 )
 
 
@@ -142,24 +148,35 @@ def refresh_vm_capacity_discovery_sources(
     aws_pricing_client: Any | None = None,
 ) -> VmDiscoveryRefresh:
     """Retain extra vendor rates and marketplace indications outside cohort v1."""
+    lease_ref = _join(output_root, "_locks/vm-discovery-refresh.json")
+    with exclusive_lease(lease_ref):
+        return _refresh_vm_capacity_discovery_sources_unlocked(
+            output_root=output_root,
+            raw_root=raw_root,
+            observed_at=observed_at,
+            session=session,
+            aws_pricing_client=aws_pricing_client,
+        )
+
+
+def _refresh_vm_capacity_discovery_sources_unlocked(
+    *,
+    output_root: str,
+    raw_root: str,
+    observed_at: datetime | str | None,
+    session: requests.Session | None,
+    aws_pricing_client: Any | None,
+) -> VmDiscoveryRefresh:
     checked = _coerce_utc(observed_at)
     checked_at = checked.isoformat()
     checked_date = checked.date().isoformat()
     run_id = f"vm-discovery-{checked.strftime('%Y%m%dT%H%M%SZ')}"
     client = session or retrying_session()
 
-    history_ref = _join(
-        output_root,
-        "silver/vm_capacity_discovery_history.parquet",
-    )
-    current_ref = _join(
-        output_root,
-        "silver/vm_capacity_discovery_current.parquet",
-    )
-    manifest_ref = _join(
-        output_root,
-        "silver/vm_capacity_discovery_manifest.json",
-    )
+    state_refs = resolve_vm_discovery_state_refs(output_root)
+    state_manifest = read_optional_json(state_refs["manifest_ref"])
+    history_ref = state_refs["history_ref"]
+    current_ref = state_refs["current_ref"]
     history = _read_optional_parquet(history_ref)
     current_by_source = {
         str(row["source_id"]): dict(row) for row in _read_optional_parquet(current_ref)
@@ -290,19 +307,35 @@ def refresh_vm_capacity_discovery_sources(
                 "raw_refs": source_raw_refs,
             }
 
-    history = sorted(
-        history,
-        key=lambda row: (
-            str(row["first_observed_at"]),
-            int(row["series_order"]),
-            int(row["event_order"]),
-        ),
-    )
+    if str(state_manifest.get("run_id") or "") == run_id:
+        return VmDiscoveryRefresh(
+            run_id=run_id,
+            checked_at=checked_at,
+            status="warning" if failed else str(state_manifest.get("status") or "ok"),
+            successful_sources=successful,
+            failed_sources=failed,
+            raw_refs=raw_refs,
+            history_ref=history_ref,
+            current_ref=current_ref,
+            manifest_ref=state_refs["manifest_ref"],
+            history_event_count=len(history),
+            current_source_count=len(current_by_source),
+        )
+
+    history = repair_observation_history(history, key="source_id")
+    current_by_source = latest_observation_rows(history, key="source_id")
     current = sorted(
         current_by_source.values(),
         key=lambda row: int(row["series_order"]),
     )
     _validate_history(history)
+    generation_prefix = _join(
+        output_root,
+        f"silver/vm_discovery/generations/run_id={run_id}",
+    )
+    history_ref = _join(generation_prefix, "offer_history.parquet")
+    current_ref = _join(generation_prefix, "current.parquet")
+    manifest_ref = _join(generation_prefix, "manifest.json")
     write_parquet_rows(history_ref, history)
     write_parquet_rows(current_ref, current)
 
@@ -311,6 +344,7 @@ def refresh_vm_capacity_discovery_sources(
     status = "ok" if not failed and complete else "warning"
     manifest = {
         "manifest_version": "vm_capacity_discovery_manifest_v1",
+        "manifest_ref": manifest_ref,
         "run_id": run_id,
         "checked_at": checked_at,
         "status": status,
@@ -350,6 +384,7 @@ def refresh_vm_capacity_discovery_sources(
         },
     }
     write_json(manifest_ref, manifest)
+    write_json(_vm_discovery_latest_manifest_ref(output_root), manifest)
     return VmDiscoveryRefresh(
         run_id=run_id,
         checked_at=checked_at,
@@ -363,6 +398,32 @@ def refresh_vm_capacity_discovery_sources(
         history_event_count=len(history),
         current_source_count=len(current_sources),
     )
+
+
+def resolve_vm_discovery_state_refs(output_root: str) -> dict[str, str]:
+    """Resolve the latest immutable discovery generation, with legacy fallback."""
+    latest_ref = _vm_discovery_latest_manifest_ref(output_root)
+    latest = read_optional_json(latest_ref)
+    if latest.get("history_ref") and latest.get("current_ref"):
+        return {
+            "history_ref": str(latest["history_ref"]),
+            "current_ref": str(latest["current_ref"]),
+            "manifest_ref": str(latest.get("manifest_ref") or latest_ref),
+        }
+    return {
+        "history_ref": _join(
+            output_root,
+            "silver/vm_capacity_discovery_history.parquet",
+        ),
+        "current_ref": _join(
+            output_root,
+            "silver/vm_capacity_discovery_current.parquet",
+        ),
+        "manifest_ref": _join(
+            output_root,
+            "silver/vm_capacity_discovery_manifest.json",
+        ),
+    }
 
 
 def validate_vm_capacity_discovery_history(
@@ -1050,8 +1111,15 @@ def _coerce_utc(value: datetime | str | None) -> datetime:
 def _read_optional_parquet(ref: str) -> list[dict[str, Any]]:
     try:
         return read_parquet_rows(ref)
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError):
         return []
+
+
+def _vm_discovery_latest_manifest_ref(output_root: str) -> str:
+    return _join(
+        output_root,
+        "silver/_manifests/vm_discovery/latest.json",
+    )
 
 
 def _join(root: str, suffix: str) -> str:

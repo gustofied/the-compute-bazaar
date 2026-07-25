@@ -3,7 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from the_compute_bazaar.prices.storage import read_parquet_rows
+from the_compute_bazaar.prices.storage import (
+    LeaseBusyError,
+    exclusive_lease,
+    read_parquet_rows,
+)
 from the_compute_bazaar.sandbox_cost.pipeline import (
     build_sandbox_cost,
     query_sandbox_gold,
@@ -271,6 +275,14 @@ def _oracle_price(part_number: str, metric: str, value: float) -> dict:
 
 
 class VmCapacityRefreshTests(unittest.TestCase):
+    def test_local_publication_lease_rejects_overlap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lock_ref = str(Path(tmpdir) / "refresh.lock")
+            with exclusive_lease(lock_ref):
+                with self.assertRaises(LeaseBusyError):
+                    with exclusive_lease(lock_ref):
+                        self.fail("Overlapping lease should not be acquired")
+
     def test_refresh_retains_unchanged_hourly_checks_and_raw_sources(
         self,
     ) -> None:
@@ -290,19 +302,26 @@ class VmCapacityRefreshTests(unittest.TestCase):
                 observed_at="2026-07-25T10:00:00Z",
                 session=_Session(),
             )
-            history = read_parquet_rows(first.history_ref)
-            current = read_parquet_rows(first.current_ref)
+            first_history = read_parquet_rows(first.history_ref)
+            history = read_parquet_rows(second.history_ref)
+            current = read_parquet_rows(second.current_ref)
             raw_manifests = list(
                 (root / "raw").rglob("provider=*/date=*/run_id=*/manifest.json")
             )
             summary = validate_vm_capacity_history(
-                history_ref=first.history_ref,
-                current_ref=first.current_ref,
+                history_ref=second.history_ref,
+                current_ref=second.current_ref,
             )
 
         self.assertEqual(first.status, "ok")
         self.assertEqual(second.status, "ok")
+        self.assertEqual(len(first_history), 4)
+        self.assertNotEqual(first.history_ref, second.history_ref)
         self.assertEqual(len(history), 8)
+        self.assertEqual(
+            {row["first_observed_at"] for row in current},
+            {"2026-07-25T09:00:00+00:00"},
+        )
         self.assertEqual({row["observation_count"] for row in current}, {2})
         self.assertEqual(
             {row["last_observed_at"] for row in current},
@@ -317,19 +336,19 @@ class VmCapacityRefreshTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_root = f"{tmpdir}/lake"
             raw_root = f"{tmpdir}/raw"
-            first = refresh_vm_capacity_sources(
+            refresh_vm_capacity_sources(
                 output_root=output_root,
                 raw_root=raw_root,
                 observed_at="2026-07-25T09:00:00Z",
                 session=_Session(),
             )
-            refresh_vm_capacity_sources(
+            second = refresh_vm_capacity_sources(
                 output_root=output_root,
                 raw_root=raw_root,
                 observed_at="2026-07-25T10:00:00Z",
                 session=_Session(vultr_price=0.06),
             )
-            history = read_parquet_rows(first.history_ref)
+            history = read_parquet_rows(second.history_ref)
 
         vultr = [row for row in history if row["provider_id"] == "vultr"]
         self.assertEqual(len(history), 8)
@@ -358,6 +377,8 @@ class VmCapacityRefreshTests(unittest.TestCase):
 
         self.assertEqual(conflict.status, "warning")
         self.assertEqual(conflict.failed_providers, ["vultr"])
+        self.assertEqual(conflict.history_ref, first.history_ref)
+        self.assertEqual(conflict.manifest_ref, first.manifest_ref)
         self.assertEqual(len(history), 4)
         self.assertEqual(len(raw_manifests), 4)
         vultr = next(row for row in history if row["provider_id"] == "vultr")
@@ -405,16 +426,23 @@ class VmCapacityDiscoveryTests(unittest.TestCase):
                 session=_Session(),
                 aws_pricing_client=_AwsPricingClient(),
             )
-            history = read_parquet_rows(first.history_ref)
-            current = read_parquet_rows(first.current_ref)
+            first_history = read_parquet_rows(first.history_ref)
+            history = read_parquet_rows(second.history_ref)
+            current = read_parquet_rows(second.current_ref)
             summary = validate_vm_capacity_discovery_history(
-                history_ref=first.history_ref,
-                current_ref=first.current_ref,
+                history_ref=second.history_ref,
+                current_ref=second.current_ref,
             )
 
         self.assertEqual(first.status, "ok")
         self.assertEqual(second.status, "ok")
+        self.assertEqual(len(first_history), 4)
+        self.assertNotEqual(first.history_ref, second.history_ref)
         self.assertEqual(len(history), 8)
+        self.assertEqual(
+            {row["first_observed_at"] for row in current},
+            {"2026-07-25T09:00:00+00:00"},
+        )
         self.assertEqual(len(current), 4)
         self.assertEqual(summary["history_event_count"], 8)
         self.assertEqual(summary["history_observation_count"], 8)
@@ -475,6 +503,8 @@ class VmCapacityDiscoveryTests(unittest.TestCase):
 
         self.assertEqual(conflict.status, "warning")
         self.assertEqual(conflict.failed_sources, ["aws"])
+        self.assertEqual(conflict.history_ref, first.history_ref)
+        self.assertEqual(conflict.manifest_ref, first.manifest_ref)
         self.assertEqual(len(history), 4)
         self.assertEqual(len(raw_manifests), 4)
         aws = next(row for row in history if row["source_id"] == "aws")
@@ -529,7 +559,7 @@ class VmCapacityGoldTests(unittest.TestCase):
                 observed_at="2026-07-25T09:00:00Z",
                 session=_Session(),
             )
-            refresh_vm_capacity_sources(
+            source = refresh_vm_capacity_sources(
                 output_root=str(root / "source-lake"),
                 raw_root=str(root / "raw"),
                 observed_at="2026-07-25T10:00:00Z",
@@ -542,7 +572,7 @@ class VmCapacityGoldTests(unittest.TestCase):
                 session=_Session(),
                 aws_pricing_client=_AwsPricingClient(),
             )
-            refresh_vm_capacity_discovery_sources(
+            discovery = refresh_vm_capacity_discovery_sources(
                 output_root=str(root / "source-lake"),
                 raw_root=str(root / "raw"),
                 observed_at="2026-07-25T10:00:00Z",

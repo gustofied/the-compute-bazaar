@@ -12,7 +12,10 @@ from typing import Any, Mapping
 
 from the_compute_bazaar.prices.datafusion import query_tables
 from the_compute_bazaar.prices.storage import (
+    exclusive_lease,
+    read_bytes,
     read_json,
+    read_optional_json,
     read_parquet_rows,
     write_bytes,
     write_json,
@@ -1101,6 +1104,38 @@ def build_sandbox_cost(
     source_manifest_path: Path = SOURCE_MANIFEST,
 ) -> SandboxCostBuild:
     """Build deterministic bronze, silver, gold, and optional public JSON."""
+    with exclusive_lease(_join(output_root, "_locks/sandbox-cost-build.json")):
+        return _build_sandbox_cost_unlocked(
+            output_root=output_root,
+            dashboard_output_root=dashboard_output_root,
+            gpu_history_ref=gpu_history_ref,
+            vm_capacity_history_ref=vm_capacity_history_ref,
+            vm_capacity_current_ref=vm_capacity_current_ref,
+            vm_capacity_manifest_ref=vm_capacity_manifest_ref,
+            vm_discovery_history_ref=vm_discovery_history_ref,
+            vm_discovery_current_ref=vm_discovery_current_ref,
+            vm_discovery_manifest_ref=vm_discovery_manifest_ref,
+            price_path=price_path,
+            benchmark_path=benchmark_path,
+            source_manifest_path=source_manifest_path,
+        )
+
+
+def _build_sandbox_cost_unlocked(
+    *,
+    output_root: str,
+    dashboard_output_root: str | None,
+    gpu_history_ref: str | None,
+    vm_capacity_history_ref: str | None,
+    vm_capacity_current_ref: str | None,
+    vm_capacity_manifest_ref: str | None,
+    vm_discovery_history_ref: str | None,
+    vm_discovery_current_ref: str | None,
+    vm_discovery_manifest_ref: str | None,
+    price_path: Path,
+    benchmark_path: Path,
+    source_manifest_path: Path,
+) -> SandboxCostBuild:
     summary = validate_evidence(
         price_path=price_path,
         benchmark_path=benchmark_path,
@@ -1676,6 +1711,18 @@ order by series_order, observed_date, point_order
         vm_source_manifest.get("checked_at"),
         vm_discovery_manifest.get("checked_at"),
     )
+    silver_refs = _promote_generation_refs(
+        refs=silver_refs,
+        output_root=output_root,
+        layer="silver",
+        build_id=build_id,
+    )
+    table_refs = _promote_generation_refs(
+        refs=table_refs,
+        output_root=output_root,
+        layer="gold",
+        build_id=build_id,
+    )
     row_counts = {
         "sandbox_hourly_price_series": len(hourly_gold),
         "sandbox_price_events": len(price_events),
@@ -1699,8 +1746,13 @@ order by series_order, observed_date, point_order
         "vm_capacity_observed_rate": len(vm_observed_rate),
         "vm_sandbox_current_comparison": len(vm_sandbox_comparison),
     }
+    manifest_ref = _join(
+        output_root,
+        (f"_manifests/sandbox_cost/date={built_at[:10]}/build_id={build_id}.json"),
+    )
     manifest = {
         "manifest_version": "sandbox_cost_gold_v4",
+        "manifest_ref": manifest_ref,
         "build_id": build_id,
         "built_at": built_at,
         "input_hash": input_hash,
@@ -1754,8 +1806,12 @@ order by series_order, observed_date, point_order
         "vm_capacity_source_manifest": vm_source_manifest or None,
         "vm_discovery_source_manifest": vm_discovery_manifest or None,
     }
-    manifest_ref = _join(output_root, "gold/manifest.json")
     write_json(manifest_ref, manifest)
+    write_json(
+        _join(output_root, "_manifests/sandbox_cost/latest.json"),
+        manifest,
+    )
+    write_json(_join(output_root, "gold/manifest.json"), manifest)
 
     public_ref = None
     if dashboard_output_root:
@@ -1808,7 +1864,7 @@ def query_sandbox_gold(
         raise ValueError(
             f"Unknown sandbox query {query_id!r}; choose one of: {choices}"
         )
-    manifest = read_json(_join(output_root, "gold/manifest.json"))
+    manifest = read_latest_sandbox_manifest(output_root)
     required_table = {
         "vm-current": "vm_capacity_current",
         "vm-fixed-rate": "vm_capacity_fixed_rate",
@@ -1835,6 +1891,89 @@ def query_sandbox_gold(
         "build_id": manifest["build_id"],
         "rows": rows,
     }
+
+
+def read_latest_sandbox_manifest(output_root: str) -> dict[str, Any]:
+    """Read the latest complete sandbox generation pointer."""
+    latest = read_optional_json(
+        _join(output_root, "_manifests/sandbox_cost/latest.json")
+    )
+    if latest:
+        return latest
+    return dict(read_json(_join(output_root, "gold/manifest.json")))
+
+
+def check_public_payload_freshness(
+    payload: Mapping[str, Any],
+    *,
+    now: datetime | str | None = None,
+    max_age_hours: float = 2.5,
+) -> dict[str, Any]:
+    """Check that the public snapshot and latest complete VM print are current."""
+    if max_age_hours <= 0:
+        raise ValueError("max_age_hours must be positive")
+    checked_at = (
+        _parse_timestamp(now, "freshness check")
+        if isinstance(now, str)
+        else (now or datetime.now(timezone.utc))
+    )
+    if checked_at.tzinfo is None:
+        checked_at = checked_at.replace(tzinfo=timezone.utc)
+    checked_at = checked_at.astimezone(timezone.utc)
+
+    manifest = payload.get("manifest")
+    if not isinstance(manifest, Mapping):
+        raise ValueError("Public snapshot has no manifest object")
+    built_at = _as_utc(_parse_timestamp(manifest.get("built_at"), "public built_at"))
+    vm_capacity = payload.get("vm_capacity")
+    if not isinstance(vm_capacity, Mapping):
+        raise ValueError("Public snapshot has no vm_capacity object")
+    vm_rows = vm_capacity.get("observed_market_rate") or []
+    if not isinstance(vm_rows, list) or not vm_rows:
+        raise ValueError("Public snapshot has no complete VM observations")
+    latest_vm = max(
+        _as_utc(_parse_timestamp(row.get("observed_at"), "VM observed_at"))
+        for row in vm_rows
+        if isinstance(row, Mapping)
+    )
+
+    snapshot_age_hours = (checked_at - built_at).total_seconds() / 3600
+    vm_age_hours = (checked_at - latest_vm).total_seconds() / 3600
+    source_manifests = [
+        manifest.get("vm_capacity_source_manifest"),
+        manifest.get("vm_discovery_source_manifest"),
+    ]
+    partial_sources = [
+        str(source.get("run_id") or "unknown")
+        for source in source_manifests
+        if isinstance(source, Mapping)
+        and source.get("status")
+        and source.get("status") != "ok"
+    ]
+    problems: list[str] = []
+    if snapshot_age_hours > max_age_hours:
+        problems.append("public_snapshot_stale")
+    if vm_age_hours > max_age_hours:
+        problems.append("vm_benchmark_stale")
+    if partial_sources:
+        problems.append("partial_vm_source_check")
+    return {
+        "status": "fail" if problems else "ok",
+        "checked_at": checked_at.isoformat(),
+        "max_age_hours": max_age_hours,
+        "snapshot_built_at": built_at.isoformat(),
+        "snapshot_age_hours": round(snapshot_age_hours, 3),
+        "latest_complete_vm_observed_at": latest_vm.isoformat(),
+        "latest_complete_vm_age_hours": round(vm_age_hours, 3),
+        "partial_source_runs": partial_sources,
+        "problems": problems,
+    }
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _validate_prices(raw_rows: Any) -> list[dict[str, Any]]:
@@ -2825,6 +2964,29 @@ def _parse_timestamp(value: Any, label: str) -> datetime:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError(f"Invalid timestamp in {label}: {value!r}") from exc
+
+
+def _promote_generation_refs(
+    *,
+    refs: Mapping[str, str],
+    output_root: str,
+    layer: str,
+    build_id: str,
+) -> dict[str, str]:
+    """Copy completed staging tables into an immutable, manifest-addressed build."""
+    promoted: dict[str, str] = {}
+    for table_name, source_ref in refs.items():
+        destination = _join(
+            output_root,
+            f"{layer}/generations/build_id={build_id}/{table_name}.parquet",
+        )
+        write_bytes(
+            destination,
+            read_bytes(source_ref),
+            content_type="application/octet-stream",
+        )
+        promoted[table_name] = destination
+    return promoted
 
 
 def _join(root: str, suffix: str) -> str:

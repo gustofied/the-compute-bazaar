@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict
+from urllib.request import Request, urlopen
 
 from .pipeline import (
     GOLD_QUERIES,
     build_sandbox_cost,
+    check_public_payload_freshness,
     query_sandbox_gold,
     validate_evidence,
 )
@@ -79,6 +81,13 @@ def main() -> None:
     query.add_argument("--query", choices=sorted(GOLD_QUERIES), required=True)
     query.add_argument("--limit", type=int)
 
+    check_public = commands.add_parser(
+        "check-public",
+        help="Fail when the public snapshot or complete VM benchmark is stale",
+    )
+    check_public.add_argument("--url", required=True)
+    check_public.add_argument("--max-age-hours", type=float, default=2.5)
+
     args = parser.parse_args()
     if args.command == "build":
         result = build_sandbox_cost(
@@ -136,6 +145,21 @@ def main() -> None:
                 default=str,
             )
         )
+        return
+    if args.command == "check-public":
+        request = Request(
+            args.url,
+            headers={"User-Agent": "the-compute-bazaar-freshness-check/1"},
+        )
+        with urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        result = check_public_payload_freshness(
+            payload,
+            max_age_hours=args.max_age_hours,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        if result["status"] != "ok":
+            raise SystemExit(1)
         return
     raise AssertionError(f"Unhandled command: {args.command}")
 

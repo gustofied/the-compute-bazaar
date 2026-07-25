@@ -17,6 +17,8 @@ import requests
 from the_compute_bazaar.prices.providers.ecb import fetch_latest_eur_usd_rate
 from the_compute_bazaar.prices.providers.http import retrying_session
 from the_compute_bazaar.prices.storage import (
+    exclusive_lease,
+    read_optional_json,
     read_parquet_rows,
     write_bytes,
     write_json,
@@ -127,24 +129,33 @@ def refresh_vm_capacity_sources(
     session: requests.Session | None = None,
 ) -> VmCapacityRefresh:
     """Check exact public VM offers and preserve raw plus hourly observations."""
+    lease_ref = _join(output_root, "_locks/vm-capacity-refresh.json")
+    with exclusive_lease(lease_ref):
+        return _refresh_vm_capacity_sources_unlocked(
+            output_root=output_root,
+            raw_root=raw_root,
+            observed_at=observed_at,
+            session=session,
+        )
+
+
+def _refresh_vm_capacity_sources_unlocked(
+    *,
+    output_root: str,
+    raw_root: str,
+    observed_at: datetime | str | None,
+    session: requests.Session | None,
+) -> VmCapacityRefresh:
     checked = _coerce_utc(observed_at)
     checked_at = checked.isoformat()
     checked_date = checked.date().isoformat()
     run_id = f"vm-capacity-{checked.strftime('%Y%m%dT%H%M%SZ')}"
     client = session or retrying_session()
 
-    history_ref = _join(
-        output_root,
-        "silver/vm_capacity_offer_history.parquet",
-    )
-    current_ref = _join(
-        output_root,
-        "silver/vm_capacity_current.parquet",
-    )
-    manifest_ref = _join(
-        output_root,
-        "silver/vm_capacity_source_manifest.json",
-    )
+    state_refs = resolve_vm_capacity_state_refs(output_root)
+    state_manifest = read_optional_json(state_refs["manifest_ref"])
+    history_ref = state_refs["history_ref"]
+    current_ref = state_refs["current_ref"]
     history = _read_optional_parquet(history_ref)
     current_by_provider = {
         str(row["provider_id"]): dict(row)
@@ -275,19 +286,40 @@ def refresh_vm_capacity_sources(
                 "raw_refs": provider_raw_refs,
             }
 
-    history = sorted(
-        history,
-        key=lambda row: (
-            str(row["first_observed_at"]),
-            int(row["series_order"]),
-            int(row["event_order"]),
-        ),
-    )
+    if str(state_manifest.get("run_id") or "") == run_id:
+        current_members = {
+            str(row["provider_id"])
+            for row in current_by_provider.values()
+            if row["cohort_id"] == VM_CAPACITY_COHORT_ID
+        }
+        return VmCapacityRefresh(
+            run_id=run_id,
+            checked_at=checked_at,
+            status="warning" if failed else str(state_manifest.get("status") or "ok"),
+            successful_providers=successful,
+            failed_providers=failed,
+            raw_refs=raw_refs,
+            history_ref=history_ref,
+            current_ref=current_ref,
+            manifest_ref=state_refs["manifest_ref"],
+            history_event_count=len(history),
+            current_member_count=len(current_members),
+        )
+
+    history = repair_observation_history(history, key="provider_id")
+    current_by_provider = latest_observation_rows(history, key="provider_id")
     current = sorted(
         current_by_provider.values(),
         key=lambda row: int(row["series_order"]),
     )
     _validate_history(history)
+    generation_prefix = _join(
+        output_root,
+        f"silver/vm_capacity/generations/run_id={run_id}",
+    )
+    history_ref = _join(generation_prefix, "offer_history.parquet")
+    current_ref = _join(generation_prefix, "current.parquet")
+    manifest_ref = _join(generation_prefix, "manifest.json")
     write_parquet_rows(history_ref, history)
     write_parquet_rows(current_ref, current)
 
@@ -300,6 +332,7 @@ def refresh_vm_capacity_sources(
     status = "ok" if not failed and complete else "warning"
     manifest = {
         "manifest_version": "vm_capacity_source_manifest_v1",
+        "manifest_ref": manifest_ref,
         "run_id": run_id,
         "checked_at": checked_at,
         "status": status,
@@ -335,6 +368,7 @@ def refresh_vm_capacity_sources(
         },
     }
     write_json(manifest_ref, manifest)
+    write_json(_vm_capacity_latest_manifest_ref(output_root), manifest)
     return VmCapacityRefresh(
         run_id=run_id,
         checked_at=checked_at,
@@ -370,6 +404,32 @@ def validate_vm_capacity_history(
         "history_observation_count": len(history),
         "current_member_count": len(current_ids),
         "cohort_complete": current_ids == set(VM_PROVIDER_ORDER),
+    }
+
+
+def resolve_vm_capacity_state_refs(output_root: str) -> dict[str, str]:
+    """Resolve the latest immutable VM-capacity generation, with legacy fallback."""
+    latest_ref = _vm_capacity_latest_manifest_ref(output_root)
+    latest = read_optional_json(latest_ref)
+    if latest.get("history_ref") and latest.get("current_ref"):
+        return {
+            "history_ref": str(latest["history_ref"]),
+            "current_ref": str(latest["current_ref"]),
+            "manifest_ref": str(latest.get("manifest_ref") or latest_ref),
+        }
+    return {
+        "history_ref": _join(
+            output_root,
+            "silver/vm_capacity_offer_history.parquet",
+        ),
+        "current_ref": _join(
+            output_root,
+            "silver/vm_capacity_current.parquet",
+        ),
+        "manifest_ref": _join(
+            output_root,
+            "silver/vm_capacity_source_manifest.json",
+        ),
     }
 
 
@@ -862,6 +922,69 @@ def _read_optional_parquet(ref: str) -> list[dict[str, Any]]:
         return read_parquet_rows(ref)
     except (FileNotFoundError, OSError):
         return []
+
+
+def repair_observation_history(
+    rows: list[dict[str, Any]],
+    *,
+    key: str,
+) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for raw in rows:
+        row = dict(raw)
+        grouped.setdefault(str(row[key]), []).append(row)
+
+    repaired: list[dict[str, Any]] = []
+    for group in grouped.values():
+        ordered = sorted(
+            group,
+            key=lambda row: (
+                str(row["checked_at"]),
+                int(row.get("event_order") or 0),
+            ),
+        )
+        first_observed_at = str(ordered[0]["checked_at"])
+        for position, row in enumerate(ordered, start=1):
+            row["first_observed_at"] = first_observed_at
+            row["last_observed_at"] = str(row["checked_at"])
+            row["observation_count"] = position
+            row["event_order"] = position
+            repaired.append(row)
+    return sorted(
+        repaired,
+        key=lambda row: (
+            str(row["checked_at"]),
+            int(row["series_order"]),
+            int(row["event_order"]),
+        ),
+    )
+
+
+def latest_observation_rows(
+    rows: list[dict[str, Any]],
+    *,
+    key: str,
+) -> dict[str, dict[str, Any]]:
+    latest: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        item_key = str(row[key])
+        previous = latest.get(item_key)
+        if previous is None or (
+            str(row["checked_at"]),
+            int(row["event_order"]),
+        ) > (
+            str(previous["checked_at"]),
+            int(previous["event_order"]),
+        ):
+            latest[item_key] = dict(row)
+    return latest
+
+
+def _vm_capacity_latest_manifest_ref(output_root: str) -> str:
+    return _join(
+        output_root,
+        "silver/_manifests/vm_capacity/latest.json",
+    )
 
 
 def _coerce_utc(value: datetime | str | None) -> datetime:

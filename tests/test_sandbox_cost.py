@@ -11,6 +11,7 @@ from the_compute_bazaar.sandbox_cost.pipeline import (
     SOURCE_MANIFEST,
     _read_local_json,
     build_sandbox_cost,
+    check_public_payload_freshness,
     query_sandbox_gold,
     validate_evidence,
 )
@@ -22,6 +23,55 @@ from the_compute_bazaar.sandbox_cost.refresh import (
     extract_benchmark_evidence,
     extract_benchmark_rows,
 )
+
+
+class PublicFreshnessTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.payload = {
+            "manifest": {
+                "built_at": "2026-07-25T10:00:00+00:00",
+                "vm_capacity_source_manifest": {
+                    "run_id": "vm-capacity-20260725T100000Z",
+                    "status": "ok",
+                },
+                "vm_discovery_source_manifest": {
+                    "run_id": "vm-discovery-20260725T100000Z",
+                    "status": "ok",
+                },
+            },
+            "vm_capacity": {
+                "observed_market_rate": [{"observed_at": "2026-07-25T10:00:00"}]
+            },
+        }
+
+    def test_public_freshness_accepts_current_complete_snapshot(self) -> None:
+        result = check_public_payload_freshness(
+            self.payload,
+            now="2026-07-25T11:00:00+00:00",
+            max_age_hours=2.5,
+        )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["problems"], [])
+
+    def test_public_freshness_rejects_stale_or_partial_snapshot(self) -> None:
+        payload = copy.deepcopy(self.payload)
+        payload["manifest"]["vm_discovery_source_manifest"]["status"] = "warning"
+        result = check_public_payload_freshness(
+            payload,
+            now="2026-07-25T13:00:01+00:00",
+            max_age_hours=2.5,
+        )
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(
+            result["problems"],
+            [
+                "public_snapshot_stale",
+                "vm_benchmark_stale",
+                "partial_vm_source_check",
+            ],
+        )
 
 
 class SandboxCostEvidenceTests(unittest.TestCase):
@@ -134,6 +184,16 @@ class SandboxCostPipelineTests(unittest.TestCase):
             public = json.loads((root / "dashboard" / "sandbox-cost.json").read_text())
 
         self.assertEqual(first.build_id, second.build_id)
+        self.assertIn(
+            f"_manifests/sandbox_cost/date=2026-07-24/build_id={first.build_id}.json",
+            first.manifest_ref,
+        )
+        self.assertTrue(
+            all(
+                f"gold/generations/build_id={first.build_id}/" in ref
+                for ref in first.table_refs.values()
+            )
+        )
         self.assertEqual(first.row_counts["sandbox_hourly_price_series"], 33)
         self.assertEqual(first.row_counts["sandbox_price_events"], 10)
         self.assertEqual(first.row_counts["sandbox_current_rates"], 11)

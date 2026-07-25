@@ -441,3 +441,42 @@ errors.
 5. Review ECB-driven Scaleway or OVHcloud observations in native EUR and USD.
 6. Keep marketplace indications separate until a source supplies a real,
    reproducible bid or executed lease with compatible shape semantics.
+
+## Reliability Review And Generation Publication
+
+The first three complete seven-vendor checks proved the hourly series, but a
+review found that the cumulative VM Parquet files still used read-modify-write
+against stable S3 keys. Windmill prevented scheduled overlap, yet a manual run
+could race the schedule and make the final writer temporarily hide one valid
+observation.
+
+The storage contract was changed rather than papering over that risk:
+
+```text
+conditional local/S3 publication lease
+  -> read latest generation manifest
+  -> merge the new source check
+  -> repair first/last/count observation metadata
+  -> write immutable silver generation
+  -> update latest silver manifest last
+  -> build DataFusion products
+  -> promote immutable silver/gold build generation
+  -> update sandbox latest manifest
+  -> publish one sanitized JSON object
+```
+
+Previously returned generation refs now remain immutable. Tests explicitly
+verify that a first four-row generation is unchanged after a second eight-row
+generation is published, that overlapping local leases are rejected, and that
+same-timestamp conflicts do not replace the prior generation.
+
+The review also separated two health concepts. A provider with normalized rows
+and unknown tail aliases is operationally healthy; those aliases now appear
+under `data_quality_status` and `normalization_warnings` instead of forcing the
+entire market heartbeat to `warning`. Source failures still affect operational
+status.
+
+The public article now distinguishes a partial source check from the latest
+complete benchmark timestamp. The hourly GitHub freshness monitor fails if the
+CloudFront snapshot or latest complete VM print exceeds 2.5 hours, or if either
+VM source group reports a partial check.
