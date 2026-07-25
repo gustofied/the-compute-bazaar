@@ -422,6 +422,14 @@ keyboard chart inspection   latest 07:00 UTC VM observation
 browser console             no warnings or errors
 ```
 
+The continuous article release was committed to AdamSioud as `171db3a`. The
+pipeline, schedule fix, tests, documentation, and updated submodule pointer
+were committed to The Compute Bazaar as `6fe28aa`. Both `main` branches were
+pushed. GitHub Pages workflow `30148927458` completed successfully, and the
+public article loaded `sandbox-cost.js?v=10`, two v2 VM points, seven current
+direct-vendor rows, and the separate marketplace indication with no console
+errors.
+
 ## Next Refresh
 
 1. Inspect both VM source statuses in the hourly market-run manifest.
