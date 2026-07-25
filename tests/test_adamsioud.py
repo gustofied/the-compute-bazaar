@@ -34,14 +34,21 @@ class AdamSioudServerTests(unittest.TestCase):
             article,
         )
         self.assertIn(
-            "Same workload, different time and cost",
+            "What the same software job costs on each sandbox",
             article,
         )
-        self.assertIn("Latest comparable jobs", article)
-        self.assertIn('data-job-metric="time"', article)
-        self.assertIn('data-job-metric="cost"', article)
-        self.assertIn("Ranked service medians", article)
+        self.assertIn("Estimated cost of the same job", article)
+        self.assertIn("Cost ranking", article)
+        self.assertNotIn('data-job-metric="time"', article)
+        self.assertNotIn('data-job-metric="cost"', article)
         self.assertIn("Inspect the seven underlying VM offers", article)
+        self.assertIn("Public VM/VPS and managed sandbox prices", article)
+        self.assertIn("all seven VM offers", article)
+        self.assertIn('data-relative-series="gpu"', article)
+        self.assertIn('data-relative-series="vm"', article)
+        self.assertIn('data-relative-series="sandbox"', article)
+        self.assertIn('data-occupancy-provider="akash"', article)
+        self.assertIn('data-occupancy-provider="clore"', article)
         self.assertIn('id="sandbox-job-scatter"', article)
         self.assertIn('id="sandbox-phase-summary"', article)
         self.assertIn('id="sandbox-batch-table-body"', article)
@@ -52,12 +59,14 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="market-state-availability"', article)
         self.assertNotIn('id="vm-hourly-chart"', article)
         self.assertNotIn('id="sandbox-batch-history"', article)
-        self.assertIn('src="./sandbox-cost.js?v=18"', article)
+        self.assertIn('src="./sandbox-cost.js?v=20"', article)
         self.assertIn("sandbox-cost.json", script)
         self.assertIn('"sandbox_cost_gold_v5"', script)
         self.assertNotIn('"sandbox_cost_gold_v4"', script)
         self.assertNotIn("summarizeJobs", script)
         self.assertIn("renderJobRanking", script)
+        self.assertNotIn("activeMetric", script)
+        self.assertNotIn("sandbox-job-view-note", script)
         self.assertIn("workload.service_summary", script)
         self.assertIn("effectiveCssZoom", script)
         self.assertIn("createRateHistoryChart", script)
@@ -69,6 +78,8 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn("createJobDistributionChart", script)
         self.assertIn("renderMarketStateSummary", script)
         self.assertIn("createMarketOccupancyChart", script)
+        self.assertIn("sandbox-capacity-total", script)
+        self.assertIn("base_100", script)
         self.assertIn("market-state.json", script)
         self.assertEqual(
             market_state["schema_version"],
@@ -117,6 +128,20 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertGreaterEqual(
             payload["manifest"]["row_counts"]["vm_capacity_observed_rate"],
             2,
+        )
+        self.assertTrue(
+            all(
+                {
+                    "base_observed_at",
+                    "base_median_usd_per_hour",
+                    "base_100",
+                    "p25_base_100",
+                    "p75_base_100",
+                    "minimum_base_100",
+                    "maximum_base_100",
+                }.issubset(row)
+                for row in payload["vm_capacity"]["observed_market_rate"]
+            )
         )
         self.assertEqual(
             payload["manifest"]["row_counts"]["vm_capacity_expanded_current"],

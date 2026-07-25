@@ -645,6 +645,41 @@ class VmCapacityGoldTests(unittest.TestCase):
             observed["rows"][0]["median_usd_per_hour"],
             0.072,
         )
+        self.assertEqual(observed["rows"][0]["base_100"], 100.0)
+        self.assertEqual(
+            observed["rows"][0]["base_observed_at"].isoformat(),
+            "2026-07-25T09:00:00",
+        )
+        self.assertEqual(
+            observed["rows"][0]["base_median_usd_per_hour"],
+            observed["rows"][0]["median_usd_per_hour"],
+        )
+        self.assertAlmostEqual(
+            observed["rows"][0]["minimum_base_100"],
+            observed["rows"][0]["minimum_usd_per_hour"]
+            / observed["rows"][0]["median_usd_per_hour"]
+            * 100.0,
+        )
+        self.assertAlmostEqual(
+            observed["rows"][0]["maximum_base_100"],
+            observed["rows"][0]["maximum_usd_per_hour"]
+            / observed["rows"][0]["median_usd_per_hour"]
+            * 100.0,
+        )
+        self.assertTrue(
+            all(
+                {
+                    "base_observed_at",
+                    "base_median_usd_per_hour",
+                    "base_100",
+                    "p25_base_100",
+                    "p75_base_100",
+                    "minimum_base_100",
+                    "maximum_base_100",
+                }.issubset(row)
+                for row in public["vm_capacity"]["observed_market_rate"]
+            )
+        )
         serialized = json.dumps(public["vm_capacity"])
         self.assertNotIn("raw_refs_json", serialized)
         self.assertNotIn(str(root / "raw"), serialized)

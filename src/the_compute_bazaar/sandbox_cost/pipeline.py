@@ -61,9 +61,9 @@ GPU_DAILY_QUERY_ID = "h100_daily_broad_coverage_v1"
 GPU_ELIGIBLE_QUERY_ID = "h100_broad_coverage_prints_v1"
 COMBINED_QUERY_ID = "sandbox_gpu_cpu_common_start_v3"
 VM_CURRENT_QUERY_ID = "vm_capacity_current_cross_section_v1"
-VM_FIXED_RATE_QUERY_ID = "vm_capacity_fixed_cohort_rate_v2"
+VM_FIXED_RATE_QUERY_ID = "vm_capacity_fixed_cohort_rate_v3"
 VM_EXPANDED_CURRENT_QUERY_ID = "vm_capacity_expanded_current_v1"
-VM_EXPANDED_RATE_QUERY_ID = "vm_capacity_expanded_hourly_rate_v1"
+VM_EXPANDED_RATE_QUERY_ID = "vm_capacity_expanded_hourly_rate_v2"
 VM_MARKETPLACE_CURRENT_QUERY_ID = "vm_capacity_marketplace_current_v1"
 VM_SANDBOX_COMPARISON_QUERY_ID = "vm_sandbox_current_rate_comparison_v2"
 VM_DISCOVERY_CURRENT_QUERY_ID = "vm_capacity_discovery_current_v1"
@@ -854,28 +854,54 @@ order by series_order, provider_label
 """
 
 VM_FIXED_RATE_SQL = f"""
+with rates as (
+  select
+    cast(checked_at as timestamp) as observed_at,
+    cast(checked_at as date) as observed_date,
+    '{VM_CAPACITY_METHODOLOGY}' as methodology_version,
+    '{VM_CAPACITY_COHORT_ID}' as cohort_id,
+    median(price_usd_per_hour) as median_usd_per_hour,
+    avg(price_usd_per_hour) as average_usd_per_hour,
+    percentile_cont(0.25) within group (
+      order by price_usd_per_hour
+    ) as p25_usd_per_hour,
+    percentile_cont(0.75) within group (
+      order by price_usd_per_hour
+    ) as p75_usd_per_hour,
+    count(*) as member_count,
+    min(price_usd_per_hour) as minimum_usd_per_hour,
+    max(price_usd_per_hour) as maximum_usd_per_hour
+  from vm_capacity_offer_history
+  where cohort_id = '{VM_CAPACITY_COHORT_ID}'
+  group by checked_at
+  having count(*) = {len(VM_PROVIDER_ORDER)}
+    and count(distinct provider_id) = {len(VM_PROVIDER_ORDER)}
+),
+baseline as (
+  select
+    observed_at as base_observed_at,
+    median_usd_per_hour as base_median_usd_per_hour
+  from rates
+  order by observed_at
+  limit 1
+)
 select
-  cast(checked_at as timestamp) as observed_at,
-  cast(checked_at as date) as observed_date,
-  '{VM_CAPACITY_METHODOLOGY}' as methodology_version,
-  '{VM_CAPACITY_COHORT_ID}' as cohort_id,
-  median(price_usd_per_hour) as median_usd_per_hour,
-  avg(price_usd_per_hour) as average_usd_per_hour,
-  percentile_cont(0.25) within group (
-    order by price_usd_per_hour
-  ) as p25_usd_per_hour,
-  percentile_cont(0.75) within group (
-    order by price_usd_per_hour
-  ) as p75_usd_per_hour,
-  count(*) as member_count,
-  min(price_usd_per_hour) as minimum_usd_per_hour,
-  max(price_usd_per_hour) as maximum_usd_per_hour
-from vm_capacity_offer_history
-where cohort_id = '{VM_CAPACITY_COHORT_ID}'
-group by checked_at
-having count(*) = {len(VM_PROVIDER_ORDER)}
-  and count(distinct provider_id) = {len(VM_PROVIDER_ORDER)}
-order by cast(checked_at as timestamp)
+  rates.*,
+  baseline.base_observed_at,
+  baseline.base_median_usd_per_hour,
+  rates.median_usd_per_hour
+    / baseline.base_median_usd_per_hour * 100.0 as base_100,
+  rates.p25_usd_per_hour
+    / baseline.base_median_usd_per_hour * 100.0 as p25_base_100,
+  rates.p75_usd_per_hour
+    / baseline.base_median_usd_per_hour * 100.0 as p75_base_100,
+  rates.minimum_usd_per_hour
+    / baseline.base_median_usd_per_hour * 100.0 as minimum_base_100,
+  rates.maximum_usd_per_hour
+    / baseline.base_median_usd_per_hour * 100.0 as maximum_base_100
+from rates
+cross join baseline
+order by rates.observed_at
 """
 
 VM_EXPANDED_CURRENT_SQL = f"""
@@ -886,28 +912,54 @@ order by price_usd_per_hour, provider_label
 """
 
 VM_EXPANDED_RATE_SQL = f"""
+with rates as (
+  select
+    cast(checked_at as timestamp) as observed_at,
+    cast(checked_at as date) as observed_date,
+    '{VM_EXPANDED_METHODOLOGY}' as methodology_version,
+    '{VM_EXPANDED_COHORT_ID}' as cohort_id,
+    median(price_usd_per_hour) as median_usd_per_hour,
+    avg(price_usd_per_hour) as average_usd_per_hour,
+    percentile_cont(0.25) within group (
+      order by price_usd_per_hour
+    ) as p25_usd_per_hour,
+    percentile_cont(0.75) within group (
+      order by price_usd_per_hour
+    ) as p75_usd_per_hour,
+    count(*) as member_count,
+    min(price_usd_per_hour) as minimum_usd_per_hour,
+    max(price_usd_per_hour) as maximum_usd_per_hour
+  from vm_capacity_expanded_history
+  where cohort_id = '{VM_EXPANDED_COHORT_ID}'
+  group by checked_at
+  having count(*) = {len(VM_EXPANDED_PROVIDER_ORDER)}
+    and count(distinct provider_id) = {len(VM_EXPANDED_PROVIDER_ORDER)}
+),
+baseline as (
+  select
+    observed_at as base_observed_at,
+    median_usd_per_hour as base_median_usd_per_hour
+  from rates
+  order by observed_at
+  limit 1
+)
 select
-  cast(checked_at as timestamp) as observed_at,
-  cast(checked_at as date) as observed_date,
-  '{VM_EXPANDED_METHODOLOGY}' as methodology_version,
-  '{VM_EXPANDED_COHORT_ID}' as cohort_id,
-  median(price_usd_per_hour) as median_usd_per_hour,
-  avg(price_usd_per_hour) as average_usd_per_hour,
-  percentile_cont(0.25) within group (
-    order by price_usd_per_hour
-  ) as p25_usd_per_hour,
-  percentile_cont(0.75) within group (
-    order by price_usd_per_hour
-  ) as p75_usd_per_hour,
-  count(*) as member_count,
-  min(price_usd_per_hour) as minimum_usd_per_hour,
-  max(price_usd_per_hour) as maximum_usd_per_hour
-from vm_capacity_expanded_history
-where cohort_id = '{VM_EXPANDED_COHORT_ID}'
-group by checked_at
-having count(*) = {len(VM_EXPANDED_PROVIDER_ORDER)}
-  and count(distinct provider_id) = {len(VM_EXPANDED_PROVIDER_ORDER)}
-order by cast(checked_at as timestamp)
+  rates.*,
+  baseline.base_observed_at,
+  baseline.base_median_usd_per_hour,
+  rates.median_usd_per_hour
+    / baseline.base_median_usd_per_hour * 100.0 as base_100,
+  rates.p25_usd_per_hour
+    / baseline.base_median_usd_per_hour * 100.0 as p25_base_100,
+  rates.p75_usd_per_hour
+    / baseline.base_median_usd_per_hour * 100.0 as p75_base_100,
+  rates.minimum_usd_per_hour
+    / baseline.base_median_usd_per_hour * 100.0 as minimum_base_100,
+  rates.maximum_usd_per_hour
+    / baseline.base_median_usd_per_hour * 100.0 as maximum_base_100
+from rates
+cross join baseline
+order by rates.observed_at
 """
 
 VM_MARKETPLACE_CURRENT_SQL = """

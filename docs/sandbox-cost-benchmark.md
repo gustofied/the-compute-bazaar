@@ -420,16 +420,18 @@ standards rather than borrowing their language without their sample design.
 ## Publication Scope
 
 The maintained data products are broader than the public article. The article
-keeps one VM-versus-sandbox rate view and one latest same-workload
-distribution. Current vendor offers and historical provider-batch summaries
-remain available in collapsed audit tables.
+keeps one absolute VM/VPS-versus-sandbox rate view, one latest same-workload
+cost distribution, one independently rebased H100/VM/sandbox comparison, and
+one source-selectable rental-occupancy view. Current vendor offers and
+historical provider-batch summaries remain available in collapsed audit
+tables.
 
-The separate seven-vendor hourly VM chart was removed from the essay while the
-series is young and mostly flat. Its hourly observations remain in silver,
-gold, and `sandbox-cost.json`. The historical provider-batch chart was also
-removed from the main narrative because its 38 rows cross six harness
-methodologies. Those rows remain queryable and auditable; they have not been
-collapsed, averaged by day, or deleted.
+The young seven-vendor hourly VM series is not repeated as a standalone chart.
+Instead, every unchanged hourly point appears in the absolute rate view and
+the VM median appears in the relative-price view. The historical
+provider-batch chart remains outside the main narrative because its 38 rows
+cross six harness methodologies. Those rows remain queryable and auditable;
+they have not been collapsed, averaged by day, or deleted.
 
 This is a presentation decision, not a data-retention rule. A future frontend
 can rebuild either view from gold, provided it preserves the cohort and
@@ -455,7 +457,9 @@ observed bill and does not include:
 - storage, network, plans, credits, or minimum billing;
 - idle retention or the difference between requested and actual usage.
 
-The public article uses “marginal estimate,” not “job cost,” for this reason.
+The public article uses “estimated processor-and-memory cost” and states the
+formula beside the chart. It does not shorten that qualified estimate to a
+provider bill or total job cost.
 
 ## Lifecycle V2
 
@@ -489,7 +493,7 @@ The first publication can remain descriptive. A stronger ranking should add
 enough independent batches under one methodology to report uncertainty around
 the median and to study between-batch variation.
 
-## GPU and Sandbox Common Start
+## GPU, VM, and Sandbox Relative Prices
 
 Compatible GPU input must satisfy:
 
@@ -502,7 +506,8 @@ benchmark_usd_gpu_hr > 0
 ```
 
 For each eligible hourly H100 print, DataFusion carries forward the latest
-fixed-cohort sandbox rate. The first eligible H100 timestamp is the base:
+fixed-cohort sandbox rate. The first eligible H100 timestamp is the base for
+those two series:
 
 ```text
 gpu_base_100 =
@@ -512,14 +517,48 @@ sandbox_base_100 =
   sandbox_fixed_cohort_median / sandbox_median_at_common_start * 100
 ```
 
-Each p25-p75 band is rebased by its own headline value. The bands are
-cross-sectional price dispersion, not confidence intervals. Raw GPU dollars
-and sandbox dollars are never placed on one axis.
+The seven-vendor VM/VPS series begins later and uses its own first complete
+hourly check:
+
+```text
+vm_base_100 =
+  vm_seven_vendor_median / first_complete_vm_median * 100
+
+vm_p25_base_100 =
+  vm_seven_vendor_p25 / first_complete_vm_median * 100
+
+vm_p75_base_100 =
+  vm_seven_vendor_p75 / first_complete_vm_median * 100
+```
+
+These VM fields are built by the named DataFusion gold query and published in
+`vm_capacity.observed_market_rate`; the browser does not derive them. Minimum
+and maximum base-100 fields are retained for audit and the absolute-price
+envelope. Each selected p25-p75 band is cross-sectional price dispersion, not
+a confidence interval. Raw GPU, VM, and sandbox dollars are never placed on
+one linear axis.
 
 This exploratory view can show relative advertised-price movement, dispersion,
-coverage, and the ratio of the two hourly rate cards. It cannot show executed
-transactions, demand, capacity, volume, utilization, causality, equal work, or
-a full customer invoice.
+coverage, and different timing of observed rate changes. It cannot show
+executed transactions, demand, traded volume, causality, equal work, or a full
+customer invoice.
+
+## Observed Rental Occupancy
+
+Rental occupancy is published only when a source supplies a rented numerator
+and matching rentable-population denominator:
+
+```text
+rented_share = rented_units / total_units
+```
+
+Akash reports GPU units. Clore reports public on-demand servers. Their units
+are not pooled, averaged, or drawn as one market-wide line. The article uses
+source tabs: the upper pane shows the selected rented share, while the lower
+pane shows the matching rented and total counts. Those counts are observed
+capacity, not trading volume. A statistical or Bollinger-style band is not
+drawn because there is no cross-sectional distribution behind each occupancy
+point.
 
 Sandbox throughput could affect GPU utilization in a controlled agent or
 reinforcement-learning workload, but this dataset cannot test that hypothesis.
@@ -543,7 +582,7 @@ They answer different questions:
 | Stage | Numerator | Denominator | Current Compute Bazaar coverage |
 | --- | --- | --- | --- |
 | Available | checks with an eligible rentable offer | scheduled checks | GPU and VM offer checks only |
-| Rented | eligible units currently rented | eligible tracked population | not currently observed |
+| Rented | eligible units currently rented | eligible tracked population | Akash GPU units and Clore public on-demand servers, shown separately |
 | Allocated | resource units assigned to workloads | schedulable units | not currently observed across providers |
 | Active | time or cycles with a selected engine active | sampled time or cycles | not currently observed comparably |
 | Productive | completed units meeting a declared objective | elapsed time | sandbox completions and runtime are retained, but no cross-provider SLO goodput is claimed |

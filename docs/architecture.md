@@ -189,8 +189,9 @@ exact public VM APIs + reviewed sandbox price evidence
 The VM product uses a fixed seven-vendor cohort of exact four-vCPU, 8 GiB
 on-demand offers. Each hourly check retains raw API responses and checksums,
 and silver appends one normalized observation per successful source even when
-the price is unchanged. Gold publishes one median/p25-p75 point for every
-complete seven-vendor timestamp, the current cross-section, and a descriptive
+the price is unchanged. Gold publishes one median/p25-p75/min/max point for
+every complete seven-vendor timestamp, the same fields rebased to the first
+complete VM median, the current cross-section, and a descriptive
 VM-to-sandbox rate ratio. The earlier four-vendor cohort remains queryable as
 v1 audit data. Akash request estimates are retained as marketplace indications
 and excluded from the vendor median. Bundled storage and CPU semantics remain
@@ -214,10 +215,18 @@ future measurements.
 
 The combined GPU/sandbox series uses hourly H100 benchmark prints only when at
 least 10 providers contribute. It rebases both compatible series to 100 at the
-first eligible H100 timestamp. The full retained H100 history remains in the
-coverage table, including excluded low-coverage periods. This view does not
-combine raw dollar levels or claim demand, transaction volume, or GPU
-utilization.
+first eligible H100 timestamp. The independently based VM/VPS series joins the
+frontend comparison from its first complete seven-vendor observation. All
+three metrics are built in DataFusion before publication. The full retained
+H100 history remains in the coverage table, including excluded low-coverage
+periods. This view does not combine raw dollar levels or claim demand or
+transaction volume.
+
+The market-state product separately publishes source-reported rental
+occupancy where both numerator and denominator exist. Akash GPU units and
+Clore public servers remain distinct series. The article pairs each selected
+rented-share line with its source-reported rented and total capacity counts;
+those counts are capacity, not volume, and no statistical band is inferred.
 
 The hourly Windmill heartbeat checks the exact VM APIs and rebuilds this gold
 product after GPU dashboard history is exported. A separate daily source check
