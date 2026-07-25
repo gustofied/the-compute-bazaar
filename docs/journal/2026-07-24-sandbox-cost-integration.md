@@ -675,3 +675,13 @@ The initial smoke attempt exposed an unrelated local Python service already
 bound to `127.0.0.1:8081`; the SSH tunnel had only bound the IPv6 loopback and
 the bootstrap client reached the wrong app. That service was left untouched.
 The release tunnel used `127.0.0.1:8082` and reached Windmill CE v1.728.1.
+
+GitHub Pages deployment
+[`30161622819`](https://github.com/gustofied/AdamSioud/actions/runs/30161622819)
+completed successfully. The live article loaded build
+`sandbox-cost-cf0271e6c58cf540`, reported 11 complete seven-vendor VM
+observations through 14:22 UTC, and rendered all five source-linked metric
+stages from the CloudFront v5 payload. Final live checks at 1280 by 720 and 390
+by 844 found no page-level horizontal overflow or console warnings/errors.
+Keyboard inspection exposed the exact latest median and provider range, with
+the tooltip contained inside the mobile viewport.
