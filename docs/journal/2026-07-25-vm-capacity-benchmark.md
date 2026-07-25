@@ -527,3 +527,5 @@ public `external/instinct-bench` workspace member, so `uv sync --locked`
 correctly rejected the incomplete workspace. The workflow now checks out that
 specific public submodule, matching the established source-audit workflow. The
 private AdamSioud submodule is not needed by the monitor and is not checked out.
+The corrected manual run, GitHub Actions run `30151388235`, completed
+successfully against commit `8f8e2dd`.
