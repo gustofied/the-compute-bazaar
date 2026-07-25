@@ -36,6 +36,7 @@ def main() -> None:
     build.add_argument("--vm-discovery-history-ref")
     build.add_argument("--vm-discovery-current-ref")
     build.add_argument("--vm-discovery-manifest-ref")
+    build.add_argument("--workload-benchmark-manifest-ref")
 
     commands.add_parser("validate", help="Validate canonical source evidence")
 
@@ -46,6 +47,11 @@ def main() -> None:
     refresh.add_argument("--output-root", default="data/sandbox-cost")
     refresh.add_argument("--source-ref", default="main")
     refresh.add_argument(
+        "--source-repository",
+        default="starslingdev/hpc-sandbox-benchmarks",
+        help="GitHub owner/repository containing the StarSling dataset",
+    )
+    refresh.add_argument(
         "--check",
         action="store_true",
         help="Exit non-zero when public benchmark evidence has changed",
@@ -54,6 +60,14 @@ def main() -> None:
         "--update-evidence",
         action="store_true",
         help="Update versioned normalized evidence after a reviewed refresh",
+    )
+    refresh.add_argument(
+        "--publish-operational",
+        action="store_true",
+        help=(
+            "Publish validated source results as the operational silver "
+            "generation consumed by the next gold build"
+        ),
     )
 
     refresh_vm = commands.add_parser(
@@ -100,6 +114,7 @@ def main() -> None:
             vm_discovery_history_ref=args.vm_discovery_history_ref,
             vm_discovery_current_ref=args.vm_discovery_current_ref,
             vm_discovery_manifest_ref=args.vm_discovery_manifest_ref,
+            workload_benchmark_manifest_ref=args.workload_benchmark_manifest_ref,
         )
         print(json.dumps(asdict(result), indent=2, sort_keys=True))
         return
@@ -112,7 +127,9 @@ def main() -> None:
         result = refresh_benchmark_sources(
             output_root=args.output_root,
             source_ref=args.source_ref,
+            source_repository=args.source_repository,
             update_evidence=args.update_evidence,
+            publish_operational=args.publish_operational,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
         if args.check and result["changed"]:

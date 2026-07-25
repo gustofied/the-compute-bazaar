@@ -186,6 +186,39 @@ debugging. They shell out to:
 /opt/compute-bazaar/.venv/bin/gpu-prices ingest-lium
 ```
 
+`infra/windmill/sandbox_benchmark_daily.py` is a separate long-running-data
+boundary. It does not execute provider SDKs inside Windmill. It:
+
+1. ingests the previously committed StarSling dataset into immutable bronze
+   and content-addressed silver;
+2. optionally dispatches the next credentialed `realworld` benchmark in an
+   owned GitHub repository;
+3. leaves the next hourly market run to rebuild DataFusion gold and public
+   JSON.
+
+The schedule is disabled by default:
+
+```sh
+uv run python infra/windmill/bootstrap_sandbox_benchmark_schedule.py
+```
+
+After the owned benchmark repository and its protected `privileged`
+environment are ready:
+
+```sh
+export SANDBOX_BENCHMARK_SOURCE_REPOSITORY=OWNER/hpc-sandbox-benchmarks
+export SANDBOX_BENCHMARK_DISPATCH_REPOSITORY=OWNER/hpc-sandbox-benchmarks
+export SANDBOX_BENCHMARK_GITHUB_TOKEN=...
+
+uv run python infra/windmill/bootstrap_sandbox_benchmark_schedule.py \
+  --dispatch \
+  --enable
+```
+
+The provider keys stay in the benchmark repository's GitHub environment.
+Windmill receives only the fine-grained workflow-dispatch token. The default
+daily input is the `realworld` suite with 12 fresh sandboxes per provider.
+
 Recommended schedule:
 
 ```text

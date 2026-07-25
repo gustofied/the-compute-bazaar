@@ -21,6 +21,7 @@ from the_compute_bazaar.sandbox_cost.refresh import (
     WORKLOAD_APP_VERSION,
     _merge_historical_rows,
     _parse_index,
+    _publish_operational_benchmark,
     extract_benchmark_evidence,
     extract_benchmark_rows,
 )
@@ -161,6 +162,132 @@ class SandboxCostEvidenceTests(unittest.TestCase):
 
 
 class SandboxCostPipelineTests(unittest.TestCase):
+    def test_operational_workload_rejects_a_retained_result_rewrite(
+        self,
+    ) -> None:
+        benchmarks = _read_local_json(BENCHMARK_EVIDENCE)
+        prices = _read_local_json(PRICE_EVIDENCE)["rows"]
+        source_manifest = _read_local_json(SOURCE_MANIFEST)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_root = str(Path(tmpdir) / "lake")
+            _publish_operational_benchmark(
+                output_root=output_root,
+                source_repository=source_manifest["source_repository"],
+                source_commit=source_manifest["source_commit"],
+                checked_at="2026-07-26T06:30:00+00:00",
+                refresh_id="workload-refresh-20260726T063000000000Z",
+                source_manifest=source_manifest,
+                source_manifest_ref=str(Path(tmpdir) / "raw" / "first.json"),
+                prices=prices,
+                batch_rows=benchmarks["batch_rows"],
+                replicate_rows=benchmarks["replicate_rows"],
+                phase_rows=benchmarks["phase_rows"],
+                run_metadata=benchmarks["run_metadata"],
+            )
+            changed = copy.deepcopy(benchmarks["batch_rows"])
+            changed[0]["runtime_seconds"] += 1
+            changed[0]["estimated_cost_usd"] = round(
+                changed[0]["runtime_seconds"]
+                * changed[0]["hourly_price_usd"]
+                / 3600,
+                9,
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "Source changed an existing benchmark result",
+            ):
+                _publish_operational_benchmark(
+                    output_root=output_root,
+                    source_repository=source_manifest["source_repository"],
+                    source_commit=source_manifest["source_commit"],
+                    checked_at="2026-07-27T06:30:00+00:00",
+                    refresh_id="workload-refresh-20260727T063000000000Z",
+                    source_manifest=source_manifest,
+                    source_manifest_ref=str(
+                        Path(tmpdir) / "raw" / "second.json"
+                    ),
+                    prices=prices,
+                    batch_rows=changed,
+                    replicate_rows=benchmarks["replicate_rows"],
+                    phase_rows=benchmarks["phase_rows"],
+                    run_metadata=benchmarks["run_metadata"],
+                )
+
+    def test_operational_workload_generation_is_idempotent_and_used_by_gold(
+        self,
+    ) -> None:
+        benchmarks = _read_local_json(BENCHMARK_EVIDENCE)
+        prices = _read_local_json(PRICE_EVIDENCE)["rows"]
+        source_manifest = _read_local_json(SOURCE_MANIFEST)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            first = _publish_operational_benchmark(
+                output_root=str(root / "lake"),
+                source_repository=source_manifest["source_repository"],
+                source_commit=source_manifest["source_commit"],
+                checked_at="2026-07-26T06:30:00+00:00",
+                refresh_id="workload-refresh-20260726T063000000000Z",
+                source_manifest=source_manifest,
+                source_manifest_ref=str(root / "raw" / "first.json"),
+                prices=prices,
+                batch_rows=benchmarks["batch_rows"],
+                replicate_rows=benchmarks["replicate_rows"],
+                phase_rows=benchmarks["phase_rows"],
+                run_metadata=benchmarks["run_metadata"],
+            )
+            second = _publish_operational_benchmark(
+                output_root=str(root / "lake"),
+                source_repository=source_manifest["source_repository"],
+                source_commit=source_manifest["source_commit"],
+                checked_at="2026-07-27T06:30:00+00:00",
+                refresh_id="workload-refresh-20260727T063000000000Z",
+                source_manifest=source_manifest,
+                source_manifest_ref=str(root / "raw" / "second.json"),
+                prices=prices,
+                batch_rows=benchmarks["batch_rows"],
+                replicate_rows=benchmarks["replicate_rows"],
+                phase_rows=benchmarks["phase_rows"],
+                run_metadata=benchmarks["run_metadata"],
+            )
+            build = build_sandbox_cost(output_root=str(root / "lake"))
+            latest = json.loads(
+                (
+                    root
+                    / "lake"
+                    / "silver"
+                    / "_manifests"
+                    / "workload_benchmark"
+                    / "latest.json"
+                ).read_text()
+            )
+            polls = list(
+                (
+                    root
+                    / "lake"
+                    / "silver"
+                    / "_manifests"
+                    / "workload_benchmark"
+                    / "polls"
+                ).rglob("*.json")
+            )
+
+        self.assertEqual(first["generation_id"], second["generation_id"])
+        self.assertEqual(first["table_refs"], second["table_refs"])
+        self.assertEqual(len(polls), 2)
+        self.assertEqual(
+            latest["latest_refresh_id"],
+            "workload-refresh-20260727T063000000000Z",
+        )
+        self.assertEqual(
+            build.row_counts["sandbox_workload_latest_replicates"],
+            69,
+        )
+        self.assertEqual(
+            build.row_counts["sandbox_workload_latest_phases"],
+            690,
+        )
+
     def test_build_is_deterministic_and_public_payload_retains_all_runs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

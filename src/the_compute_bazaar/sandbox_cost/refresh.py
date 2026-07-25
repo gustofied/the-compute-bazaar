@@ -19,14 +19,24 @@ from .pipeline import (
     SOURCE_MANIFEST,
     TARGET_SHAPE,
     _read_local_json,
+    _validate_batches,
+    _validate_phases,
     _validate_prices,
+    _validate_replicates,
+    _validate_run_metadata,
+    _validate_source_manifest,
     write_source_capture,
+)
+from the_compute_bazaar.prices.storage import (
+    exclusive_lease,
+    read_optional_json,
+    read_parquet_rows,
+    write_json,
+    write_parquet_rows,
 )
 
 
 REPOSITORY = "starslingdev/hpc-sandbox-benchmarks"
-API_ROOT = f"https://api.github.com/repos/{REPOSITORY}"
-RAW_ROOT = f"https://raw.githubusercontent.com/{REPOSITORY}"
 TASK_SOURCE_FILE = "realworld-better-auth/pts_realworld-better-auth.xml"
 TASK_PREFIX = "realworld_better_auth_task_"
 WORKLOAD_APP_VERSION = "6f3ba45639579da152b69e8e5342e02f28288670"
@@ -74,18 +84,25 @@ def refresh_benchmark_sources(
     *,
     output_root: str = "data/sandbox-cost",
     source_ref: str = "main",
+    source_repository: str = REPOSITORY,
     update_evidence: bool = False,
+    publish_operational: bool = False,
     session: requests.Session | None = None,
 ) -> dict[str, Any]:
     """Fetch commit-pinned public run data, extract rows, and detect drift."""
+    source_repository = _validate_source_repository(source_repository)
+    api_root = f"https://api.github.com/repos/{source_repository}"
+    raw_root = f"https://raw.githubusercontent.com/{source_repository}"
     client = session or requests.Session()
-    commit = _resolve_commit(client, source_ref)
-    retrieved_at = datetime.now(timezone.utc).isoformat()
+    commit = _resolve_commit(client, source_ref, api_root=api_root)
+    retrieved = datetime.now(timezone.utc)
+    retrieved_at = retrieved.isoformat()
+    refresh_id = f"workload-refresh-{retrieved.strftime('%Y%m%dT%H%M%S%fZ')}"
     index_path = "data/dataset/index.json"
     methodology_path = "docs/methodology.md"
-    index_bytes = _fetch_bytes(client, f"{RAW_ROOT}/{commit}/{index_path}")
+    index_bytes = _fetch_bytes(client, f"{raw_root}/{commit}/{index_path}")
     methodology_bytes = _fetch_bytes(
-        client, f"{RAW_ROOT}/{commit}/{methodology_path}"
+        client, f"{raw_root}/{commit}/{methodology_path}"
     )
     index = _parse_index(index_bytes)
 
@@ -100,7 +117,7 @@ def refresh_benchmark_sources(
         if "+" in run_id:
             continue
         path = f"data/dataset/{entry['path']}"
-        raw = _fetch_bytes(client, f"{RAW_ROOT}/{commit}/{path}")
+        raw = _fetch_bytes(client, f"{raw_root}/{commit}/{path}")
         captures[path] = raw
         run = json.loads(raw)
         if not isinstance(run, dict):
@@ -119,6 +136,7 @@ def refresh_benchmark_sources(
         runs=runs,
         prices=prices,
         source_commit=commit,
+        source_repository=source_repository,
     )
     canonical = _read_local_json(BENCHMARK_EVIDENCE)
     canonical_batches = canonical.get("batch_rows", canonical.get("rows", []))
@@ -161,9 +179,10 @@ def refresh_benchmark_sources(
         or canonical.get("run_metadata", []) != merged_runs
     )
 
+    repository_partition = source_repository.replace("/", "--")
     capture_prefix = (
         f"{output_root.rstrip('/')}/bronze/hpc-sandbox-benchmarks/"
-        f"commit={commit}"
+        f"source={repository_partition}/commit={commit}/refresh_id={refresh_id}"
     )
     source_files = []
     for path, raw in sorted(captures.items()):
@@ -173,7 +192,7 @@ def refresh_benchmark_sources(
             {
                 "path": path,
                 "source_url": (
-                    f"https://github.com/{REPOSITORY}/blob/{commit}/{path}"
+                    f"https://github.com/{source_repository}/blob/{commit}/{path}"
                 ),
                 "sha256": hashlib.sha256(raw).hexdigest(),
                 "size_bytes": len(raw),
@@ -182,7 +201,7 @@ def refresh_benchmark_sources(
     runtime_manifest = {
         "schema_version": "sandbox_source_manifest_v1",
         "retrieved_at": retrieved_at,
-        "source_repository": REPOSITORY,
+        "source_repository": source_repository,
         "source_commit": commit,
         "files": source_files,
         "notes": [
@@ -191,15 +210,33 @@ def refresh_benchmark_sources(
         ],
     }
     manifest_ref = f"{capture_prefix}/source-manifest.json"
-    from the_compute_bazaar.prices.storage import write_json
-
     write_json(manifest_ref, runtime_manifest)
+
+    operational_manifest_ref = None
+    operational_table_refs: dict[str, str] = {}
+    if publish_operational:
+        operational = _publish_operational_benchmark(
+            output_root=output_root,
+            source_repository=source_repository,
+            source_commit=commit,
+            checked_at=retrieved_at,
+            refresh_id=refresh_id,
+            source_manifest=runtime_manifest,
+            source_manifest_ref=manifest_ref,
+            prices=prices,
+            batch_rows=merged_batches,
+            replicate_rows=merged_replicates,
+            phase_rows=merged_phases,
+            run_metadata=merged_runs,
+        )
+        operational_manifest_ref = str(operational["manifest_ref"])
+        operational_table_refs = dict(operational["table_refs"])
 
     if update_evidence and changed:
         benchmark_payload = {
             "schema_version": "sandbox_benchmark_observation_v2",
             "retrieved_at": retrieved_at,
-            "source_repository": REPOSITORY,
+            "source_repository": source_repository,
             "source_commit": commit,
             "target_shape": TARGET_SHAPE,
             "job": {
@@ -241,6 +278,8 @@ def refresh_benchmark_sources(
         "updated_evidence": bool(update_evidence and changed),
         "rejected_shapes": rejected_shapes,
         "bronze_manifest_ref": manifest_ref,
+        "operational_manifest_ref": operational_manifest_ref,
+        "operational_table_refs": operational_table_refs,
     }
 
 
@@ -249,12 +288,14 @@ def extract_benchmark_rows(
     runs: list[dict[str, Any]],
     prices: list[dict[str, Any]],
     source_commit: str = "main",
+    source_repository: str = REPOSITORY,
 ) -> list[dict[str, Any]]:
     """Extract provider-batch summaries for compatibility with existing callers."""
     return extract_benchmark_evidence(
         runs=runs,
         prices=prices,
         source_commit=source_commit,
+        source_repository=source_repository,
     )["batch_rows"]
 
 
@@ -263,8 +304,10 @@ def extract_benchmark_evidence(
     runs: list[dict[str, Any]],
     prices: list[dict[str, Any]],
     source_commit: str = "main",
+    source_repository: str = REPOSITORY,
 ) -> dict[str, list[dict[str, Any]]]:
     """Extract batches, aligned replicates, phases, and run methodology."""
+    source_repository = _validate_source_repository(source_repository)
     price_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in prices:
         price_rows[row["series_id"]].append(row)
@@ -402,7 +445,7 @@ def extract_benchmark_evidence(
                 "task_signature": task_signature,
                 "methodology_id": methodology_id,
                 "benchmark_source_url": (
-                    f"https://github.com/{REPOSITORY}/blob/{source_commit}/"
+                    f"https://github.com/{source_repository}/blob/{source_commit}/"
                     f"data/dataset/runs/{run_id}.json"
                 ),
                 "price_date": price["observed_date"],
@@ -502,7 +545,7 @@ def extract_benchmark_evidence(
                     "runtime_basis": "sum_of_published_task_means",
                     "lifecycle_included": False,
                     "benchmark_source_url": (
-                        f"https://github.com/{REPOSITORY}/blob/{source_commit}/"
+                        f"https://github.com/{source_repository}/blob/{source_commit}/"
                         f"data/dataset/runs/{run_id}.json"
                     ),
                 }
@@ -623,8 +666,259 @@ def _optional_text(value: Any) -> str | None:
     return None if value in (None, "") else str(value)
 
 
-def _resolve_commit(client: requests.Session, ref: str) -> str:
-    response = client.get(f"{API_ROOT}/commits/{ref}", timeout=30)
+def _publish_operational_benchmark(
+    *,
+    output_root: str,
+    source_repository: str,
+    source_commit: str,
+    checked_at: str,
+    refresh_id: str,
+    source_manifest: dict[str, Any],
+    source_manifest_ref: str,
+    prices: list[dict[str, Any]],
+    batch_rows: list[dict[str, Any]],
+    replicate_rows: list[dict[str, Any]],
+    phase_rows: list[dict[str, Any]],
+    run_metadata: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Publish a trusted benchmark dataset generation for the hourly gold build."""
+    batches = _validate_batches(batch_rows, prices)
+    replicates = _validate_replicates(replicate_rows, prices, batches)
+    phases = _validate_phases(phase_rows, replicates)
+    runs = _validate_run_metadata(run_metadata, batches, replicates)
+    _validate_source_manifest(source_manifest, batches)
+
+    stable_source_manifest = {
+        "schema_version": "sandbox_source_manifest_v1",
+        "source_repository": source_repository,
+        "source_commit": source_commit,
+        "files": source_manifest["files"],
+        "notes": source_manifest.get("notes", []),
+    }
+    content = {
+        "source_manifest": stable_source_manifest,
+        "target_shape": TARGET_SHAPE,
+        "batch_rows": batches,
+        "replicate_rows": replicates,
+        "phase_rows": phases,
+        "run_metadata": runs,
+    }
+    generation_hash = hashlib.sha256(
+        json.dumps(
+            content,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    generation_id = f"sandbox-workload-{generation_hash[:16]}"
+    generation_prefix = (
+        f"{output_root.rstrip('/')}/silver/workload_benchmark/"
+        f"generations/generation_id={generation_id}"
+    )
+    table_refs = {
+        "sandbox_benchmark_batches": f"{generation_prefix}/batch_history.parquet",
+        "sandbox_benchmark_replicates": (
+            f"{generation_prefix}/replicate_history.parquet"
+        ),
+        "sandbox_benchmark_phases": f"{generation_prefix}/phase_history.parquet",
+        "sandbox_benchmark_run_metadata": (
+            f"{generation_prefix}/run_metadata.parquet"
+        ),
+    }
+    dataset_source_manifest_ref = f"{generation_prefix}/source-manifest.json"
+    dataset_manifest_ref = f"{generation_prefix}/manifest.json"
+    latest_ref = (
+        f"{output_root.rstrip('/')}/silver/_manifests/"
+        "workload_benchmark/latest.json"
+    )
+    poll_ref = (
+        f"{output_root.rstrip('/')}/silver/_manifests/workload_benchmark/"
+        f"polls/date={checked_at[:10]}/refresh_id={refresh_id}.json"
+    )
+    latest_run = max(runs, key=lambda row: str(row["generated_at"]))
+    dataset_manifest = {
+        "manifest_version": "sandbox_workload_dataset_v1",
+        "manifest_ref": dataset_manifest_ref,
+        "generation_id": generation_id,
+        "content_sha256": generation_hash,
+        "source_repository": source_repository,
+        "source_commit": source_commit,
+        "dataset_observed_at": latest_run["generated_at"],
+        "target_shape": TARGET_SHAPE,
+        "source_manifest_ref": dataset_source_manifest_ref,
+        "table_refs": table_refs,
+        "row_counts": {
+            "batch_rows": len(batches),
+            "replicate_rows": len(replicates),
+            "phase_rows": len(phases),
+            "run_metadata": len(runs),
+        },
+        "run_count": len({row["benchmark_run_id"] for row in batches}),
+        "calendar_day_count": len({row["observed_date"] for row in batches}),
+        "methodology_count": len({row["methodology_id"] for row in runs}),
+        "latest_run_id": latest_run["benchmark_run_id"],
+    }
+    poll_manifest = {
+        "manifest_version": "sandbox_workload_poll_v1",
+        "refresh_id": refresh_id,
+        "checked_at": checked_at,
+        "source_repository": source_repository,
+        "source_commit": source_commit,
+        "source_capture_manifest_ref": source_manifest_ref,
+        "dataset_manifest_ref": dataset_manifest_ref,
+        "generation_id": generation_id,
+        "changed_from_reviewed_evidence": _stable_rows(batch_rows)
+        != _stable_rows(_read_local_json(BENCHMARK_EVIDENCE)["batch_rows"]),
+    }
+    latest_manifest = {
+        **dataset_manifest,
+        "latest_checked_at": checked_at,
+        "latest_refresh_id": refresh_id,
+        "latest_poll_manifest_ref": poll_ref,
+        "latest_source_capture_manifest_ref": source_manifest_ref,
+    }
+
+    lease_ref = (
+        f"{output_root.rstrip('/')}/_locks/workload-benchmark-refresh.json"
+    )
+    with exclusive_lease(lease_ref):
+        existing_manifest = read_optional_json(latest_ref)
+        if existing_manifest:
+            _assert_no_operational_rewrite(
+                existing_manifest=existing_manifest,
+                incoming={
+                    "sandbox_benchmark_batches": batches,
+                    "sandbox_benchmark_replicates": replicates,
+                    "sandbox_benchmark_phases": phases,
+                    "sandbox_benchmark_run_metadata": runs,
+                },
+            )
+        write_parquet_rows(table_refs["sandbox_benchmark_batches"], batches)
+        write_parquet_rows(
+            table_refs["sandbox_benchmark_replicates"],
+            replicates,
+        )
+        write_parquet_rows(table_refs["sandbox_benchmark_phases"], phases)
+        write_parquet_rows(
+            table_refs["sandbox_benchmark_run_metadata"],
+            runs,
+        )
+        write_json(dataset_source_manifest_ref, stable_source_manifest)
+        write_json(dataset_manifest_ref, dataset_manifest)
+        write_json(poll_ref, poll_manifest)
+        write_json(latest_ref, latest_manifest)
+    return latest_manifest
+
+
+def _assert_no_operational_rewrite(
+    *,
+    existing_manifest: dict[str, Any],
+    incoming: dict[str, list[dict[str, Any]]],
+) -> None:
+    """Reject a source that removes or mutates an already published identity."""
+    existing_refs = existing_manifest.get("table_refs")
+    if not isinstance(existing_refs, dict):
+        raise ValueError("Existing workload manifest has no table refs")
+    contracts = {
+        "sandbox_benchmark_batches": (
+            ("series_id", "benchmark_run_id"),
+            (
+                "runtime_seconds",
+                "estimated_cost_usd",
+                "hourly_price_usd",
+                "job_parts",
+                "source_run_sha",
+                "task_signature",
+                "workload_app_version",
+            ),
+        ),
+        "sandbox_benchmark_replicates": (
+            ("series_id", "benchmark_run_id", "replicate_index"),
+            (
+                "runtime_seconds",
+                "estimated_cost_usd",
+                "hourly_price_usd",
+                "task_count",
+                "source_run_sha",
+                "task_signature",
+            ),
+        ),
+        "sandbox_benchmark_phases": (
+            (
+                "series_id",
+                "benchmark_run_id",
+                "replicate_index",
+                "task_id",
+            ),
+            (
+                "runtime_seconds",
+                "task_order",
+                "source_run_sha",
+                "task_signature",
+            ),
+        ),
+        "sandbox_benchmark_run_metadata": (
+            ("benchmark_run_id",),
+            (
+                "source_run_sha",
+                "task_signature",
+                "workload_app_version",
+                "provider_result_count",
+            ),
+        ),
+    }
+    for table_name, (key_fields, stable_fields) in contracts.items():
+        existing_ref = existing_refs.get(table_name)
+        if not isinstance(existing_ref, str) or not existing_ref:
+            raise ValueError(
+                f"Existing workload manifest is missing {table_name}"
+            )
+        existing_rows = read_parquet_rows(existing_ref)
+        incoming_rows = incoming[table_name]
+        merged = _merge_rows(
+            existing_rows,
+            incoming_rows,
+            key_fields=key_fields,
+            stable_fields=stable_fields,
+        )
+        if len(merged) != len(incoming_rows):
+            incoming_keys = {
+                tuple(str(row[field]) for field in key_fields)
+                for row in incoming_rows
+            }
+            missing = [
+                tuple(str(row[field]) for field in key_fields)
+                for row in existing_rows
+                if tuple(str(row[field]) for field in key_fields)
+                not in incoming_keys
+            ]
+            raise ValueError(
+                f"Operational workload source removed retained {table_name} "
+                f"identities: {missing[:5]}"
+            )
+
+
+def _validate_source_repository(value: str) -> str:
+    parts = value.strip().split("/")
+    if (
+        len(parts) != 2
+        or not all(parts)
+        or any(not part.replace("-", "").replace("_", "").isalnum() for part in parts)
+    ):
+        raise ValueError(
+            "source_repository must be a GitHub owner/repository slug"
+        )
+    return "/".join(parts)
+
+
+def _resolve_commit(
+    client: requests.Session,
+    ref: str,
+    *,
+    api_root: str,
+) -> str:
+    response = client.get(f"{api_root}/commits/{ref}", timeout=30)
     response.raise_for_status()
     payload = response.json()
     sha = payload.get("sha")

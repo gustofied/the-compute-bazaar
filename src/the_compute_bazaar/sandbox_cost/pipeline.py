@@ -1193,6 +1193,27 @@ def validate_evidence(
     )
     _validate_source_manifest(source_manifest, batches)
 
+    return _evidence_summary(
+        prices=prices,
+        batches=batches,
+        replicates=replicates,
+        phases=phases,
+        run_metadata=run_metadata,
+        source_manifest=source_manifest,
+        utilization_rows=utilization_rows,
+    )
+
+
+def _evidence_summary(
+    *,
+    prices: list[dict[str, Any]],
+    batches: list[dict[str, Any]],
+    replicates: list[dict[str, Any]],
+    phases: list[dict[str, Any]],
+    run_metadata: list[dict[str, Any]],
+    source_manifest: dict[str, Any],
+    utilization_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
     return {
         "price_observation_count": len(prices),
         "price_service_count": len({row["series_id"] for row in prices}),
@@ -1231,6 +1252,7 @@ def build_sandbox_cost(
     vm_discovery_history_ref: str | None = None,
     vm_discovery_current_ref: str | None = None,
     vm_discovery_manifest_ref: str | None = None,
+    workload_benchmark_manifest_ref: str | None = None,
     price_path: Path = PRICE_EVIDENCE,
     benchmark_path: Path = BENCHMARK_EVIDENCE,
     source_manifest_path: Path = SOURCE_MANIFEST,
@@ -1248,6 +1270,7 @@ def build_sandbox_cost(
             vm_discovery_history_ref=vm_discovery_history_ref,
             vm_discovery_current_ref=vm_discovery_current_ref,
             vm_discovery_manifest_ref=vm_discovery_manifest_ref,
+            workload_benchmark_manifest_ref=workload_benchmark_manifest_ref,
             price_path=price_path,
             benchmark_path=benchmark_path,
             source_manifest_path=source_manifest_path,
@@ -1266,6 +1289,7 @@ def _build_sandbox_cost_unlocked(
     vm_discovery_history_ref: str | None,
     vm_discovery_current_ref: str | None,
     vm_discovery_manifest_ref: str | None,
+    workload_benchmark_manifest_ref: str | None,
     price_path: Path,
     benchmark_path: Path,
     source_manifest_path: Path,
@@ -1285,10 +1309,38 @@ def _build_sandbox_cost_unlocked(
     utilization_rows = _validate_utilization_metric_definitions(
         utilization_payload["rows"]
     )
-    batch_rows = list(benchmarks_payload["batch_rows"])
-    replicate_rows = list(benchmarks_payload["replicate_rows"])
-    phase_rows = list(benchmarks_payload["phase_rows"])
-    run_metadata = list(benchmarks_payload["run_metadata"])
+    workload_manifest_ref = workload_benchmark_manifest_ref or _join(
+        output_root,
+        "silver/_manifests/workload_benchmark/latest.json",
+    )
+    workload_manifest = _load_optional_json(workload_manifest_ref)
+    if workload_manifest:
+        (
+            benchmarks_payload,
+            source_manifest,
+            batch_rows,
+            replicate_rows,
+            phase_rows,
+            run_metadata,
+        ) = _load_operational_workload_benchmark(
+            manifest=workload_manifest,
+            prices=price_rows,
+            canonical_payload=benchmarks_payload,
+        )
+        summary = _evidence_summary(
+            prices=price_rows,
+            batches=batch_rows,
+            replicates=replicate_rows,
+            phases=phase_rows,
+            run_metadata=run_metadata,
+            source_manifest=source_manifest,
+            utilization_rows=utilization_rows,
+        )
+    else:
+        batch_rows = list(benchmarks_payload["batch_rows"])
+        replicate_rows = list(benchmarks_payload["replicate_rows"])
+        phase_rows = list(benchmarks_payload["phase_rows"])
+        run_metadata = list(benchmarks_payload["run_metadata"])
     vm_history_rows = _load_optional_parquet(vm_capacity_history_ref)
     vm_current_rows = _load_optional_parquet(vm_capacity_current_ref)
     vm_source_manifest = _load_optional_json(vm_capacity_manifest_ref)
@@ -3128,6 +3180,110 @@ def _load_optional_json(ref: str | None) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ValueError(f"Expected JSON object at {ref}")
     return dict(value)
+
+
+def _load_operational_workload_benchmark(
+    *,
+    manifest: dict[str, Any],
+    prices: list[dict[str, Any]],
+    canonical_payload: dict[str, Any],
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
+    """Load and validate the latest trusted recurring workload generation."""
+    if manifest.get("manifest_version") != "sandbox_workload_dataset_v1":
+        raise ValueError(
+            "Unsupported recurring workload manifest: "
+            f"{manifest.get('manifest_version')!r}"
+        )
+    if manifest.get("target_shape") != TARGET_SHAPE:
+        raise ValueError(
+            "Recurring workload manifest has an incompatible machine shape"
+        )
+    expected_tables = {
+        "sandbox_benchmark_batches",
+        "sandbox_benchmark_replicates",
+        "sandbox_benchmark_phases",
+        "sandbox_benchmark_run_metadata",
+    }
+    table_refs = manifest.get("table_refs")
+    if not isinstance(table_refs, dict) or set(table_refs) != expected_tables:
+        raise ValueError(
+            "Recurring workload manifest table refs drifted: expected "
+            f"{sorted(expected_tables)}"
+        )
+    if not all(isinstance(ref, str) and ref for ref in table_refs.values()):
+        raise ValueError("Recurring workload table refs must be non-empty strings")
+
+    source_manifest_ref = manifest.get("source_manifest_ref")
+    if not isinstance(source_manifest_ref, str) or not source_manifest_ref:
+        raise ValueError("Recurring workload manifest has no source manifest ref")
+    source_manifest = read_json(source_manifest_ref)
+    if not isinstance(source_manifest, dict):
+        raise ValueError("Recurring workload source manifest must be an object")
+    for field in ("source_repository", "source_commit"):
+        if source_manifest.get(field) != manifest.get(field):
+            raise ValueError(
+                f"Recurring workload {field} disagrees with its source manifest"
+            )
+
+    batches = _validate_batches(
+        read_parquet_rows(str(table_refs["sandbox_benchmark_batches"])),
+        prices,
+    )
+    replicates = _validate_replicates(
+        read_parquet_rows(str(table_refs["sandbox_benchmark_replicates"])),
+        prices,
+        batches,
+    )
+    phases = _validate_phases(
+        read_parquet_rows(str(table_refs["sandbox_benchmark_phases"])),
+        replicates,
+    )
+    run_metadata = _validate_run_metadata(
+        read_parquet_rows(str(table_refs["sandbox_benchmark_run_metadata"])),
+        batches,
+        replicates,
+    )
+    _validate_source_manifest(source_manifest, batches)
+
+    canonical_keys = {
+        (str(row["series_id"]), str(row["benchmark_run_id"]))
+        for row in canonical_payload.get("batch_rows", [])
+    }
+    operational_keys = {
+        (str(row["series_id"]), str(row["benchmark_run_id"])) for row in batches
+    }
+    missing = canonical_keys - operational_keys
+    if missing:
+        raise ValueError(
+            "Recurring workload generation would drop reviewed history: "
+            f"{sorted(missing)[:5]}"
+        )
+
+    payload = {
+        **canonical_payload,
+        "retrieved_at": manifest.get("dataset_observed_at"),
+        "source_repository": manifest.get("source_repository"),
+        "source_commit": manifest.get("source_commit"),
+        "batch_rows": batches,
+        "replicate_rows": replicates,
+        "phase_rows": phases,
+        "run_metadata": run_metadata,
+    }
+    return (
+        payload,
+        source_manifest,
+        batches,
+        replicates,
+        phases,
+        run_metadata,
+    )
 
 
 def _load_gpu_history(ref: str | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:

@@ -301,6 +301,31 @@ and new or structurally changed public benchmark runs. Managed-sandbox price
 pages remain a manual reviewed input because their billing semantics and markup
 are not one stable API.
 
+A controlled recurring workload uses the maintained StarSling execution
+harness rather than duplicating its provider SDKs here. An explicit trusted
+refresh writes immutable source captures and a versioned operational silver
+generation:
+
+```sh
+uv run sandbox-cost refresh-benchmark \
+  --output-root data/lake/sandbox_cost \
+  --source-repository OWNER/hpc-sandbox-benchmarks \
+  --source-ref main \
+  --publish-operational
+```
+
+The next hourly build validates that generation, preserves all reviewed
+history, and rebuilds workload gold with DataFusion. The disabled-by-default
+Windmill job can ingest the prior committed result and dispatch the next
+`realworld` run:
+
+```sh
+uv run python infra/windmill/bootstrap_sandbox_benchmark_schedule.py
+```
+
+Only use `--dispatch --enable` after the owned benchmark repository has its
+protected provider secrets and publication workflow configured.
+
 See [docs/sandbox-cost-benchmark.md](docs/sandbox-cost-benchmark.md) for source
 semantics, formulas, layer paths, review rules, and refresh instructions.
 

@@ -768,6 +768,94 @@ uv run sandbox-cost refresh-benchmark \
 Never combine `--check` and `--update-evidence`. Historical source rewrites
 fail instead of silently changing prior observations.
 
+### Controlled Recurring Workload
+
+The recurring benchmark reuses the maintained
+[StarSling harness](https://github.com/starslingdev/hpc-sandbox-benchmarks).
+That repository owns provider SDK calls, sandbox lifecycle, the pinned
+4-vCPU/8-GiB/40-GB target, replicate planning, task timing, and its validated
+Run schema. Compute Bazaar owns the market-data side:
+
+```text
+credentialed StarSling realworld run
+  -> committed schema-validated Run document
+  -> immutable Compute Bazaar bronze retrieval
+  -> content-addressed workload silver generation
+  -> next hourly DataFusion workload gold build
+  -> sandbox-cost.json and article
+```
+
+Do not copy provider credentials or execution logic into the Compute Bazaar
+worker. Publish a trusted source generation explicitly:
+
+```sh
+uv run sandbox-cost refresh-benchmark \
+  --output-root data/lake/sandbox_cost \
+  --source-repository OWNER/hpc-sandbox-benchmarks \
+  --source-ref main \
+  --publish-operational
+```
+
+Each poll writes a unique bronze capture with retrieval time and checksums:
+
+```text
+bronze/hpc-sandbox-benchmarks/
+  source=<owner--repository>/commit=<sha>/refresh_id=<refresh>/...
+```
+
+Normalized tables are content-addressed, so polling an unchanged source does
+not create a false benchmark observation:
+
+```text
+silver/workload_benchmark/generations/generation_id=<content-hash>/
+silver/_manifests/workload_benchmark/polls/date=<date>/...
+silver/_manifests/workload_benchmark/latest.json
+```
+
+Before promoting the latest generation, the refresh checks the exact target
+shape, pinned workload version and ten-task signature, aligned replicate
+indices, cost arithmetic, source-file checksums, and retained history. A source
+cannot remove a reviewed run or change a prior result at the same identity.
+The hourly sandbox build follows the latest manifest automatically and
+recomputes the normal workload gold tables with the existing named DataFusion
+queries.
+
+The Windmill script is intentionally disabled until an owned benchmark
+repository is ready:
+
+```sh
+uv run python infra/windmill/bootstrap_sandbox_benchmark_schedule.py
+```
+
+The daily job first ingests the previously committed dataset, then optionally
+dispatches the next `realworld` matrix with 12 fresh sandboxes per provider.
+This order avoids keeping a Windmill worker open for a long benchmark and
+means only committed, validated results enter the lake.
+
+To enable dispatch:
+
+1. Maintain an owned fork or repository based on the pinned StarSling harness.
+2. Adapt its same-repository guards to that owned repository without removing
+   the protected-environment checks.
+3. Create a GitHub environment named `privileged`, restrict it to `main`, and
+   require a reviewer.
+4. Add only the provider credentials actually used:
+   `E2B_API_KEY`, `DAYTONA_API_KEY`, `MODAL_TOKEN_ID`,
+   `MODAL_TOKEN_SECRET`, `NOVITA_API_KEY`, `BL_API_KEY`, and
+   `BL_WORKSPACE`.
+5. Create a fine-grained GitHub token with Actions write access to the owned
+   repository. Store it locally as
+   `SANDBOX_BENCHMARK_GITHUB_TOKEN`; Windmill stores it as a secret variable.
+6. Set `SANDBOX_BENCHMARK_DISPATCH_REPOSITORY` and point
+   `SANDBOX_BENCHMARK_SOURCE_REPOSITORY` at the repository whose committed
+   dataset should be ingested.
+7. Bootstrap with `--dispatch --enable`.
+
+Provider credentials remain in GitHub's protected environment. Windmill gets
+only the workflow-dispatch token. Dataset publication may still require the
+repository's review/merge gate; Compute Bazaar will ingest the result after it
+is committed, not from an unreviewed Actions artifact.
+
 ## Recurrence
 
 Windmill `market_hourly` checks the seven exact vendor inputs and the separate
@@ -776,8 +864,10 @@ history, rebuilds the sandbox product, writes `sandbox-cost.json`, and
 publishes the market-run manifest each hour. One source failure is isolated and
 reported as a warning while the last validated current row remains available.
 Gold does not emit a new seven-vendor point for an incomplete hour. Reviewed
-managed-sandbox rates change only after a manual source audit. Workload
-evidence changes only after a reviewed StarSling promotion.
+managed-sandbox rates change only after a manual source audit. External
+StarSling evidence changes only after review. An explicitly configured owned
+runner may publish operational workload generations after the strict checks
+above; each methodology remains separately identified.
 
 `.github/workflows/sandbox-cost-sources.yml` runs daily and on demand. It
 validates evidence, performs a clean live schema/shape check for the four

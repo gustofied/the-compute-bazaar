@@ -255,3 +255,92 @@ uv run python -m unittest \
   earns its own public chart.
 - Treat a controlled recurring same-workload benchmark as a new methodology,
   rather than extending the six historical harness generations into one line.
+
+## Follow-up: History Windows And Controlled Execution
+
+The occupancy chart now has `1D`, `7D`, `1M`, and `All` controls. These are
+view filters over the complete retained source history. They do not resample,
+smooth, combine providers, or alter the underlying Akash GPU-unit and Clore
+public-server denominators. Source selection and time range remain independent
+keyboard-operable controls.
+
+The recurring workload design was audited against the current public
+StarSling repository. The discarded approach was to build new E2B, Daytona,
+Modal, Novita, and Blaxel executors in Compute Bazaar. StarSling already owns:
+
+- provider adapters and credential discovery;
+- the exact 4-vCPU, 8-GiB, 40-GB target;
+- fresh-sandbox replicate planning;
+- lifecycle and task timing;
+- schema validation, aggregation, and dataset promotion;
+- protected GitHub Environment rules for provider secrets.
+
+The adopted boundary is:
+
+```text
+StarSling = credentialed measurement execution
+Compute Bazaar = immutable ingestion, normalization, DataFusion gold, publication
+```
+
+`sandbox-cost refresh-benchmark --publish-operational` now writes:
+
+- a unique bronze retrieval with checksums;
+- a retained poll manifest for every check;
+- content-addressed batch, replicate, phase, and run-metadata silver tables;
+- a latest pointer updated only after the generation is complete.
+
+The publisher rejects incompatible shapes, workload/schema drift, changed
+historical identities, missing source files, bad price joins, and any
+generation that drops reviewed history. Repeated checks of unchanged source
+data reuse the same content generation while retaining separate poll records.
+The next hourly sandbox build discovers this manifest automatically and runs
+the existing DataFusion workload queries, so a browser never computes the
+benchmark.
+
+The new Windmill job is disabled by default. It ingests the previous committed
+dataset before optionally dispatching the next `realworld` matrix in an owned
+benchmark repository. Provider credentials remain in that repository's
+protected GitHub environment. Windmill receives only a narrowly scoped
+workflow-dispatch token. This keeps a multi-hour benchmark out of the
+Windmill worker while preserving Windmill as the operator-facing schedule.
+
+Verification completed during this pass:
+
+```sh
+node --check external/AdamSioud/exemplars/compute/sandbox-cost.js
+uv run python -m compileall -q \
+  src/the_compute_bazaar/sandbox_cost infra/windmill
+uv run python -m unittest tests.test_sandbox_cost
+uv run python -m unittest tests.test_windmill_bootstrap
+uv run python -m unittest tests.test_adamsioud
+```
+
+Browser checks at 1280 pixels and 390 by 844 pixels confirmed:
+
+- all four history ranges update their pressed state and chart description;
+- Akash/Clore switching remains independent of the selected range;
+- left/right keyboard navigation changes the range and focus together;
+- the mobile controls stay inside the article width with no page overflow;
+- the article logged no console warnings or errors.
+
+The complete repository suite then passed 91 tests. A live source smoke test
+resolved StarSling commit
+`c7c9abf328430e2b5a01b0a4f57863c0fdd87641`, retained 38 compatible batches,
+69 jobs, and 690 phases, and rejected the earlier 2-vCPU runs. Two identical
+polls reused generation `sandbox-workload-6f1a818f65624fdd`; the second poll
+was retained separately, and a DataFusion build consumed that generation.
+
+## Follow-up Deployment
+
+- AdamSioud commit `574038a` publishes the occupancy history controls.
+- The Windmill worker was rebuilt as
+  `compute-bazaar-windmill-worker:2026-07-25-workload-history-v1`, image digest
+  `e1b5df2a31d9792697e12aefeefd0fd3c3ed568a18fc01ea33d1eb7dcc53ed06`.
+- The deployment recreated only `windmill_worker`. Windmill Postgres, server,
+  Caddy, and their volumes remained running.
+- The Windmill health endpoint reported a healthy database and two live
+  workers. The deployed image also passed `sandbox-cost validate`.
+- The controlled daily benchmark schedule remains disabled. Enabling it still
+  requires an owned benchmark repository, protected provider credentials in
+  its `privileged` GitHub environment, and a fine-grained workflow-dispatch
+  token stored as a Windmill secret.
