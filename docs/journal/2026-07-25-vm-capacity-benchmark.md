@@ -231,6 +231,49 @@ Managed-sandbox rate cards remain manually reviewed. StarSling benchmark
 evidence remains commit-pinned and manually promoted after the daily source
 check detects new compatible data.
 
+## Release Verification
+
+The article changes were committed to AdamSioud as `87bbb80`. The recurring
+pipeline, tests, workflow, documentation, and submodule pointer were committed
+to The Compute Bazaar as `da41797`. Both `main` branches were pushed.
+
+The VPC Windmill worker was rebuilt from the pushed source and recreated
+without changing Postgres, Windmill server, or AutoMQ state. A real
+`market_hourly` invocation completed as:
+
+```text
+market_run_id     market-vm-capacity-release-20260725T0545Z
+VM source run     vm-capacity-20260725T054534Z
+VM source status  ok
+VM members        4
+VM history events 4
+sandbox build     sandbox-cost-c27eee3c8e3f7263
+public schema     sandbox_cost_gold_v4
+```
+
+The run wrote VM bronze, silver, and gold objects to S3, published the public
+payload, and retained its market-run manifest. CloudFront returned the v4
+payload with all four rows and one current comparison row. A serialized
+public-boundary check found no `s3://` URI or `raw_refs` field.
+
+Verification completed with:
+
+```text
+ruff check                         passed
+unittest discovery                71 passed
+focused VM tests                  5 passed
+JavaScript syntax                 passed
+desktop browser                   passed
+mobile browser                    passed
+keyboard chart inspection         passed
+production console/network logs   no errors
+GitHub Pages deployment           passed
+```
+
+The production page rendered the 05:45 UTC source check, `$0.081/hour` VM
+median, `$0.481/hour` managed-sandbox median, and `5.9x` observed cohort-rate
+ratio. The hourly Windmill schedule remains enabled at `0 0 * * * *`.
+
 ## Next Refresh
 
 1. Inspect the hourly market-run manifest and VM source status.
