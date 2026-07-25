@@ -4,7 +4,7 @@
     "A publication row names one numerator, denominator, measurement window, and evidentiary boundary.",
     "Compute Bazaar does not infer rented capacity from disappearing offers or hardware activity from a running lease."
   ],
-  "retrieved_at": "2026-07-25T15:00:00+00:00",
+  "retrieved_at": "2026-07-25T14:00:00+00:00",
   "rows": [
     {
       "definition": "Share of repeated source checks in which at least one eligible GPU instance could be rented.",
