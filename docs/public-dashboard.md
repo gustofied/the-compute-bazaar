@@ -76,17 +76,24 @@ coverage counts. Each export merges the newest observations into the existing hi
 hourly job does not need to rescan the full lake. Use it instead of downloading the much larger
 all-product `index-history.json` on public story pages.
 
-`sandbox-cost.json` is the public article payload for the reviewed sandbox
-benchmark. It contains 33 dated hourly-price observations, 10 actual rate-change
-events, the current 11-service cross-section with explicit metering semantics,
-the fixed eight-service median/p25-p75 series, 38 historical provider-batch
-means, 69 complete latest jobs reconstructed from 690 retained task phases,
-three incomplete slots from 72 source slots, six workload summaries,
-retained H100 coverage history, and the coverage-gated H100/sandbox common-start
-series. It declares the timing and cost basis and explicitly excludes lifecycle
-latency. It contains source URLs and plain caveats, but no private lake
-credentials or raw private S3 objects. The hourly market run rebuilds it from
-maintained evidence and the newly exported GPU benchmark history.
+`sandbox-cost.json` is the version 4 public article payload for the sandbox and
+underlying-capacity benchmark. It contains the current exact-shape,
+four-provider VM offer cohort; its retained fixed-membership median/p25-p75
+history; the current VM/sandbox cohort comparison; 33 dated managed-sandbox
+hourly-price observations; 10 actual rate-change events; the current 11-service
+cross-section with explicit metering semantics; the fixed eight-service
+median/p25-p75 series; 38 historical provider-batch means; 69 complete latest
+jobs reconstructed from 690 retained task phases; three incomplete slots from
+72 source slots; six workload summaries; retained H100 coverage history; and
+the coverage-gated H100/sandbox common-start series.
+
+The payload declares timing, currency, machine shape, storage treatment, source
+URLs, and cost basis. It explicitly excludes lifecycle latency and does not
+describe the VM/sandbox rate ratio as markup or margin. Public source status and
+checksums may be included, but raw private S3 refs, private manifests,
+credentials, and raw response objects are removed at export. The hourly market
+run checks the VM APIs and rebuilds the payload from maintained evidence and
+the newly exported GPU benchmark history.
 
 ## S3/CloudFront Shape
 

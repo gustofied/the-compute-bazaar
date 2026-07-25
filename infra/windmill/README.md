@@ -169,7 +169,7 @@ AWS_EXECUTION_ENV,AWS_CONTAINER_CREDENTIALS_RELATIVE_URI,AWS_DEFAULT_REGION,AWS_
 The main script is `infra/windmill/market_hourly.py`. It runs the complete heartbeat:
 
 ```text
-ingest live APIs -> ingest current price observations -> ingest published rate cards -> build GPU gold -> export GPU history -> build sandbox-cost gold -> export dashboard JSON -> write market run manifest
+ingest live APIs -> ingest current price observations -> ingest published rate cards -> build GPU gold -> export GPU history -> check exact VM cohort -> build sandbox-cost gold -> export dashboard JSON -> write market run manifest
 ```
 
 In the dev worker image it shells out to the baked project CLI:
@@ -234,9 +234,13 @@ Windmill variables/secrets, creates the market script, and adds the hourly sched
 when `COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT` is not set.
 
 The same hourly run writes `sandbox-cost.json` beside the GPU dashboard files.
-Sandbox price evidence is reviewed and versioned in the project; the hourly job
-does not scrape provider marketing pages. The public StarSling benchmark
-repository is checked separately each day by
+The exact four-vCPU, 8 GiB VM cohort is checked through public catalog APIs
+inside every hourly run. It retains raw responses and appends a silver event
+only when price, FX, shape, region, storage treatment, or another inclusion
+field changes. Managed-sandbox price evidence remains reviewed and versioned
+in the project; the hourly job does not scrape those marketing pages. The
+public StarSling benchmark repository and VM source schemas are checked
+separately each day by
 `.github/workflows/sandbox-cost-sources.yml`. A failed check means new evidence
 or schema drift needs review. After review, update canonical evidence with the
 commit-pinned `sandbox-cost refresh-benchmark --update-evidence` command in

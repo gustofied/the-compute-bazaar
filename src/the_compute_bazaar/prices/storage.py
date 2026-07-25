@@ -150,6 +150,35 @@ def write_parquet_rows(uri: str, rows: Iterable[Mapping[str, Any]]) -> str:
     return str(path)
 
 
+def read_parquet_rows(uri: str) -> list[dict[str, Any]]:
+    """Read a local or S3 Parquet object into plain row dictionaries."""
+    try:
+        import pyarrow.parquet as pq
+    except ImportError as exc:
+        raise RuntimeError(
+            "Reading Parquet requires the 'platform' extra: uv sync --extra platform"
+        ) from exc
+
+    if uri.startswith("s3://"):
+        try:
+            import pyarrow.fs as pafs
+        except ImportError as exc:
+            raise RuntimeError(
+                "Reading Parquet from S3 requires pyarrow filesystem support"
+            ) from exc
+
+        parsed = urlparse(uri)
+        region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+        filesystem = pafs.S3FileSystem(region=region) if region else pafs.S3FileSystem()
+        table = pq.read_table(
+            f"{parsed.netloc}/{parsed.path.lstrip('/')}",
+            filesystem=filesystem,
+        )
+    else:
+        table = pq.read_table(Path(uri))
+    return [dict(row) for row in table.to_pylist()]
+
+
 def date_partition(
     root: str, *, provider: str, observed_date: str, run_id: str, filename: str
 ) -> str:

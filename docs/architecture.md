@@ -9,6 +9,7 @@ flowchart LR
   Vast["Provider API: Vast.ai"] --> Windmill["Windmill scheduled workers"]
   Lium["Provider API: Lium"] --> Windmill
   Rates["Official published rate cards"] --> Windmill
+  VMCatalogs["Exact public VM catalog APIs"] --> Windmill
   SandboxRates["Reviewed sandbox price evidence"] --> SandboxBronze["Sandbox bronze evidence"]
   StarSling["StarSling public benchmark runs"] --> SandboxBronze
 
@@ -21,6 +22,9 @@ flowchart LR
   Curia --> DataFusion["DataFusion SQL engine"]
   DataFusion --> Curia
   Curia --> Gold["S3 gold: Curia-authored market objects"]
+  Bronze --> VMSilver["VM silver: exact-shape offer events"]
+  VMSilver --> DataFusion
+  DataFusion --> VMGold["VM gold: fixed cohort and substrate comparison"]
   SandboxBronze --> SandboxSilver["Sandbox silver: prices, batches, jobs, phases"]
   SandboxSilver --> DataFusion
   DataFusion --> SandboxGold["Sandbox gold: rates, workload, base-100"]
@@ -31,6 +35,7 @@ flowchart LR
   Gold --> API["Future API / MCP"]
   Gold --> Dashboard["D3 blog/dashboard"]
   SandboxGold --> Dashboard
+  VMGold --> Dashboard
   MarketRun --> Dashboard
   MarketRun --> API
   AutoMQ --> Live["Future live backend / live feed"]
@@ -147,18 +152,25 @@ useful ones should be promoted into the Curia catalog before they become methodo
 
 ## Sandbox Cost Product
 
-The sandbox-cost benchmark applies the same layer discipline to public CPU and
-memory rates plus the StarSling HPC Sandbox Benchmark:
+The sandbox-cost benchmark applies the same layer discipline to exact-shape
+public VM offers, reviewed managed-sandbox CPU and memory rates, and the
+StarSling HPC Sandbox Benchmark:
 
 ```text
-reviewed price evidence + commit-pinned public benchmark source
+exact public VM APIs + reviewed sandbox price evidence
+  + commit-pinned public benchmark source
   -> bronze
+  -> silver/vm_capacity_offer_history
+  -> silver/vm_capacity_current
   -> silver/sandbox_hourly_prices
   -> silver/sandbox_benchmark_batches
   -> silver/sandbox_benchmark_replicates
   -> silver/sandbox_benchmark_phases
   -> silver/sandbox_benchmark_run_metadata
   -> DataFusion methodology queries
+  -> gold/vm_capacity_current
+  -> gold/vm_capacity_fixed_rate
+  -> gold/vm_sandbox_current_comparison
   -> gold/sandbox_hourly_price_series
   -> gold/sandbox_price_events
   -> gold/sandbox_current_rates
@@ -173,6 +185,14 @@ reviewed price evidence + commit-pinned public benchmark source
   -> gold/sandbox_gpu_cpu_common_start
   -> dashboard/compute-bazaar/sandbox-cost.json
 ```
+
+The VM product uses a fixed four-provider cohort of exact four-vCPU, 8 GiB
+on-demand offers. Each hourly check retains raw API responses and checksums.
+Silver adds an event only when price, FX, shape, region, storage treatment, or
+another inclusion field changes. Gold publishes the current cross-section,
+median/p25-p75 history, and a descriptive VM-to-sandbox rate ratio. Bundled
+storage and CPU semantics remain explicit; the ratio is not a margin or
+like-for-like product decomposition.
 
 The fixed hourly rate uses the same eight services at every event date and
 publishes the cohort median and p25-p75 range; the arithmetic mean remains a
@@ -197,11 +217,11 @@ coverage table, including excluded low-coverage periods. This view does not
 combine raw dollar levels or claim demand, transaction volume, or GPU
 utilization.
 
-The hourly Windmill heartbeat rebuilds this gold product after GPU dashboard
-history is exported. A separate daily source check detects new or changed
-StarSling evidence. Public provider price pages are reviewed manually because
-their billing semantics are not safely interchangeable or uniformly
-machine-readable.
+The hourly Windmill heartbeat checks the exact VM APIs and rebuilds this gold
+product after GPU dashboard history is exported. A separate daily source check
+detects VM source/schema drift and new or changed StarSling evidence. Managed
+sandbox price pages are reviewed manually because their billing semantics are
+not safely interchangeable or uniformly machine-readable.
 
 See [sandbox-cost-benchmark.md](sandbox-cost-benchmark.md) for the complete
 measurement and maintenance contract.

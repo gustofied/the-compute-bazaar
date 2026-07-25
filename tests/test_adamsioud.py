@@ -27,7 +27,7 @@ class AdamSioudServerTests(unittest.TestCase):
 
         self.assertIn("data-sandbox-cost", article)
         self.assertIn(
-            "Public cost of one hour at four processors and 8 GiB of memory",
+            "Four vCPUs and 8 GiB, before and after the sandbox layer",
             article,
         )
         self.assertIn(
@@ -40,15 +40,34 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="sandbox-batch-table-body"', article)
         self.assertIn('id="sandbox-combined-chart"', article)
         self.assertIn('id="sandbox-coverage-chart"', article)
-        self.assertIn('src="./sandbox-cost.js?v=7"', article)
+        self.assertIn('src="./sandbox-cost.js?v=8"', article)
         self.assertIn("sandbox-cost.json", script)
-        self.assertIn('manifestVersion !== "sandbox_cost_gold_v3"', script)
+        self.assertIn('"sandbox_cost_gold_v4"', script)
         self.assertIn("effectiveCssZoom", script)
+        self.assertIn("createRateHistoryChart", script)
+        self.assertIn('id="vm-current-rates"', article)
+        self.assertIn('id="vm-capacity-table-body"', article)
         self.assertIn("createJobDistributionChart", script)
         self.assertIn("createBatchHistoryChart", script)
         self.assertEqual(
             payload["manifest"]["manifest_version"],
-            "sandbox_cost_gold_v3",
+            "sandbox_cost_gold_v4",
+        )
+        self.assertEqual(
+            payload["manifest"]["row_counts"]["vm_capacity_current"],
+            4,
+        )
+        self.assertEqual(
+            payload["manifest"]["row_counts"]["vm_capacity_fixed_rate"],
+            1,
+        )
+        self.assertEqual(
+            len(payload["vm_capacity"]["current_cross_section"]),
+            4,
+        )
+        self.assertNotIn(
+            "raw_refs_json",
+            json.dumps(payload["vm_capacity"]),
         )
         self.assertEqual(
             payload["manifest"]["row_counts"]["sandbox_hourly_price_series"],
@@ -58,12 +77,8 @@ class AdamSioudServerTests(unittest.TestCase):
             payload["manifest"]["row_counts"]["sandbox_price_events"],
             10,
         )
-        coverage_count = payload["manifest"]["row_counts"][
-            "gpu_h100_daily_coverage"
-        ]
-        eligible_count = payload["manifest"]["row_counts"][
-            "gpu_h100_eligible_history"
-        ]
+        coverage_count = payload["manifest"]["row_counts"]["gpu_h100_daily_coverage"]
+        eligible_count = payload["manifest"]["row_counts"]["gpu_h100_eligible_history"]
         self.assertGreaterEqual(coverage_count, 37)
         self.assertEqual(
             coverage_count,

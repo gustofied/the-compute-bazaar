@@ -1,14 +1,16 @@
 # Sandbox Cost Benchmark
 
 The sandbox-cost benchmark is a maintained Compute Bazaar data product used by
-the AdamSioud Compute article. It answers three deliberately separate
+the AdamSioud Compute article. It answers four deliberately separate
 questions:
 
-1. What public processor-and-memory rate is quoted for the audited
+1. What do exact-shape public VM offers quote for four vCPUs and 8 GiB before a
+   managed sandbox layer is added?
+2. What public processor-and-memory rate is quoted for the audited
    four-processor, 8 GiB sandbox request?
-2. How long did one pinned software workload spend inside its measured phases,
+3. How long did one pinned software workload spend inside its measured phases,
    and what marginal processor-and-memory cost does that measured time imply?
-3. How did a coverage-qualified H100 advertised-price benchmark and a fixed
+4. How did a coverage-qualified H100 advertised-price benchmark and a fixed
    sandbox rate-card cohort move after one declared common starting point?
 
 These are not interchangeable measurements. An advertised rate is not an
@@ -49,7 +51,11 @@ tail-latency study, or a universal provider ranking.
 ## Maintained Data Path
 
 ```text
-official price pages + archived observations
+exact public VM catalog APIs + ECB reference FX
+  -> hourly immutable raw captures
+  -> fixed exact-shape VM offer history
+
+official sandbox price pages + archived observations
   -> reviewed immutable price evidence
 
 StarSling public benchmark repository
@@ -82,6 +88,9 @@ bronze/benchmark-evidence.json
 bronze/source-manifest.json
 bronze/hpc-sandbox-benchmarks/commit=<sha>/...
 
+silver/vm_capacity_offer_history.parquet
+silver/vm_capacity_current.parquet
+silver/vm_capacity_source_manifest.json
 silver/sandbox_hourly_prices.parquet
 silver/sandbox_benchmark_batches.parquet
 silver/sandbox_benchmark_replicates.parquet
@@ -98,6 +107,9 @@ gold/sandbox_workload_latest_replicates.parquet
 gold/sandbox_workload_latest_phases.parquet
 gold/sandbox_workload_phase_summary.parquet
 gold/sandbox_workload_service_summary.parquet
+gold/vm_capacity_current.parquet
+gold/vm_capacity_fixed_rate.parquet
+gold/vm_sandbox_current_comparison.parquet
 gold/gpu_h100_daily_coverage.parquet
 gold/gpu_h100_eligible_history.parquet
 gold/sandbox_gpu_cpu_common_start.parquet
@@ -108,6 +120,80 @@ Bronze preserves source records, retrieval metadata, and checksums. Silver
 standardizes units, machine shapes, timestamps, observation levels, timing
 bases, and provenance. Gold contains publication-ready products computed by
 named, hashed DataFusion queries.
+
+The VM source captures live below `--raw-root`:
+
+```text
+sandbox-cost/vm-capacity/provider=<provider>/date=<yyyy-mm-dd>/
+  run_id=<vm-capacity-run>/...
+```
+
+Every hourly check gets a raw capture and checksum. Silver history adds a new
+event only when price, FX conversion, machine shape, region, storage treatment,
+or another inclusion field changes. An unchanged check advances
+`last_observed_at` and `observation_count`; it does not manufacture another
+price point.
+
+## Underlying VM Capacity Cohort
+
+The first public VM cohort is deliberately small and exact:
+
+```text
+cohort ID       public_vm_4vcpu_8gib_v1
+shape           exactly 4 vCPU and 8 GiB memory
+purchase basis  public Linux on-demand offer
+headline        median USD hourly offer
+dispersion      p25-p75 USD hourly offers
+membership      fixed four-provider cohort
+history start   first automated observation; no invented backfill
+```
+
+The fixed members and source selections are:
+
+| Provider | Exact offer | Reference location | Storage treatment |
+| --- | --- | --- | --- |
+| Akamai Linode | `g6-standard-4` | public global plan | 160 GB bundled |
+| Vultr | `vc2-4c-8gb` | Paris (`cdg`) reference | 160 GB SSD bundled |
+| Scaleway | `BASIC3-X4C-8G` / `fr-par-2` | Paris | storage separate |
+| Microsoft Azure | `Standard_F4s_v2` | West Europe | 32 GiB temporary disk; OS and persistent disks separate |
+
+The sources are the official [Akamai Linode Types
+API](https://techdocs.akamai.com/linode-api/reference/get-linode-types),
+[Vultr Plans API](https://docs.vultr.com/reference/vultr-cli/plans/list),
+[Scaleway Public Catalog
+API](https://www.scaleway.com/en/developers/api/product-catalog/public-catalog),
+and [Azure Retail Prices
+API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices).
+Azure's machine shape is checked against the [Fsv2
+specification](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/compute-optimized/fsv2-series).
+
+Scaleway is quoted in EUR. Each observation retains the native price and the
+latest ECB EUR/USD reference rate used to produce its USD comparison value. An
+FX move can therefore create a new USD event even if Scaleway's native rate is
+unchanged.
+
+The cohort rejects spot, reserved, promotional, and mismatched shapes. It is
+not a CPU performance benchmark: vCPU generation, tenancy, burst policy,
+network, and bundled storage differ. The article calls the values “observed VM
+offer rates,” not a universal CPU price.
+
+The current substrate comparison is:
+
+```text
+vm_fixed_median =
+  median(current exact-shape VM offer USD/hour)
+
+sandbox_fixed_median =
+  median(current fixed sandbox cohort USD/hour)
+
+observed_rate_ratio =
+  sandbox_fixed_median / vm_fixed_median
+```
+
+The ratio describes two public offer cohorts at one check time. It is not a
+markup, gross margin, invoice, or like-for-like cost decomposition. Managed
+sandbox rates can include orchestration, isolation, APIs, images, pooling,
+support, and billing semantics that are absent from the VM offers.
 
 ## Price Evidence
 
@@ -407,6 +493,10 @@ coverage gate, and precision are part of the build identity.
 
 The pipeline fails on:
 
+- unknown or missing fixed-cohort VM providers;
+- a VM offer that no longer matches exactly four vCPUs and 8 GiB;
+- duplicate VM events or a current row without retained history;
+- missing native currency, FX, storage, region, or source fields;
 - unknown source or benchmark fields;
 - missing required fields;
 - duplicate observations;
@@ -430,21 +520,32 @@ Validate reviewed evidence:
 uv run sandbox-cost validate
 ```
 
-Build from maintained GPU history:
+Check the live fixed VM cohort and retain its raw responses:
+
+```sh
+uv run sandbox-cost refresh-vm-capacity \
+  --output-root data/lake/sandbox_cost \
+  --raw-root data/raw
+```
+
+Build from maintained GPU and VM history:
 
 ```sh
 uv run sandbox-cost build \
-  --output-root data/sandbox-cost \
+  --output-root data/lake/sandbox_cost \
   --dashboard-output-root data/dashboard/compute-bazaar \
-  --gpu-history-ref data/sandbox-cost/silver/gpu_benchmark_history.parquet
+  --gpu-history-ref data/lake/sandbox_cost/silver/gpu_benchmark_history.parquet \
+  --vm-capacity-history-ref data/lake/sandbox_cost/silver/vm_capacity_offer_history.parquet \
+  --vm-capacity-current-ref data/lake/sandbox_cost/silver/vm_capacity_current.parquet \
+  --vm-capacity-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_source_manifest.json
 ```
 
 Run an allowlisted DataFusion query:
 
 ```sh
 uv run sandbox-cost query \
-  --output-root data/sandbox-cost \
-  --query workload-latest-replicates \
+  --output-root data/lake/sandbox_cost \
+  --query vm-fixed-rate \
   --limit 25
 ```
 
@@ -460,6 +561,9 @@ workload-latest-replicates
 workload-latest-phases
 workload-phase-summary
 workload-summary
+vm-current
+vm-fixed-rate
+vm-sandbox-current
 gpu-daily-coverage
 gpu-eligible-history
 combined-common-start
@@ -469,7 +573,7 @@ Check the public StarSling source without changing reviewed evidence:
 
 ```sh
 uv run sandbox-cost refresh-benchmark \
-  --output-root data/sandbox-cost \
+  --output-root data/lake/sandbox_cost \
   --source-ref main \
   --check
 ```
@@ -479,7 +583,7 @@ commit-pinned bronze capture before promotion:
 
 ```sh
 uv run sandbox-cost refresh-benchmark \
-  --output-root data/sandbox-cost \
+  --output-root data/lake/sandbox_cost \
   --source-ref <reviewed-commit> \
   --update-evidence
 ```
@@ -489,17 +593,23 @@ fail instead of silently changing prior observations.
 
 ## Recurrence
 
-Windmill `market_hourly` builds GPU gold, exports benchmark history, rebuilds
-the sandbox product, writes `sandbox-cost.json`, and publishes the market-run
-manifest each hour. Reviewed sandbox rates change only after a manual source
-audit. Workload evidence changes only after a reviewed StarSling promotion.
+Windmill `market_hourly` checks the exact public VM APIs, retains every raw
+check, builds GPU gold, exports benchmark history, rebuilds the sandbox
+product, writes `sandbox-cost.json`, and publishes the market-run manifest each
+hour. One provider failure is isolated and reported as a warning while the
+last validated observation remains available; an incomplete fixed cohort is
+not silently presented as complete. Reviewed managed-sandbox rates change only
+after a manual source audit. Workload evidence changes only after a reviewed
+StarSling promotion.
 
 `.github/workflows/sandbox-cost-sources.yml` runs daily and on demand. It
-validates evidence, resolves StarSling to an immutable commit, detects
-source/schema drift or new compatible runs, and runs focused tests. A failed
-source check is a review request, not permission to publish.
+validates evidence, performs a clean live VM schema/shape check, resolves
+StarSling to an immutable commit, detects source/schema drift or new compatible
+runs, and runs focused tests. The CI VM check writes only to `/tmp`; Windmill
+owns durable hourly history. A failed source check is a review request, not
+permission to publish.
 
-Manual price review is intentional:
+Manual managed-sandbox price review is intentional:
 
 1. Open the current and archived source URLs.
 2. Verify billing unit, requested quantity, memory basis, currency, and date
@@ -517,6 +627,11 @@ The public-safe artifact is:
 dashboard/compute-bazaar/sandbox-cost.json
 ```
 
+The version 4 payload contains the public VM current cohort, fixed-rate
+history, current VM/sandbox comparison, managed-sandbox rate history, workload
+results, and GPU comparison. Raw S3 refs and private manifests are removed at
+the public boundary.
+
 The AdamSioud article prefers CloudFront in production and keeps a checked-in
 fallback for local and failure-safe rendering:
 
@@ -531,6 +646,7 @@ Focused verification:
 ```sh
 uv run python -m unittest \
   tests.test_sandbox_cost \
+  tests.test_vm_capacity \
   tests.test_adamsioud -v
 
 node --check external/AdamSioud/exemplars/compute/sandbox-cost.js

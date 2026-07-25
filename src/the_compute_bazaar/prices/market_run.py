@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from the_compute_bazaar.sandbox_cost.pipeline import build_sandbox_cost
+from the_compute_bazaar.sandbox_cost.vm_capacity import (
+    refresh_vm_capacity_sources,
+)
 
 from .coverage import query_frontier_coverage_ref
 from .events import new_run_id
@@ -210,10 +213,59 @@ def run_market_hourly(
         output_root=dashboard_output_root,
         limit=dashboard_limit,
     )
+    sandbox_output_root = "/".join([lake_root.rstrip("/"), "sandbox_cost"])
+    vm_history_ref = "/".join(
+        [
+            sandbox_output_root.rstrip("/"),
+            "silver/vm_capacity_offer_history.parquet",
+        ]
+    )
+    vm_current_ref = "/".join(
+        [
+            sandbox_output_root.rstrip("/"),
+            "silver/vm_capacity_current.parquet",
+        ]
+    )
+    vm_manifest_ref = "/".join(
+        [
+            sandbox_output_root.rstrip("/"),
+            "silver/vm_capacity_source_manifest.json",
+        ]
+    )
+    try:
+        if dry_run:
+            raise RuntimeError("VM-capacity source refresh skipped in dry-run mode")
+        vm_capacity = refresh_vm_capacity_sources(
+            output_root=sandbox_output_root,
+            raw_root=raw_root,
+            observed_at=observed_at,
+        )
+        checks["vm_capacity"] = vm_capacity.status
+        data_quality["vm_capacity"] = {
+            "run_id": vm_capacity.run_id,
+            "checked_at": vm_capacity.checked_at,
+            "status": vm_capacity.status,
+            "successful_providers": vm_capacity.successful_providers,
+            "failed_providers": vm_capacity.failed_providers,
+            "history_event_count": vm_capacity.history_event_count,
+            "current_member_count": vm_capacity.current_member_count,
+            "manifest_ref": vm_capacity.manifest_ref,
+        }
+    except Exception as exc:  # noqa: BLE001 - preserve the market heartbeat.
+        checks["vm_capacity"] = "warning"
+        data_quality["vm_capacity"] = {
+            "status": "warning",
+            "error_type": type(exc).__name__,
+            "error": _provider_error_message(exc),
+            "using_last_retained_state": True,
+        }
     sandbox_cost = build_sandbox_cost(
-        output_root="/".join([lake_root.rstrip("/"), "sandbox_cost"]),
+        output_root=sandbox_output_root,
         dashboard_output_root=dashboard_output_root,
         gpu_history_ref=dashboard_export["output_refs"]["benchmark_history"],
+        vm_capacity_history_ref=vm_history_ref,
+        vm_capacity_current_ref=vm_current_ref,
+        vm_capacity_manifest_ref=vm_manifest_ref,
     )
     dashboard_output_refs = {
         **dashboard_export["output_refs"],
@@ -233,6 +285,7 @@ def run_market_hourly(
         "sandbox_benchmark_results": sandbox_cost.row_counts.get(
             "sandbox_workload_latest_replicates", 0
         ),
+        "vm_capacity_offers": sandbox_cost.row_counts.get("vm_capacity_current", 0),
     }
     checks["gold"] = (
         "ok" if all(value > 0 for value in row_counts.values()) else "warning"

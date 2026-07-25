@@ -131,9 +131,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
                 dashboard_output_root=dashboard_root,
                 gpu_history_ref=str(gpu_history),
             )
-            public = json.loads(
-                (root / "dashboard" / "sandbox-cost.json").read_text()
-            )
+            public = json.loads((root / "dashboard" / "sandbox-cost.json").read_text())
 
         self.assertEqual(first.build_id, second.build_id)
         self.assertEqual(first.row_counts["sandbox_hourly_price_series"], 33)
@@ -160,9 +158,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertEqual(first.row_counts["gpu_h100_daily_coverage"], 3)
         self.assertEqual(first.row_counts["gpu_h100_eligible_history"], 2)
         self.assertEqual(first.row_counts["sandbox_gpu_cpu_common_start"], 2)
-        self.assertEqual(
-            public["manifest"]["manifest_version"], "sandbox_cost_gold_v3"
-        )
+        self.assertEqual(public["manifest"]["manifest_version"], "sandbox_cost_gold_v4")
         self.assertEqual(public["workload"]["source_batch_count"], 7)
         self.assertEqual(public["workload"]["calendar_day_count"], 5)
         self.assertEqual(public["workload"]["methodology_generation_count"], 6)
@@ -201,9 +197,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
             "provider_coverage_below_10",
         )
         self.assertEqual(
-            public["hourly_price"]["fixed_cohort_rate"][-1][
-                "median_usd_per_hour"
-            ],
+            public["hourly_price"]["fixed_cohort_rate"][-1]["median_usd_per_hour"],
             0.4806,
         )
         self.assertEqual(

@@ -221,11 +221,11 @@ keeps only public-safe status, counts, and query rows.
 The maintained sandbox benchmark follows the same evidence-to-product model:
 
 ```text
-public price evidence + StarSling benchmark runs
-  -> bronze source records
-  -> silver normalized prices, batches, jobs, phases, and run metadata
+exact VM catalog APIs + reviewed sandbox prices + StarSling benchmark runs
+  -> bronze raw VM checks and reviewed source records
+  -> silver VM offers, sandbox prices, batches, jobs, phases, and run metadata
   -> named DataFusion queries
-  -> gold fixed-cohort rates, workload summaries, and coverage-gated comparison
+  -> gold VM and sandbox cohorts, workload summaries, and coverage-gated comparison
   -> sandbox-cost.json
   -> AdamSioud Compute article
 ```
@@ -239,6 +239,13 @@ visible as incomplete rather than being imputed. Repeated intraday batches
 remain distinct. Earlier two-processor runs are captured but rejected because
 the publication shape is four processors, 8 GiB memory, and 40 GB disk.
 
+The underlying capacity view checks a fixed four-provider cohort of exact
+four-vCPU, 8 GiB public VM offers each hour. Raw API responses and checksums are
+retained; silver history adds a point only when price, FX, shape, location, or
+inclusion semantics change. Its median and p25-p75 are shown beside the fixed
+eight-service managed-sandbox cohort. Their observed rate ratio is descriptive,
+not a markup or margin.
+
 The hourly sandbox headline is the median of the same eight-service cohort,
 with p25-p75 and mean retained as descriptive fields. The H100 comparison uses
 only hourly benchmark prints with at least 10 contributing providers. Earlier
@@ -249,27 +256,35 @@ transaction volume or GPU utilization.
 ```sh
 uv run sandbox-cost validate
 
+uv run sandbox-cost refresh-vm-capacity \
+  --output-root data/lake/sandbox_cost \
+  --raw-root data/raw
+
 uv run sandbox-cost build \
-  --output-root data/sandbox-cost \
+  --output-root data/lake/sandbox_cost \
   --dashboard-output-root data/dashboard/compute-bazaar \
-  --gpu-history-ref data/sandbox-cost/silver/gpu_benchmark_history.parquet
+  --gpu-history-ref data/lake/sandbox_cost/silver/gpu_benchmark_history.parquet \
+  --vm-capacity-history-ref data/lake/sandbox_cost/silver/vm_capacity_offer_history.parquet \
+  --vm-capacity-current-ref data/lake/sandbox_cost/silver/vm_capacity_current.parquet \
+  --vm-capacity-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_source_manifest.json
 
 uv run sandbox-cost query \
-  --output-root data/sandbox-cost \
-  --query workload-latest-replicates \
+  --output-root data/lake/sandbox_cost \
+  --query vm-sandbox-current \
   --limit 10
 
 uv run sandbox-cost refresh-benchmark \
-  --output-root data/sandbox-cost \
+  --output-root data/lake/sandbox_cost \
   --source-ref main \
   --check
 ```
 
 The hourly `market-hourly` heartbeat rebuilds and publishes
-`sandbox-cost.json` after exporting GPU benchmark history. A daily GitHub
-Actions check detects new or structurally changed public benchmark runs.
-Provider price pages remain a manual reviewed input because their billing
-semantics and markup are not one stable API.
+`sandbox-cost.json` after checking the exact public VM cohort and exporting GPU
+benchmark history. A daily GitHub Actions check detects VM source/schema drift
+and new or structurally changed public benchmark runs. Managed-sandbox price
+pages remain a manual reviewed input because their billing semantics and markup
+are not one stable API.
 
 See [docs/sandbox-cost-benchmark.md](docs/sandbox-cost-benchmark.md) for source
 semantics, formulas, layer paths, review rules, and refresh instructions.

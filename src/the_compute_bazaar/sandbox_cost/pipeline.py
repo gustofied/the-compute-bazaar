@@ -13,9 +13,16 @@ from typing import Any, Mapping
 from the_compute_bazaar.prices.datafusion import query_tables
 from the_compute_bazaar.prices.storage import (
     read_json,
+    read_parquet_rows,
     write_bytes,
     write_json,
     write_parquet_rows,
+)
+from the_compute_bazaar.sandbox_cost.vm_capacity import (
+    VM_CAPACITY_COHORT_ID,
+    VM_CAPACITY_METHODOLOGY,
+    VM_PROVIDER_ORDER,
+    VM_TARGET_SHAPE,
 )
 
 
@@ -39,6 +46,9 @@ GPU_COMPARISON_MIN_PROVIDERS = 10
 GPU_DAILY_QUERY_ID = "h100_daily_broad_coverage_v1"
 GPU_ELIGIBLE_QUERY_ID = "h100_broad_coverage_prints_v1"
 COMBINED_QUERY_ID = "sandbox_gpu_cpu_common_start_v3"
+VM_CURRENT_QUERY_ID = "vm_capacity_current_cross_section_v1"
+VM_FIXED_RATE_QUERY_ID = "vm_capacity_fixed_cohort_rate_v1"
+VM_SANDBOX_COMPARISON_QUERY_ID = "vm_sandbox_current_rate_comparison_v1"
 NUMERIC_DECIMAL_PLACES = 12
 
 RUNTIME_PRICE_SERIES = {
@@ -780,6 +790,103 @@ cross join baseline
 order by comparable.gold_observed_at
 """
 
+VM_CURRENT_SQL = """
+select *
+from vm_capacity_current
+order by price_usd_per_hour, provider_label
+"""
+
+VM_FIXED_RATE_SQL = f"""
+with event_times as (
+  select distinct cast(first_observed_at as timestamp) as observed_at
+  from vm_capacity_offer_history
+  where cohort_id = '{VM_CAPACITY_COHORT_ID}'
+),
+members as (
+  select distinct provider_id
+  from vm_capacity_offer_history
+  where cohort_id = '{VM_CAPACITY_COHORT_ID}'
+),
+ranked as (
+  select
+    events.observed_at,
+    history.provider_id,
+    history.provider_label,
+    history.price_usd_per_hour,
+    history.source_price_per_hour,
+    history.source_currency,
+    history.fx_rate_usd_per_source_currency,
+    history.fx_observed_date,
+    history.first_observed_at as source_first_observed_at,
+    history.last_observed_at as source_last_observed_at,
+    row_number() over (
+      partition by events.observed_at, history.provider_id
+      order by cast(history.first_observed_at as timestamp) desc,
+        history.event_order desc
+    ) as recency_rank
+  from event_times events
+  cross join members
+  join vm_capacity_offer_history history
+    on history.provider_id = members.provider_id
+   and cast(history.first_observed_at as timestamp) <= events.observed_at
+),
+current_members as (
+  select *
+  from ranked
+  where recency_rank = 1
+)
+select
+  observed_at,
+  cast(observed_at as date) as observed_date,
+  '{VM_CAPACITY_METHODOLOGY}' as methodology_version,
+  '{VM_CAPACITY_COHORT_ID}' as cohort_id,
+  median(price_usd_per_hour) as median_usd_per_hour,
+  avg(price_usd_per_hour) as average_usd_per_hour,
+  percentile_cont(0.25) within group (
+    order by price_usd_per_hour
+  ) as p25_usd_per_hour,
+  percentile_cont(0.75) within group (
+    order by price_usd_per_hour
+  ) as p75_usd_per_hour,
+  count(*) as member_count,
+  min(price_usd_per_hour) as minimum_usd_per_hour,
+  max(price_usd_per_hour) as maximum_usd_per_hour
+from current_members
+group by observed_at
+having count(*) = {len(VM_PROVIDER_ORDER)}
+order by observed_at
+"""
+
+VM_SANDBOX_COMPARISON_SQL = """
+with latest_vm as (
+  select *
+  from vm_capacity_fixed_rate
+  order by observed_at desc
+  limit 1
+),
+latest_sandbox as (
+  select *
+  from sandbox_fixed_rate
+  order by observed_date desc
+  limit 1
+)
+select
+  vm.observed_at as vm_observed_at,
+  sandbox.observed_date as sandbox_rate_date,
+  vm.median_usd_per_hour as vm_median_usd_per_hour,
+  vm.p25_usd_per_hour as vm_p25_usd_per_hour,
+  vm.p75_usd_per_hour as vm_p75_usd_per_hour,
+  vm.member_count as vm_member_count,
+  sandbox.median_usd_per_hour as sandbox_median_usd_per_hour,
+  sandbox.p25_usd_per_hour as sandbox_p25_usd_per_hour,
+  sandbox.p75_usd_per_hour as sandbox_p75_usd_per_hour,
+  sandbox.member_count as sandbox_member_count,
+  sandbox.median_usd_per_hour / vm.median_usd_per_hour
+    as observed_rate_ratio
+from latest_vm vm
+cross join latest_sandbox sandbox
+"""
+
 GOLD_QUERIES = {
     "hourly-prices": """
 select *
@@ -840,6 +947,21 @@ order by gold_observed_at
 select *
 from sandbox_gpu_cpu_common_start
 order by gold_observed_at
+""",
+    "vm-current": """
+select *
+from vm_capacity_current
+order by price_usd_per_hour, provider_label
+""",
+    "vm-fixed-rate": """
+select *
+from vm_capacity_fixed_rate
+order by observed_at
+""",
+    "vm-sandbox-current": """
+select *
+from vm_sandbox_current_comparison
+order by vm_observed_at
 """,
 }
 
@@ -906,9 +1028,7 @@ def validate_evidence(
         "benchmark_phase_count": len(phases),
         "benchmark_service_count": len({row["series_id"] for row in batches}),
         "benchmark_run_count": len({row["benchmark_run_id"] for row in batches}),
-        "benchmark_calendar_day_count": len(
-            {row["observed_date"] for row in batches}
-        ),
+        "benchmark_calendar_day_count": len({row["observed_date"] for row in batches}),
         "benchmark_methodology_count": len(
             {row["methodology_id"] for row in run_metadata}
         ),
@@ -917,11 +1037,7 @@ def validate_evidence(
             key=lambda row: row["generated_at"],
         )["benchmark_run_id"],
         "fixed_members": sorted(
-            {
-                row["series_id"]
-                for row in prices
-                if row["index_cohort"] == FIXED_COHORT
-            }
+            {row["series_id"] for row in prices if row["index_cohort"] == FIXED_COHORT}
         ),
         "source_file_count": len(source_manifest["files"]),
     }
@@ -932,6 +1048,9 @@ def build_sandbox_cost(
     output_root: str = "data/sandbox-cost",
     dashboard_output_root: str | None = None,
     gpu_history_ref: str | None = None,
+    vm_capacity_history_ref: str | None = None,
+    vm_capacity_current_ref: str | None = None,
+    vm_capacity_manifest_ref: str | None = None,
     price_path: Path = PRICE_EVIDENCE,
     benchmark_path: Path = BENCHMARK_EVIDENCE,
     source_manifest_path: Path = SOURCE_MANIFEST,
@@ -950,14 +1069,17 @@ def build_sandbox_cost(
     replicate_rows = list(benchmarks_payload["replicate_rows"])
     phase_rows = list(benchmarks_payload["phase_rows"])
     run_metadata = list(benchmarks_payload["run_metadata"])
+    vm_history_rows = _load_optional_parquet(vm_capacity_history_ref)
+    vm_current_rows = _load_optional_parquet(vm_capacity_current_ref)
+    vm_source_manifest = _load_optional_json(vm_capacity_manifest_ref)
+    if bool(vm_history_rows) != bool(vm_current_rows):
+        raise ValueError("VM-capacity history and current refs must both contain rows")
 
     bronze_refs = {
         "hourly_price_evidence": _join(
             output_root, "bronze/hourly-price-evidence.json"
         ),
-        "benchmark_evidence": _join(
-            output_root, "bronze/benchmark-evidence.json"
-        ),
+        "benchmark_evidence": _join(output_root, "bronze/benchmark-evidence.json"),
         "source_manifest": _join(output_root, "bronze/source-manifest.json"),
     }
     write_json(bronze_refs["hourly_price_evidence"], prices_payload)
@@ -981,6 +1103,15 @@ def build_sandbox_cost(
             output_root, "silver/sandbox_benchmark_run_metadata.parquet"
         ),
     }
+    if vm_history_rows:
+        silver_refs["vm_capacity_offer_history"] = _join(
+            output_root,
+            "silver/vm_capacity_offer_history.parquet",
+        )
+        silver_refs["vm_capacity_current"] = _join(
+            output_root,
+            "silver/vm_capacity_current.parquet",
+        )
     write_parquet_rows(silver_refs["sandbox_hourly_prices"], price_rows)
     write_parquet_rows(silver_refs["sandbox_benchmark_batches"], batch_rows)
     write_parquet_rows(
@@ -992,6 +1123,15 @@ def build_sandbox_cost(
         silver_refs["sandbox_benchmark_run_metadata"],
         run_metadata,
     )
+    if vm_history_rows:
+        write_parquet_rows(
+            silver_refs["vm_capacity_offer_history"],
+            vm_history_rows,
+        )
+        write_parquet_rows(
+            silver_refs["vm_capacity_current"],
+            vm_current_rows,
+        )
 
     hourly_gold = _canonicalize_numeric_rows(
         query_tables(
@@ -1024,9 +1164,7 @@ order by series_order, observed_date, point_order
     workload_batches = _canonicalize_numeric_rows(
         query_tables(
             tables={
-                "sandbox_benchmark_batches": silver_refs[
-                    "sandbox_benchmark_batches"
-                ]
+                "sandbox_benchmark_batches": silver_refs["sandbox_benchmark_batches"]
             },
             sql=WORKLOAD_BATCH_SQL,
         )
@@ -1044,9 +1182,7 @@ order by series_order, observed_date, point_order
     latest_phases = _canonicalize_numeric_rows(
         query_tables(
             tables={
-                "sandbox_benchmark_phases": silver_refs[
-                    "sandbox_benchmark_phases"
-                ]
+                "sandbox_benchmark_phases": silver_refs["sandbox_benchmark_phases"]
             },
             sql=WORKLOAD_LATEST_PHASES_SQL,
         )
@@ -1063,9 +1199,7 @@ order by series_order, observed_date, point_order
     write_parquet_rows(latest_phases_ref, latest_phases)
     workload_summary = _canonicalize_numeric_rows(
         query_tables(
-            tables={
-                "sandbox_workload_latest_replicates": latest_replicates_ref
-            },
+            tables={"sandbox_workload_latest_replicates": latest_replicates_ref},
             sql=WORKLOAD_SUMMARY_SQL,
         )
     )
@@ -1076,6 +1210,47 @@ order by series_order, observed_date, point_order
         )
     )
 
+    vm_current: list[dict[str, Any]] = []
+    vm_fixed_rate: list[dict[str, Any]] = []
+    vm_sandbox_comparison: list[dict[str, Any]] = []
+    if vm_history_rows:
+        vm_current = _canonicalize_numeric_rows(
+            query_tables(
+                tables={"vm_capacity_current": silver_refs["vm_capacity_current"]},
+                sql=VM_CURRENT_SQL,
+            )
+        )
+        vm_fixed_rate = _canonicalize_numeric_rows(
+            query_tables(
+                tables={
+                    "vm_capacity_offer_history": silver_refs[
+                        "vm_capacity_offer_history"
+                    ]
+                },
+                sql=VM_FIXED_RATE_SQL,
+            )
+        )
+        vm_fixed_rate_ref = _join(
+            output_root,
+            "gold/vm_capacity_fixed_rate.parquet",
+        )
+        sandbox_fixed_rate_ref = _join(
+            output_root,
+            "gold/sandbox_fixed_rate.parquet",
+        )
+        write_parquet_rows(vm_fixed_rate_ref, vm_fixed_rate)
+        write_parquet_rows(sandbox_fixed_rate_ref, fixed_rate)
+        if vm_fixed_rate:
+            vm_sandbox_comparison = _canonicalize_numeric_rows(
+                query_tables(
+                    tables={
+                        "vm_capacity_fixed_rate": vm_fixed_rate_ref,
+                        "sandbox_fixed_rate": sandbox_fixed_rate_ref,
+                    },
+                    sql=VM_SANDBOX_COMPARISON_SQL,
+                )
+            )
+
     gpu_rows, gpu_manifest = _load_gpu_history(gpu_history_ref)
     combined: list[dict[str, Any]] = []
     gpu_daily_coverage: list[dict[str, Any]] = []
@@ -1085,12 +1260,8 @@ order by series_order, observed_date, point_order
         gpu_silver_ref = _join(output_root, "silver/gpu_benchmark_history.parquet")
         write_parquet_rows(gpu_silver_ref, gpu_rows)
         fixed_rate_ref = _join(output_root, "gold/sandbox_fixed_rate.parquet")
-        gpu_daily_ref = _join(
-            output_root, "gold/gpu_h100_daily_coverage.parquet"
-        )
-        gpu_eligible_ref = _join(
-            output_root, "gold/gpu_h100_eligible_history.parquet"
-        )
+        gpu_daily_ref = _join(output_root, "gold/gpu_h100_daily_coverage.parquet")
+        gpu_eligible_ref = _join(output_root, "gold/gpu_h100_eligible_history.parquet")
         write_parquet_rows(fixed_rate_ref, fixed_rate)
         gpu_daily_coverage = _canonicalize_numeric_rows(
             query_tables(
@@ -1120,15 +1291,11 @@ order by series_order, observed_date, point_order
         "sandbox_hourly_price_series": _join(
             output_root, "gold/sandbox_hourly_price_series.parquet"
         ),
-        "sandbox_price_events": _join(
-            output_root, "gold/sandbox_price_events.parquet"
-        ),
+        "sandbox_price_events": _join(output_root, "gold/sandbox_price_events.parquet"),
         "sandbox_current_rates": _join(
             output_root, "gold/sandbox_current_rates.parquet"
         ),
-        "sandbox_fixed_rate": _join(
-            output_root, "gold/sandbox_fixed_rate.parquet"
-        ),
+        "sandbox_fixed_rate": _join(output_root, "gold/sandbox_fixed_rate.parquet"),
         "sandbox_workload_batch_history": _join(
             output_root, "gold/sandbox_workload_batch_history.parquet"
         ),
@@ -1150,6 +1317,23 @@ order by series_order, observed_date, point_order
             output_root, "gold/sandbox_gpu_cpu_common_start.parquet"
         ),
     }
+    if vm_history_rows:
+        table_refs.update(
+            {
+                "vm_capacity_current": _join(
+                    output_root,
+                    "gold/vm_capacity_current.parquet",
+                ),
+                "vm_capacity_fixed_rate": _join(
+                    output_root,
+                    "gold/vm_capacity_fixed_rate.parquet",
+                ),
+                "vm_sandbox_current_comparison": _join(
+                    output_root,
+                    "gold/vm_sandbox_current_comparison.parquet",
+                ),
+            }
+        )
     write_parquet_rows(table_refs["sandbox_hourly_price_series"], hourly_gold)
     write_parquet_rows(table_refs["sandbox_price_events"], price_events)
     write_parquet_rows(table_refs["sandbox_current_rates"], current_rates)
@@ -1166,32 +1350,35 @@ order by series_order, observed_date, point_order
         table_refs["sandbox_workload_service_summary"],
         workload_summary,
     )
-    write_parquet_rows(
-        table_refs["gpu_h100_daily_coverage"], gpu_daily_coverage
-    )
-    write_parquet_rows(
-        table_refs["gpu_h100_eligible_history"], gpu_eligible_history
-    )
-    write_parquet_rows(
-        table_refs["sandbox_gpu_cpu_common_start"], combined
-    )
+    write_parquet_rows(table_refs["gpu_h100_daily_coverage"], gpu_daily_coverage)
+    write_parquet_rows(table_refs["gpu_h100_eligible_history"], gpu_eligible_history)
+    write_parquet_rows(table_refs["sandbox_gpu_cpu_common_start"], combined)
+    if vm_history_rows:
+        write_parquet_rows(table_refs["vm_capacity_current"], vm_current)
+        write_parquet_rows(
+            table_refs["vm_capacity_fixed_rate"],
+            vm_fixed_rate,
+        )
+        write_parquet_rows(
+            table_refs["vm_sandbox_current_comparison"],
+            vm_sandbox_comparison,
+        )
 
     query_hashes = {
         "fixed_rate": _sha256_text(FIXED_RATE_SQL),
         "price_events": _sha256_text(PRICE_EVENTS_SQL),
         "current_rates": _sha256_text(CURRENT_RATES_SQL),
         "workload_batches": _sha256_text(WORKLOAD_BATCH_SQL),
-        "workload_replicates": _sha256_text(
-            WORKLOAD_LATEST_REPLICATES_SQL
-        ),
+        "workload_replicates": _sha256_text(WORKLOAD_LATEST_REPLICATES_SQL),
         "workload_phases": _sha256_text(WORKLOAD_LATEST_PHASES_SQL),
-        "workload_phase_summary": _sha256_text(
-            WORKLOAD_PHASE_SUMMARY_SQL
-        ),
+        "workload_phase_summary": _sha256_text(WORKLOAD_PHASE_SUMMARY_SQL),
         "workload_summary": _sha256_text(WORKLOAD_SUMMARY_SQL),
         "gpu_daily_coverage": _sha256_text(GPU_DAILY_COVERAGE_SQL),
         "gpu_eligible_history": _sha256_text(GPU_ELIGIBLE_HISTORY_SQL),
         "combined": _sha256_text(COMBINED_COMMON_START_SQL),
+        "vm_current": _sha256_text(VM_CURRENT_SQL),
+        "vm_fixed_rate": _sha256_text(VM_FIXED_RATE_SQL),
+        "vm_sandbox_comparison": _sha256_text(VM_SANDBOX_COMPARISON_SQL),
     }
     input_hash = _content_hash(
         {
@@ -1200,7 +1387,15 @@ order by series_order, observed_date, point_order
             "source_manifest": source_manifest,
             "gpu_rows": gpu_rows,
             "gpu_source_manifest": _public_gpu_source_manifest(gpu_manifest),
+            "vm_capacity_history": vm_history_rows,
+            "vm_capacity_current": vm_current_rows,
+            "vm_capacity_source_manifest": _public_vm_source_manifest(
+                vm_source_manifest
+            ),
             "target_shape": TARGET_SHAPE,
+            "vm_target_shape": VM_TARGET_SHAPE,
+            "vm_capacity_cohort": VM_CAPACITY_COHORT_ID,
+            "vm_capacity_methodology": VM_CAPACITY_METHODOLOGY,
             "fixed_rate_cohort": FIXED_COHORT,
             "sandbox_rate_methodology": SANDBOX_RATE_METHODOLOGY,
             "gpu_comparison_min_providers": GPU_COMPARISON_MIN_PROVIDERS,
@@ -1214,6 +1409,7 @@ order by series_order, observed_date, point_order
         benchmarks_payload.get("retrieved_at"),
         gpu_manifest.get("dashboard_exported_at"),
         gpu_manifest.get("observed_at"),
+        vm_source_manifest.get("checked_at"),
     )
     row_counts = {
         "sandbox_hourly_price_series": len(hourly_gold),
@@ -1228,19 +1424,25 @@ order by series_order, observed_date, point_order
         "gpu_h100_daily_coverage": len(gpu_daily_coverage),
         "gpu_h100_eligible_history": len(gpu_eligible_history),
         "sandbox_gpu_cpu_common_start": len(combined),
+        "vm_capacity_current": len(vm_current),
+        "vm_capacity_fixed_rate": len(vm_fixed_rate),
+        "vm_sandbox_current_comparison": len(vm_sandbox_comparison),
     }
     manifest = {
-        "manifest_version": "sandbox_cost_gold_v3",
+        "manifest_version": "sandbox_cost_gold_v4",
         "build_id": build_id,
         "built_at": built_at,
         "input_hash": input_hash,
         "source_repository": source_manifest["source_repository"],
         "source_commit": source_manifest["source_commit"],
         "target_shape": TARGET_SHAPE,
+        "vm_target_shape": VM_TARGET_SHAPE,
         "source_reviewed_at": prices_payload.get("retrieved_at"),
         "benchmark_retrieved_at": benchmarks_payload.get("retrieved_at"),
         "fixed_rate_cohort": FIXED_COHORT,
         "sandbox_rate_methodology": SANDBOX_RATE_METHODOLOGY,
+        "vm_capacity_cohort": VM_CAPACITY_COHORT_ID,
+        "vm_capacity_methodology": VM_CAPACITY_METHODOLOGY,
         "gpu_comparison_min_providers": GPU_COMPARISON_MIN_PROVIDERS,
         "numeric_decimal_places": NUMERIC_DECIMAL_PLACES,
         "query_ids": {
@@ -1255,6 +1457,9 @@ order by series_order, observed_date, point_order
             "gpu_daily_coverage": GPU_DAILY_QUERY_ID,
             "gpu_eligible_history": GPU_ELIGIBLE_QUERY_ID,
             "combined": COMBINED_QUERY_ID,
+            "vm_current": VM_CURRENT_QUERY_ID,
+            "vm_fixed_rate": VM_FIXED_RATE_QUERY_ID,
+            "vm_sandbox_comparison": VM_SANDBOX_COMPARISON_QUERY_ID,
         },
         "query_hashes": query_hashes,
         "bronze_refs": bronze_refs,
@@ -1266,6 +1471,7 @@ order by series_order, observed_date, point_order
         "row_counts": row_counts,
         "evidence_summary": summary,
         "gpu_source_manifest": gpu_manifest or None,
+        "vm_capacity_source_manifest": vm_source_manifest or None,
     }
     manifest_ref = _join(output_root, "gold/manifest.json")
     write_json(manifest_ref, manifest)
@@ -1289,6 +1495,9 @@ order by series_order, observed_date, point_order
                 run_metadata=run_metadata,
                 gpu_daily_coverage=gpu_daily_coverage,
                 combined=combined,
+                vm_current=vm_current,
+                vm_fixed_rate=vm_fixed_rate,
+                vm_sandbox_comparison=vm_sandbox_comparison,
             ),
         )
 
@@ -1311,8 +1520,20 @@ def query_sandbox_gold(
     """Run an allowlisted DataFusion query over maintained sandbox gold tables."""
     if query_id not in GOLD_QUERIES:
         choices = ", ".join(sorted(GOLD_QUERIES))
-        raise ValueError(f"Unknown sandbox query {query_id!r}; choose one of: {choices}")
+        raise ValueError(
+            f"Unknown sandbox query {query_id!r}; choose one of: {choices}"
+        )
     manifest = read_json(_join(output_root, "gold/manifest.json"))
+    required_table = {
+        "vm-current": "vm_capacity_current",
+        "vm-fixed-rate": "vm_capacity_fixed_rate",
+        "vm-sandbox-current": "vm_sandbox_current_comparison",
+    }.get(query_id)
+    if required_table and required_table not in manifest["table_refs"]:
+        raise ValueError(
+            f"Query {query_id!r} is unavailable because VM-capacity data "
+            "has not been refreshed for this build"
+        )
     sql = GOLD_QUERIES[query_id].strip()
     if limit is not None:
         if limit < 1:
@@ -1341,11 +1562,10 @@ def _validate_prices(raw_rows: Any) -> list[dict[str, Any]]:
         seen.add(key)
         if not str(row["source_url"]).startswith(("https://", "http://")):
             raise ValueError(f"Missing source URL for hourly-price observation {key}")
-        expected = (
-            Decimal(str(row["processor_quantity"]))
-            * Decimal(str(row["processor_rate_usd_per_unit_hour"]))
-            + Decimal(str(row["memory_gib"]))
-            * Decimal(str(row["memory_rate_usd_per_gib_hour"]))
+        expected = Decimal(str(row["processor_quantity"])) * Decimal(
+            str(row["processor_rate_usd_per_unit_hour"])
+        ) + Decimal(str(row["memory_gib"])) * Decimal(
+            str(row["memory_rate_usd_per_gib_hour"])
         )
         observed = Decimal(str(row["price_usd_per_hour"]))
         if abs(expected - observed) > Decimal("0.000001"):
@@ -1404,9 +1624,7 @@ def _validate_replicates(
 ) -> list[dict[str, Any]]:
     if not isinstance(raw_rows, list) or not raw_rows:
         raise ValueError("Benchmark evidence must contain non-empty replicate_rows")
-    batch_keys = {
-        (row["series_id"], row["benchmark_run_id"]): row for row in batches
-    }
+    batch_keys = {(row["series_id"], row["benchmark_run_id"]): row for row in batches}
     rows: list[dict[str, Any]] = []
     seen: set[tuple[str, str, int]] = set()
     for position, raw in enumerate(raw_rows):
@@ -1424,10 +1642,7 @@ def _validate_replicates(
         _validate_workload_cost_row(row, prices, key)
         if row["observation_level"] != "aligned_job_replicate":
             raise ValueError(f"Unexpected replicate observation level for {key}")
-        if (
-            row["runtime_basis"]
-            != "sum_of_ten_task_samples_with_same_replicate_index"
-        ):
+        if row["runtime_basis"] != "sum_of_ten_task_samples_with_same_replicate_index":
             raise ValueError(f"Unexpected replicate runtime basis for {key}")
         if int(row["task_count"]) != 10:
             raise ValueError(f"Expected ten phases for replicate {key}")
@@ -1459,9 +1674,7 @@ def _validate_replicates(
                 f"Replicate count does not match batch {key}: "
                 f"{len(group)} != {batch['replicate_count']}"
             )
-        mean_runtime = sum(float(row["runtime_seconds"]) for row in group) / len(
-            group
-        )
+        mean_runtime = sum(float(row["runtime_seconds"]) for row in group) / len(group)
         if abs(mean_runtime - float(batch["runtime_seconds"])) > 0.000001:
             raise ValueError(f"Replicate mean does not reproduce batch runtime {key}")
     return rows
@@ -1610,13 +1823,16 @@ def _validate_workload_cost_row(
         "https://github.com/starslingdev/hpc-sandbox-benchmarks/"
     ):
         raise ValueError(f"Missing benchmark source URL for {key}")
-    if row["observed_vcpus"] is not None and abs(
-        float(row["observed_vcpus"]) - TARGET_SHAPE["vcpus"]
-    ) > 0.01:
+    if (
+        row["observed_vcpus"] is not None
+        and abs(float(row["observed_vcpus"]) - TARGET_SHAPE["vcpus"]) > 0.01
+    ):
         raise ValueError(f"Observed vCPU mismatch for {key}")
-    if row["observed_memory_gib"] is not None and abs(
-        float(row["observed_memory_gib"]) - TARGET_SHAPE["memory_gib"]
-    ) > TARGET_SHAPE["memory_gib"] * 0.1:
+    if (
+        row["observed_memory_gib"] is not None
+        and abs(float(row["observed_memory_gib"]) - TARGET_SHAPE["memory_gib"])
+        > TARGET_SHAPE["memory_gib"] * 0.1
+    ):
         raise ValueError(f"Observed memory mismatch for {key}")
 
     expected_cost = (
@@ -1644,9 +1860,7 @@ def _validate_workload_cost_row(
         key=lambda price: price["observed_date"],
     )
     if not candidates:
-        raise ValueError(
-            f"No {price_series} price at or before {row['observed_date']}"
-        )
+        raise ValueError(f"No {price_series} price at or before {row['observed_date']}")
     price = candidates[-1]
     if row["price_date"] != price["observed_date"]:
         raise ValueError(f"Wrong price date retained for benchmark result {key}")
@@ -1701,7 +1915,11 @@ def _public_payload(
     run_metadata: list[dict[str, Any]],
     gpu_daily_coverage: list[dict[str, Any]],
     combined: list[dict[str, Any]],
+    vm_current: list[dict[str, Any]],
+    vm_fixed_rate: list[dict[str, Any]],
+    vm_sandbox_comparison: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    public_vm_current = [_public_vm_row(row) for row in vm_current]
     source_rows: dict[str, dict[str, str]] = {}
     for row in hourly_rows:
         source_rows[row["source_url"]] = {
@@ -1713,6 +1931,15 @@ def _public_payload(
             "label": f"StarSling batch {row['benchmark_run_id']}",
             "url": row["benchmark_source_url"],
         }
+    for row in public_vm_current:
+        source_rows[row["source_url"]] = {
+            "label": f"{row['provider_label']} public VM price API",
+            "url": row["source_url"],
+        }
+        source_rows[row["spec_url"]] = {
+            "label": f"{row['provider_label']} machine specification",
+            "url": row["spec_url"],
+        }
     latest_run = max(run_metadata, key=lambda row: row["generated_at"])
     return {
         "manifest": {
@@ -1720,26 +1947,27 @@ def _public_payload(
             "build_id": manifest["build_id"],
             "built_at": manifest["built_at"],
             "target_shape": manifest["target_shape"],
+            "vm_target_shape": manifest["vm_target_shape"],
             "source_reviewed_at": manifest["source_reviewed_at"],
             "benchmark_retrieved_at": manifest["benchmark_retrieved_at"],
             "fixed_rate_cohort": manifest["fixed_rate_cohort"],
-            "sandbox_rate_methodology": manifest[
-                "sandbox_rate_methodology"
-            ],
-            "gpu_comparison_min_providers": manifest[
-                "gpu_comparison_min_providers"
-            ],
+            "sandbox_rate_methodology": manifest["sandbox_rate_methodology"],
+            "vm_capacity_cohort": manifest["vm_capacity_cohort"],
+            "vm_capacity_methodology": manifest["vm_capacity_methodology"],
+            "gpu_comparison_min_providers": manifest["gpu_comparison_min_providers"],
             "numeric_decimal_places": manifest["numeric_decimal_places"],
             "query_ids": manifest["query_ids"],
             "row_counts": manifest["row_counts"],
             "gpu_source_manifest": _public_gpu_source_manifest(
                 manifest["gpu_source_manifest"]
             ),
+            "vm_capacity_source_manifest": _public_vm_source_manifest(
+                manifest["vm_capacity_source_manifest"]
+            ),
         },
         "hourly_price": {
             "title": (
-                "Public hourly cost scenario for four processors and "
-                "8 GiB of memory"
+                "Public hourly cost scenario for four processors and 8 GiB of memory"
             ),
             "unit": "USD per hour",
             "rate_basis": "processor and memory rate card only",
@@ -1757,6 +1985,32 @@ def _public_payload(
             # Keep the old field for one publication cycle while article caches expire.
             "fixed_membership_average": fixed_rate,
             "price_events": price_events,
+        },
+        "vm_capacity": {
+            "title": (
+                "Observed public VM offer rates for four vCPUs and 8 GiB of memory"
+            ),
+            "unit": "USD per hour",
+            "rate_basis": "Linux on-demand public offer",
+            "comparison_scope": (
+                "One exact four-vCPU, 8-GiB public offer from each fixed "
+                "provider. Regions, CPU models, tenancy, bundled storage, "
+                "network, and delivered performance remain provider-specific."
+            ),
+            "history_scope": (
+                "Observed history begins with the first automated source "
+                "check. No earlier price history is inferred."
+            ),
+            "currency_scope": (
+                "USD offers are retained directly. Scaleway EUR is converted "
+                "with the retained ECB EUR/USD reference observation."
+            ),
+            "methodology_version": VM_CAPACITY_METHODOLOGY,
+            "cohort_id": VM_CAPACITY_COHORT_ID,
+            "fixed_members": list(VM_PROVIDER_ORDER),
+            "current_cross_section": public_vm_current,
+            "fixed_cohort_rate": vm_fixed_rate,
+            "sandbox_comparison": vm_sandbox_comparison,
         },
         "workload": {
             "title": (
@@ -1803,15 +2057,11 @@ def _public_payload(
             "latest_run": latest_run,
             "latest_replicate_count": len(latest_replicates),
             "latest_source_replicate_slot_count": max(
-                (
-                    int(row["source_replicate_slot_count"])
-                    for row in workload_summary
-                ),
+                (int(row["source_replicate_slot_count"]) for row in workload_summary),
                 default=0,
             ),
             "latest_incomplete_replicate_count": sum(
-                int(row["incomplete_replicate_count"])
-                for row in workload_summary
+                int(row["incomplete_replicate_count"]) for row in workload_summary
             ),
             "latest_phase_count": len(latest_phases),
             "batch_history": workload_batches,
@@ -1827,8 +2077,7 @@ def _public_payload(
                 "sandbox median each equal 100 at the first eligible GPU print"
             ),
             "gpu_input": (
-                "Eligible hourly H100 advertised provider-floor "
-                "benchmark prints"
+                "Eligible hourly H100 advertised provider-floor benchmark prints"
             ),
             "sandbox_input": (
                 "As-of fixed eight-service median advertised sandbox rate"
@@ -1870,6 +2119,83 @@ def _public_gpu_source_manifest(raw: Any) -> dict[str, Any] | None:
     return {key: raw[key] for key in allowed if key in raw}
 
 
+def _public_vm_source_manifest(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, Mapping):
+        return None
+    allowed = (
+        "manifest_version",
+        "run_id",
+        "checked_at",
+        "status",
+        "cohort_id",
+        "methodology_version",
+        "target_shape",
+        "fixed_members",
+        "successful_providers",
+        "failed_providers",
+        "history_event_count",
+        "current_member_count",
+        "cohort_complete",
+        "source_notes",
+    )
+    return {key: raw[key] for key in allowed if key in raw}
+
+
+def _public_vm_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    allowed = (
+        "provider_id",
+        "provider_label",
+        "series_order",
+        "plan_id",
+        "plan_label",
+        "price_usd_per_hour",
+        "source_price_per_hour",
+        "source_currency",
+        "fx_rate_usd_per_source_currency",
+        "fx_observed_date",
+        "vcpus",
+        "memory_gib",
+        "region_id",
+        "region_label",
+        "storage_gb",
+        "storage_type",
+        "storage_included",
+        "storage_scope",
+        "cpu_model",
+        "tenancy",
+        "billing_mode",
+        "price_effective_at",
+        "first_observed_at",
+        "last_observed_at",
+        "observation_count",
+        "source_url",
+        "spec_url",
+        "color",
+    )
+    return {key: row[key] for key in allowed if key in row}
+
+
+def _load_optional_parquet(ref: str | None) -> list[dict[str, Any]]:
+    if not ref:
+        return []
+    try:
+        return read_parquet_rows(ref)
+    except FileNotFoundError:
+        return []
+
+
+def _load_optional_json(ref: str | None) -> dict[str, Any]:
+    if not ref:
+        return {}
+    try:
+        value = read_json(ref)
+    except FileNotFoundError:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError(f"Expected JSON object at {ref}")
+    return dict(value)
+
+
 def _load_gpu_history(ref: str | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if not ref:
         return [], {}
@@ -1887,9 +2213,7 @@ order by gold_observed_at, benchmark_family_id
             (str(row["gold_observed_at"]) for row in normalized),
             default=None,
         )
-        methodologies = sorted(
-            {str(row["methodology_version"]) for row in normalized}
-        )
+        methodologies = sorted({str(row["methodology_version"]) for row in normalized})
         return normalized, {
             "manifest_version": "gpu_benchmark_history_parquet_v1",
             "methodology_version": (
@@ -1905,9 +2229,7 @@ order by gold_observed_at, benchmark_family_id
     rows = payload.get("rows")
     if not isinstance(rows, list):
         raise ValueError(f"GPU history at {ref} does not contain a rows list")
-    return _normalize_gpu_history_rows(rows, ref), dict(
-        payload.get("manifest") or {}
-    )
+    return _normalize_gpu_history_rows(rows, ref), dict(payload.get("manifest") or {})
 
 
 def _normalize_gpu_history_rows(
@@ -1933,8 +2255,7 @@ def _normalize_gpu_history_rows(
         missing = required - set(raw)
         if missing:
             raise ValueError(
-                f"GPU history row {position} is missing: "
-                f"{', '.join(sorted(missing))}"
+                f"GPU history row {position} is missing: {', '.join(sorted(missing))}"
             )
         _parse_timestamp(raw["gold_observed_at"], f"GPU history row {position}")
         if raw["benchmark_usd_gpu_hr"] is None:
@@ -2017,11 +2338,7 @@ def _sha256_text(value: str) -> str:
 
 
 def _latest_timestamp(*values: Any) -> str:
-    parsed = [
-        _parse_timestamp(value, "build timestamp")
-        for value in values
-        if value
-    ]
+    parsed = [_parse_timestamp(value, "build timestamp") for value in values if value]
     if not parsed:
         return datetime.now(timezone.utc).isoformat()
     return max(parsed).isoformat()

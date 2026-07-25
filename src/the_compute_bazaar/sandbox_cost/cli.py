@@ -13,6 +13,7 @@ from .pipeline import (
     validate_evidence,
 )
 from .refresh import refresh_benchmark_sources
+from .vm_capacity import refresh_vm_capacity_sources
 
 
 def main() -> None:
@@ -26,6 +27,9 @@ def main() -> None:
     build.add_argument("--output-root", default="data/sandbox-cost")
     build.add_argument("--dashboard-output-root")
     build.add_argument("--gpu-history-ref")
+    build.add_argument("--vm-capacity-history-ref")
+    build.add_argument("--vm-capacity-current-ref")
+    build.add_argument("--vm-capacity-manifest-ref")
 
     commands.add_parser("validate", help="Validate canonical source evidence")
 
@@ -46,6 +50,13 @@ def main() -> None:
         help="Update versioned normalized evidence after a reviewed refresh",
     )
 
+    refresh_vm = commands.add_parser(
+        "refresh-vm-capacity",
+        help="Check the fixed public 4-vCPU, 8-GiB VM cohort",
+    )
+    refresh_vm.add_argument("--output-root", default="data/sandbox-cost")
+    refresh_vm.add_argument("--raw-root", default="data/raw")
+
     query = commands.add_parser(
         "query",
         help="Run an allowlisted DataFusion query over sandbox gold",
@@ -60,6 +71,9 @@ def main() -> None:
             output_root=args.output_root,
             dashboard_output_root=args.dashboard_output_root,
             gpu_history_ref=args.gpu_history_ref,
+            vm_capacity_history_ref=args.vm_capacity_history_ref,
+            vm_capacity_current_ref=args.vm_capacity_current_ref,
+            vm_capacity_manifest_ref=args.vm_capacity_manifest_ref,
         )
         print(json.dumps(asdict(result), indent=2, sort_keys=True))
         return
@@ -77,6 +91,13 @@ def main() -> None:
         print(json.dumps(result, indent=2, sort_keys=True))
         if args.check and result["changed"]:
             raise SystemExit(1)
+        return
+    if args.command == "refresh-vm-capacity":
+        result = refresh_vm_capacity_sources(
+            output_root=args.output_root,
+            raw_root=args.raw_root,
+        )
+        print(json.dumps(asdict(result), indent=2, sort_keys=True))
         return
     if args.command == "query":
         print(
