@@ -91,6 +91,13 @@ bronze/hpc-sandbox-benchmarks/commit=<sha>/...
 silver/vm_capacity_offer_history.parquet
 silver/vm_capacity_current.parquet
 silver/vm_capacity_source_manifest.json
+silver/vm_capacity_discovery_history.parquet
+silver/vm_capacity_discovery_current.parquet
+silver/vm_capacity_discovery_manifest.json
+silver/vm_capacity_expanded_history.parquet
+silver/vm_capacity_expanded_current.parquet
+silver/vm_capacity_marketplace_history.parquet
+silver/vm_capacity_marketplace_current.parquet
 silver/sandbox_hourly_prices.parquet
 silver/sandbox_benchmark_batches.parquet
 silver/sandbox_benchmark_replicates.parquet
@@ -109,6 +116,12 @@ gold/sandbox_workload_phase_summary.parquet
 gold/sandbox_workload_service_summary.parquet
 gold/vm_capacity_current.parquet
 gold/vm_capacity_fixed_rate.parquet
+gold/vm_capacity_expanded_current.parquet
+gold/vm_capacity_expanded_rate.parquet
+gold/vm_capacity_observed_rate.parquet
+gold/vm_capacity_discovery_current.parquet
+gold/vm_capacity_marketplace_current.parquet
+gold/vm_capacity_marketplace_history.parquet
 gold/vm_sandbox_current_comparison.parquet
 gold/gpu_h100_daily_coverage.parquet
 gold/gpu_h100_eligible_history.parquet
@@ -128,23 +141,24 @@ sandbox-cost/vm-capacity/provider=<provider>/date=<yyyy-mm-dd>/
   run_id=<vm-capacity-run>/...
 ```
 
-Every hourly check gets a raw capture and checksum. Silver history adds a new
-event only when price, FX conversion, machine shape, region, storage treatment,
-or another inclusion field changes. An unchanged check advances
-`last_observed_at` and `observation_count`; it does not manufacture another
-price point.
+Every hourly check gets a raw capture and checksum. Silver history stores one
+normalized observation per successful source check, including hours when the
+published price is unchanged. A repeated run for the same source and timestamp
+is idempotent; a different payload for an already retained timestamp fails.
+This is an observation series, not a change-event series.
 
 ## Underlying VM Capacity Cohort
 
-The first public VM cohort is deliberately small and exact:
+The publication cohort is fixed and exact:
 
 ```text
-cohort ID       public_vm_4vcpu_8gib_v1
+cohort ID       public_vm_4vcpu_8gib_v2
 shape           exactly 4 vCPU and 8 GiB memory
 purchase basis  public Linux on-demand offer
 headline        median USD hourly offer
 dispersion      p25-p75 USD hourly offers
-membership      fixed four-provider cohort
+membership      fixed seven-vendor cohort
+frequency       one point per complete hourly source check
 history start   first automated observation; no invented backfill
 ```
 
@@ -156,38 +170,65 @@ The fixed members and source selections are:
 | Vultr | `vc2-4c-8gb` | Paris (`cdg`) reference | 160 GB SSD bundled |
 | Scaleway | `BASIC3-X4C-8G` / `fr-par-2` | Paris | storage separate |
 | Microsoft Azure | `Standard_F4s_v2` | West Europe | 32 GiB temporary disk; OS and persistent disks separate |
+| Amazon EC2 | `c7i.xlarge` | Paris (`eu-west-3`) | EBS storage separate |
+| OVHcloud | `d2-8.consumption` | France public catalog | 50 GB local NVMe bundled |
+| Oracle Cloud | `VM.Standard.E4.Flex`, 2 OCPU + 8 GB | global public list | boot and block volumes separate |
 
 The sources are the official [Akamai Linode Types
 API](https://techdocs.akamai.com/linode-api/reference/get-linode-types),
 [Vultr Plans API](https://docs.vultr.com/reference/vultr-cli/plans/list),
 [Scaleway Public Catalog
 API](https://www.scaleway.com/en/developers/api/product-catalog/public-catalog),
-and [Azure Retail Prices
-API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices).
+[Azure Retail Prices
+API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices),
+[AWS Price List
+API](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html),
+[OVHcloud public
+catalog](https://eu.api.ovh.com/console-preview/?section=%2Forder&branch=v1#get-/order/catalog/public/cloud),
+and [Oracle public price
+API](https://docs.oracle.com/en-us/iaas/Content/Billing/Tasks/signingup_topic-Estimating_Costs.htm).
 Azure's machine shape is checked against the [Fsv2
 specification](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/compute-optimized/fsv2-series).
+AWS is an exact Price List product and on-demand term. Oracle is composed from
+two official PAYG OCPU meters and eight official PAYG memory-GB meters; on x86
+Oracle shapes, two OCPUs correspond to four vCPUs.
 
-Scaleway is quoted in EUR. Each observation retains the native price and the
-latest ECB EUR/USD reference rate used to produce its USD comparison value. An
-FX move can therefore create a new USD event even if Scaleway's native rate is
-unchanged.
+Scaleway and OVHcloud are quoted in EUR. Each observation retains the native
+price and the latest ECB EUR/USD reference rate used to produce its USD
+comparison value. An FX move can therefore move the USD series even when the
+native offer is unchanged.
 
 The cohort rejects spot, reserved, promotional, and mismatched shapes. It is
 not a CPU performance benchmark: vCPU generation, tenancy, burst policy,
 network, and bundled storage differ. The article calls the values “observed VM
 offer rates,” not a universal CPU price.
 
+The original four-member cohort is retained as
+`public_vm_4vcpu_8gib_v1`. It is not rewritten or backfilled after the
+membership expansion. Cohort v2 begins at the first timestamp where all seven
+exact vendor observations are present. The public chart uses v2; the v1 gold
+table remains queryable for audit. In the public payload,
+`observed_market_rate` and the compatibility alias `fixed_cohort_rate` follow
+the active cohort; v1 rows are available only under
+`legacy_fixed_cohort_rate`.
+
+Akash is collected beside the cohort as a `marketplace_indication`. Its public
+pricing endpoint returns a request-specific monthly model for four CPU units,
+8 GiB memory, and 20 GiB storage. The pipeline divides that estimate by 730 to
+show an hourly indication, but does not call it a vCPU offer, live bid, lease,
+or executed price and does not include it in the seven-vendor median.
+
 The current substrate comparison is:
 
 ```text
-vm_fixed_median =
-  median(current exact-shape VM offer USD/hour)
+vm_observed_median[t] =
+  median(seven exact-shape vendor offer USD/hour observations at t)
 
 sandbox_fixed_median =
   median(current fixed sandbox cohort USD/hour)
 
 observed_rate_ratio =
-  sandbox_fixed_median / vm_fixed_median
+  sandbox_fixed_median / latest vm_observed_median
 ```
 
 The ratio describes two public offer cohorts at one check time. It is not a
@@ -495,7 +536,8 @@ The pipeline fails on:
 
 - unknown or missing fixed-cohort VM providers;
 - a VM offer that no longer matches exactly four vCPUs and 8 GiB;
-- duplicate VM events or a current row without retained history;
+- duplicate source observations at one timestamp or a current row without
+  retained history;
 - missing native currency, FX, storage, region, or source fields;
 - unknown source or benchmark fields;
 - missing required fields;
@@ -520,10 +562,14 @@ Validate reviewed evidence:
 uv run sandbox-cost validate
 ```
 
-Check the live fixed VM cohort and retain its raw responses:
+Check all live VM sources and retain their raw responses:
 
 ```sh
 uv run sandbox-cost refresh-vm-capacity \
+  --output-root data/lake/sandbox_cost \
+  --raw-root data/raw
+
+uv run sandbox-cost refresh-vm-discovery \
   --output-root data/lake/sandbox_cost \
   --raw-root data/raw
 ```
@@ -537,7 +583,10 @@ uv run sandbox-cost build \
   --gpu-history-ref data/lake/sandbox_cost/silver/gpu_benchmark_history.parquet \
   --vm-capacity-history-ref data/lake/sandbox_cost/silver/vm_capacity_offer_history.parquet \
   --vm-capacity-current-ref data/lake/sandbox_cost/silver/vm_capacity_current.parquet \
-  --vm-capacity-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_source_manifest.json
+  --vm-capacity-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_source_manifest.json \
+  --vm-discovery-history-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_history.parquet \
+  --vm-discovery-current-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_current.parquet \
+  --vm-discovery-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_manifest.json
 ```
 
 Run an allowlisted DataFusion query:
@@ -545,7 +594,7 @@ Run an allowlisted DataFusion query:
 ```sh
 uv run sandbox-cost query \
   --output-root data/lake/sandbox_cost \
-  --query vm-fixed-rate \
+  --query vm-observed-rate \
   --limit 25
 ```
 
@@ -563,6 +612,10 @@ workload-phase-summary
 workload-summary
 vm-current
 vm-fixed-rate
+vm-expanded-current
+vm-observed-rate
+vm-marketplace-current
+vm-discovery
 vm-sandbox-current
 gpu-daily-coverage
 gpu-eligible-history
@@ -593,21 +646,23 @@ fail instead of silently changing prior observations.
 
 ## Recurrence
 
-Windmill `market_hourly` checks the exact public VM APIs, retains every raw
-check, builds GPU gold, exports benchmark history, rebuilds the sandbox
-product, writes `sandbox-cost.json`, and publishes the market-run manifest each
-hour. One provider failure is isolated and reported as a warning while the
-last validated observation remains available; an incomplete fixed cohort is
-not silently presented as complete. Reviewed managed-sandbox rates change only
-after a manual source audit. Workload evidence changes only after a reviewed
-StarSling promotion.
+Windmill `market_hourly` checks the seven exact vendor inputs and the separate
+Akash indication, retains every raw check, builds GPU gold, exports benchmark
+history, rebuilds the sandbox product, writes `sandbox-cost.json`, and
+publishes the market-run manifest each hour. One source failure is isolated and
+reported as a warning while the last validated current row remains available.
+Gold does not emit a new seven-vendor point for an incomplete hour. Reviewed
+managed-sandbox rates change only after a manual source audit. Workload
+evidence changes only after a reviewed StarSling promotion.
 
 `.github/workflows/sandbox-cost-sources.yml` runs daily and on demand. It
-validates evidence, performs a clean live VM schema/shape check, resolves
-StarSling to an immutable commit, detects source/schema drift or new compatible
-runs, and runs focused tests. The CI VM check writes only to `/tmp`; Windmill
-owns durable hourly history. A failed source check is a review request, not
-permission to publish.
+validates evidence, performs a clean live schema/shape check for the four
+unauthenticated v1 catalogs, resolves StarSling to an immutable commit, detects
+source/schema drift or new compatible runs, and runs focused tests. The AWS
+Price List input and the full seven-vendor cohort are checked by the
+IAM-enabled Windmill worker each hour. The CI VM check writes only to `/tmp`;
+Windmill owns durable hourly history. A failed source check is a review
+request, not permission to publish.
 
 Manual managed-sandbox price review is intentional:
 
@@ -627,7 +682,7 @@ The public-safe artifact is:
 dashboard/compute-bazaar/sandbox-cost.json
 ```
 
-The version 4 payload contains the public VM current cohort, fixed-rate
+The version 4 payload contains the public VM current cohort, hourly observed
 history, current VM/sandbox comparison, managed-sandbox rate history, workload
 results, and GPU comparison. Raw S3 refs and private manifests are removed at
 the public boundary.

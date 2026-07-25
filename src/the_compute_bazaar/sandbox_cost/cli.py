@@ -14,6 +14,7 @@ from .pipeline import (
 )
 from .refresh import refresh_benchmark_sources
 from .vm_capacity import refresh_vm_capacity_sources
+from .vm_discovery import refresh_vm_capacity_discovery_sources
 
 
 def main() -> None:
@@ -30,6 +31,9 @@ def main() -> None:
     build.add_argument("--vm-capacity-history-ref")
     build.add_argument("--vm-capacity-current-ref")
     build.add_argument("--vm-capacity-manifest-ref")
+    build.add_argument("--vm-discovery-history-ref")
+    build.add_argument("--vm-discovery-current-ref")
+    build.add_argument("--vm-discovery-manifest-ref")
 
     commands.add_parser("validate", help="Validate canonical source evidence")
 
@@ -52,10 +56,20 @@ def main() -> None:
 
     refresh_vm = commands.add_parser(
         "refresh-vm-capacity",
-        help="Check the fixed public 4-vCPU, 8-GiB VM cohort",
+        help="Record the first four exact public 4-vCPU, 8-GiB VM offers",
     )
     refresh_vm.add_argument("--output-root", default="data/sandbox-cost")
     refresh_vm.add_argument("--raw-root", default="data/raw")
+
+    refresh_vm_discovery = commands.add_parser(
+        "refresh-vm-discovery",
+        help="Record three more exact VM offers and the Akash indication",
+    )
+    refresh_vm_discovery.add_argument(
+        "--output-root",
+        default="data/sandbox-cost",
+    )
+    refresh_vm_discovery.add_argument("--raw-root", default="data/raw")
 
     query = commands.add_parser(
         "query",
@@ -74,6 +88,9 @@ def main() -> None:
             vm_capacity_history_ref=args.vm_capacity_history_ref,
             vm_capacity_current_ref=args.vm_capacity_current_ref,
             vm_capacity_manifest_ref=args.vm_capacity_manifest_ref,
+            vm_discovery_history_ref=args.vm_discovery_history_ref,
+            vm_discovery_current_ref=args.vm_discovery_current_ref,
+            vm_discovery_manifest_ref=args.vm_discovery_manifest_ref,
         )
         print(json.dumps(asdict(result), indent=2, sort_keys=True))
         return
@@ -94,6 +111,13 @@ def main() -> None:
         return
     if args.command == "refresh-vm-capacity":
         result = refresh_vm_capacity_sources(
+            output_root=args.output_root,
+            raw_root=args.raw_root,
+        )
+        print(json.dumps(asdict(result), indent=2, sort_keys=True))
+        return
+    if args.command == "refresh-vm-discovery":
+        result = refresh_vm_capacity_discovery_sources(
             output_root=args.output_root,
             raw_root=args.raw_root,
         )

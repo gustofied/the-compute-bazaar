@@ -10,6 +10,9 @@ from the_compute_bazaar.sandbox_cost.pipeline import build_sandbox_cost
 from the_compute_bazaar.sandbox_cost.vm_capacity import (
     refresh_vm_capacity_sources,
 )
+from the_compute_bazaar.sandbox_cost.vm_discovery import (
+    refresh_vm_capacity_discovery_sources,
+)
 
 from .coverage import query_frontier_coverage_ref
 from .events import new_run_id
@@ -232,6 +235,24 @@ def run_market_hourly(
             "silver/vm_capacity_source_manifest.json",
         ]
     )
+    vm_discovery_history_ref = "/".join(
+        [
+            sandbox_output_root.rstrip("/"),
+            "silver/vm_capacity_discovery_history.parquet",
+        ]
+    )
+    vm_discovery_current_ref = "/".join(
+        [
+            sandbox_output_root.rstrip("/"),
+            "silver/vm_capacity_discovery_current.parquet",
+        ]
+    )
+    vm_discovery_manifest_ref = "/".join(
+        [
+            sandbox_output_root.rstrip("/"),
+            "silver/vm_capacity_discovery_manifest.json",
+        ]
+    )
     try:
         if dry_run:
             raise RuntimeError("VM-capacity source refresh skipped in dry-run mode")
@@ -248,12 +269,41 @@ def run_market_hourly(
             "successful_providers": vm_capacity.successful_providers,
             "failed_providers": vm_capacity.failed_providers,
             "history_event_count": vm_capacity.history_event_count,
+            "history_observation_count": vm_capacity.history_event_count,
             "current_member_count": vm_capacity.current_member_count,
             "manifest_ref": vm_capacity.manifest_ref,
         }
     except Exception as exc:  # noqa: BLE001 - preserve the market heartbeat.
         checks["vm_capacity"] = "warning"
         data_quality["vm_capacity"] = {
+            "status": "warning",
+            "error_type": type(exc).__name__,
+            "error": _provider_error_message(exc),
+            "using_last_retained_state": True,
+        }
+    try:
+        if dry_run:
+            raise RuntimeError("VM discovery source refresh skipped in dry-run mode")
+        vm_discovery = refresh_vm_capacity_discovery_sources(
+            output_root=sandbox_output_root,
+            raw_root=raw_root,
+            observed_at=observed_at,
+        )
+        checks["vm_capacity_discovery"] = vm_discovery.status
+        data_quality["vm_capacity_discovery"] = {
+            "run_id": vm_discovery.run_id,
+            "checked_at": vm_discovery.checked_at,
+            "status": vm_discovery.status,
+            "successful_sources": vm_discovery.successful_sources,
+            "failed_sources": vm_discovery.failed_sources,
+            "history_event_count": vm_discovery.history_event_count,
+            "history_observation_count": vm_discovery.history_event_count,
+            "current_source_count": vm_discovery.current_source_count,
+            "manifest_ref": vm_discovery.manifest_ref,
+        }
+    except Exception as exc:  # noqa: BLE001 - preserve the market heartbeat.
+        checks["vm_capacity_discovery"] = "warning"
+        data_quality["vm_capacity_discovery"] = {
             "status": "warning",
             "error_type": type(exc).__name__,
             "error": _provider_error_message(exc),
@@ -266,6 +316,9 @@ def run_market_hourly(
         vm_capacity_history_ref=vm_history_ref,
         vm_capacity_current_ref=vm_current_ref,
         vm_capacity_manifest_ref=vm_manifest_ref,
+        vm_discovery_history_ref=vm_discovery_history_ref,
+        vm_discovery_current_ref=vm_discovery_current_ref,
+        vm_discovery_manifest_ref=vm_discovery_manifest_ref,
     )
     dashboard_output_refs = {
         **dashboard_export["output_refs"],
@@ -285,7 +338,10 @@ def run_market_hourly(
         "sandbox_benchmark_results": sandbox_cost.row_counts.get(
             "sandbox_workload_latest_replicates", 0
         ),
-        "vm_capacity_offers": sandbox_cost.row_counts.get("vm_capacity_current", 0),
+        "vm_capacity_offers": sandbox_cost.row_counts.get(
+            "vm_capacity_expanded_current",
+            sandbox_cost.row_counts.get("vm_capacity_current", 0),
+        ),
     }
     checks["gold"] = (
         "ok" if all(value > 0 for value in row_counts.values()) else "warning"

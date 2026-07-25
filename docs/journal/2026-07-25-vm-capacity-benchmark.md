@@ -2,6 +2,99 @@
 
 Date: 25 July 2026
 
+## Later Revision: Continuous Seven-Vendor Cohort
+
+The first release below established a four-provider cohort, but its silver
+history retained only price-change events. That made an hourly job look like a
+one-point chart whenever catalogs stayed unchanged. Before treating that
+series as established history, the contract was revised:
+
+```text
+each successful hourly source check
+  -> one immutable bronze capture
+  -> one normalized silver observation
+
+each timestamp with all seven exact vendor observations
+  -> one DataFusion gold median, mean, p25, and p75 point
+```
+
+An unchanged catalog price is still a new observation of the market at a new
+time. Repeating the same source and timestamp is idempotent. A conflicting
+payload at an already retained timestamp fails rather than replacing history.
+Manifests now expose `history_observation_count`; the older
+`history_event_count` field remains temporarily as a compatibility alias.
+
+The publication cohort is now `public_vm_4vcpu_8gib_v2`, with methodology
+`seven_vendor_exact_shape_hourly_median_iqr_v1` and fixed membership:
+
+| Provider | Exact selection | Initial audited native rate |
+| --- | --- | ---: |
+| Akamai Linode | `g6-standard-4` | $0.072/hour |
+| Vultr | `vc2-4c-8gb` | $0.055/hour |
+| Scaleway | `BASIC3-X4C-8G`, Paris | EUR 0.079001/hour |
+| Microsoft Azure | `Standard_F4s_v2`, West Europe | $0.194/hour |
+| Amazon EC2 | `c7i.xlarge`, Paris | $0.2121/hour |
+| OVHcloud | `d2-8.consumption`, France catalog | EUR 0.0372/hour |
+| Oracle Cloud | `VM.Standard.E4.Flex`, 2 OCPU + 8 GB | $0.062/hour |
+
+AWS is selected through the official Price List API and validated as Linux,
+shared tenancy, on-demand, four vCPU, and 8 GiB in `eu-west-3`. OVHcloud is an
+active hourly Linux catalog plan with four cores, 8 GB, and 50 GB local NVMe.
+Oracle is composed from official PAYG meters:
+
+```text
+2 OCPU * $0.025/OCPU-hour
+  + 8 GB * $0.0015/GB-hour
+  = $0.062/hour
+```
+
+The collector also records an Akash request estimate for four CPU units,
+8 GiB, and 20 GiB storage. The first checked response was $30.46/month, or
+about $0.04173/hour when divided by 730. It remains
+`marketplace_indication`, not a vCPU claim, bid, lease, executed price, or
+member of the seven-vendor median.
+
+The old `public_vm_4vcpu_8gib_v1` gold query remains for audit. It is not
+relabeled or backfilled. The v2 graph begins at its first complete seven-source
+hour. This is what "do not quietly change the historical median" means: a
+membership change gets a new cohort and methodology, while all prior source
+observations remain what they originally were.
+
+At release time, v2 therefore has one honest point rather than an invented
+line. Each subsequent complete Windmill hour appends seven source observations
+and one gold cohort point. A catalog that returns the same price as the prior
+hour still contributes a new observation because it was checked again at a new
+time.
+
+Additional source audit:
+
+- DigitalOcean, Hetzner, Google Cloud, Leaseweb, and UpCloud require a useful
+  API credential or a more involved catalog contract before they can become
+  maintained hourly inputs.
+- Real Akash bids require deployment and escrow context; the public pricing
+  endpoint is only an estimate.
+- Golem marketplace proposals require a running Yagna client and app key.
+- Spare Cores is useful for secondary validation, but its current terms do not
+  permit republishing or reassembling its Navigator data into a competing
+  comparison database without permission, so it is not an input.
+
+New maintained paths:
+
+```text
+raw/sandbox-cost/vm-capacity-discovery/source=<source>/...
+lake/sandbox_cost/silver/vm_capacity_discovery_history.parquet
+lake/sandbox_cost/silver/vm_capacity_expanded_history.parquet
+lake/sandbox_cost/silver/vm_capacity_marketplace_history.parquet
+lake/sandbox_cost/gold/vm_capacity_expanded_rate.parquet
+lake/sandbox_cost/gold/vm_capacity_observed_rate.parquet
+```
+
+The Windmill market heartbeat uses one `observed_at` value for both source
+collectors, so the seven rows can form one complete hourly cross-section.
+Source failures remain isolated, but an incomplete timestamp does not produce
+a new seven-vendor gold point. The current last-known source rows remain
+available with their own check times.
+
 ## Objective
 
 Add the infrastructure below managed code sandboxes to the maintained
@@ -84,8 +177,10 @@ new event even when the native offer is unchanged.
    commitments, and promotions.
 5. Keep one declared reference region when a catalog is regional.
 6. Retain every raw source check with retrieval time and checksum.
-7. Append a silver event only when price, native currency/FX, shape, location,
-   storage treatment, or inclusion semantics change.
+7. In the original v1 release, append a silver event only when price, native
+   currency/FX, shape, location, storage treatment, or inclusion semantics
+   changed. The later v2 revision above supersedes this with one observation
+   per successful hourly check.
 8. Do not backfill history from undated current catalogs. The line starts with
    the first automated check.
 9. Compute current, median/IQR history, and VM/sandbox comparison through named
@@ -231,7 +326,7 @@ Managed-sandbox rate cards remain manually reviewed. StarSling benchmark
 evidence remains commit-pinned and manually promoted after the daily source
 check detects new compatible data.
 
-## Release Verification
+## Original v1 Release Verification
 
 The article changes were committed to AdamSioud as `87bbb80`. The recurring
 pipeline, tests, workflow, documentation, and submodule pointer were committed
@@ -274,15 +369,67 @@ The production page rendered the 05:45 UTC source check, `$0.081/hour` VM
 median, `$0.481/hour` managed-sandbox median, and `5.9x` observed cohort-rate
 ratio. The hourly Windmill schedule remains enabled at `0 0 * * * *`.
 
+## Continuous v2 Release Verification
+
+The seven-vendor cohort was released as a new series rather than a rewrite of
+the four-vendor observations. Its first manually triggered complete check and
+the next scheduled check are:
+
+```text
+2026-07-25 06:27:29 UTC  median $0.072/hour  7 providers
+2026-07-25 07:00:08 UTC  median $0.072/hour  7 providers
+```
+
+The second value is intentionally retained even though the rates were
+unchanged. The history contract is one observation for every successful source
+check, not one event for every price change. DataFusion emits a gold point only
+when all seven direct-vendor offers share that exact check timestamp. A missing
+or incompatible source therefore leaves a visible gap instead of carrying a
+stale rate forward. The older v1 observations remain available as
+`legacy_fixed_cohort_rate`; they are never relabeled or recomputed as v2.
+
+The scheduled production run completed as:
+
+```text
+Windmill job       019f97f5-14cf-e904-a46e-741d97febfe3
+market run         market-20260725T070008-dfd5dfc0
+started            2026-07-25 07:00:08 UTC
+completed          2026-07-25 07:01:38 UTC
+four-source checks 12 retained observations
+discovery checks   8 retained observations
+v2 gold history    2 complete seven-provider points
+public current     7 direct-vendor offers
+marketplace        1 separate Akash indication
+```
+
+`market_hourly_hourly` is the only enabled recurring market schedule. The
+standalone Vast and Lium schedules remain installed but disabled for manual
+provider debugging, preventing duplicate observations and work. The public
+CloudFront payload contains the two v2 points, the separate three-point v1
+history, and no raw S3 reference.
+
+Final local verification completed with:
+
+```text
+ruff check                  passed
+ruff format --check         passed
+unittest discovery          77 passed
+JavaScript syntax           passed
+git diff --check            passed
+mobile browser              390 x 844, no page overflow
+desktop browser             1280 x 720, no page overflow
+keyboard chart inspection   latest 07:00 UTC VM observation
+browser console             no warnings or errors
+```
+
 ## Next Refresh
 
-1. Inspect the hourly market-run manifest and VM source status.
-2. If a source fails, inspect its retained raw capture or schema error before
+1. Inspect both VM source statuses in the hourly market-run manifest.
+2. Confirm `vm_capacity_expanded_rate` gains one row per complete hourly run.
+3. If a source fails, inspect its retained raw capture or schema error before
    changing the parser.
-3. If a plan changes shape or disappears, do not substitute another plan
+4. If a plan changes shape or disappears, do not substitute another plan
    silently; version the cohort or explicitly review replacement membership.
-4. Review any ECB-driven Scaleway event in native EUR and USD terms.
-5. Rebuild the public payload and visually inspect both cohorts after a real
-   second event appears.
-6. Consider a broader discovery table only after enough exact public APIs can
-   be maintained without weakening the fixed-cohort contract.
+5. Review ECB-driven Scaleway or OVHcloud observations in native EUR and USD.
+6. Keep marketplace indications separate until a source supplies a real,
+   reproducible bid or executed lease with compatible shape semantics.

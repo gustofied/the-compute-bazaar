@@ -23,6 +23,16 @@ from the_compute_bazaar.sandbox_cost.vm_capacity import (
     VM_CAPACITY_METHODOLOGY,
     VM_PROVIDER_ORDER,
     VM_TARGET_SHAPE,
+    validate_vm_capacity_history,
+)
+from the_compute_bazaar.sandbox_cost.vm_discovery import (
+    VM_DISCOVERY_METHODOLOGY,
+    VM_DISCOVERY_SOURCE_ORDER,
+    VM_DISCOVERY_UNIVERSE_ID,
+    VM_EXPANDED_COHORT_ID,
+    VM_EXPANDED_METHODOLOGY,
+    VM_EXPANDED_PROVIDER_ORDER,
+    validate_vm_capacity_discovery_history,
 )
 
 
@@ -47,8 +57,12 @@ GPU_DAILY_QUERY_ID = "h100_daily_broad_coverage_v1"
 GPU_ELIGIBLE_QUERY_ID = "h100_broad_coverage_prints_v1"
 COMBINED_QUERY_ID = "sandbox_gpu_cpu_common_start_v3"
 VM_CURRENT_QUERY_ID = "vm_capacity_current_cross_section_v1"
-VM_FIXED_RATE_QUERY_ID = "vm_capacity_fixed_cohort_rate_v1"
-VM_SANDBOX_COMPARISON_QUERY_ID = "vm_sandbox_current_rate_comparison_v1"
+VM_FIXED_RATE_QUERY_ID = "vm_capacity_fixed_cohort_rate_v2"
+VM_EXPANDED_CURRENT_QUERY_ID = "vm_capacity_expanded_current_v1"
+VM_EXPANDED_RATE_QUERY_ID = "vm_capacity_expanded_hourly_rate_v1"
+VM_MARKETPLACE_CURRENT_QUERY_ID = "vm_capacity_marketplace_current_v1"
+VM_SANDBOX_COMPARISON_QUERY_ID = "vm_sandbox_current_rate_comparison_v2"
+VM_DISCOVERY_CURRENT_QUERY_ID = "vm_capacity_discovery_current_v1"
 NUMERIC_DECIMAL_PLACES = 12
 
 RUNTIME_PRICE_SERIES = {
@@ -796,48 +810,16 @@ from vm_capacity_current
 order by price_usd_per_hour, provider_label
 """
 
+VM_DISCOVERY_CURRENT_SQL = """
+select *
+from vm_capacity_discovery_current
+order by series_order, provider_label
+"""
+
 VM_FIXED_RATE_SQL = f"""
-with event_times as (
-  select distinct cast(first_observed_at as timestamp) as observed_at
-  from vm_capacity_offer_history
-  where cohort_id = '{VM_CAPACITY_COHORT_ID}'
-),
-members as (
-  select distinct provider_id
-  from vm_capacity_offer_history
-  where cohort_id = '{VM_CAPACITY_COHORT_ID}'
-),
-ranked as (
-  select
-    events.observed_at,
-    history.provider_id,
-    history.provider_label,
-    history.price_usd_per_hour,
-    history.source_price_per_hour,
-    history.source_currency,
-    history.fx_rate_usd_per_source_currency,
-    history.fx_observed_date,
-    history.first_observed_at as source_first_observed_at,
-    history.last_observed_at as source_last_observed_at,
-    row_number() over (
-      partition by events.observed_at, history.provider_id
-      order by cast(history.first_observed_at as timestamp) desc,
-        history.event_order desc
-    ) as recency_rank
-  from event_times events
-  cross join members
-  join vm_capacity_offer_history history
-    on history.provider_id = members.provider_id
-   and cast(history.first_observed_at as timestamp) <= events.observed_at
-),
-current_members as (
-  select *
-  from ranked
-  where recency_rank = 1
-)
 select
-  observed_at,
-  cast(observed_at as date) as observed_date,
+  cast(checked_at as timestamp) as observed_at,
+  cast(checked_at as date) as observed_date,
   '{VM_CAPACITY_METHODOLOGY}' as methodology_version,
   '{VM_CAPACITY_COHORT_ID}' as cohort_id,
   median(price_usd_per_hour) as median_usd_per_hour,
@@ -851,16 +833,56 @@ select
   count(*) as member_count,
   min(price_usd_per_hour) as minimum_usd_per_hour,
   max(price_usd_per_hour) as maximum_usd_per_hour
-from current_members
-group by observed_at
+from vm_capacity_offer_history
+where cohort_id = '{VM_CAPACITY_COHORT_ID}'
+group by checked_at
 having count(*) = {len(VM_PROVIDER_ORDER)}
-order by observed_at
+  and count(distinct provider_id) = {len(VM_PROVIDER_ORDER)}
+order by cast(checked_at as timestamp)
+"""
+
+VM_EXPANDED_CURRENT_SQL = f"""
+select *
+from vm_capacity_expanded_current
+where cohort_id = '{VM_EXPANDED_COHORT_ID}'
+order by price_usd_per_hour, provider_label
+"""
+
+VM_EXPANDED_RATE_SQL = f"""
+select
+  cast(checked_at as timestamp) as observed_at,
+  cast(checked_at as date) as observed_date,
+  '{VM_EXPANDED_METHODOLOGY}' as methodology_version,
+  '{VM_EXPANDED_COHORT_ID}' as cohort_id,
+  median(price_usd_per_hour) as median_usd_per_hour,
+  avg(price_usd_per_hour) as average_usd_per_hour,
+  percentile_cont(0.25) within group (
+    order by price_usd_per_hour
+  ) as p25_usd_per_hour,
+  percentile_cont(0.75) within group (
+    order by price_usd_per_hour
+  ) as p75_usd_per_hour,
+  count(*) as member_count,
+  min(price_usd_per_hour) as minimum_usd_per_hour,
+  max(price_usd_per_hour) as maximum_usd_per_hour
+from vm_capacity_expanded_history
+where cohort_id = '{VM_EXPANDED_COHORT_ID}'
+group by checked_at
+having count(*) = {len(VM_EXPANDED_PROVIDER_ORDER)}
+  and count(distinct provider_id) = {len(VM_EXPANDED_PROVIDER_ORDER)}
+order by cast(checked_at as timestamp)
+"""
+
+VM_MARKETPLACE_CURRENT_SQL = """
+select *
+from vm_capacity_marketplace_current
+order by price_usd_per_hour, provider_label
 """
 
 VM_SANDBOX_COMPARISON_SQL = """
 with latest_vm as (
   select *
-  from vm_capacity_fixed_rate
+  from vm_capacity_observed_rate
   order by observed_at desc
   limit 1
 ),
@@ -958,10 +980,30 @@ select *
 from vm_capacity_fixed_rate
 order by observed_at
 """,
+    "vm-expanded-current": """
+select *
+from vm_capacity_expanded_current
+order by price_usd_per_hour, provider_label
+""",
+    "vm-observed-rate": """
+select *
+from vm_capacity_observed_rate
+order by observed_at
+""",
+    "vm-marketplace-current": """
+select *
+from vm_capacity_marketplace_current
+order by price_usd_per_hour, provider_label
+""",
     "vm-sandbox-current": """
 select *
 from vm_sandbox_current_comparison
 order by vm_observed_at
+""",
+    "vm-discovery": """
+select *
+from vm_capacity_discovery_current
+order by series_order, provider_label
 """,
 }
 
@@ -1051,6 +1093,9 @@ def build_sandbox_cost(
     vm_capacity_history_ref: str | None = None,
     vm_capacity_current_ref: str | None = None,
     vm_capacity_manifest_ref: str | None = None,
+    vm_discovery_history_ref: str | None = None,
+    vm_discovery_current_ref: str | None = None,
+    vm_discovery_manifest_ref: str | None = None,
     price_path: Path = PRICE_EVIDENCE,
     benchmark_path: Path = BENCHMARK_EVIDENCE,
     source_manifest_path: Path = SOURCE_MANIFEST,
@@ -1074,6 +1119,40 @@ def build_sandbox_cost(
     vm_source_manifest = _load_optional_json(vm_capacity_manifest_ref)
     if bool(vm_history_rows) != bool(vm_current_rows):
         raise ValueError("VM-capacity history and current refs must both contain rows")
+    if vm_history_rows:
+        validate_vm_capacity_history(
+            history_ref=str(vm_capacity_history_ref),
+            current_ref=str(vm_capacity_current_ref),
+        )
+    vm_discovery_history_rows = _load_optional_parquet(vm_discovery_history_ref)
+    vm_discovery_current_rows = _load_optional_parquet(vm_discovery_current_ref)
+    vm_discovery_manifest = _load_optional_json(vm_discovery_manifest_ref)
+    if bool(vm_discovery_history_rows) != bool(vm_discovery_current_rows):
+        raise ValueError("VM discovery history and current refs must both contain rows")
+    if vm_discovery_history_rows:
+        validate_vm_capacity_discovery_history(
+            history_ref=str(vm_discovery_history_ref),
+            current_ref=str(vm_discovery_current_ref),
+        )
+    vm_expanded_history_rows: list[dict[str, Any]] = []
+    vm_expanded_current_rows: list[dict[str, Any]] = []
+    vm_marketplace_history_rows = [
+        dict(row)
+        for row in vm_discovery_history_rows
+        if row.get("source_class") == "marketplace_indication"
+    ]
+    vm_marketplace_current_rows = [
+        dict(row)
+        for row in vm_discovery_current_rows
+        if row.get("source_class") == "marketplace_indication"
+    ]
+    if vm_history_rows and vm_discovery_history_rows:
+        vm_expanded_history_rows = _expanded_vm_rows(
+            [*vm_history_rows, *vm_discovery_history_rows]
+        )
+        vm_expanded_current_rows = _expanded_vm_rows(
+            [*vm_current_rows, *vm_discovery_current_rows]
+        )
 
     bronze_refs = {
         "hourly_price_evidence": _join(
@@ -1112,6 +1191,33 @@ def build_sandbox_cost(
             output_root,
             "silver/vm_capacity_current.parquet",
         )
+    if vm_discovery_history_rows:
+        silver_refs["vm_capacity_discovery_history"] = _join(
+            output_root,
+            "silver/vm_capacity_discovery_history.parquet",
+        )
+        silver_refs["vm_capacity_discovery_current"] = _join(
+            output_root,
+            "silver/vm_capacity_discovery_current.parquet",
+        )
+        if vm_marketplace_history_rows:
+            silver_refs["vm_capacity_marketplace_history"] = _join(
+                output_root,
+                "silver/vm_capacity_marketplace_history.parquet",
+            )
+            silver_refs["vm_capacity_marketplace_current"] = _join(
+                output_root,
+                "silver/vm_capacity_marketplace_current.parquet",
+            )
+    if vm_expanded_history_rows:
+        silver_refs["vm_capacity_expanded_history"] = _join(
+            output_root,
+            "silver/vm_capacity_expanded_history.parquet",
+        )
+        silver_refs["vm_capacity_expanded_current"] = _join(
+            output_root,
+            "silver/vm_capacity_expanded_current.parquet",
+        )
     write_parquet_rows(silver_refs["sandbox_hourly_prices"], price_rows)
     write_parquet_rows(silver_refs["sandbox_benchmark_batches"], batch_rows)
     write_parquet_rows(
@@ -1131,6 +1237,33 @@ def build_sandbox_cost(
         write_parquet_rows(
             silver_refs["vm_capacity_current"],
             vm_current_rows,
+        )
+    if vm_discovery_history_rows:
+        write_parquet_rows(
+            silver_refs["vm_capacity_discovery_history"],
+            vm_discovery_history_rows,
+        )
+        write_parquet_rows(
+            silver_refs["vm_capacity_discovery_current"],
+            vm_discovery_current_rows,
+        )
+        if vm_marketplace_history_rows:
+            write_parquet_rows(
+                silver_refs["vm_capacity_marketplace_history"],
+                vm_marketplace_history_rows,
+            )
+            write_parquet_rows(
+                silver_refs["vm_capacity_marketplace_current"],
+                vm_marketplace_current_rows,
+            )
+    if vm_expanded_history_rows:
+        write_parquet_rows(
+            silver_refs["vm_capacity_expanded_history"],
+            vm_expanded_history_rows,
+        )
+        write_parquet_rows(
+            silver_refs["vm_capacity_expanded_current"],
+            vm_expanded_current_rows,
         )
 
     hourly_gold = _canonicalize_numeric_rows(
@@ -1212,6 +1345,10 @@ order by series_order, observed_date, point_order
 
     vm_current: list[dict[str, Any]] = []
     vm_fixed_rate: list[dict[str, Any]] = []
+    vm_expanded_current: list[dict[str, Any]] = []
+    vm_expanded_rate: list[dict[str, Any]] = []
+    vm_marketplace_current: list[dict[str, Any]] = []
+    vm_marketplace_history: list[dict[str, Any]] = []
     vm_sandbox_comparison: list[dict[str, Any]] = []
     if vm_history_rows:
         vm_current = _canonicalize_numeric_rows(
@@ -1240,16 +1377,61 @@ order by series_order, observed_date, point_order
         )
         write_parquet_rows(vm_fixed_rate_ref, vm_fixed_rate)
         write_parquet_rows(sandbox_fixed_rate_ref, fixed_rate)
-        if vm_fixed_rate:
-            vm_sandbox_comparison = _canonicalize_numeric_rows(
-                query_tables(
-                    tables={
-                        "vm_capacity_fixed_rate": vm_fixed_rate_ref,
-                        "sandbox_fixed_rate": sandbox_fixed_rate_ref,
-                    },
-                    sql=VM_SANDBOX_COMPARISON_SQL,
-                )
+    if vm_expanded_history_rows:
+        vm_expanded_current = _canonicalize_numeric_rows(
+            query_tables(
+                tables={
+                    "vm_capacity_expanded_current": silver_refs[
+                        "vm_capacity_expanded_current"
+                    ]
+                },
+                sql=VM_EXPANDED_CURRENT_SQL,
             )
+        )
+        vm_expanded_rate = _canonicalize_numeric_rows(
+            query_tables(
+                tables={
+                    "vm_capacity_expanded_history": silver_refs[
+                        "vm_capacity_expanded_history"
+                    ]
+                },
+                sql=VM_EXPANDED_RATE_SQL,
+            )
+        )
+    if vm_marketplace_history_rows:
+        vm_marketplace_current = _canonicalize_numeric_rows(
+            query_tables(
+                tables={
+                    "vm_capacity_marketplace_current": silver_refs[
+                        "vm_capacity_marketplace_current"
+                    ]
+                },
+                sql=VM_MARKETPLACE_CURRENT_SQL,
+            )
+        )
+        vm_marketplace_history = _canonicalize_numeric_rows(vm_marketplace_history_rows)
+
+    vm_observed_rate = vm_expanded_rate if vm_expanded_history_rows else vm_fixed_rate
+    if vm_observed_rate:
+        vm_observed_rate_ref = _join(
+            output_root,
+            "gold/vm_capacity_observed_rate.parquet",
+        )
+        sandbox_fixed_rate_ref = _join(
+            output_root,
+            "gold/sandbox_fixed_rate.parquet",
+        )
+        write_parquet_rows(vm_observed_rate_ref, vm_observed_rate)
+        write_parquet_rows(sandbox_fixed_rate_ref, fixed_rate)
+        vm_sandbox_comparison = _canonicalize_numeric_rows(
+            query_tables(
+                tables={
+                    "vm_capacity_observed_rate": vm_observed_rate_ref,
+                    "sandbox_fixed_rate": sandbox_fixed_rate_ref,
+                },
+                sql=VM_SANDBOX_COMPARISON_SQL,
+            )
+        )
 
     gpu_rows, gpu_manifest = _load_gpu_history(gpu_history_ref)
     combined: list[dict[str, Any]] = []
@@ -1328,9 +1510,49 @@ order by series_order, observed_date, point_order
                     output_root,
                     "gold/vm_capacity_fixed_rate.parquet",
                 ),
+            }
+        )
+    if vm_observed_rate:
+        table_refs.update(
+            {
+                "vm_capacity_observed_rate": _join(
+                    output_root,
+                    "gold/vm_capacity_observed_rate.parquet",
+                ),
                 "vm_sandbox_current_comparison": _join(
                     output_root,
                     "gold/vm_sandbox_current_comparison.parquet",
+                ),
+            }
+        )
+    if vm_expanded_history_rows:
+        table_refs.update(
+            {
+                "vm_capacity_expanded_current": _join(
+                    output_root,
+                    "gold/vm_capacity_expanded_current.parquet",
+                ),
+                "vm_capacity_expanded_rate": _join(
+                    output_root,
+                    "gold/vm_capacity_expanded_rate.parquet",
+                ),
+            }
+        )
+    if vm_discovery_history_rows:
+        table_refs["vm_capacity_discovery_current"] = _join(
+            output_root,
+            "gold/vm_capacity_discovery_current.parquet",
+        )
+    if vm_marketplace_history_rows:
+        table_refs.update(
+            {
+                "vm_capacity_marketplace_current": _join(
+                    output_root,
+                    "gold/vm_capacity_marketplace_current.parquet",
+                ),
+                "vm_capacity_marketplace_history": _join(
+                    output_root,
+                    "gold/vm_capacity_marketplace_history.parquet",
                 ),
             }
         )
@@ -1359,9 +1581,37 @@ order by series_order, observed_date, point_order
             table_refs["vm_capacity_fixed_rate"],
             vm_fixed_rate,
         )
+    if vm_observed_rate:
         write_parquet_rows(
             table_refs["vm_sandbox_current_comparison"],
             vm_sandbox_comparison,
+        )
+        write_parquet_rows(
+            table_refs["vm_capacity_observed_rate"],
+            vm_observed_rate,
+        )
+    if vm_expanded_history_rows:
+        write_parquet_rows(
+            table_refs["vm_capacity_expanded_current"],
+            vm_expanded_current,
+        )
+        write_parquet_rows(
+            table_refs["vm_capacity_expanded_rate"],
+            vm_expanded_rate,
+        )
+    if vm_discovery_history_rows:
+        write_parquet_rows(
+            table_refs["vm_capacity_discovery_current"],
+            vm_discovery_current_rows,
+        )
+    if vm_marketplace_history_rows:
+        write_parquet_rows(
+            table_refs["vm_capacity_marketplace_current"],
+            vm_marketplace_current,
+        )
+        write_parquet_rows(
+            table_refs["vm_capacity_marketplace_history"],
+            vm_marketplace_history,
         )
 
     query_hashes = {
@@ -1378,6 +1628,10 @@ order by series_order, observed_date, point_order
         "combined": _sha256_text(COMBINED_COMMON_START_SQL),
         "vm_current": _sha256_text(VM_CURRENT_SQL),
         "vm_fixed_rate": _sha256_text(VM_FIXED_RATE_SQL),
+        "vm_expanded_current": _sha256_text(VM_EXPANDED_CURRENT_SQL),
+        "vm_expanded_rate": _sha256_text(VM_EXPANDED_RATE_SQL),
+        "vm_discovery_current": _sha256_text(VM_DISCOVERY_CURRENT_SQL),
+        "vm_marketplace_current": _sha256_text(VM_MARKETPLACE_CURRENT_SQL),
         "vm_sandbox_comparison": _sha256_text(VM_SANDBOX_COMPARISON_SQL),
     }
     input_hash = _content_hash(
@@ -1392,10 +1646,20 @@ order by series_order, observed_date, point_order
             "vm_capacity_source_manifest": _public_vm_source_manifest(
                 vm_source_manifest
             ),
+            "vm_discovery_history": vm_discovery_history_rows,
+            "vm_discovery_current": vm_discovery_current_rows,
+            "vm_discovery_manifest": _public_vm_discovery_manifest(
+                vm_discovery_manifest
+            ),
             "target_shape": TARGET_SHAPE,
             "vm_target_shape": VM_TARGET_SHAPE,
             "vm_capacity_cohort": VM_CAPACITY_COHORT_ID,
             "vm_capacity_methodology": VM_CAPACITY_METHODOLOGY,
+            "vm_expanded_cohort": VM_EXPANDED_COHORT_ID,
+            "vm_expanded_methodology": VM_EXPANDED_METHODOLOGY,
+            "vm_expanded_members": VM_EXPANDED_PROVIDER_ORDER,
+            "vm_discovery_universe": VM_DISCOVERY_UNIVERSE_ID,
+            "vm_discovery_methodology": VM_DISCOVERY_METHODOLOGY,
             "fixed_rate_cohort": FIXED_COHORT,
             "sandbox_rate_methodology": SANDBOX_RATE_METHODOLOGY,
             "gpu_comparison_min_providers": GPU_COMPARISON_MIN_PROVIDERS,
@@ -1410,6 +1674,7 @@ order by series_order, observed_date, point_order
         gpu_manifest.get("dashboard_exported_at"),
         gpu_manifest.get("observed_at"),
         vm_source_manifest.get("checked_at"),
+        vm_discovery_manifest.get("checked_at"),
     )
     row_counts = {
         "sandbox_hourly_price_series": len(hourly_gold),
@@ -1426,6 +1691,12 @@ order by series_order, observed_date, point_order
         "sandbox_gpu_cpu_common_start": len(combined),
         "vm_capacity_current": len(vm_current),
         "vm_capacity_fixed_rate": len(vm_fixed_rate),
+        "vm_capacity_expanded_current": len(vm_expanded_current),
+        "vm_capacity_expanded_rate": len(vm_expanded_rate),
+        "vm_capacity_marketplace_current": len(vm_marketplace_current),
+        "vm_capacity_marketplace_history": len(vm_marketplace_history),
+        "vm_capacity_discovery_current": len(vm_discovery_current_rows),
+        "vm_capacity_observed_rate": len(vm_observed_rate),
         "vm_sandbox_current_comparison": len(vm_sandbox_comparison),
     }
     manifest = {
@@ -1443,6 +1714,11 @@ order by series_order, observed_date, point_order
         "sandbox_rate_methodology": SANDBOX_RATE_METHODOLOGY,
         "vm_capacity_cohort": VM_CAPACITY_COHORT_ID,
         "vm_capacity_methodology": VM_CAPACITY_METHODOLOGY,
+        "vm_expanded_cohort": VM_EXPANDED_COHORT_ID,
+        "vm_expanded_methodology": VM_EXPANDED_METHODOLOGY,
+        "vm_expanded_members": list(VM_EXPANDED_PROVIDER_ORDER),
+        "vm_discovery_universe": VM_DISCOVERY_UNIVERSE_ID,
+        "vm_discovery_methodology": VM_DISCOVERY_METHODOLOGY,
         "gpu_comparison_min_providers": GPU_COMPARISON_MIN_PROVIDERS,
         "numeric_decimal_places": NUMERIC_DECIMAL_PLACES,
         "query_ids": {
@@ -1459,6 +1735,10 @@ order by series_order, observed_date, point_order
             "combined": COMBINED_QUERY_ID,
             "vm_current": VM_CURRENT_QUERY_ID,
             "vm_fixed_rate": VM_FIXED_RATE_QUERY_ID,
+            "vm_expanded_current": VM_EXPANDED_CURRENT_QUERY_ID,
+            "vm_expanded_rate": VM_EXPANDED_RATE_QUERY_ID,
+            "vm_discovery_current": VM_DISCOVERY_CURRENT_QUERY_ID,
+            "vm_marketplace_current": VM_MARKETPLACE_CURRENT_QUERY_ID,
             "vm_sandbox_comparison": VM_SANDBOX_COMPARISON_QUERY_ID,
         },
         "query_hashes": query_hashes,
@@ -1472,6 +1752,7 @@ order by series_order, observed_date, point_order
         "evidence_summary": summary,
         "gpu_source_manifest": gpu_manifest or None,
         "vm_capacity_source_manifest": vm_source_manifest or None,
+        "vm_discovery_source_manifest": vm_discovery_manifest or None,
     }
     manifest_ref = _join(output_root, "gold/manifest.json")
     write_json(manifest_ref, manifest)
@@ -1497,6 +1778,10 @@ order by series_order, observed_date, point_order
                 combined=combined,
                 vm_current=vm_current,
                 vm_fixed_rate=vm_fixed_rate,
+                vm_expanded_current=vm_expanded_current,
+                vm_expanded_rate=vm_expanded_rate,
+                vm_marketplace_current=vm_marketplace_current,
+                vm_marketplace_history=vm_marketplace_history,
                 vm_sandbox_comparison=vm_sandbox_comparison,
             ),
         )
@@ -1527,7 +1812,11 @@ def query_sandbox_gold(
     required_table = {
         "vm-current": "vm_capacity_current",
         "vm-fixed-rate": "vm_capacity_fixed_rate",
+        "vm-expanded-current": "vm_capacity_expanded_current",
+        "vm-observed-rate": "vm_capacity_observed_rate",
+        "vm-marketplace-current": "vm_capacity_marketplace_current",
         "vm-sandbox-current": "vm_sandbox_current_comparison",
+        "vm-discovery": "vm_capacity_discovery_current",
     }.get(query_id)
     if required_table and required_table not in manifest["table_refs"]:
         raise ValueError(
@@ -1917,9 +2206,40 @@ def _public_payload(
     combined: list[dict[str, Any]],
     vm_current: list[dict[str, Any]],
     vm_fixed_rate: list[dict[str, Any]],
+    vm_expanded_current: list[dict[str, Any]],
+    vm_expanded_rate: list[dict[str, Any]],
+    vm_marketplace_current: list[dict[str, Any]],
+    vm_marketplace_history: list[dict[str, Any]],
     vm_sandbox_comparison: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    public_vm_current = [_public_vm_row(row) for row in vm_current]
+    expanded_provider_ids = {
+        str(row.get("provider_id") or "") for row in vm_expanded_current
+    }
+    expanded_vm_available = bool(vm_expanded_rate) and expanded_provider_ids == set(
+        VM_EXPANDED_PROVIDER_ORDER
+    )
+    public_vm_current = [
+        _public_vm_row(row)
+        for row in (vm_expanded_current if expanded_vm_available else vm_current)
+    ]
+    public_vm_marketplace = [
+        _public_vm_marketplace_row(row) for row in vm_marketplace_current
+    ]
+    public_vm_marketplace_history = [
+        _public_vm_marketplace_row(row) for row in vm_marketplace_history
+    ]
+    vm_members = (
+        list(VM_EXPANDED_PROVIDER_ORDER)
+        if expanded_vm_available
+        else list(VM_PROVIDER_ORDER)
+    )
+    vm_methodology = (
+        VM_EXPANDED_METHODOLOGY if expanded_vm_available else VM_CAPACITY_METHODOLOGY
+    )
+    vm_cohort = (
+        VM_EXPANDED_COHORT_ID if expanded_vm_available else VM_CAPACITY_COHORT_ID
+    )
+    vm_observed_rate = vm_expanded_rate if expanded_vm_available else vm_fixed_rate
     source_rows: dict[str, dict[str, str]] = {}
     for row in hourly_rows:
         source_rows[row["source_url"]] = {
@@ -1940,6 +2260,15 @@ def _public_payload(
             "label": f"{row['provider_label']} machine specification",
             "url": row["spec_url"],
         }
+    for row in public_vm_marketplace:
+        source_rows[row["source_url"]] = {
+            "label": f"{row['provider_label']} marketplace estimate",
+            "url": row["source_url"],
+        }
+        source_rows[row["spec_url"]] = {
+            "label": f"{row['provider_label']} request specification",
+            "url": row["spec_url"],
+        }
     latest_run = max(run_metadata, key=lambda row: row["generated_at"])
     return {
         "manifest": {
@@ -1954,6 +2283,9 @@ def _public_payload(
             "sandbox_rate_methodology": manifest["sandbox_rate_methodology"],
             "vm_capacity_cohort": manifest["vm_capacity_cohort"],
             "vm_capacity_methodology": manifest["vm_capacity_methodology"],
+            "vm_expanded_cohort": manifest["vm_expanded_cohort"],
+            "vm_expanded_methodology": manifest["vm_expanded_methodology"],
+            "vm_expanded_members": manifest["vm_expanded_members"],
             "gpu_comparison_min_providers": manifest["gpu_comparison_min_providers"],
             "numeric_decimal_places": manifest["numeric_decimal_places"],
             "query_ids": manifest["query_ids"],
@@ -1963,6 +2295,9 @@ def _public_payload(
             ),
             "vm_capacity_source_manifest": _public_vm_source_manifest(
                 manifest["vm_capacity_source_manifest"]
+            ),
+            "vm_discovery_source_manifest": _public_vm_discovery_manifest(
+                manifest["vm_discovery_source_manifest"]
             ),
         },
         "hourly_price": {
@@ -1993,23 +2328,41 @@ def _public_payload(
             "unit": "USD per hour",
             "rate_basis": "Linux on-demand public offer",
             "comparison_scope": (
-                "One exact four-vCPU, 8-GiB public offer from each fixed "
+                "One exact four-vCPU, 8-GiB public offer from each of seven "
+                "vendors. Regions, CPU models, tenancy, bundled storage, "
+                "network, and delivered performance remain vendor-specific."
+                if expanded_vm_available
+                else "One exact four-vCPU, 8-GiB public offer from each fixed "
                 "provider. Regions, CPU models, tenancy, bundled storage, "
                 "network, and delivered performance remain provider-specific."
             ),
             "history_scope": (
-                "Observed history begins with the first automated source "
-                "check. No earlier price history is inferred."
+                "One complete cross-section is retained for every successful "
+                "hourly check, including hours when prices do not change. "
+                "History begins with the first automated source check; no "
+                "earlier observations are inferred."
             ),
             "currency_scope": (
                 "USD offers are retained directly. Scaleway EUR is converted "
                 "with the retained ECB EUR/USD reference observation."
             ),
-            "methodology_version": VM_CAPACITY_METHODOLOGY,
-            "cohort_id": VM_CAPACITY_COHORT_ID,
-            "fixed_members": list(VM_PROVIDER_ORDER),
+            "methodology_version": vm_methodology,
+            "cohort_id": vm_cohort,
+            "members": vm_members,
+            "fixed_members": vm_members,
             "current_cross_section": public_vm_current,
-            "fixed_cohort_rate": vm_fixed_rate,
+            "observed_market_rate": vm_observed_rate,
+            # Compatibility alias for clients that still read the old field.
+            # It always follows the active cohort declared above.
+            "fixed_cohort_rate": vm_observed_rate,
+            "legacy_fixed_cohort_rate": vm_fixed_rate,
+            "marketplace_indications": public_vm_marketplace,
+            "marketplace_history": public_vm_marketplace_history,
+            "marketplace_scope": (
+                "Marketplace indications are shown separately and are not "
+                "included in the seven-vendor median. The current Akash value "
+                "is a modeled request estimate, not a bid or executed lease."
+            ),
             "sandbox_comparison": vm_sandbox_comparison,
         },
         "workload": {
@@ -2134,8 +2487,32 @@ def _public_vm_source_manifest(raw: Any) -> dict[str, Any] | None:
         "successful_providers",
         "failed_providers",
         "history_event_count",
+        "history_observation_count",
         "current_member_count",
         "cohort_complete",
+        "source_notes",
+    )
+    return {key: raw[key] for key in allowed if key in raw}
+
+
+def _public_vm_discovery_manifest(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, Mapping):
+        return None
+    allowed = (
+        "manifest_version",
+        "run_id",
+        "checked_at",
+        "status",
+        "universe_id",
+        "methodology_version",
+        "target",
+        "source_order",
+        "successful_sources",
+        "failed_sources",
+        "history_event_count",
+        "history_observation_count",
+        "current_source_count",
+        "universe_complete",
         "source_notes",
     )
     return {key: raw[key] for key in allowed if key in raw}
@@ -2168,11 +2545,152 @@ def _public_vm_row(row: Mapping[str, Any]) -> dict[str, Any]:
         "first_observed_at",
         "last_observed_at",
         "observation_count",
+        "checked_at",
+        "source_class",
+        "observation_kind",
+        "availability_status",
+        "capacity_confirmed",
+        "executable_offer",
+        "price_formula",
         "source_url",
         "spec_url",
         "color",
     )
     return {key: row[key] for key in allowed if key in row}
+
+
+def _public_vm_marketplace_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    allowed = (
+        "source_id",
+        "provider_id",
+        "provider_label",
+        "series_order",
+        "source_class",
+        "observation_kind",
+        "plan_id",
+        "plan_label",
+        "price_usd_per_hour",
+        "source_price",
+        "source_currency",
+        "source_price_unit",
+        "normalization_hours",
+        "processor_quantity",
+        "processor_unit",
+        "vcpus",
+        "memory_gib",
+        "storage_gb",
+        "storage_type",
+        "storage_included",
+        "storage_scope",
+        "region_id",
+        "region_label",
+        "cpu_model",
+        "tenancy",
+        "billing_mode",
+        "price_effective_at",
+        "availability_status",
+        "capacity_confirmed",
+        "executable_offer",
+        "price_formula",
+        "checked_at",
+        "first_observed_at",
+        "last_observed_at",
+        "observation_count",
+        "source_url",
+        "spec_url",
+        "color",
+    )
+    return {key: row[key] for key in allowed if key in row}
+
+
+def _expanded_vm_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Project both source collectors into one exact-shape silver contract."""
+    expanded: list[dict[str, Any]] = []
+    for raw in rows:
+        provider_id = str(raw.get("provider_id") or raw.get("source_id") or "")
+        if provider_id not in VM_EXPANDED_PROVIDER_ORDER:
+            continue
+        if raw.get("source_class") == "marketplace_indication":
+            continue
+        if int(raw.get("vcpus") or 0) != 4 or float(raw.get("memory_gib") or 0) != 8:
+            raise ValueError(
+                f"Expanded VM source {provider_id} is not exactly 4 vCPU / 8 GiB"
+            )
+        if provider_id in VM_DISCOVERY_SOURCE_ORDER and not bool(
+            raw.get("candidate_for_expanded_cohort")
+        ):
+            raise ValueError(
+                f"Discovery source {provider_id} is not eligible for cohort v2"
+            )
+        source_methodology = str(raw.get("methodology_version") or "")
+        expanded.append(
+            {
+                "provider_id": provider_id,
+                "provider_label": str(raw["provider_label"]),
+                "series_order": VM_EXPANDED_PROVIDER_ORDER.index(provider_id) + 1,
+                "cohort_id": VM_EXPANDED_COHORT_ID,
+                "methodology_version": VM_EXPANDED_METHODOLOGY,
+                "source_methodology_version": source_methodology,
+                "source_class": str(raw.get("source_class") or "direct_vendor_offer"),
+                "observation_kind": str(
+                    raw.get("observation_kind") or "published_offer"
+                ),
+                "plan_id": str(raw["plan_id"]),
+                "plan_label": str(raw["plan_label"]),
+                "price_usd_per_hour": float(raw["price_usd_per_hour"]),
+                "currency": "USD",
+                "source_price_per_hour": float(
+                    raw.get("source_price_per_hour", raw.get("source_price"))
+                ),
+                "source_currency": str(raw["source_currency"]),
+                "source_price_unit": str(
+                    raw.get("source_price_unit") or "instance hour"
+                ),
+                "normalization_hours": int(raw.get("normalization_hours") or 1),
+                "fx_rate_usd_per_source_currency": raw.get(
+                    "fx_rate_usd_per_source_currency"
+                ),
+                "fx_observed_date": raw.get("fx_observed_date"),
+                "vcpus": int(raw["vcpus"]),
+                "memory_gib": float(raw["memory_gib"]),
+                "region_id": str(raw["region_id"]),
+                "region_label": str(raw["region_label"]),
+                "storage_gb": raw.get("storage_gb"),
+                "storage_type": str(raw["storage_type"]),
+                "storage_included": bool(raw["storage_included"]),
+                "storage_scope": str(raw["storage_scope"]),
+                "cpu_model": str(raw["cpu_model"]),
+                "tenancy": str(raw["tenancy"]),
+                "billing_mode": str(raw["billing_mode"]),
+                "price_effective_at": raw.get("price_effective_at"),
+                "availability_status": str(
+                    raw.get("availability_status") or "published_rate"
+                ),
+                "capacity_confirmed": bool(raw.get("capacity_confirmed", False)),
+                "executable_offer": bool(raw.get("executable_offer", True)),
+                "price_formula": str(
+                    raw.get("price_formula") or "one published instance hour"
+                ),
+                "checked_at": str(raw["checked_at"]),
+                "first_observed_at": str(raw["first_observed_at"]),
+                "last_observed_at": str(raw["last_observed_at"]),
+                "observation_count": int(raw["observation_count"]),
+                "event_order": int(raw["event_order"]),
+                "observation_fingerprint": str(raw["observation_fingerprint"]),
+                "source_url": str(raw["source_url"]),
+                "spec_url": str(raw["spec_url"]),
+                "color": str(raw["color"]),
+                "raw_refs_json": str(raw["raw_refs_json"]),
+            }
+        )
+    expanded.sort(
+        key=lambda row: (
+            str(row["checked_at"]),
+            int(row["series_order"]),
+            int(row["event_order"]),
+        )
+    )
+    return expanded
 
 
 def _load_optional_parquet(ref: str | None) -> list[dict[str, Any]]:

@@ -169,7 +169,7 @@ AWS_EXECUTION_ENV,AWS_CONTAINER_CREDENTIALS_RELATIVE_URI,AWS_DEFAULT_REGION,AWS_
 The main script is `infra/windmill/market_hourly.py`. It runs the complete heartbeat:
 
 ```text
-ingest live APIs -> ingest current price observations -> ingest published rate cards -> build GPU gold -> export GPU history -> check exact VM cohort -> build sandbox-cost gold -> export dashboard JSON -> write market run manifest
+ingest live APIs -> ingest current price observations -> ingest published rate cards -> build GPU gold -> export GPU history -> check seven exact VM vendors and one marketplace indication -> build sandbox-cost gold -> export dashboard JSON -> write market run manifest
 ```
 
 In the dev worker image it shells out to the baked project CLI:
@@ -234,13 +234,15 @@ Windmill variables/secrets, creates the market script, and adds the hourly sched
 when `COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT` is not set.
 
 The same hourly run writes `sandbox-cost.json` beside the GPU dashboard files.
-The exact four-vCPU, 8 GiB VM cohort is checked through public catalog APIs
-inside every hourly run. It retains raw responses and appends a silver event
-only when price, FX, shape, region, storage treatment, or another inclusion
-field changes. Managed-sandbox price evidence remains reviewed and versioned
-in the project; the hourly job does not scrape those marketing pages. The
-public StarSling benchmark repository and VM source schemas are checked
-separately each day by
+Seven exact four-vCPU, 8 GiB VM offers are checked through official catalog
+APIs inside every hourly run. Each check retains raw responses and appends one
+normalized source snapshot, including unchanged prices. DataFusion emits a
+gold point only when all seven vendor observations share that check time.
+Akash is retained separately as a modeled request indication and never enters
+the median. Managed-sandbox price evidence remains reviewed and versioned in
+the project; the hourly job does not scrape those marketing pages. The public
+StarSling benchmark repository and the first four unauthenticated VM source
+schemas are checked separately each day by
 `.github/workflows/sandbox-cost-sources.yml`. A failed check means new evidence
 or schema drift needs review. After review, update canonical evidence with the
 commit-pinned `sandbox-cost refresh-benchmark --update-evidence` command in
@@ -252,6 +254,20 @@ Provider-only schedules can still be bootstrapped for debugging:
 uv run python infra/windmill/bootstrap_provider_schedule.py --provider vast
 uv run python infra/windmill/bootstrap_provider_schedule.py --provider lium
 ```
+
+Keep those schedules disabled while `market_hourly` is enabled; the main
+heartbeat already ingests both providers. The scripts remain available for
+manual debugging:
+
+```sh
+uv run python infra/windmill/bootstrap_provider_schedule.py \
+  --provider vast --disabled
+uv run python infra/windmill/bootstrap_provider_schedule.py \
+  --provider lium --disabled
+```
+
+The bootstrap client calls Windmill's dedicated schedule `setenabled` endpoint
+after create/update so `--disabled` changes the actual recurring state.
 
 Run a manual smoke through the same VPC worker path:
 

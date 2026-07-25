@@ -126,7 +126,7 @@ def refresh_vm_capacity_sources(
     observed_at: datetime | str | None = None,
     session: requests.Session | None = None,
 ) -> VmCapacityRefresh:
-    """Check exact public VM offers and preserve raw checks plus price events."""
+    """Check exact public VM offers and preserve raw plus hourly observations."""
     checked = _coerce_utc(observed_at)
     checked_at = checked.isoformat()
     checked_date = checked.date().isoformat()
@@ -181,47 +181,42 @@ def refresh_vm_capacity_sources(
                 "color": PROVIDER_COLORS[provider_id],
             }
             _validate_normalized_row(row)
-            provider_raw_refs = _write_raw_payloads(
-                raw_root=raw_root,
-                provider_id=provider_id,
-                observed_date=checked_date,
-                run_id=run_id,
-                retrieved_at=checked_at,
-                payloads=result.raw_payloads,
-            )
-            raw_refs[provider_id] = provider_raw_refs
-            row["raw_refs_json"] = json.dumps(
-                provider_raw_refs,
-                separators=(",", ":"),
-            )
             row["observation_fingerprint"] = _observation_fingerprint(row)
 
             previous = current_by_provider.get(provider_id)
-            if (
-                previous
-                and previous.get("observation_fingerprint")
-                == row["observation_fingerprint"]
-            ):
-                row["first_observed_at"] = str(previous["first_observed_at"])
-                row["observation_count"] = int(previous["observation_count"]) + 1
-                row["event_order"] = int(previous["event_order"])
-                row["last_observed_at"] = checked_at
-                matching_event = next(
-                    (
-                        item
-                        for item in history
-                        if item["provider_id"] == provider_id
-                        and int(item["event_order"]) == row["event_order"]
-                    ),
-                    None,
-                )
-                if matching_event is None:
+            existing_snapshot = next(
+                (
+                    item
+                    for item in history
+                    if item["provider_id"] == provider_id
+                    and str(item["checked_at"]) == checked_at
+                ),
+                None,
+            )
+            if existing_snapshot is not None:
+                if (
+                    existing_snapshot.get("observation_fingerprint")
+                    != row["observation_fingerprint"]
+                ):
                     raise ValueError(
-                        f"Current {provider_id} observation has no history event"
+                        f"Conflicting immutable {provider_id} snapshot at {checked_at}"
                     )
-                matching_event["last_observed_at"] = checked_at
-                matching_event["observation_count"] = row["observation_count"]
+                row = dict(existing_snapshot)
+                provider_raw_refs = json.loads(str(row["raw_refs_json"]))
             else:
+                provider_raw_refs = _write_raw_payloads(
+                    raw_root=raw_root,
+                    provider_id=provider_id,
+                    observed_date=checked_date,
+                    run_id=run_id,
+                    retrieved_at=checked_at,
+                    payloads=result.raw_payloads,
+                )
+                raw_refs[provider_id] = provider_raw_refs
+                row["raw_refs_json"] = json.dumps(
+                    provider_raw_refs,
+                    separators=(",", ":"),
+                )
                 previous_event_order = max(
                     (
                         int(item["event_order"])
@@ -232,9 +227,12 @@ def refresh_vm_capacity_sources(
                 )
                 row["first_observed_at"] = checked_at
                 row["last_observed_at"] = checked_at
-                row["observation_count"] = 1
+                row["observation_count"] = (
+                    int(previous["observation_count"]) + 1 if previous else 1
+                )
                 row["event_order"] = previous_event_order + 1
                 history.append(dict(row))
+            raw_refs[provider_id] = provider_raw_refs
             current_by_provider[provider_id] = row
             successful.append(provider_id)
             source_checks[provider_id] = {
@@ -317,6 +315,7 @@ def refresh_vm_capacity_sources(
         "history_ref": history_ref,
         "current_ref": current_ref,
         "history_event_count": len(history),
+        "history_observation_count": len(history),
         "current_member_count": len(current_members),
         "cohort_complete": complete,
         "source_notes": {
@@ -329,9 +328,9 @@ def refresh_vm_capacity_sources(
                 "reference rate; FX changes can change the USD observation."
             ),
             "history": (
-                "Raw checks are retained every run. Silver appends only when "
-                "price, currency conversion, shape, region, or inclusion "
-                "semantics change."
+                "Raw and normalized source snapshots are retained every run, "
+                "including unchanged rates, so gold can publish a continuous "
+                "hourly series."
             ),
         },
     }
@@ -368,6 +367,7 @@ def validate_vm_capacity_history(
         raise ValueError(f"Unknown VM-capacity providers: {sorted(unknown)}")
     return {
         "history_event_count": len(history),
+        "history_observation_count": len(history),
         "current_member_count": len(current_ids),
         "cohort_complete": current_ids == set(VM_PROVIDER_ORDER),
     }
@@ -751,23 +751,23 @@ def _validate_normalized_row(row: Mapping[str, Any]) -> None:
 
 def _validate_history(rows: list[dict[str, Any]]) -> None:
     seen: set[tuple[str, int]] = set()
-    fingerprints: set[tuple[str, str]] = set()
+    snapshots: set[tuple[str, str]] = set()
     for row in rows:
         _validate_normalized_row(row)
         key = (str(row["provider_id"]), int(row["event_order"]))
         if key in seen:
             raise ValueError(f"Duplicate VM-capacity event {key}")
         seen.add(key)
-        fingerprint_key = (
+        snapshot_key = (
             str(row["provider_id"]),
-            str(row["observation_fingerprint"]),
+            str(row["checked_at"]),
         )
-        if fingerprint_key in fingerprints:
+        if snapshot_key in snapshots:
             raise ValueError(
-                "VM-capacity history repeats an unchanged observation for "
-                f"{row['provider_id']}"
+                "VM-capacity history repeats an hourly source snapshot for "
+                f"{row['provider_id']} at {row['checked_at']}"
             )
-        fingerprints.add(fingerprint_key)
+        snapshots.add(snapshot_key)
 
 
 def _observation_fingerprint(row: Mapping[str, Any]) -> str:

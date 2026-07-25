@@ -238,6 +238,11 @@ class WindmillClient:
                 body,
                 ok_statuses={200, 201},
             )
+        self._post(
+            f"/w/{self.workspace}/schedules/setenabled/{quote(path, safe='')}",
+            {"enabled": enabled},
+            ok_statuses={200},
+        )
 
     def _get(self, path: str, *, ok_statuses: set[int]) -> bytes:
         request = Request(

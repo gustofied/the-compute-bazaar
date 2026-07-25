@@ -40,12 +40,13 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="sandbox-batch-table-body"', article)
         self.assertIn('id="sandbox-combined-chart"', article)
         self.assertIn('id="sandbox-coverage-chart"', article)
-        self.assertIn('src="./sandbox-cost.js?v=8"', article)
+        self.assertIn('src="./sandbox-cost.js?v=10"', article)
         self.assertIn("sandbox-cost.json", script)
         self.assertIn('"sandbox_cost_gold_v4"', script)
         self.assertIn("effectiveCssZoom", script)
         self.assertIn("createRateHistoryChart", script)
         self.assertIn('id="vm-current-rates"', article)
+        self.assertIn('id="vm-marketplace-rates"', article)
         self.assertIn('id="vm-capacity-table-body"', article)
         self.assertIn("createJobDistributionChart", script)
         self.assertIn("createBatchHistoryChart", script)
@@ -58,13 +59,26 @@ class AdamSioudServerTests(unittest.TestCase):
             4,
         )
         self.assertEqual(
+            payload["manifest"]["row_counts"]["vm_capacity_expanded_rate"],
+            len(payload["vm_capacity"]["fixed_cohort_rate"]),
+        )
+        self.assertEqual(
             payload["manifest"]["row_counts"]["vm_capacity_fixed_rate"],
+            len(payload["vm_capacity"]["legacy_fixed_cohort_rate"]),
+        )
+        self.assertGreaterEqual(
+            payload["manifest"]["row_counts"]["vm_capacity_observed_rate"],
             1,
         )
         self.assertEqual(
-            len(payload["vm_capacity"]["current_cross_section"]),
-            4,
+            payload["manifest"]["row_counts"]["vm_capacity_expanded_current"],
+            7,
         )
+        self.assertEqual(
+            len(payload["vm_capacity"]["current_cross_section"]),
+            7,
+        )
+        self.assertEqual(len(payload["vm_capacity"]["marketplace_indications"]), 1)
         self.assertNotIn(
             "raw_refs_json",
             json.dumps(payload["vm_capacity"]),

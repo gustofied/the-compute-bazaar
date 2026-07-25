@@ -22,7 +22,7 @@ flowchart LR
   Curia --> DataFusion["DataFusion SQL engine"]
   DataFusion --> Curia
   Curia --> Gold["S3 gold: Curia-authored market objects"]
-  Bronze --> VMSilver["VM silver: exact-shape offer events"]
+  Bronze --> VMSilver["VM silver: exact-shape hourly observations"]
   VMSilver --> DataFusion
   DataFusion --> VMGold["VM gold: fixed cohort and substrate comparison"]
   SandboxBronze --> SandboxSilver["Sandbox silver: prices, batches, jobs, phases"]
@@ -186,13 +186,15 @@ exact public VM APIs + reviewed sandbox price evidence
   -> dashboard/compute-bazaar/sandbox-cost.json
 ```
 
-The VM product uses a fixed four-provider cohort of exact four-vCPU, 8 GiB
-on-demand offers. Each hourly check retains raw API responses and checksums.
-Silver adds an event only when price, FX, shape, region, storage treatment, or
-another inclusion field changes. Gold publishes the current cross-section,
-median/p25-p75 history, and a descriptive VM-to-sandbox rate ratio. Bundled
-storage and CPU semantics remain explicit; the ratio is not a margin or
-like-for-like product decomposition.
+The VM product uses a fixed seven-vendor cohort of exact four-vCPU, 8 GiB
+on-demand offers. Each hourly check retains raw API responses and checksums,
+and silver appends one normalized observation per successful source even when
+the price is unchanged. Gold publishes one median/p25-p75 point for every
+complete seven-vendor timestamp, the current cross-section, and a descriptive
+VM-to-sandbox rate ratio. The earlier four-vendor cohort remains queryable as
+v1 audit data. Akash request estimates are retained as marketplace indications
+and excluded from the vendor median. Bundled storage and CPU semantics remain
+explicit; the ratio is not a margin or like-for-like product decomposition.
 
 The fixed hourly rate uses the same eight services at every event date and
 publishes the cohort median and p25-p75 range; the arithmetic mean remains a

@@ -239,12 +239,15 @@ visible as incomplete rather than being imputed. Repeated intraday batches
 remain distinct. Earlier two-processor runs are captured but rejected because
 the publication shape is four processors, 8 GiB memory, and 40 GB disk.
 
-The underlying capacity view checks a fixed four-provider cohort of exact
-four-vCPU, 8 GiB public VM offers each hour. Raw API responses and checksums are
-retained; silver history adds a point only when price, FX, shape, location, or
-inclusion semantics change. Its median and p25-p75 are shown beside the fixed
-eight-service managed-sandbox cohort. Their observed rate ratio is descriptive,
-not a markup or margin.
+The underlying capacity view checks a fixed seven-vendor cohort of exact
+four-vCPU, 8 GiB public VM offers each hour: Akamai Linode, Vultr, Scaleway,
+Microsoft Azure, Amazon EC2, OVHcloud, and Oracle Cloud. Raw API responses and
+checksums are retained, and silver stores one normalized snapshot per source
+per check even when the price is unchanged. DataFusion publishes one median
+and p25-p75 point for each complete hourly cross-section. An Akash modeled
+request estimate is retained and shown separately; it is not counted as a bid,
+executed price, or member of the vendor median. The VM/sandbox rate ratio is
+descriptive, not a markup or margin.
 
 The hourly sandbox headline is the median of the same eight-service cohort,
 with p25-p75 and mean retained as descriptive fields. The H100 comparison uses
@@ -260,17 +263,24 @@ uv run sandbox-cost refresh-vm-capacity \
   --output-root data/lake/sandbox_cost \
   --raw-root data/raw
 
+uv run sandbox-cost refresh-vm-discovery \
+  --output-root data/lake/sandbox_cost \
+  --raw-root data/raw
+
 uv run sandbox-cost build \
   --output-root data/lake/sandbox_cost \
   --dashboard-output-root data/dashboard/compute-bazaar \
   --gpu-history-ref data/lake/sandbox_cost/silver/gpu_benchmark_history.parquet \
   --vm-capacity-history-ref data/lake/sandbox_cost/silver/vm_capacity_offer_history.parquet \
   --vm-capacity-current-ref data/lake/sandbox_cost/silver/vm_capacity_current.parquet \
-  --vm-capacity-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_source_manifest.json
+  --vm-capacity-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_source_manifest.json \
+  --vm-discovery-history-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_history.parquet \
+  --vm-discovery-current-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_current.parquet \
+  --vm-discovery-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_manifest.json
 
 uv run sandbox-cost query \
   --output-root data/lake/sandbox_cost \
-  --query vm-sandbox-current \
+  --query vm-observed-rate \
   --limit 10
 
 uv run sandbox-cost refresh-benchmark \
