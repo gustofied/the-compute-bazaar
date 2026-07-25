@@ -34,10 +34,13 @@ class AdamSioudServerTests(unittest.TestCase):
             article,
         )
         self.assertIn(
-            "Measured phase time; marginal rate-card cost estimated",
+            "Same workload, different time and cost",
             article,
         )
-        self.assertIn("How long the same workload took", article)
+        self.assertIn("Latest comparable jobs", article)
+        self.assertIn('data-job-metric="time"', article)
+        self.assertIn('data-job-metric="cost"', article)
+        self.assertIn("Ranked service medians", article)
         self.assertIn("Inspect the seven underlying VM offers", article)
         self.assertIn('id="sandbox-job-scatter"', article)
         self.assertIn('id="sandbox-phase-summary"', article)
@@ -49,9 +52,13 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="market-state-availability"', article)
         self.assertNotIn('id="vm-hourly-chart"', article)
         self.assertNotIn('id="sandbox-batch-history"', article)
-        self.assertIn('src="./sandbox-cost.js?v=17"', article)
+        self.assertIn('src="./sandbox-cost.js?v=18"', article)
         self.assertIn("sandbox-cost.json", script)
         self.assertIn('"sandbox_cost_gold_v5"', script)
+        self.assertNotIn('"sandbox_cost_gold_v4"', script)
+        self.assertNotIn("summarizeJobs", script)
+        self.assertIn("renderJobRanking", script)
+        self.assertIn("workload.service_summary", script)
         self.assertIn("effectiveCssZoom", script)
         self.assertIn("createRateHistoryChart", script)
         self.assertIn("partial source check", script)
@@ -159,6 +166,19 @@ class AdamSioudServerTests(unittest.TestCase):
         )
         self.assertEqual(payload["workload"]["latest_phase_count"], 690)
         self.assertEqual(len(payload["workload"]["service_summary"]), 6)
+        self.assertTrue(
+            all(
+                {
+                    "median_runtime_seconds",
+                    "p25_runtime_seconds",
+                    "p75_runtime_seconds",
+                    "median_estimated_cost_usd",
+                    "p25_estimated_cost_usd",
+                    "p75_estimated_cost_usd",
+                }.issubset(row)
+                for row in payload["workload"]["service_summary"]
+            )
+        )
         self.assertEqual(len(payload["workload"]["phase_summary"]), 60)
         self.assertEqual(len(payload["workload"]["batch_history"]), 38)
         self.assertEqual(len(payload["workload"]["latest_replicates"]), 69)

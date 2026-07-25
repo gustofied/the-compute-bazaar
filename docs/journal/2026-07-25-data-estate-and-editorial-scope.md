@@ -96,6 +96,45 @@ The historical workload summaries should be visualized again only when the
 query groups comparable harness methodologies or a controlled recurring
 benchmark supplies a genuinely consistent time series.
 
+## Workload Comparison Redesign
+
+The first simplified workload view still privileged runtime: it drew all 69
+jobs and showed estimated cents only as a label. That made the rate-card
+estimate look secondary even though the reader's question is explicitly about
+both time and cost.
+
+The revised primary view now:
+
+- ranks six services by their published median;
+- switches between measured phase time and estimated
+  processor-and-memory cost without changing the constituent jobs;
+- keeps both medians visible in a compact ranked ledger;
+- retains every complete job for pointer and keyboard inspection;
+- retains the published p25-p75 range as supporting dispersion;
+- leaves all 38 cross-method historical summaries in a collapsed audit table,
+  outside the primary visualization.
+
+No benchmark formula moved into the browser. Version 5 already contains every
+job, service medians, p25-p75 values, and cost estimates produced by the
+maintained DataFusion/gold build. The D3 code now refuses a missing or
+service-incomplete workload summary instead of deriving a replacement from
+the raw jobs. Its permitted work is presentation: choosing a measure, sorting,
+scaling, labeling, and interaction.
+
+The public copy was tightened around plain measurement terms:
+
+```text
+measured phase time
+estimated processor-and-memory cost
+complete job
+service median
+middle 50%
+```
+
+The section explicitly says that the latest batch has 69 complete jobs from 72
+source slots, that three incomplete slots are not estimated, and that the
+historical evidence crosses six harness revisions.
+
 ## Verification Commands
 
 ```sh
@@ -121,11 +160,22 @@ uv run python -m unittest \
 - Desktop browser inspection at 1280 pixels showed the simplified rate and
   workload sequence, the collapsed VM source disclosure, and no document-level
   horizontal overflow.
+- The revised workload chart rendered 69 individual jobs, six published
+  medians, and six published p25-p75 ranges. Switching to estimated cost
+  reordered the services from the time ranking to Novita, Daytona VM, Blaxel,
+  E2B, Modal VM, and Modal gVisor without changing the constituent count.
+- Pointer-independent keyboard inspection exposed both measures and the
+  p25-p75 range through the chart's live region. Arrow keys also switched the
+  two metric controls.
+- Responsive inspection at 390 by 844 pixels showed both full-width metric
+  controls, all six chart rows, the two median columns, and zero document,
+  article, or ranked-ledger horizontal overflow.
 - Opening the VM disclosure kept the wide provenance table inside its own
   scroll wrapper.
 - The browser reported no console errors.
-- The public freshness check passed with no partial VM source runs or stale
-  projection warning.
+- The public freshness check at `2026-07-25T20:27:25Z` passed with no partial
+  VM source runs or stale projection warning; the newest complete VM
+  observation was 0.457 hours old.
 
 ## Next Data Work
 

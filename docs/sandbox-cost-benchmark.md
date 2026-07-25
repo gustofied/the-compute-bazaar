@@ -48,6 +48,34 @@ not measured
 This is a descriptive observed-batch comparison. It is not an SLA, a
 tail-latency study, or a universal provider ranking.
 
+## Publication Rendering Contract
+
+The benchmark is calculated before it reaches the article. The
+`sandbox_cost_gold_v5` publication contract carries:
+
+- every complete aligned job with its measured runtime and matching
+  processor-and-memory cost estimate;
+- one service summary with precomputed median, p25, and p75 values for both
+  runtime and estimated cost;
+- source-slot counts, incomplete-slot counts, source run IDs, and pinned source
+  URLs;
+- the retained cross-method batch history and phase summaries.
+
+The article's JavaScript may choose the active measure, rank rows, set a scale,
+and draw or label the published values. It does not calculate service medians,
+percentiles, frontier membership, or cost estimates from raw browser rows. The
+renderer accepts version 5 and fails visibly when the required workload
+summary is absent or does not cover the same services as the constituent jobs.
+This keeps the CLI, DataFusion tables, exported JSON, and article on one
+statistical contract.
+
+The public workload view defaults to median measured phase time and can switch
+to median estimated processor-and-memory cost. Both values remain visible in
+the ranked service ledger. Every complete job remains available as a plotted
+observation and in the audit table; p25-p75 remains supporting dispersion.
+Historical batches that cross harness generations stay in the collapsed audit
+record rather than being drawn as one misleading performance series.
+
 ## Maintained Data Path
 
 ```text
