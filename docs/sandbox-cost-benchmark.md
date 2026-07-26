@@ -956,6 +956,22 @@ Its dedicated VM chart uses the v2 observation window so consecutive hourly
 checks remain distinguishable; the adjacent overview keeps the longer
 VM-versus-sandbox time range for context.
 
+The article also plots the normalized sandbox-provider rows behind the gold
+median. A dot marks a series start or a changed public rate, while unchanged
+retained observations remain available to pointer and keyboard inspection.
+Each provider uses a step line between dated observations. The line means
+"last observed public rate," not an hourly transaction print. Solid lines
+identify the fixed eight-service cohort; dashed lines retain additional
+observed services without letting them alter the fixed-membership median.
+
+All article figures now use the shared D3 card contract documented in
+`docs/visualization-system.md`. Each chart remains a view over the public gold
+payload, but pointer or keyboard selection also publishes a persistent
+observation with date, value, detail, and a source action when the row contains
+a public URL. The shared helper owns Safari/CSS-zoom pointer geometry, tooltip
+placement, card status, methodology links, and stable share links. It does not
+calculate benchmark values.
+
 Focused verification:
 
 ```sh

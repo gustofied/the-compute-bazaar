@@ -214,3 +214,131 @@ pinned shape, workload signature, source rewrite, and schema checks before the
 next hourly build can publish it. Check `workload-run-history` after promotion
 and confirm whether the run is a complete six-service cohort before expecting
 the public headline to advance.
+
+## Sandbox Vendor Histories
+
+The aggregate VM-versus-sandbox chart remains the first price comparison, but
+the sandbox median now has a visible constituent view immediately below it.
+The new chart renders all 33 retained public rate observations across 11
+services:
+
+- solid paths are the eight fixed-cohort services used by the median;
+- dashed paths are Beam, Freestyle, and Sailboxes, retained outside that
+  fixed-membership calculation;
+- dots mark a series start or a changed public rate;
+- step segments carry the last observed public rate to the next source date;
+- the gold fixed-eight median and middle 50 percent remain the dominant marks.
+
+This avoids two discarded presentations. A median-only chart hid the vendor
+evidence, while treating every connected segment as an hourly market print
+would overstate the source precision. The current view keeps both the aggregate
+and its public rate-card evidence without changing any gold formula.
+
+Focused verification:
+
+```sh
+node --check external/AdamSioud/exemplars/compute/sandbox-cost.js
+uv run python -m unittest tests.test_adamsioud -v
+git diff --check
+git -C external/AdamSioud diff --check
+```
+
+Results:
+
+```text
+JavaScript syntax                 passed
+article tests                     2 passed
+desktop browser                   11 paths, 33 vendor dots, no console errors
+mobile browser                    390 by 844, no horizontal overflow
+keyboard inspection              vendor highlight and median tooltip passed
+```
+
+## Visualization Card System
+
+The article had three interaction dialects: the GPU headline and history, six
+compact market-pulse charts, and the larger sandbox/occupancy figures. They
+shared an editorial visual language but duplicated pointer geometry, tooltip
+placement, loading state, and provenance behavior.
+
+The retained approach is a small native D3/SVG framework:
+
+```text
+compute-viz.css
+compute-viz.js
+```
+
+EvilCharts was reviewed as a composition reference, especially its separation
+of chart container, series, dots, tooltip, and configuration. Adding its React
+and ECharts stack would not fit this static article, so no dependency was
+added. The useful discipline was translated into the existing D3 code.
+
+Decisions:
+
+- the card, not the SVG, is the smallest shareable publication object;
+- all 13 article visualizations have stable ids and one card contract;
+- a floating tooltip remains useful for scanning;
+- a persistent observation row keeps the selected point, value, context, and
+  source actions available after hover;
+- dots mean retained observations, while the active dot means selection;
+- source and methodology actions are explicit;
+- share links target the canonical article and stable card id;
+- GPU history and sandbox charts use one CSS-zoom-aware pointer calculation;
+- pointer and keyboard selection publish the same observation object;
+- formulas remain in DataFusion/gold and are not moved into frontend code.
+
+The discarded alternative was a generic dashboard component library. It would
+have added a second visual language and a client framework without improving
+the evidence model. The shared layer is intentionally small enough that the
+article remains plain HTML, CSS, D3, and generated JSON.
+
+The complete contract is documented in
+`docs/visualization-system.md`, including line continuity, resting and active
+dots, bands, evidence status, card states, share URLs, keyboard behavior,
+mobile behavior, and the future `actionUrl` slot for listing, dataroom, or RFQ
+objects.
+
+Verification:
+
+```sh
+node --check external/AdamSioud/exemplars/compute/compute-viz.js
+node --check external/AdamSioud/exemplars/compute/compute-market.js
+node --check external/AdamSioud/exemplars/compute/compute-market-history.js
+node --check external/AdamSioud/exemplars/compute/sandbox-cost.js
+uv run python -m unittest \
+  tests.test_sandbox_cost \
+  tests.test_vm_capacity \
+  tests.test_adamsioud -v
+```
+
+Results:
+
+```text
+JavaScript syntax                 passed
+focused data and article tests   34 passed
+desktop cards                    13 enhanced, 13 live
+desktop overflow                 none
+mobile viewport                  390 by 844, no page or card overflow
+browser console                  no warnings or errors
+keyboard state                   min, max, current, and value text exposed
+source action                    archived E2B price observation opened
+stable card link                 query and fragment highlight verified
+```
+
+Reader review removed the resting dots from dense GPU history. They repeated
+the hourly sampling pattern without identifying a distinct event. GPU history
+now keeps only the active pointer or keyboard marker. The framework rule was
+adjusted accordingly: a resting dot must identify a source event, methodology
+boundary, or meaningful inflection with additional information attached.
+Sparse sandbox-provider dots remain only for a series start or changed public
+rate. Unchanged observations stay in the interaction and source record without
+receiving another visual mark.
+
+The next visual review also pulled the shared system back from a generic
+dashboard-card treatment. The stable id, share action, source action,
+observation state, and keyboard behavior remain shared. Borders, shadows,
+padding, legends, captions, and plot composition do not. The GPU headline
+returns to its original horizontal-rule treatment, compact pulse figures sit
+open in their editorial rows, and larger figures keep their own layouts.
+Generic "Source-backed data loaded" copy was replaced by figure-specific
+provenance such as hourly benchmark history, the seven-vendor VM cohort, dated
+rate-card evidence, and the latest compatible StarSling cohort.

@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -21,6 +22,15 @@ class AdamSioudServerTests(unittest.TestCase):
             encoding="utf-8"
         )
         script = (article_root / "sandbox-cost.js").read_text(encoding="utf-8")
+        viz_script = (article_root / "compute-viz.js").read_text(
+            encoding="utf-8"
+        )
+        viz_styles = (article_root / "compute-viz.css").read_text(
+            encoding="utf-8"
+        )
+        history_script = (article_root / "compute-market-history.js").read_text(
+            encoding="utf-8"
+        )
         payload = json.loads(
             (article_root / "sandbox-cost.json").read_text(encoding="utf-8")
         )
@@ -57,6 +67,8 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertNotIn('data-job-metric="cost"', article)
         self.assertIn("Inspect the seven underlying VM offers", article)
         self.assertIn("Public VM/VPS and managed sandbox prices", article)
+        self.assertIn("Rates behind the sandbox median", article)
+        self.assertIn('id="sandbox-vendor-chart"', article)
         self.assertIn("all seven VM offers", article)
         self.assertIn('data-relative-series="gpu"', article)
         self.assertIn('data-relative-series="vm"', article)
@@ -77,7 +89,52 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="market-state-availability"', article)
         self.assertNotIn('id="vm-hourly-chart"', article)
         self.assertNotIn('id="sandbox-batch-history"', article)
-        self.assertIn('src="./sandbox-cost.js?v=22"', article)
+        self.assertIn('href="./compute-viz.css?v=1"', article)
+        self.assertIn('src="./compute-viz.js?v=1"', article)
+        self.assertIn('src="./compute-market.js?v=10"', article)
+        self.assertIn('src="./compute-market-history.js?v=7"', article)
+        self.assertIn('src="./sandbox-cost.js?v=24"', article)
+        self.assertEqual(article.count("data-viz-card"), 13)
+        for status_label in {
+            "Hourly benchmark history",
+            "Hourly seven-vendor cohort",
+            "Latest compatible StarSling run",
+            "Dated public rate-card evidence",
+            "Observed marketplace capacity",
+        }:
+            self.assertIn(f'data-viz-status-label="{status_label}"', article)
+        self.assertEqual(
+            len(re.findall(r'\bid="([^"]+)"', article)),
+            len(set(re.findall(r'\bid="([^"]+)"', article))),
+        )
+        for card_id in {
+            "gpu-price-card",
+            "gpu-price-pulse-card",
+            "gpu-availability-pulse-card",
+            "cpu-price-pulse-card",
+            "cpu-availability-pulse-card",
+            "sandbox-cost-pulse-card",
+            "sandbox-runtime-pulse-card",
+            "vm-sandbox-price-card",
+            "sandbox-vendor-rate-card",
+            "sandbox-job-cost-card",
+            "relative-price-card",
+            "gpu-coverage-card",
+            "market-occupancy-card",
+        }:
+            self.assertIn(f'id="{card_id}"', article)
+        self.assertIn("window.ComputeViz", viz_script)
+        self.assertIn("effectiveCssZoom", viz_script)
+        self.assertIn("localPointer", viz_script)
+        self.assertIn("positionTooltip", viz_script)
+        self.assertIn("observe", viz_script)
+        self.assertIn("cardUrl", viz_script)
+        self.assertIn(".viz-observation", viz_styles)
+        self.assertIn(".viz-card-footer", viz_styles)
+        self.assertNotIn("market-history-observation", history_script)
+        self.assertIn('attr("role", "slider")', history_script)
+        self.assertIn('attr("aria-valuenow", focusIndex)', history_script)
+        self.assertIn("viz.localPointer", history_script)
         self.assertIn("sandbox-cost.json", script)
         self.assertIn('"sandbox_cost_gold_v5"', script)
         self.assertNotIn('"sandbox_cost_gold_v4"', script)
@@ -86,8 +143,18 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertNotIn("activeMetric", script)
         self.assertNotIn("sandbox-job-view-note", script)
         self.assertIn("workload.service_summary", script)
-        self.assertIn("effectiveCssZoom", script)
+        self.assertNotIn("function effectiveCssZoom", script)
+        self.assertNotIn("function localPointer", script)
+        self.assertIn("viz.localPointer", script)
+        self.assertIn("viz.positionTooltip", script)
+        self.assertIn("viz.observe", script)
+        self.assertIn('attr("aria-valuenow", focusIndex)', script)
+        self.assertNotIn('label: "Source-backed data loaded"', script)
         self.assertIn("createRateHistoryChart", script)
+        self.assertIn("createSandboxVendorChart", script)
+        self.assertIn("sandbox-vendor-series", script)
+        self.assertIn("keyChangeRows", script)
+        self.assertNotIn("const pointRows", script)
         self.assertIn("partial source check", script)
         self.assertIn("latest complete", script)
         self.assertIn('id="vm-current-rates"', article)

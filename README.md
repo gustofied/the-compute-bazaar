@@ -340,6 +340,8 @@ runs and identifies whether all six fixed services are present.
 
 See [docs/sandbox-cost-benchmark.md](docs/sandbox-cost-benchmark.md) for source
 semantics, formulas, layer paths, review rules, and refresh instructions.
+The article's reusable D3 card, interaction, and sharing rules live in
+[docs/visualization-system.md](docs/visualization-system.md).
 
 ## Build Gold
 
