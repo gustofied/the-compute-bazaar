@@ -57,17 +57,38 @@ declared in markup:
 ```
 
 `ComputeViz.enhanceCards()` adds the observation area, status footer,
-methodology action, share action, and accessible status message. Compact
-figures can visually suppress repeated status copy while retaining it for
-assistive technology. The stable share URL is:
+methodology action, expanded-view action, share action, and accessible status
+message. Compact figures can visually suppress repeated status copy while
+retaining it for assistive technology.
+
+The stable live-card URL is:
 
 ```text
-?card=example-card#example-card
+?view=card&card=example-card#example-card
 ```
 
-This points to the canonical article and highlights the requested card. It
-does not serialize a temporary hover state or claim that the underlying data
-will never change.
+It opens the original card full-width with its current public payload,
+provenance, article link, copy-link action, and copy-embed action. This is a
+presentation mode of the article, not a second renderer or a copied dataset.
+It does not serialize a temporary hover state or claim that the underlying
+data will never change.
+
+The iframe-safe URL is:
+
+```text
+?view=embed&card=example-card
+```
+
+Embed mode removes the article chrome and surrounding card header so the host
+page controls spacing and framing. The generated iframe is lazy-loaded and
+uses the same source-backed chart implementation.
+
+These are live, view-only artifacts. They intentionally differ from a frozen
+chart snapshot: refreshing a live card can show a newer hourly observation.
+The static GitHub Pages article cannot emit unique server-rendered Open Graph
+metadata for every query-string card. Rich social preview images therefore
+require a separate deterministic snapshot/export step and must not be implied
+by the live sharing control.
 
 ## Information Marks
 

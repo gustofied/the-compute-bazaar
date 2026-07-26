@@ -342,3 +342,76 @@ open in their editorial rows, and larger figures keep their own layouts.
 Generic "Source-backed data loaded" copy was replaced by figure-specific
 provenance such as hourly benchmark history, the seven-vendor VM cohort, dated
 rate-card evidence, and the latest compatible StarSling cohort.
+
+## Live Card Permalinks And Embeds
+
+The stable card identity is now also a presentation mode. Each of the 13
+existing cards receives an expanded-view action and its share control copies a
+live, view-only card URL:
+
+```text
+?view=card&card=gpu-price-card#gpu-price-card
+```
+
+The page waits for the selected card's public payload, moves that original DOM
+card into a full-width stage, and then asks the existing D3 renderer to lay
+itself out again. No chart formula, dataset, or renderer is duplicated.
+Expanded mode adds the article link, copy-link action, and copy-embed action.
+The iframe URL uses the same implementation without article chrome:
+
+```text
+?view=embed&card=gpu-price-card
+```
+
+This follows the useful part of TradingView's sharing model: a view-only link
+keeps the artifact interactive, while an iframe is the portable live object.
+It deliberately does not pretend to be a frozen snapshot. A future
+deterministic image exporter can capture a run id and observation timestamp
+for social previews, but that is a separate artifact with different freshness
+semantics. Static GitHub Pages also cannot serve card-specific Open Graph
+metadata from query parameters, so no rich-preview promise was added.
+
+Implementation decisions:
+
+- reuse the exact article card rather than maintain one page per chart;
+- derive URLs from the canonical article URL so local preview links never leak
+  into copied publication links;
+- reveal compact-card provenance in standalone and embed modes;
+- keep embed mode frameless and let the host page own its outer composition;
+- open GPU history automatically when that card is shared;
+- dispatch one shared layout event after a card moves so D3 and SVG figures
+  redraw at their expanded width;
+- preserve responsive behavior and keyboard/pointer inspection.
+
+Verification:
+
+```sh
+node --check external/AdamSioud/exemplars/compute/compute-viz.js
+node --check external/AdamSioud/exemplars/compute/compute-market.js
+node --check external/AdamSioud/exemplars/compute/compute-market-history.js
+node --check external/AdamSioud/exemplars/compute/sandbox-cost.js
+uv run python -m unittest \
+  tests.test_sandbox_cost \
+  tests.test_vm_capacity \
+  tests.test_adamsioud -v
+uv run ruff check tests/test_adamsioud.py
+```
+
+Results:
+
+```text
+JavaScript syntax                  passed
+focused data and article tests    34 passed
+ruff                              passed
+normal article cards              13 enhanced, 13 expanded links
+expanded desktop card             one card, 1120 px, no overflow
+expanded mobile card              390 px viewport, no overflow
+iframe mode                       one card, no page header, no overflow
+browser console                   no warnings or errors
+```
+
+Visual checks covered the expanded GPU card, the dense eleven-vendor sandbox
+rate history, the compact H100 pulse, and iframe mode. The old site-wide
+`main` maximum width initially kept the standalone view at 900 pixels; the
+card-specific shell now overrides that cap without changing the article
+layout.
