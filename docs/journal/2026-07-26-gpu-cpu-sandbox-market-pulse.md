@@ -466,3 +466,17 @@ rate history, StarSling workload distribution, and rental occupancy card on
 desktop. The vendor, workload, pulse, and occupancy embed paths were also
 checked at 390 by 844. All retained their original chart encodings and
 controls; no generic container, shadow, or duplicate renderer was introduced.
+
+Publication:
+
+```text
+AdamSioud commit     4a65703
+Pages workflow       30197034540
+Pages result         success
+Compute Bazaar pin   de3985f
+```
+
+The deployed article returned all 13 cards in `live` state, 13 expanded-view
+links, 24-by-24 rendered article controls, no horizontal overflow, and no
+browser console warnings or errors. The public H100 compact card rendered at
+its intended 860-pixel maximum with current hourly data.
