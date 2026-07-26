@@ -429,3 +429,40 @@ The public article returned 13 live cards, 13 expanded-view links, no warning
 cards, no horizontal overflow, and no browser console warnings or errors. The
 published H100 pulse also rendered successfully in both standalone and iframe
 modes.
+
+## Standalone Card Refinement
+
+A second visual review kept the article treatment intact and tightened only
+the live-card presentation. The original implementation made every expanded
+card 1120 pixels wide, repeated evidence-chart titles and provenance, retained
+the article's selected-card stripe, and hid the expand action inside embeds.
+Those behaviors made the feature work but did not make every card feel native
+to its content.
+
+The retained system now uses three proportions:
+
+```text
+headline  1040 px maximum  GPU ticker plus opened history
+compact    860 px maximum  single market pulse and coverage
+evidence  1120 px maximum  source, workload, comparison, occupancy
+```
+
+Other decisions:
+
+- a standalone header contains the single page title and sharing actions;
+- evidence figures hide only their repeated internal title in full-card mode;
+- provenance remains once at the bottom of the card;
+- full-card pages hide redundant footer share and expand controls;
+- embeds retain methodology, expand, and share controls;
+- embeds no longer force a full-viewport body and use type-specific suggested
+  heights;
+- the selected-card stripe is removed in standalone and embed modes;
+- normal article controls now honor the documented 24-pixel minimum target;
+- mobile card pages use the available 366 pixels in a 390-pixel viewport
+  without horizontal overflow.
+
+Visual QA covered the H100 pulse, four-product GPU headline, eleven-vendor
+rate history, StarSling workload distribution, and rental occupancy card on
+desktop. The vendor, workload, pulse, and occupancy embed paths were also
+checked at 390 by 844. All retained their original chart encodings and
+controls; no generic container, shadow, or duplicate renderer was introduced.

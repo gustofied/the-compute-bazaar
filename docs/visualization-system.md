@@ -81,7 +81,21 @@ The iframe-safe URL is:
 
 Embed mode removes the article chrome and surrounding card header so the host
 page controls spacing and framing. The generated iframe is lazy-loaded and
-uses the same source-backed chart implementation.
+uses the same source-backed chart implementation. Its suggested height follows
+the card type, and the embed retains an expand action back to the full live
+card.
+
+Standalone composition has three deliberate proportions:
+
+- `headline`: the four-product GPU ticker and its opened history;
+- `compact`: one market measure or the narrow provider-coverage view;
+- `evidence`: workload, price-source, relative-movement, and occupancy plates.
+
+Compact cards do not stretch to the evidence width. Evidence plates keep the
+space needed for exact marks, controls, and labels. The full-card header owns
+the title, so evidence figures suppress their repeated internal title in that
+mode only. Embeds retain the internal title because they have no page header.
+This is a presentation distinction, not a separate chart implementation.
 
 These are live, view-only artifacts. They intentionally differ from a frozen
 chart snapshot: refreshing a live card can show a newer hourly observation.
