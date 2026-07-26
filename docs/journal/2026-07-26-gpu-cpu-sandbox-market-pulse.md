@@ -415,3 +415,17 @@ rate history, the compact H100 pulse, and iframe mode. The old site-wide
 `main` maximum width initially kept the standalone view at 900 pixels; the
 card-specific shell now overrides that cap without changing the article
 layout.
+
+Publication:
+
+```text
+AdamSioud commit     def47eb
+Pages workflow       30196099058
+Pages result         success
+Compute Bazaar pin   385b3f5
+```
+
+The public article returned 13 live cards, 13 expanded-view links, no warning
+cards, no horizontal overflow, and no browser console warnings or errors. The
+published H100 pulse also rendered successfully in both standalone and iframe
+modes.
