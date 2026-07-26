@@ -112,23 +112,55 @@ async function runScratchSql() {
 }
 
 function renderSummary(manifest) {
+  const providerCount = Number(manifest?.provider_count || 0);
+  const successfulProviderCount = Number(manifest?.successful_provider_count || 0);
+  const failedProviders = manifest?.failed_providers || [];
+  const healthValue = providerCount
+    ? `${successfulProviderCount}/${providerCount} sources · ${formatStatus(manifest?.status)}`
+    : formatStatus(manifest?.status);
+  const productValue = manifest?.sandbox_table_count
+    ? `${manifest.table_count} gold tables · GPU, VM, sandbox`
+    : `${manifest?.table_count || 0} gold tables · GPU`;
   const values = [
-    ["Gold run", manifest?.run_id || "unknown"],
-    ["Observed", formatDate(manifest?.observed_at)],
-    ["Providers", (manifest?.provider_scope || []).join(" · ") || "unknown"],
+    { label: "Market run", value: manifest?.market_run_id || manifest?.run_id || "unknown" },
+    { label: "Observed", value: formatDate(manifest?.observed_at) },
+    {
+      label: "Run health",
+      value: healthValue,
+      detail: failedProviders.length ? `Unavailable: ${failedProviders.join(", ")}` : "All configured sources completed",
+      tone: failedProviders.length ? "warning" : "ok",
+    },
+    {
+      label: "Products",
+      value: productValue,
+      detail: manifest?.sandbox_build_id ? `Sandbox build ${manifest.sandbox_build_id}` : "GPU gold manifest",
+    },
   ];
 
   nodes.summary.innerHTML = values
-    .map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
+    .map(
+      ({ label, value, detail, tone }) => `
+        <div${tone ? ` data-tone="${escapeHtml(tone)}"` : ""}>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+          ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
+        </div>
+      `,
+    )
     .join("");
 }
 
 function renderScratchTables() {
   if (!state.scratch || !state.scratch.tables?.length) {
-    nodes.scratchTables.textContent = "No gold tables are available for scratch SQL yet.";
+    nodes.scratchTables.innerHTML = "<summary>No gold tables available</summary>";
     return;
   }
-  nodes.scratchTables.textContent = `Allowed tables: ${state.scratch.tables.join(", ")}`;
+  nodes.scratchTables.innerHTML = `
+    <summary>Allowed gold tables (${state.scratch.tables.length})</summary>
+    <ul>
+      ${state.scratch.tables.map((table) => `<li><code>${escapeHtml(table)}</code></li>`).join("")}
+    </ul>
+  `;
 }
 
 function renderQueryList() {
@@ -260,9 +292,10 @@ function renderLineage(payload) {
       <div>
         <h3>Gold context</h3>
         ${renderKeyValues({
-          gold_run: gold.manifest?.run_id,
-          observed_at: gold.manifest?.observed_at,
-          manifest_ref: gold.manifest_ref,
+          component: gold.component,
+          component_runs: gold.component_runs,
+          component_observed_at: gold.component_observed_at,
+          manifest_refs: gold.manifest_refs,
         })}
       </div>
     </div>
@@ -452,6 +485,10 @@ function formatDate(value) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function formatStatus(value) {
+  return String(value || "unknown").replaceAll("_", " ");
 }
 
 function escapeHtml(value) {

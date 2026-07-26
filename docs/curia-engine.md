@@ -160,15 +160,21 @@ Gold stores product truth.
 
 ## Operator Workbench
 
-The local `/operator/` page is the first practical Curia workbench. It is intentionally small:
-versioned DataFusion SQL from `queries/curia/`, a result table, row click-through, manifest context,
-and preview buttons for allowed evidence refs. Python does not define these views. Python loads the
-catalog, registers gold Parquet refs, executes SQL, and returns results.
+The local `/operator/` page is the first practical Curia workbench. It composes
+the latest GPU and sandbox/VM gold manifests into one read-only catalog:
+versioned DataFusion SQL from `queries/curia/`, a result table, row
+click-through, component-manifest context, and preview buttons for allowed
+evidence refs. Python does not define these views. Python loads the catalog,
+registers gold Parquet refs, executes SQL, and returns results.
 
 It also includes a read-only scratch SQL console. Scratch SQL uses the same DataFusion runner as
-cataloged SQL, but it is intentionally constrained: one `SELECT` or `WITH` statement, latest gold
-`fact_*` and `dim_*` tables only, no writes, no external file reads, and a bounded limit. Scratch is
-for exploration. Cataloged SQL is for methodology and product truth.
+cataloged SQL, but it is intentionally constrained: one `SELECT` or `WITH`
+statement, only tables declared by the composed latest gold manifests, no
+writes, no external file reads, and a bounded limit. Gold table names are not
+restricted to `fact_*` and `dim_*`; measured workloads and future reviewed text
+objects can also be gold. Scratch is for exploration. Cataloged SQL is for
+stable inspection views and methodology; materialized gold remains product
+truth.
 
 Each cataloged query has:
 
@@ -181,8 +187,20 @@ Each cataloged query has:
 
 It should grow in this order:
 
-1. versioned SQL views for benchmark values, constituents, listings, provider comparison, and table counts
+1. versioned SQL views for benchmark values, constituents, listings, capacity, VM/sandbox prices, workloads, provider comparison, and table counts
 2. row drill-down from Gold to Silver and Bronze evidence
 3. run-to-run comparison
 4. controlled promotion actions for labels, notes, and qualitative market objects
 5. custom SQL only after the cataloged views are stable
+
+Two cross-product views make the current catalog legible without creating a
+false composite index:
+
+- `compute_price_cross_section:v0` returns current GPU benchmark, exact-shape
+  VM, and managed-sandbox prices while preserving their different units,
+  shapes, bases, and source dates.
+- `sandbox_workload_costs:v0` returns measured StarSling runtime and estimated
+  processor-and-memory cost by service from the maintained workload gold table.
+
+The first view is for comparison and source inspection. It does not put unlike
+prices onto one axis or declare them economically interchangeable.

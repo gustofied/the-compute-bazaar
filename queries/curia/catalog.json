@@ -57,6 +57,28 @@
       "default_limit": 200
     },
     {
+      "query_id": "compute_price_cross_section",
+      "version": "v0",
+      "title": "Compute Price Cross-Section",
+      "description": "Current GPU benchmarks, exact-shape VM offers, and managed sandbox rates with their units kept explicit.",
+      "tables": [
+        "fact_benchmark_values",
+        "vm_capacity_expanded_current",
+        "sandbox_current_rates"
+      ],
+      "sql_path": "compute_price_cross_section_v0.sql",
+      "default_limit": 100
+    },
+    {
+      "query_id": "sandbox_workload_costs",
+      "version": "v0",
+      "title": "Sandbox Workload Costs",
+      "description": "Measured StarSling runtime and estimated processor-and-memory cost by sandbox service.",
+      "tables": ["sandbox_workload_service_summary"],
+      "sql_path": "sandbox_workload_costs_v0.sql",
+      "default_limit": 50
+    },
+    {
       "query_id": "gold_table_counts",
       "version": "v0",
       "title": "Gold Table Counts",

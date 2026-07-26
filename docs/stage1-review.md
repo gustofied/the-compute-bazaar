@@ -1,203 +1,177 @@
 # Stage 1 Review
 
-The Compute Bazaar is now a Stage 1 GPU market-data platform: provider ingestion, event stream,
-S3 bronze/silver/gold lake, Curia-authored market products, DataFusion methodology queries, and
-dashboard snapshots.
-
-Before this stage, the repo was a research workbench with useful scripts and good architecture
-ideas. Now it has a connected platform loop:
+The Compute Bazaar is now an operating Stage 1 compute market-data platform.
+Its current boundary is observation, evidence, normalization, queryable market
+products, and public explanation:
 
 ```text
-Provider APIs
-  -> Windmill scheduled workers
-  -> AutoMQ / Kafka event stream
-  -> S3 bronze raw evidence
-  -> S3 silver normalized offers
-  -> Curia engine
-  -> DataFusion SQL methodology queries
-  -> S3 gold market objects
-  -> dashboard / CLI / future API / agents
+GPU and VM source APIs
+  + reviewed sandbox prices
+  + public measured workload results
+  -> Windmill hourly observation cycle
+  -> AutoMQ event tape
+  -> S3 bronze evidence
+  -> S3 silver observations
+  -> Curia + DataFusion
+  -> S3 gold products
+  -> operator / CLI / public article
 ```
 
-## What We Proved
+It is not yet a procurement, RFQ, reservation, or settlement system. Those
+future layers should consume the market memory built here rather than be mixed
+into this stage.
 
-Vast and Lium both ingest into the same market schema. The VPC-connected Windmill worker can pull
-provider data, write raw evidence, normalize offers, publish AutoMQ events, build S3-backed market
-tables, and feed the dashboard snapshot path.
+## What Is Operating
 
-The latest Stage 1 review boundary was:
+The hourly Windmill run isolates source failures, retains immutable source and
+generation manifests, publishes normalized events to AutoMQ, builds GPU and
+sandbox/VM gold, exports public-safe JSON, and writes one top-level market-run
+manifest.
+
+The retained cadence audit from 25 July 00:00 UTC through 26 July 10:00 UTC
+found all 35 expected hourly slots. Manual reruns remain additional immutable
+observations. The 10:00 UTC run completed 17 of 18 configured GPU source paths;
+Oracle's public GPU catalog returned repeated 502 responses, while gold and
+publication still completed from the successful sources. The next scheduled
+run at 11:00 UTC recovered and completed all 18 sources.
+
+The current product generation contained:
 
 ```text
-Vast run:  vast-20260617T230000-ffcb1688
-Lium run:  windmill-lium-stage1-final-20260618
-Gold run:  gold-stage1-review-20260618
+1,912 normalized gold GPU listings
+224 GPU price-index rows
+4 frontier benchmark values
+868 current compute-market-state rows
+7 exact-shape public VM offers
+11 reviewed managed-sandbox rates
+69 complete latest StarSling jobs
+33 composed gold tables in the operator
 ```
 
-That gold run produced:
+Counts vary by observation. The manifest, not this review document, is the
+live authority.
+
+## Data Model
+
+Bronze is the evidence record:
+
+- raw provider and catalog responses;
+- retrieval timestamps, source URLs, and checksums;
+- reviewed sandbox price evidence;
+- commit-pinned public benchmark captures.
+
+Silver is source-honest normalized observation data:
+
+- GPU offers and compute-market-state observations;
+- exact-shape VM offer and discovery history;
+- managed-sandbox prices and timing semantics;
+- StarSling runs, batches, replicates, and phases.
+
+Curia is the controlled authoring layer. DataFusion executes named SQL over
+registered Parquet tables; Python handles deterministic ingestion, manifests,
+and publication control. Curia records which input refs, query, methodology,
+and quality rules produced a gold object.
+
+Gold is the product memory:
+
+- GPU listings, dimensions, indexes, benchmarks, and constituents;
+- current and historical market-state observations;
+- fixed-cohort VM rates and current offers;
+- sandbox rate histories and current cross-sections;
+- measured workload summaries, run history, and estimated resource cost;
+- source-honest relative series used by the article.
+
+Gold is not limited to numeric `fact_*` and `dim_*` tables. A future reviewed
+request, RFQ, article, or qualitative market object can be gold when it has a
+controlled schema, provenance, and promotion rule.
+
+## Product Surfaces
+
+### Operator
+
+`/operator/` is the full internal inspection surface. It composes the latest
+GPU and sandbox/VM gold manifests, registers all declared tables in one
+read-only DataFusion session, and exposes:
+
+- named, versioned Curia SQL;
+- bounded scratch SQL;
+- current run health and source failures;
+- row-level bronze, silver, query, and gold trajectory;
+- safe previews for refs in the current manifest chain.
+
+The operator can inspect a current price cross-section without pretending that
+GPU dollars per GPU-hour, VM dollars per VM-hour, and sandbox dollars per
+sandbox-hour are one metric. It can also inspect measured StarSling runtime and
+estimated processor-and-memory cost directly from gold.
+
+### Dashboard And Article
+
+The local dashboard is a publication and run-health reader. The AdamSioud
+article is the narrative surface. Both read sanitized JSON derived from gold;
+neither calculates benchmark values in JavaScript or reads private lake paths.
+
+The article intentionally shows fewer things than the operator. It currently
+uses:
+
+- H100/H200/B200/B300 observed benchmark history;
+- market capacity and availability measures with source-specific denominators;
+- exact-shape VM and managed-sandbox rate context;
+- same-workload StarSling runtime and estimated resource cost;
+- exploratory base-100 GPU/VM/sandbox movement with unlike raw units kept off
+  one axis.
+
+Local article previews now prefer the same CloudFront feed as production and
+fall back to checked-in JSON only when the remote publication is unavailable.
+
+## What The System Proves
+
+The platform can answer:
 
 ```text
-181 market listings
-50 GPU products
-2 providers
-41 regions
-28 price-index rows
-126 index constituents
+What did each source publish at this observation time?
+How was the source normalized?
+What current gold objects did the market run create?
+What is the observed provider-floor benchmark for a frontier GPU?
+Which constituents and exclusions support that value?
+What does a fixed 4 vCPU / 8 GiB public VM cost across the maintained cohort?
+What did the same public workload cost and how long did it run?
+Which raw or reviewed evidence supports a displayed row?
 ```
 
-The important shift is that Compute Bazaar does not just show prices. It produces an explainable
-compute price index from raw provider evidence.
+That is more than an hourly dashboard. It is a retained, queryable compute
+market memory with a public story on top.
 
-## Layer Model
+## Honest Limitations
 
-```text
-bronze:
-  raw provider evidence for audit and replay
+- GPU benchmark values are observed advertised provider-floor medians, not
+  executed prices or settlement-grade marks.
+- Published rate cards provide price context but do not prove immediate
+  capacity.
+- Some source GPU labels remain normalization debt. They are retained as
+  warnings rather than guessed into frontier products.
+- B200 and B300 still have thinner live offer coverage than H100 and H200.
+- Managed-sandbox prices are reviewed rate-card observations. Rebuilding gold
+  hourly does not mean every marketing page changed or was re-reviewed hourly.
+- StarSling owns workload execution. Compute Bazaar polls compatible public
+  results and launches no paid benchmark jobs.
+- Availability, active-capacity share, and rental occupancy have different
+  denominators. The system retains those distinctions and does not publish one
+  synthetic utilization number.
+- The current Windmill worker is pragmatic infrastructure. A registry-built
+  image, tighter IAM, and production sandboxing remain deployment work.
 
-silver:
-  normalized offers, including edge cases and provider-specific messiness
+## Current Next Work
 
-gold/fact_gpu_listings:
-  Curia-authored query-ready listing observations
+The immediate work remains inside Stage 1:
 
-gold/fact_price_index_values:
-  published Curia-authored price outputs
+1. keep observing hourly cadence and distinguish source failures from quality
+   warnings;
+2. reduce meaningful normalization debt without merging unlike GPU products;
+3. keep operator queries, component lineage, and public payload contracts in
+   sync as gold evolves;
+4. continue responsive and accessibility QA for the internal operator and
+   public article;
+5. make releases reproducible and keep the maintenance journal current.
 
-gold/fact_price_index_constituents:
-  explainability and audit trail for each index value
-
-gold/dim_gpu_products, gold/dim_providers, gold/dim_regions:
-  dimensions for product surfaces and queries
-```
-
-Consumers should mostly read gold. Silver remains useful for debugging and rebuilding gold when
-methodology changes.
-
-DataFusion is not the gold layer. It is the SQL engine Curia uses to compute, test, and reproduce
-market methodology over Parquet/S3 inputs. Gold is the materialized product truth Curia writes after
-that controlled computation.
-
-## Findings
-
-1. Gold/dashboard refresh now has a single `market-hourly` command and Windmill script. It has run
-   from the VPC worker. The next risk is operational: observe the first scheduled cycles and confirm
-   that every heartbeat writes provider manifests, gold tables, dashboard JSON, and a market-run
-   manifest.
-
-2. Lium ingestion now has pagination and deduping. We should still validate real provider behavior
-   over multiple runs before treating it as complete-market coverage.
-
-3. Failed Kafka publishing can leave raw/silver S3 objects without a success manifest. That is
-   acceptable for dev evidence, but production needs failed-run manifests or reconciliation.
-
-4. The dev Windmill worker is intentionally pragmatic: a baked EC2 Docker image. Before production,
-   move toward a registry-built worker image, tighter IAM, and normal Windmill sandboxing.
-
-## Next Milestone
-
-Do not add another provider yet. The next milestone is to operate the platform heartbeat:
-
-```text
-market_hourly Windmill flow
-1. ingest Vast
-2. ingest Lium
-3. build gold
-4. export dashboard JSON
-5. run stage1-check
-6. write one market run manifest
-```
-
-The output is one top-level market run:
-
-```json
-{
-  "market_run_id": "market-20260618T120000",
-  "providers": ["vast", "lium"],
-  "provider_runs": ["vast-...", "lium-..."],
-  "gold_run_id": "gold-...",
-  "dashboard_export_id": "dashboard-...",
-  "listing_count": 181,
-  "gpu_product_count": 50,
-  "index_row_count": 28,
-  "status": "success"
-}
-```
-
-That manifest is the heartbeat: the thing a dashboard, API, CLI, or agent can inspect to know
-whether the market is fresh.
-
-## Index Direction
-
-The compute index is one of the first real gold products. For Stage 1, keep it simple and honest:
-
-```text
-Compute Bazaar Live Price Index
-Indicative advertised GPU-hour benchmark, refreshed hourly
-```
-
-The first index family can start as:
-
-```text
-index_family = gpu_live_price
-gpu_product = h100 | a100 | rtx4090 | ...
-region_group = global
-measure = floor | median | p25 | p75
-```
-
-Each published value should retain its constituents:
-
-```text
-index_value_id
-listing_id
-provider_id
-gpu_product_id
-price_per_gpu_hour
-included
-exclusion_reason
-source_run_id
-raw_uri
-normalization_version
-methodology_version
-```
-
-That lets every product output answer:
-
-```text
-What run created this?
-What raw evidence supports it?
-What silver rows fed it?
-What gold table exposed it?
-What query/index methodology produced it?
-```
-
-That is what makes this market infrastructure, not just a dashboard.
-
-## Roadmap
-
-1. Observe the `market_hourly` Windmill schedule over multiple hourly cycles
-2. Public-safe S3/CloudFront dashboard JSON
-3. Market-run history charts over recent heartbeats
-4. Richer index methodology: median, p25, p75, and exclusion policy versions
-5. Provider coverage and field completeness scoring
-6. MCP/API over Curia-authored gold tables and DataFusion-backed query tools
-7. Historical time series, not just latest snapshots
-
-The agent layer should come after stable gold tables. Agents should first answer grounded questions:
-
-```text
-What is the cheapest fresh H100?
-How has A100 pricing moved this week?
-Which provider is cheapest for secure A6000?
-Which raw run supports this index value?
-```
-
-## Honest Read
-
-Stage 1 is done enough to review.
-
-The next turn is not more architecture. It is operating freshness:
-
-```text
-working manually -> scheduled hourly -> public-safe surface -> query/API layer
-```
-
-Once the gold/dashboard refresh is automatic, the platform starts feeling alive.
+Only after this layer is consistently boring to operate should the project
+move outward into agent sourcing, RFQs, procurement, or market execution.

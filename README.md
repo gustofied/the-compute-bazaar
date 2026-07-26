@@ -1,11 +1,12 @@
 # The Compute Bazaar
 
-The Compute Bazaar is a Stage 1 GPU market-data platform. It ingests provider
-data, preserves raw evidence in S3, normalizes offers into a common schema, and
-uses the Curia engine to publish gold market objects for listings, benchmarks,
-price indexes, and provider comparisons. DataFusion is the SQL compute engine
-Curia uses over the lake; Gold is the product truth Curia writes for CLI
-commands, dashboard snapshots, and later API/MCP tools for agents.
+The Compute Bazaar is a Stage 1 compute market-data platform. It ingests GPU
+provider data and exact-shape VM catalogs, preserves raw evidence in S3,
+normalizes observations, and uses the Curia engine to publish gold market
+objects for listings, benchmarks, capacity, sandbox rates, and measured
+workloads. DataFusion is the SQL compute engine Curia uses over the lake; Gold
+is the product truth Curia writes for CLI commands, operator queries, public
+dashboard snapshots, and later API/MCP tools for agents.
 
 <p align="center">
   <a href="#architecture">Architecture</a>
@@ -65,15 +66,17 @@ Layer roles:
 ```text
 bronze/raw evidence        exact provider responses for audit and replay
 silver/gpu_offers          normalized provider offers in one schema
+silver/sandbox_cost/*      VM offers, reviewed rates, and measured workload evidence
 Curia                      controlled authoring layer for market truth
 gold/fact_gpu_listings     query-ready market listings
 gold/fact_price_index_*    index values and constituents
 gold/fact_benchmark_*      H100/H200/B200/B300 benchmark values and constituents
-gold/sandbox_*             sandbox rates, workload observations, and relative series
+gold/vm_* + sandbox_*      exact-shape rates, workload observations, and relative series
 gold/dim_*                 GPU, provider, and region dimensions
 AutoMQ                     live event tape
 DataFusion                 SQL compute engine Curia uses over lake tables
-dashboard                  first product surface
+operator                   read-only SQL and evidence inspection surface
+dashboard/article          public-safe human surfaces
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the platform model and
@@ -358,6 +361,8 @@ uv run gpu-prices gold-benchmarks --limit 10
 uv run gpu-prices gold-benchmark-constituents --benchmark-family-id H100 --limit 50
 uv run gpu-prices gold-provider-comparison --limit 20
 uv run gpu-prices operator-query compute_market_state --version v1 --limit 200
+uv run gpu-prices operator-query compute_price_cross_section --version v0 --limit 100
+uv run gpu-prices operator-query sandbox_workload_costs --version v0 --limit 50
 uv run gpu-prices export-gold-dashboard --limit 100
 ```
 
@@ -482,12 +487,14 @@ Useful endpoints:
 /api/operator/ref-preview
 ```
 
-The operator workbench at `/operator/` is an internal Curia inspection surface.
-It runs versioned DataFusion SQL from the query catalog in
+The operator workbench at `/operator/` is the internal Curia inspection
+surface. It composes the latest GPU and sandbox/VM gold manifests into one
+read-only catalog, then runs versioned DataFusion SQL from
 `queries/curia/catalog.json` and `queries/curia/*.sql`. Python loads the catalog,
 registers the latest gold Parquet refs, applies a bounded limit, and executes
 the SQL with DataFusion. This keeps benchmark values, constituents, frontier
-listings, provider comparisons, and table counts as inspectable query assets
+listings, capacity, exact-shape VM offers, managed-sandbox rates, measured
+workloads, provider comparisons, and table counts as inspectable query assets
 instead of hardcoded app views.
 Clicking a row shows its current data trajectory: bronze raw evidence, silver
 normalized refs, the Curia/DataFusion SQL query, and the gold table context.
@@ -495,9 +502,11 @@ Refs in the trajectory can be previewed when they are part of the latest
 manifest chain; Parquet refs stay query-only through DataFusion.
 
 The workbench also has a read-only scratch SQL console. Scratch SQL runs through
-the same DataFusion engine, but it can only query latest gold `fact_*` and
-`dim_*` tables from the current gold manifest. It accepts one `SELECT` or `WITH`
-statement, rejects writes/external file reads, and enforces a bounded limit.
+the same DataFusion engine and can only query table refs declared by the latest
+composed gold manifests. This includes intentionally named GPU, VM, sandbox,
+workload, and future qualitative gold objects; gold is not restricted to
+`fact_*` and `dim_*` names. Scratch accepts one `SELECT` or `WITH` statement,
+rejects writes and external file readers, and enforces a bounded limit.
 Useful scratch queries should be promoted into `queries/curia/*.sql` and
 registered in `queries/curia/catalog.json`.
 
@@ -507,6 +516,8 @@ The same cataloged SQL views are available from the CLI:
 uv run gpu-prices operator-queries
 uv run gpu-prices operator-query benchmark_values --limit 20
 uv run gpu-prices operator-query benchmark_values --version v0 --limit 20
+uv run gpu-prices operator-query compute_price_cross_section --version v0 --limit 100
+uv run gpu-prices operator-query sandbox_workload_costs --version v0 --limit 50
 uv run gpu-prices operator-sql --sql "select * from fact_benchmark_values order by benchmark_family_id" --limit 20
 uv run gpu-prices operator-ref-preview s3://YOUR_BUCKET/raw/provider=vast/.../bundles.json
 ```
@@ -518,7 +529,7 @@ The page auto-refreshes its JSON data every five minutes by default. Disable or 
 ?refreshMs=60000
 ```
 
-The same page can later point at public S3/CloudFront JSON directly with:
+The dashboard can also read public S3/CloudFront JSON directly with:
 
 ```text
 ?data=https://YOUR_PUBLIC_HOST/compute-bazaar

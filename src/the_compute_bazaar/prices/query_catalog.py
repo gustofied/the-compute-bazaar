@@ -11,7 +11,6 @@ from typing import Any
 
 from .datafusion import query_tables
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_QUERY_CATALOG_DIR = PROJECT_ROOT / "queries" / "curia"
 DEFAULT_QUERY_CATALOG_PATH = DEFAULT_QUERY_CATALOG_DIR / "catalog.json"
@@ -117,7 +116,7 @@ def get_catalog_query(query_id: str, *, version: str | None = None) -> CatalogQu
     if not matches:
         suffix = f" version {version}" if version else ""
         raise KeyError(f"Unknown Curia query: {query_id}{suffix}")
-    return sorted(matches, key=lambda query: query.version, reverse=True)[0]
+    return max(matches, key=lambda query: query.version)
 
 
 def list_catalog_queries(*, manifest: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -193,7 +192,7 @@ def scratch_table_refs(manifest: dict[str, Any]) -> dict[str, str]:
     return {
         table_name: str(ref)
         for table_name, ref in table_refs.items()
-        if ref and (table_name.startswith("fact_") or table_name.startswith("dim_"))
+        if ref
     }
 
 

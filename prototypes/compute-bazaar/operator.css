@@ -85,7 +85,7 @@ label,
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   padding-bottom: 22px;
 }
 
@@ -103,6 +103,22 @@ label,
   font-size: 13px;
   font-weight: 400;
   overflow-wrap: anywhere;
+}
+
+.summary small {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.summary div[data-tone="warning"] {
+  border-color: #b98741;
+}
+
+.summary div[data-tone="warning"] strong {
+  color: #805718;
 }
 
 .workspace {
@@ -227,6 +243,30 @@ textarea {
   font-size: 10px;
   line-height: 1.45;
   margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.scratch-tables {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.45;
+  margin-top: 10px;
+}
+
+.scratch-tables summary {
+  cursor: pointer;
+}
+
+.scratch-tables ul {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.scratch-tables code {
   overflow-wrap: anywhere;
 }
 
@@ -486,5 +526,22 @@ tbody tr.selected {
   .workspace,
   .lineage-grid {
     grid-template-columns: 1fr;
+  }
+
+  .query-list {
+    grid-auto-columns: minmax(240px, 82vw);
+    grid-auto-flow: column;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    padding-bottom: 8px;
+    scroll-snap-type: inline mandatory;
+  }
+
+  .query-card {
+    scroll-snap-align: start;
+  }
+
+  .scratch-panel textarea {
+    min-height: 140px;
   }
 }

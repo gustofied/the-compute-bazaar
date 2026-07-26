@@ -144,11 +144,15 @@ The materialized benchmark tables are the hourly published memory of that query.
 manifests are the reproducible methodology. This is why benchmark rows carry both
 `methodology_version` and `methodology_query_id`.
 
-The operator workbench uses the same idea for inspection views: named SQL files live under
-`queries/curia/`, with metadata in `queries/curia/catalog.json`. The API and CLI run those SQL files
-through DataFusion rather than embedding the view logic in Python. The same workbench also exposes
-read-only scratch SQL over latest gold `fact_*` and `dim_*` tables. Scratch queries are exploratory;
-useful ones should be promoted into the Curia catalog before they become methodology.
+The operator workbench uses the same idea for inspection views: named SQL files
+live under `queries/curia/`, with metadata in `queries/curia/catalog.json`. The
+API and CLI run those SQL files through DataFusion rather than embedding the
+view logic in Python. The workbench composes the latest GPU and sandbox/VM
+manifests, so one catalog can inspect all maintained gold products while
+keeping each component manifest and lineage chain explicit. Scratch SQL is
+read-only and can access only tables declared by those manifests. Useful
+queries should be promoted into the Curia catalog before they become stable
+inspection views or methodology.
 
 ## Sandbox Cost Product
 
@@ -304,7 +308,7 @@ Stage 1 is live:
 - AutoMQ also receives `gpu.market_state_observation.v1` events.
 - Curia can use DataFusion to query the latest silver/gold manifests and Parquet files.
 
-Stage 1.5 is now started:
+Stage 1.5 is operating:
 
 - `gpu-prices build-gold` builds the first gold tables from latest silver.
 - `gpu-prices gold-index` queries `gold.fact_price_index_values`.
@@ -315,6 +319,11 @@ Stage 1.5 is now started:
 - `gpu-prices gold-benchmark-constituents` exposes benchmark evidence rows.
 - `operator-query compute_market_state --version v1` queries current
   occupancy, availability pressure, and offer depth through DataFusion.
+- `operator-query compute_price_cross_section --version v0` inspects current
+  GPU benchmark, exact-shape VM, and managed-sandbox prices with their
+  different units and shapes preserved.
+- `operator-query sandbox_workload_costs --version v0` inspects measured
+  runtime and estimated processor-and-memory cost from workload gold.
 - `gpu-prices export-gold-dashboard` writes public-safe JSON snapshots for static D3 sections.
 - `gpu-prices market-hourly` runs the complete provider-to-dashboard heartbeat and writes
   `gold/_manifests/market_runs/latest.json`.
@@ -325,6 +334,12 @@ history updates with conditional S3 leases. Operational status now describes
 whether ingestion and publication worked; unknown GPU aliases are retained
 separately as normalization/data-quality debt. An hourly external freshness
 check watches the public snapshot and latest complete VM observation.
+
+The operator displays the latest market-run health separately from product
+availability. A partial upstream failure therefore remains visible even when
+Curia successfully writes a coherent gold generation from the other sources.
+The public article stays a smaller narrative projection; it is not the place
+to expose every table or private lake reference.
 
 The capacity-state path has two gold tables:
 

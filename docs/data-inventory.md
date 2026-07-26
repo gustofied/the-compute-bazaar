@@ -118,6 +118,14 @@ series into 1D, 7D, 1M, and All windows and draws them. It does not calculate
 the H100 benchmark, VM median, capacity shares, StarSling medians, or
 percentiles in the browser.
 
+The internal `/operator/` surface is the full read-only view. It composes the
+latest GPU and sandbox/VM gold manifests, registers their Parquet tables in
+DataFusion, and exposes named catalog queries plus bounded scratch SQL. The
+catalog is the correct place to compare prices while retaining explicit units,
+inspect measured workload costs, and trace rows back through component
+manifests. The public article continues to read only sanitized publication
+JSON.
+
 ## Refresh And Verification
 
 The hourly market heartbeat is:

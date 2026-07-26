@@ -2859,7 +2859,10 @@ class GoldQueryTests(unittest.TestCase):
             "queries/curia/benchmark_values_v0.sql",
         )
         self.assertEqual(len(catalog_rows["benchmark_values"]["query_hash"]), 64)
-        self.assertTrue(all(query["available"] for query in catalog["queries"]))
+        self.assertTrue(catalog_rows["benchmark_values"]["available"])
+        self.assertTrue(catalog_rows["compute_market_state"]["available"])
+        self.assertFalse(catalog_rows["compute_price_cross_section"]["available"])
+        self.assertFalse(catalog_rows["sandbox_workload_costs"]["available"])
         self.assertEqual(
             values["query"]["sql_path"], "queries/curia/benchmark_values_v0.sql"
         )
@@ -2890,6 +2893,180 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual(preview["json_summary"]["item_count"], 1)
         self.assertEqual(sql_preview["kind"], "sql")
         self.assertIn("fact_benchmark_constituents", sql_preview["text"])
+
+    def test_operator_composes_gpu_vm_and_sandbox_gold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="vast",
+                run_id="vast-operator-combined",
+                offers=[
+                    _offer(
+                        provider="vast",
+                        source_offer_id="h100-operator-combined",
+                        price_usd_hr=2.00,
+                        gpu_raw_name="NVIDIA H100",
+                        gpu_model="H100_80GB",
+                        vram_gb=80,
+                    )
+                ],
+            )
+            build_gold_market_tables(
+                lake_root=lake_root,
+                providers=["vast"],
+                run_id="gold-operator-combined",
+            )
+            gpu_manifest_ref = read_latest_gold_manifest(lake_root)["manifest_ref"]
+
+            sandbox_root = f"{lake_root}/sandbox_cost"
+            vm_ref = f"{sandbox_root}/gold/vm-capacity-expanded-current.parquet"
+            rates_ref = f"{sandbox_root}/gold/sandbox-current-rates.parquet"
+            workload_ref = (
+                f"{sandbox_root}/gold/sandbox-workload-service-summary.parquet"
+            )
+            write_parquet_rows(
+                vm_ref,
+                [
+                    {
+                        "plan_label": "Example VM",
+                        "provider_label": "Example Cloud",
+                        "price_usd_per_hour": 0.08,
+                        "billing_mode": "public hourly offer",
+                        "checked_at": "2026-07-26T10:00:00+00:00",
+                        "source_url": "https://example.test/vm",
+                        "methodology_version": "vm_v1",
+                    }
+                ],
+            )
+            write_parquet_rows(
+                rates_ref,
+                [
+                    {
+                        "series_label": "Example Sandbox",
+                        "price_usd_per_hour": 0.40,
+                        "billing_basis_label": "allocated CPU and memory",
+                        "observed_date": "2026-07-24",
+                        "source_url": "https://example.test/sandbox",
+                    }
+                ],
+            )
+            write_parquet_rows(
+                workload_ref,
+                [
+                    {
+                        "series_label": "Example Sandbox",
+                        "median_estimated_cost_usd": 0.02,
+                        "p25_estimated_cost_usd": 0.018,
+                        "p75_estimated_cost_usd": 0.022,
+                        "median_runtime_seconds": 180.0,
+                        "p25_runtime_seconds": 170.0,
+                        "p75_runtime_seconds": 190.0,
+                        "result_count": 12,
+                        "source_replicate_slot_count": 12,
+                        "incomplete_replicate_count": 0,
+                        "replicate_completion_ratio": 1.0,
+                        "benchmark_run_id": "example-run",
+                        "methodology_id": "example-methodology",
+                        "latest_generated_at": "2026-07-23T16:40:10Z",
+                    }
+                ],
+            )
+            sandbox_manifest_ref = (
+                f"{sandbox_root}/_manifests/sandbox_cost/latest.json"
+            )
+            write_json(
+                sandbox_manifest_ref,
+                {
+                    "manifest_version": "sandbox_cost_gold_v5",
+                    "manifest_ref": sandbox_manifest_ref,
+                    "build_id": "sandbox-cost-operator",
+                    "built_at": "2026-07-26T10:00:00+00:00",
+                    "bronze_refs": {
+                        "source_manifest": f"{sandbox_root}/bronze/source-manifest.json"
+                    },
+                    "silver_refs": {
+                        "rates": f"{sandbox_root}/silver/rates.parquet"
+                    },
+                    "table_refs": {
+                        "vm_capacity_expanded_current": vm_ref,
+                        "sandbox_current_rates": rates_ref,
+                        "sandbox_workload_service_summary": workload_ref,
+                    },
+                    "row_counts": {
+                        "vm_capacity_expanded_current": 1,
+                        "sandbox_current_rates": 1,
+                        "sandbox_workload_service_summary": 1,
+                    },
+                },
+            )
+
+            catalog = list_operator_queries(lake_root=lake_root)
+            cross_section = run_operator_query(
+                lake_root=lake_root,
+                query_id="compute_price_cross_section",
+                limit=20,
+            )
+            workload = run_operator_query(
+                lake_root=lake_root,
+                query_id="sandbox_workload_costs",
+                limit=20,
+            )
+            scratch = run_operator_sql(
+                lake_root=lake_root,
+                sql="select series_label from sandbox_current_rates",
+                limit=10,
+            )
+            lineage = trace_operator_row(
+                lake_root=lake_root,
+                query_id="sandbox_workload_costs",
+                row=workload["rows"][0],
+            )
+            cross_section_lineage = trace_operator_row(
+                lake_root=lake_root,
+                query_id="compute_price_cross_section",
+                row=cross_section["rows"][0],
+            )
+
+        catalog_rows = {query["query_id"]: query for query in catalog["queries"]}
+        self.assertTrue(catalog_rows["compute_price_cross_section"]["available"])
+        self.assertTrue(catalog_rows["sandbox_workload_costs"]["available"])
+        self.assertEqual(catalog["manifest"]["gpu_table_count"], 10)
+        self.assertEqual(catalog["manifest"]["sandbox_table_count"], 3)
+        self.assertEqual(
+            {row["market_layer"] for row in cross_section["rows"]},
+            {"gpu_benchmark", "vm_offer", "managed_sandbox"},
+        )
+        self.assertEqual(workload["rows"][0]["median_runtime_seconds"], 180.0)
+        self.assertEqual(scratch["rows"], [{"series_label": "Example Sandbox"}])
+        self.assertEqual(lineage["provider_runs"], [])
+        self.assertEqual(lineage["gold"]["component"], "sandbox")
+        self.assertEqual(
+            lineage["gold"]["component_runs"],
+            {"sandbox": "sandbox-cost-operator"},
+        )
+        self.assertEqual(
+            lineage["gold"]["manifest_refs"],
+            [sandbox_manifest_ref],
+        )
+        self.assertEqual(cross_section_lineage["gold"]["component"], "combined")
+        self.assertEqual(
+            cross_section_lineage["gold"]["component_runs"],
+            {
+                "gpu": "gold-operator-combined",
+                "sandbox": "sandbox-cost-operator",
+            },
+        )
+        self.assertEqual(
+            cross_section_lineage["gold"]["manifest_refs"],
+            [gpu_manifest_ref, sandbox_manifest_ref],
+        )
+        self.assertIn(
+            f"{sandbox_root}/bronze/source-manifest.json",
+            lineage["trajectory"][0]["refs"],
+        )
 
     def test_market_run_keeps_partial_snapshot_when_one_provider_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

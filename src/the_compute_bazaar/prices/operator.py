@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
+from the_compute_bazaar.sandbox_cost.pipeline import read_latest_sandbox_manifest
+
 from .gold import read_latest_gold_manifest
+from .market_run import read_latest_market_run
 from .query_catalog import (
     DEFAULT_QUERY_CATALOG_PATH,
     PROJECT_ROOT,
@@ -17,7 +21,6 @@ from .query_catalog import (
     scratch_query_entry,
 )
 from .storage import read_bytes, read_json
-
 
 MAX_REF_PREVIEW_BYTES = 128 * 1024
 
@@ -32,7 +35,7 @@ def list_operator_queries(*, lake_root: str | None = None) -> dict[str, Any]:
 
 
 def read_operator_manifest(*, lake_root: str) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
+    manifest = _read_operator_manifest(lake_root)
     return {
         "manifest": _operator_manifest_summary(manifest),
         "table_refs": dict(manifest.get("table_refs") or {}),
@@ -44,6 +47,7 @@ def read_operator_manifest(*, lake_root: str) -> dict[str, Any]:
         "source_market_state_refs": dict(
             manifest.get("source_market_state_refs") or {}
         ),
+        "component_manifests": _component_manifest_summaries(manifest),
     }
 
 
@@ -54,7 +58,7 @@ def run_operator_query(
     version: str | None = None,
     limit: int | None = None,
 ) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
+    manifest = _read_operator_manifest(lake_root)
     result = run_catalog_query(
         manifest=manifest,
         query_id=query_id,
@@ -73,7 +77,7 @@ def run_operator_sql(
     sql: str,
     limit: int | None = None,
 ) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
+    manifest = _read_operator_manifest(lake_root)
     result = run_scratch_query(
         manifest=manifest,
         sql=sql,
@@ -92,8 +96,9 @@ def trace_operator_row(
     row: dict[str, Any],
     version: str | None = None,
 ) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
+    manifest = _read_operator_manifest(lake_root)
     query = get_catalog_query(query_id, version=version)
+    component_name, component_manifest = _query_component(manifest, query.tables)
     provider_runs = _provider_runs(manifest)
     selected_provider = str(row.get("provider") or row.get("provider_id") or "").strip()
     matching_provider_runs = [
@@ -101,42 +106,108 @@ def trace_operator_row(
         for provider_run in provider_runs
         if selected_provider and provider_run.get("provider") == selected_provider
     ]
-    raw_refs = _dedupe(
-        [
-            str(row.get("raw_ref")) if row.get("raw_ref") else "",
-            *[
-                str(provider_run.get("raw_ref"))
-                for provider_run in (matching_provider_runs or provider_runs)
-                if provider_run.get("raw_ref")
-            ],
-        ]
-    )
-    silver_refs = _dedupe(
-        [
-            *_split_refs(row.get("source_normalized_ref")),
-            *_split_refs(row.get("source_market_state_ref")),
-            *[
-                str(provider_run.get("normalized_ref"))
-                for provider_run in (matching_provider_runs or provider_runs)
-                if provider_run.get("normalized_ref")
-            ],
-        ]
-    )
-    source_manifest_refs = _dedupe(
-        [
-            *_split_refs(row.get("source_manifest_ref")),
-            *[
-                str(provider_run.get("manifest_ref"))
-                for provider_run in (matching_provider_runs or provider_runs)
-                if provider_run.get("manifest_ref")
-            ],
-        ]
-    )
+    if component_name in {"sandbox", "combined"}:
+        combined_provider_runs = (
+            matching_provider_runs or provider_runs
+            if component_name == "combined"
+            else []
+        )
+        raw_refs = _dedupe(
+            [
+                *_ref_values(component_manifest.get("bronze_refs")),
+                *_split_refs(row.get("raw_ref")),
+                *_split_refs(row.get("raw_refs_json")),
+                *[
+                    str(provider_run.get("raw_ref"))
+                    for provider_run in combined_provider_runs
+                    if provider_run.get("raw_ref")
+                ],
+            ]
+        )
+        silver_refs = _dedupe(
+            [
+                *_ref_values(component_manifest.get("silver_refs")),
+                *_split_refs(row.get("source_normalized_ref")),
+                *[
+                    str(provider_run.get("normalized_ref"))
+                    for provider_run in combined_provider_runs
+                    if provider_run.get("normalized_ref")
+                ],
+            ]
+        )
+        source_manifest_refs = _dedupe(
+            [
+                str(component_manifest.get("manifest_ref") or ""),
+                *_source_manifest_refs(component_manifest),
+            ]
+        )
+        lineage_provider_runs = combined_provider_runs
+        if component_name == "combined":
+            bronze_note = (
+                "GPU provider payloads plus reviewed VM, sandbox, and benchmark "
+                "evidence retained for audit and replay."
+            )
+            silver_note = (
+                "Comparable GPU offers and explicitly shaped CPU/sandbox "
+                "observations, with their unlike units kept separate."
+            )
+        else:
+            bronze_note = (
+                "Reviewed rate cards, exact-shape VM captures, and public benchmark "
+                "evidence retained for audit and replay."
+            )
+            silver_note = (
+                "Normalized rates, machine shapes, workload runs, and source timing "
+                "with incompatible observations kept separate."
+            )
+    else:
+        raw_refs = _dedupe(
+            [
+                str(row.get("raw_ref")) if row.get("raw_ref") else "",
+                *[
+                    str(provider_run.get("raw_ref"))
+                    for provider_run in (matching_provider_runs or provider_runs)
+                    if provider_run.get("raw_ref")
+                ],
+            ]
+        )
+        silver_refs = _dedupe(
+            [
+                *_split_refs(row.get("source_normalized_ref")),
+                *_split_refs(row.get("source_market_state_ref")),
+                *[
+                    str(provider_run.get("normalized_ref"))
+                    for provider_run in (matching_provider_runs or provider_runs)
+                    if provider_run.get("normalized_ref")
+                ],
+            ]
+        )
+        source_manifest_refs = _dedupe(
+            [
+                *_split_refs(row.get("source_manifest_ref")),
+                *[
+                    str(provider_run.get("manifest_ref"))
+                    for provider_run in (matching_provider_runs or provider_runs)
+                    if provider_run.get("manifest_ref")
+                ],
+            ]
+        )
+        lineage_provider_runs = matching_provider_runs or provider_runs
+        bronze_note = "Provider-shaped payloads retained for audit and replay."
+        silver_note = "Common GPU offer schema created from provider evidence."
     gold_table_refs = {
         table_name: ref
         for table_name, ref in dict(manifest.get("table_refs") or {}).items()
         if table_name in query.tables
     }
+    component_manifest_refs = _query_component_manifest_refs(
+        manifest,
+        component_name=component_name,
+    )
+    component_runs = _query_component_runs(
+        manifest,
+        component_name=component_name,
+    )
 
     return {
         "query": query.catalog_entry(manifest),
@@ -147,8 +218,12 @@ def trace_operator_row(
             "benchmark_value_id": row.get("benchmark_value_id"),
             "benchmark_symbol": row.get("benchmark_symbol"),
             "index_symbol": row.get("index_symbol"),
+            "series_id": row.get("series_id"),
+            "series_label": row.get("series_label"),
+            "benchmark_run_id": row.get("benchmark_run_id"),
             "source_offer_id": row.get("source_offer_id"),
             "source_run_id": row.get("source_run_id"),
+            "source_url": row.get("source_url"),
             "raw_ref": row.get("raw_ref"),
             "source_manifest_ref": row.get("source_manifest_ref"),
             "source_normalized_ref": row.get("source_normalized_ref"),
@@ -159,13 +234,13 @@ def trace_operator_row(
                 "layer": "bronze",
                 "title": "Raw provider evidence",
                 "refs": raw_refs,
-                "note": "Provider-shaped payloads retained for audit and replay.",
+                "note": bronze_note,
             },
             {
                 "layer": "silver",
                 "title": "Normalized provider observations",
                 "refs": silver_refs,
-                "note": "Common GPU offer schema created from provider evidence.",
+                "note": silver_note,
             },
             {
                 "layer": "curia",
@@ -182,14 +257,27 @@ def trace_operator_row(
         ],
         "gold": {
             "manifest": _operator_manifest_summary(manifest),
-            "manifest_ref": manifest.get("manifest_ref"),
+            "component": component_name,
+            "component_runs": {
+                name: details["run_id"] for name, details in component_runs.items()
+            },
+            "component_observed_at": {
+                name: details["observed_at"]
+                for name, details in component_runs.items()
+            },
+            "manifest_ref": (
+                component_manifest_refs[0]
+                if len(component_manifest_refs) == 1
+                else None
+            ),
+            "manifest_refs": component_manifest_refs,
             "table_refs": gold_table_refs,
             "row_counts": {
                 table_name: dict(manifest.get("row_counts") or {}).get(table_name)
                 for table_name in query.tables
             },
         },
-        "provider_runs": matching_provider_runs or provider_runs,
+        "provider_runs": lineage_provider_runs,
         "source_manifest_refs": source_manifest_refs,
     }
 
@@ -201,7 +289,7 @@ def preview_operator_ref(
     max_bytes: int = MAX_REF_PREVIEW_BYTES,
 ) -> dict[str, Any]:
     """Preview an allowed ref from the latest operator manifest chain."""
-    manifest = read_latest_gold_manifest(lake_root)
+    manifest = _read_operator_manifest(lake_root)
     allowed_refs = _allowed_refs(manifest)
     normalized_ref = str(ref or "").strip()
     if not normalized_ref:
@@ -233,7 +321,7 @@ def preview_operator_ref(
     if normalized_ref.endswith(".json"):
         try:
             json_value = _read_allowed_ref_json(normalized_ref)
-        except Exception:
+        except Exception:  # noqa: BLE001 - an unreadable JSON preview should fall back to text.
             json_value = None
         if json_value is not None:
             payload["json_summary"] = _json_summary(json_value)
@@ -243,13 +331,13 @@ def preview_operator_ref(
 
 
 def _read_allowed_ref_bytes(ref: str) -> bytes:
-    if ref.startswith("s3://") or ref.startswith("/"):
+    if ref.startswith(("s3://", "/")):
         return read_bytes(ref)
     return _safe_project_ref(ref).read_bytes()
 
 
 def _read_allowed_ref_json(ref: str) -> Any:
-    if ref.startswith("s3://") or ref.startswith("/"):
+    if ref.startswith(("s3://", "/")):
         return read_json(ref)
     return read_json(str(_safe_project_ref(ref)))
 
@@ -265,23 +353,153 @@ def _optional_latest_manifest(lake_root: str | None) -> dict[str, Any] | None:
     if not lake_root:
         return None
     try:
-        return read_latest_gold_manifest(lake_root)
-    except Exception:
+        return _read_operator_manifest(lake_root)
+    except Exception:  # noqa: BLE001 - catalog discovery remains usable before gold exists.
         return None
 
 
 def _operator_manifest_summary(manifest: dict[str, Any] | None) -> dict[str, Any] | None:
     if manifest is None:
         return None
+    market_run = dict(manifest.get("market_run") or {})
+    successful_providers = list(market_run.get("successful_providers") or [])
+    failed_providers = list(market_run.get("failed_providers") or [])
+    provider_scope = list(
+        market_run.get("providers") or manifest.get("provider_scope") or []
+    )
+    component_manifests = dict(manifest.get("component_manifests") or {})
     return {
         "run_id": manifest.get("run_id"),
         "observed_at": manifest.get("observed_at"),
         "observed_date": manifest.get("observed_date"),
-        "provider_scope": manifest.get("provider_scope"),
+        "provider_scope": provider_scope,
         "source_run_ids": manifest.get("source_run_ids"),
         "row_counts": manifest.get("row_counts"),
         "methodology_version": manifest.get("methodology_version"),
+        "market_run_id": market_run.get("market_run_id"),
+        "status": market_run.get("status") or "gold_ready",
+        "data_quality_status": market_run.get("data_quality_status"),
+        "successful_provider_count": len(successful_providers),
+        "failed_providers": failed_providers,
+        "provider_count": len(provider_scope),
+        "table_count": len(dict(manifest.get("table_refs") or {})),
+        "gpu_table_count": len(
+            dict(dict(component_manifests.get("gpu") or {}).get("table_refs") or {})
+        ),
+        "sandbox_table_count": len(
+            dict(
+                dict(component_manifests.get("sandbox") or {}).get("table_refs")
+                or {}
+            )
+        ),
+        "sandbox_build_id": dict(component_manifests.get("sandbox") or {}).get(
+            "build_id"
+        ),
     }
+
+
+def _read_operator_manifest(lake_root: str) -> dict[str, Any]:
+    gpu_manifest = dict(read_latest_gold_manifest(lake_root))
+    sandbox_manifest = _optional_sandbox_manifest(lake_root)
+    market_run = _optional_market_run(lake_root)
+    table_refs = dict(gpu_manifest.get("table_refs") or {})
+    row_counts = dict(gpu_manifest.get("row_counts") or {})
+    if sandbox_manifest:
+        table_refs.update(dict(sandbox_manifest.get("table_refs") or {}))
+        row_counts.update(dict(sandbox_manifest.get("row_counts") or {}))
+
+    return {
+        **gpu_manifest,
+        "table_refs": table_refs,
+        "row_counts": row_counts,
+        "market_run": market_run,
+        "component_manifests": {
+            "gpu": gpu_manifest,
+            **({"sandbox": sandbox_manifest} if sandbox_manifest else {}),
+        },
+    }
+
+
+def _optional_sandbox_manifest(lake_root: str) -> dict[str, Any]:
+    output_root = "/".join([lake_root.rstrip("/"), "sandbox_cost"])
+    try:
+        return dict(read_latest_sandbox_manifest(output_root))
+    except Exception:  # noqa: BLE001 - sandbox gold is an optional operator component.
+        return {}
+
+
+def _optional_market_run(lake_root: str) -> dict[str, Any]:
+    try:
+        return dict(read_latest_market_run(lake_root))
+    except Exception:  # noqa: BLE001 - older local gold builds have no market-run manifest.
+        return {}
+
+
+def _component_manifest_summaries(manifest: dict[str, Any]) -> dict[str, Any]:
+    summaries: dict[str, Any] = {}
+    for name, component in dict(manifest.get("component_manifests") or {}).items():
+        component_manifest = dict(component or {})
+        summaries[name] = {
+            "run_id": component_manifest.get("run_id")
+            or component_manifest.get("build_id"),
+            "manifest_version": component_manifest.get("manifest_version"),
+            "manifest_ref": component_manifest.get("manifest_ref"),
+            "observed_at": component_manifest.get("observed_at")
+            or component_manifest.get("built_at"),
+            "table_count": len(dict(component_manifest.get("table_refs") or {})),
+            "row_counts": dict(component_manifest.get("row_counts") or {}),
+        }
+    return summaries
+
+
+def _query_component(
+    manifest: dict[str, Any],
+    query_tables: tuple[str, ...],
+) -> tuple[str, dict[str, Any]]:
+    components = dict(manifest.get("component_manifests") or {})
+    sandbox = dict(components.get("sandbox") or {})
+    sandbox_tables = set(dict(sandbox.get("table_refs") or {}))
+    if query_tables and set(query_tables).issubset(sandbox_tables):
+        return "sandbox", sandbox
+    if set(query_tables) & sandbox_tables:
+        return "combined", sandbox
+    return "gpu", dict(components.get("gpu") or manifest)
+
+
+def _query_component_manifest_refs(
+    manifest: dict[str, Any],
+    *,
+    component_name: str,
+) -> list[str]:
+    return _dedupe(
+        [
+            str(details["manifest_ref"] or "")
+            for details in _query_component_runs(
+                manifest,
+                component_name=component_name,
+            ).values()
+        ]
+    )
+
+
+def _query_component_runs(
+    manifest: dict[str, Any],
+    *,
+    component_name: str,
+) -> dict[str, dict[str, Any]]:
+    components = dict(manifest.get("component_manifests") or {})
+    names = ["gpu", "sandbox"] if component_name == "combined" else [component_name]
+    result: dict[str, dict[str, Any]] = {}
+    for name in names:
+        component = dict(components.get(name) or {})
+        if not component:
+            continue
+        result[name] = {
+            "run_id": component.get("run_id") or component.get("build_id"),
+            "observed_at": component.get("observed_at") or component.get("built_at"),
+            "manifest_ref": component.get("manifest_ref"),
+        }
+    return result
 
 
 def _provider_runs(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -297,7 +515,7 @@ def _provider_runs(manifest: dict[str, Any]) -> list[dict[str, Any]]:
         if manifest_ref:
             try:
                 source_manifest = dict(read_json(str(manifest_ref)))
-            except Exception:
+            except Exception:  # noqa: BLE001 - one unreadable source must not hide other runs.
                 source_manifest = {}
         runs.append(
             {
@@ -338,6 +556,13 @@ def _allowed_refs(manifest: dict[str, Any]) -> set[str]:
             value = provider_run.get(key)
             if value:
                 refs.add(str(value))
+    for component in dict(manifest.get("component_manifests") or {}).values():
+        component_manifest = dict(component or {})
+        refs.update(_ref_values(component_manifest.get("manifest_ref")))
+        refs.update(_ref_values(component_manifest.get("bronze_refs")))
+        refs.update(_ref_values(component_manifest.get("silver_refs")))
+        refs.update(_ref_values(component_manifest.get("table_refs")))
+        refs.update(_source_manifest_refs(component_manifest))
     refs.add(str(DEFAULT_QUERY_CATALOG_PATH.relative_to(PROJECT_ROOT)))
     for query in load_query_catalog():
         refs.add(str(query.sql_path.relative_to(PROJECT_ROOT)))
@@ -360,7 +585,7 @@ def _json_summary(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         summary: dict[str, Any] = {
             "type": "object",
-            "keys": sorted(str(key) for key in value.keys())[:25],
+            "keys": sorted(str(key) for key in value)[:25],
         }
         for key in ["offers", "executors", "data", "pages"]:
             child = value.get(key)
@@ -375,7 +600,7 @@ def _json_summary(value: Any) -> dict[str, Any]:
 def _compact_json(value: Any, *, depth: int = 0) -> Any:
     if depth >= 3:
         if isinstance(value, dict):
-            return {"_type": "object", "_keys": sorted(str(key) for key in value.keys())[:12]}
+            return {"_type": "object", "_keys": sorted(str(key) for key in value)[:12]}
         if isinstance(value, list):
             return {"_type": "array", "_count": len(value)}
         return value
@@ -405,4 +630,39 @@ def _split_refs(value: Any) -> list[str]:
         return []
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
-    return [part.strip() for part in str(value).split(",") if part.strip()]
+    text = str(value).strip()
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+        except (TypeError, ValueError):
+            parsed = None
+        if isinstance(parsed, list):
+            return [str(item).strip() for item in parsed if str(item).strip()]
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _ref_values(value: Any) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, dict):
+        refs: list[str] = []
+        for child in value.values():
+            refs.extend(_ref_values(child))
+        return refs
+    if isinstance(value, (list, tuple, set)):
+        refs = []
+        for child in value:
+            refs.extend(_ref_values(child))
+        return refs
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def _source_manifest_refs(manifest: dict[str, Any]) -> list[str]:
+    refs: list[str] = []
+    for key, value in manifest.items():
+        if key.endswith("manifest_ref") and value:
+            refs.extend(_ref_values(value))
+        elif key.endswith("source_manifest") and isinstance(value, dict):
+            refs.extend(_ref_values(value.get("manifest_ref")))
+    return _dedupe(refs)
