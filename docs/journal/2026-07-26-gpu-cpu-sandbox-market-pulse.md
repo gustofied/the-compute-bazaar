@@ -1,0 +1,216 @@
+# GPU, CPU, and Sandbox Market Pulse
+
+## Objective
+
+Turn the article's separate GPU, VM, capacity, and workload products into one
+source-honest opening view without inventing a composite compute index.
+
+The final order is:
+
+```text
+GPU
+  H100 observed provider-floor benchmark
+  Akash available GPU units / total GPU units
+
+CPU
+  exact 4-vCPU / 8-GiB seven-vendor VM median
+  Akash available CPU millicores / total CPU millicores
+
+Sandbox
+  StarSling complete-run median estimated processor-and-memory cost
+  StarSling complete-run median measured phase runtime
+```
+
+Price, available capacity, estimated cost, and runtime remain separate
+measures and separate axes.
+
+## Source Audit
+
+The overview reuses maintained sources rather than adding a frontend data
+path:
+
+- H100 price comes from the coverage-qualified
+  `advertised_provider_floor_median_v1` gold benchmark history.
+- VM price comes from the fixed `public_vm_4vcpu_8gib_v2` cohort: Akamai
+  Linode, Vultr, Scaleway, Azure, AWS, OVHcloud, and Oracle Cloud.
+- GPU and CPU available share come from the Akash provider inventory API.
+  The denominator is the matching total reported across online Akash
+  providers. GPU uses GPU units; CPU uses millicpu.
+- Sandbox evidence comes from the public StarSling HPC Sandbox Benchmark.
+  Compute Bazaar polls its committed dataset and launches no paid workloads.
+
+The StarSling source currently has seven matching four-processor runs over
+five calendar days. It has two distinct runs on 22 July. The first four
+matching runs contain five service rows. The final three contain the complete
+fixed six-service cohort. All seven remain retained.
+
+## Gold Contract
+
+The new DataFusion query groups `sandbox_benchmark_batches` by source run and
+publishes:
+
+```text
+gold/sandbox_workload_run_history.parquet
+```
+
+For every run it retains:
+
+- source run ID, generated time, observed date, and original URL;
+- source commit, workload signature, method ID, and machine shape;
+- distinct service count and `fixed_cohort_complete`;
+- median, average, p25, p75, minimum, and maximum measured runtime;
+- the same statistics for estimated processor-and-memory cost.
+
+The estimate is unchanged:
+
+```text
+estimated_processor_and_memory_cost =
+  measured_phase_seconds / 3600
+  * matching_public_hourly_processor_and_memory_rate
+```
+
+The query is allowlisted as `workload-run-history`, hashed into the build
+identity, written to the immutable gold generation, included in manifest row
+counts, and projected under `workload.run_history` in
+`sandbox_cost_gold_v5`.
+
+## Frontend Decision
+
+The new market pulse sits before the detailed evidence sections in the main
+AdamSioud Compute article. It is an overview, not a second article or a
+replacement for the audit tables.
+
+Controls:
+
+```text
+1D (default)
+7D
+1M
+All
+```
+
+GPU, VM, and Akash rows accumulate with the hourly market heartbeat. StarSling
+changes only when the daily public poll finds a compatible upstream run. If a
+selected live window contains no StarSling run, the latest complete source
+point stays visible with its real timestamp and an explicit note that it lies
+outside the selected window. The renderer does not carry the value forward.
+
+The browser only filters time windows and draws precomputed values. It does
+not calculate benchmark values, medians, percentiles, available shares, or job
+cost.
+
+## Discarded Approaches
+
+- One combined axis was rejected because GPU dollars, VM dollars, job cents,
+  available share, and seconds are not commensurate.
+- A single “compute utilization” series was rejected. Available capacity is
+  not a running lease, processor activity, or useful work.
+- Incomplete five-service StarSling runs were not mixed into the fixed
+  six-service headline.
+- StarSling values were not repeated hourly. An unchanged upstream source
+  creates no new runtime observation.
+- A broad worker-source `rsync` was stopped after it began including an
+  irrelevant local Terraform provider binary. The release used a minimal
+  build context containing only `.dockerignore`, package metadata, `src/`,
+  and the worker Dockerfile.
+
+## Production Release
+
+Only the Windmill worker container was recreated. Postgres, Windmill server,
+AutoMQ, and their volumes remained running.
+
+```text
+worker image
+  compute-bazaar-windmill-worker:2026-07-26-market-pulse-v1
+
+image digest
+  sha256:3134a3b811ee34ff598cbb139fb6f2a335e61db32532e464a94c3a9a4213f0b2
+
+market run
+  market-pulse-release-20260725T2350
+
+gold run
+  gold-market-pulse-release-20260725T2350
+
+sandbox build
+  sandbox-cost-5bfb725c7fcd6350
+```
+
+All 18 provider inputs, Kafka, GPU gold, both VM source groups, sandbox gold,
+dashboard export, and public publication returned `ok`. The market run status
+was `success`.
+
+Published history at release:
+
+```text
+eligible H100 prints                 57
+complete seven-vendor VM points      28
+Akash aggregate GPU points           13
+Akash aggregate CPU points            3
+StarSling source runs                 7
+complete six-service StarSling runs   3
+```
+
+The data-quality status remained `warning` only because retained provider
+normalization aliases and the B200/B300 observation targets are not all
+complete. No provider or publication stage failed.
+
+## Verification
+
+Commands:
+
+```sh
+uv run --with pytest pytest tests/test_sandbox_cost.py -q
+uv run --with pytest pytest \
+  tests/test_windmill_bootstrap.py \
+  tests/test_gpu_market_core.py -q
+uv run --with pytest pytest \
+  tests/test_sandbox_cost.py \
+  tests/test_adamsioud.py -q
+uv run ruff check \
+  src/the_compute_bazaar/sandbox_cost/pipeline.py \
+  tests/test_sandbox_cost.py \
+  tests/test_adamsioud.py
+node --check external/AdamSioud/exemplars/compute/sandbox-cost.js
+uv run sandbox-cost check-public \
+  --url https://d3n0n6h709c83f.cloudfront.net/sandbox-cost.json \
+  --max-age-hours 2.5
+```
+
+Results:
+
+```text
+sandbox pipeline tests              21 passed
+worker/provider focused tests       50 passed
+article + sandbox focused tests     23 passed
+ruff                                passed
+JavaScript syntax                   passed
+public freshness                    ok
+partial VM source runs              none
+```
+
+Browser QA:
+
+- desktop: 1280 by 720, six values rendered, no page overflow;
+- mobile iframe viewport: 390 by 844, one-column pulse, 390-pixel document
+  width, no horizontal overflow;
+- 7D control selected all three complete StarSling runs;
+- keyboard inspection exposed exact H100 value, provider count, p25-p75, and
+  timestamp;
+- desktop and mobile browser logs were empty.
+
+## Next Refresh
+
+The hourly Windmill schedule remains:
+
+```text
+f/compute-bazaar/market_hourly_hourly
+0 0 * * * * UTC
+enabled
+```
+
+The source-only StarSling poll remains daily. A new upstream run must pass the
+pinned shape, workload signature, source rewrite, and schema checks before the
+next hourly build can publish it. Check `workload-run-history` after promotion
+and confirm whether the run is a complete six-service cohort before expecting
+the public headline to advance.

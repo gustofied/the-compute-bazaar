@@ -56,6 +56,8 @@ WORKLOAD_REPLICATE_QUERY_ID = "sandbox_workload_latest_replicates_v2"
 WORKLOAD_PHASE_QUERY_ID = "sandbox_workload_latest_phases_v1"
 WORKLOAD_PHASE_SUMMARY_QUERY_ID = "sandbox_workload_phase_summary_v1"
 WORKLOAD_SUMMARY_QUERY_ID = "sandbox_workload_service_summary_v2"
+WORKLOAD_RUN_SUMMARY_QUERY_ID = "sandbox_workload_run_summary_v1"
+WORKLOAD_FIXED_SERVICE_COUNT = 6
 GPU_COMPARISON_MIN_PROVIDERS = 10
 GPU_DAILY_QUERY_ID = "h100_daily_broad_coverage_v1"
 GPU_ELIGIBLE_QUERY_ID = "h100_broad_coverage_prints_v1"
@@ -638,6 +640,51 @@ group by
 order by median_runtime_seconds, median_estimated_cost_usd
 """
 
+WORKLOAD_RUN_SUMMARY_SQL = f"""
+select
+  benchmark_run_id,
+  min(generated_at) as generated_at,
+  min(observed_date) as observed_date,
+  min(benchmark_source_url) as benchmark_source_url,
+  min(methodology_id) as methodology_id,
+  min(source_run_sha) as source_run_sha,
+  min(task_signature) as task_signature,
+  min(workload_app_version) as workload_app_version,
+  min(runtime_basis) as runtime_basis,
+  min(cost_basis) as cost_basis,
+  min(price_scope) as price_scope,
+  min(vcpus) as vcpus,
+  min(memory_gib) as memory_gib,
+  min(disk_gb) as disk_gb,
+  min(job_parts) as job_parts,
+  count(distinct series_id) as service_count,
+  count(distinct series_id) = {WORKLOAD_FIXED_SERVICE_COUNT}
+    as fixed_cohort_complete,
+  median(runtime_seconds) as median_runtime_seconds,
+  avg(runtime_seconds) as average_runtime_seconds,
+  percentile_cont(0.25) within group (
+    order by runtime_seconds
+  ) as p25_runtime_seconds,
+  percentile_cont(0.75) within group (
+    order by runtime_seconds
+  ) as p75_runtime_seconds,
+  min(runtime_seconds) as minimum_runtime_seconds,
+  max(runtime_seconds) as maximum_runtime_seconds,
+  median(estimated_cost_usd) as median_estimated_cost_usd,
+  avg(estimated_cost_usd) as average_estimated_cost_usd,
+  percentile_cont(0.25) within group (
+    order by estimated_cost_usd
+  ) as p25_estimated_cost_usd,
+  percentile_cont(0.75) within group (
+    order by estimated_cost_usd
+  ) as p75_estimated_cost_usd,
+  min(estimated_cost_usd) as minimum_estimated_cost_usd,
+  max(estimated_cost_usd) as maximum_estimated_cost_usd
+from sandbox_benchmark_batches
+group by benchmark_run_id
+order by generated_at, benchmark_run_id
+"""
+
 GPU_DAILY_COVERAGE_SQL = f"""
 with compatible_gpu as (
   select
@@ -1070,6 +1117,11 @@ order by series_order, task_order
 select *
 from sandbox_workload_service_summary
 order by median_runtime_seconds, median_estimated_cost_usd
+""",
+    "workload-run-history": """
+select *
+from sandbox_workload_run_history
+order by generated_at, benchmark_run_id
 """,
     "gpu-daily-coverage": """
 select *
@@ -1540,6 +1592,14 @@ order by series_order, observed_date, point_order
             sql=WORKLOAD_BATCH_SQL,
         )
     )
+    workload_run_history = _canonicalize_numeric_rows(
+        query_tables(
+            tables={
+                "sandbox_benchmark_batches": silver_refs["sandbox_benchmark_batches"]
+            },
+            sql=WORKLOAD_RUN_SUMMARY_SQL,
+        )
+    )
     latest_replicates = _canonicalize_numeric_rows(
         query_tables(
             tables={
@@ -1729,6 +1789,9 @@ order by series_order, observed_date, point_order
         "sandbox_workload_batch_history": _join(
             output_root, "gold/sandbox_workload_batch_history.parquet"
         ),
+        "sandbox_workload_run_history": _join(
+            output_root, "gold/sandbox_workload_run_history.parquet"
+        ),
         "sandbox_workload_latest_replicates": latest_replicates_ref,
         "sandbox_workload_latest_phases": latest_phases_ref,
         "sandbox_workload_phase_summary": _join(
@@ -1816,6 +1879,10 @@ order by series_order, observed_date, point_order
         workload_batches,
     )
     write_parquet_rows(
+        table_refs["sandbox_workload_run_history"],
+        workload_run_history,
+    )
+    write_parquet_rows(
         table_refs["sandbox_workload_phase_summary"],
         phase_summary,
     )
@@ -1874,6 +1941,7 @@ order by series_order, observed_date, point_order
         "price_events": _sha256_text(PRICE_EVENTS_SQL),
         "current_rates": _sha256_text(CURRENT_RATES_SQL),
         "workload_batches": _sha256_text(WORKLOAD_BATCH_SQL),
+        "workload_run_history": _sha256_text(WORKLOAD_RUN_SUMMARY_SQL),
         "workload_replicates": _sha256_text(WORKLOAD_LATEST_REPLICATES_SQL),
         "workload_phases": _sha256_text(WORKLOAD_LATEST_PHASES_SQL),
         "workload_phase_summary": _sha256_text(WORKLOAD_PHASE_SUMMARY_SQL),
@@ -1952,6 +2020,7 @@ order by series_order, observed_date, point_order
         "sandbox_current_rates": len(current_rates),
         "sandbox_fixed_rate": len(fixed_rate),
         "sandbox_workload_batch_history": len(workload_batches),
+        "sandbox_workload_run_history": len(workload_run_history),
         "sandbox_workload_latest_replicates": len(latest_replicates),
         "sandbox_workload_latest_phases": len(latest_phases),
         "sandbox_workload_phase_summary": len(phase_summary),
@@ -2002,6 +2071,7 @@ order by series_order, observed_date, point_order
             "price_events": PRICE_EVENTS_QUERY_ID,
             "current_rates": CURRENT_RATES_QUERY_ID,
             "workload_batches": WORKLOAD_BATCH_QUERY_ID,
+            "workload_run_history": WORKLOAD_RUN_SUMMARY_QUERY_ID,
             "workload_replicates": WORKLOAD_REPLICATE_QUERY_ID,
             "workload_phases": WORKLOAD_PHASE_QUERY_ID,
             "workload_phase_summary": WORKLOAD_PHASE_SUMMARY_QUERY_ID,
@@ -2050,6 +2120,7 @@ order by series_order, observed_date, point_order
                 price_events=price_events,
                 current_rates=current_rates,
                 workload_batches=workload_batches,
+                workload_run_history=workload_run_history,
                 latest_replicates=latest_replicates,
                 latest_phases=latest_phases,
                 phase_summary=phase_summary,
@@ -2632,6 +2703,7 @@ def _public_payload(
     price_events: list[dict[str, Any]],
     current_rates: list[dict[str, Any]],
     workload_batches: list[dict[str, Any]],
+    workload_run_history: list[dict[str, Any]],
     latest_replicates: list[dict[str, Any]],
     latest_phases: list[dict[str, Any]],
     phase_summary: list[dict[str, Any]],
@@ -2848,6 +2920,14 @@ def _public_payload(
             "methodology_generation_count": len(
                 {row["methodology_id"] for row in run_metadata}
             ),
+            "fixed_service_count": WORKLOAD_FIXED_SERVICE_COUNT,
+            "complete_run_count": len(
+                [
+                    row
+                    for row in workload_run_history
+                    if row["fixed_cohort_complete"]
+                ]
+            ),
             "latest_run": latest_run,
             "latest_replicate_count": len(latest_replicates),
             "latest_source_replicate_slot_count": max(
@@ -2859,6 +2939,7 @@ def _public_payload(
             ),
             "latest_phase_count": len(latest_phases),
             "batch_history": workload_batches,
+            "run_history": workload_run_history,
             "latest_replicates": latest_replicates,
             "phase_summary": phase_summary,
             "service_summary": workload_summary,

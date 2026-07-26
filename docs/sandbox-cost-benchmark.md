@@ -461,6 +461,59 @@ The public article uses “estimated processor-and-memory cost” and states the
 formula beside the chart. It does not shorten that qualified estimate to a
 provider bill or total job cost.
 
+## Source-Run History
+
+DataFusion builds one gold row per retained StarSling source run:
+
+```text
+sandbox_benchmark_batches
+  group by benchmark_run_id
+  -> sandbox_workload_run_history
+```
+
+Each row carries the original run timestamp and URL, source commit, task
+signature, methodology ID, machine shape, distinct service count,
+fixed-cohort completeness, and median/p25/p75 values for measured runtime and
+estimated processor-and-memory cost. Repeated runs on the same calendar day
+remain separate.
+
+The current public source has seven matching four-processor runs over five
+calendar days. Four early runs contain five service rows. Three later runs
+contain all six fixed services and are eligible for the article headline:
+
+```text
+29937467891
+29982453127
+30019301067
+```
+
+No missing service is imputed. The incomplete source runs remain in the gold
+table and public audit payload. The frontend may filter to
+`fixed_cohort_complete = true`, but it does not recompute medians or collapse
+intraday runs.
+
+## Market Pulse Rendering
+
+The article opens the maintained section with six separate panes:
+
+```text
+H100 observed benchmark | Akash available GPU share
+seven-vendor VM median  | Akash available CPU share
+StarSling job-cost median | StarSling measured-runtime median
+```
+
+H100 and VM panes use their precomputed gold medians and cross-sectional
+p25-p75 bands. Akash panes use the published
+`available_units / total_units` share and retain GPU units or CPU millicores as
+reported. StarSling panes use only complete six-service source-run summaries.
+Price, available share, estimated cost, and runtime never share an axis.
+
+The default window is 1D, followed by 7D, 1M, and All. GPU, VM, and Akash
+series are filtered against the latest live market observation. If no
+compatible StarSling batch falls inside that live window, the latest source
+point remains visible for context with its actual timestamp and an explicit
+outside-window note. It is not copied forward or relabelled as hourly.
+
 ## Lifecycle V2
 
 The next runtime experiment should remain separate from the measured-phase
@@ -733,6 +786,7 @@ workload-latest-replicates
 workload-latest-phases
 workload-phase-summary
 workload-summary
+workload-run-history
 vm-current
 vm-fixed-rate
 vm-expanded-current

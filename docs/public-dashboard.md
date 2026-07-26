@@ -78,14 +78,15 @@ all-product `index-history.json` on public story pages.
 
 `sandbox-cost.json` is the version 5 public article payload for the sandbox and
 underlying-capacity benchmark. It contains the current exact-shape,
-four-provider VM offer cohort; its retained fixed-membership median/p25-p75
+seven-provider VM offer cohort; its retained fixed-membership median/p25-p75
 history; the current VM/sandbox cohort comparison; 33 dated managed-sandbox
 hourly-price observations; 10 actual rate-change events; the current 11-service
 cross-section with explicit metering semantics; the fixed eight-service
 median/p25-p75 series; 38 historical provider-batch means; 69 complete latest
 jobs reconstructed from 690 retained task phases; three incomplete slots from
-72 source slots; six workload summaries; retained H100 coverage history; and
-the coverage-gated H100/sandbox common-start series.
+72 source slots; six workload summaries; seven source-run summaries with three
+complete fixed six-service cohorts; retained H100 coverage history; and the
+coverage-gated H100/sandbox common-start series.
 
 The payload declares timing, currency, machine shape, storage treatment, source
 URLs, and cost basis. It explicitly excludes lifecycle latency and does not
@@ -94,6 +95,13 @@ checksums may be included, but raw private S3 refs, private manifests,
 credentials, and raw response objects are removed at export. The hourly market
 run checks the VM APIs and rebuilds the payload from maintained evidence and
 the newly exported GPU benchmark history.
+
+`market-state.json` publishes the public-safe current cross-section plus
+cumulative aggregate history for Akash CPU, GPU, memory, and storage capacity
+and source-compatible occupancy rows. The article uses `available_share` for
+the market-pulse capacity panes and keeps each resource's original unit. It
+does not combine CPU millicores and GPU units or label available share as
+processor activity.
 
 ## S3/CloudFront Shape
 

@@ -37,6 +37,20 @@ class AdamSioudServerTests(unittest.TestCase):
             "What the same software job costs on each sandbox",
             article,
         )
+        self.assertIn(
+            "Price, available capacity, and one measured software job",
+            article,
+        )
+        self.assertIn('data-pulse-window="1d"', article)
+        self.assertIn('data-pulse-window="7d"', article)
+        self.assertIn('data-pulse-window="1m"', article)
+        self.assertIn('data-pulse-window="all"', article)
+        self.assertIn('id="market-pulse-gpu-price-chart"', article)
+        self.assertIn('id="market-pulse-gpu-availability-chart"', article)
+        self.assertIn('id="market-pulse-cpu-price-chart"', article)
+        self.assertIn('id="market-pulse-cpu-availability-chart"', article)
+        self.assertIn('id="market-pulse-sandbox-cost-chart"', article)
+        self.assertIn('id="market-pulse-sandbox-runtime-chart"', article)
         self.assertIn("Estimated cost of the same job", article)
         self.assertIn("Cost ranking", article)
         self.assertNotIn('data-job-metric="time"', article)
@@ -63,7 +77,7 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="market-state-availability"', article)
         self.assertNotIn('id="vm-hourly-chart"', article)
         self.assertNotIn('id="sandbox-batch-history"', article)
-        self.assertIn('src="./sandbox-cost.js?v=21"', article)
+        self.assertIn('src="./sandbox-cost.js?v=22"', article)
         self.assertIn("sandbox-cost.json", script)
         self.assertIn('"sandbox_cost_gold_v5"', script)
         self.assertNotIn('"sandbox_cost_gold_v4"', script)
@@ -81,6 +95,9 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="vm-capacity-table-body"', article)
         self.assertIn("createJobDistributionChart", script)
         self.assertIn("renderMarketStateSummary", script)
+        self.assertIn("createMarketPulse", script)
+        self.assertIn("workloadRunHistory", script)
+        self.assertIn("fixedCohortComplete", script)
         self.assertIn("createMarketOccupancyChart", script)
         self.assertIn("sandbox-capacity-total", script)
         self.assertIn("data-occupancy-window", article)
@@ -109,9 +126,21 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertTrue(
             all(
                 row["measurement_kind"] == "rental_occupancy"
-                and row["resource_type"] == "ALL_GPU"
+                and row["resource_type"]
+                in {
+                    "ALL_GPU",
+                    "ALL_CPU",
+                    "ALL_MEMORY",
+                    "ALL_STORAGE",
+                    "ALL_EPHEMERAL_STORAGE",
+                    "ALL_PERSISTENT_STORAGE",
+                }
                 for row in market_state["history_rows"]
             )
+        )
+        self.assertIn(
+            "ALL_GPU",
+            {row["resource_type"] for row in market_state["history_rows"]},
         )
         self.assertNotIn("raw_ref", json.dumps(market_state))
         self.assertNotIn("s3://", json.dumps(market_state))
@@ -184,6 +213,9 @@ class AdamSioudServerTests(unittest.TestCase):
         )
         self.assertEqual(len(payload["combined"]["rows"]), eligible_count)
         self.assertEqual(payload["workload"]["source_batch_count"], 7)
+        self.assertEqual(payload["workload"]["fixed_service_count"], 6)
+        self.assertEqual(payload["workload"]["complete_run_count"], 3)
+        self.assertEqual(len(payload["workload"]["run_history"]), 7)
         self.assertEqual(payload["workload"]["calendar_day_count"], 5)
         self.assertEqual(payload["workload"]["methodology_generation_count"], 6)
         self.assertEqual(payload["workload"]["latest_replicate_count"], 69)

@@ -180,6 +180,7 @@ exact public VM APIs + reviewed sandbox price evidence
   -> gold/sandbox_workload_latest_phases
   -> gold/sandbox_workload_phase_summary
   -> gold/sandbox_workload_service_summary
+  -> gold/sandbox_workload_run_history
   -> gold/gpu_h100_daily_coverage
   -> gold/gpu_h100_eligible_history
   -> gold/sandbox_gpu_cpu_common_start
@@ -213,6 +214,14 @@ methodology rather than rendered as one homogeneous performance series.
 Lifecycle latency, queueing, reliability, and concurrency remain separate
 future measurements.
 
+DataFusion also groups the retained provider-batch rows by source run into
+`sandbox_workload_run_history`. Each row carries service count, fixed-cohort
+completeness, median/p25/p75 runtime, median/p25/p75 estimated
+processor-and-memory cost, source run ID, source commit, and methodology ID.
+All seven source runs remain present, including repeated intraday runs. The
+article's headline history uses only the three runs containing all six fixed
+services; it does not rewrite incomplete runs or average them by day.
+
 The combined GPU/sandbox series uses hourly H100 benchmark prints only when at
 least 10 providers contribute. It rebases both compatible series to 100 at the
 first eligible H100 timestamp. The independently based VM/VPS series joins the
@@ -228,6 +237,21 @@ storage units, Clore public servers, and Prime configurations remain distinct
 series. The article pairs each selected share with its source numerator,
 denominator, unit, and scope; those counts are capacity observations, not
 transaction volume, and no statistical band is inferred.
+
+The article market pulse composes existing gold products without deriving
+market statistics in JavaScript. Its six panes are:
+
+```text
+H100 observed benchmark | Akash available GPU share
+seven-vendor VM median  | Akash available CPU share
+StarSling job-cost median | StarSling measured-runtime median
+```
+
+The first four panes advance with the hourly market run. The StarSling panes
+advance only after the daily public-source poll publishes another compatible
+content-addressed generation. A 1D view may retain the latest StarSling point
+for context, but it labels the point's actual source time and says when it lies
+outside the selected live window.
 
 The hourly Windmill heartbeat checks the exact VM APIs and rebuilds this gold
 product after GPU dashboard history is exported. A separate daily source check

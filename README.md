@@ -228,7 +228,7 @@ exact VM catalog APIs + reviewed sandbox prices + StarSling benchmark runs
   -> bronze raw VM checks and reviewed source records
   -> silver VM offers, sandbox prices, batches, jobs, phases, and run metadata
   -> named DataFusion queries
-  -> gold VM and sandbox cohorts, workload summaries, and coverage-gated comparison
+  -> gold VM and sandbox cohorts, run summaries, and coverage-gated comparison
   -> sandbox-cost.json
   -> AdamSioud Compute article
 ```
@@ -258,6 +258,14 @@ only hourly benchmark prints with at least 10 contributing providers. Earlier
 low-coverage observations stay in the coverage table; they are not connected
 into a misleading continuous price line. Provider count is coverage, not
 transaction volume or GPU utilization.
+
+The article's default 1D market pulse places three pairs in aligned panes:
+H100 price beside Akash available GPU share, the seven-vendor VM median beside
+Akash available CPU share, and the latest complete StarSling six-service
+estimated job-cost median beside its measured-runtime median. These are six
+separate measures, not one blended index. GPU, VM, and Akash series grow with
+the hourly heartbeat. StarSling history changes only when the daily public
+source poll finds a new compatible upstream run.
 
 The project does not use a generic `utilization` field. Availability, active
 capacity, rental occupancy, scheduler allocation, processor activity, and
@@ -326,6 +334,9 @@ uv run python infra/windmill/bootstrap_sandbox_benchmark_schedule.py
 
 An unchanged upstream commit produces no false runtime observation. Workload
 history changes only after StarSling publishes a new compatible run.
+The allowlisted `workload-run-history` query reads
+`gold/sandbox_workload_run_history.parquet`; it preserves repeated intraday
+runs and identifies whether all six fixed services are present.
 
 See [docs/sandbox-cost-benchmark.md](docs/sandbox-cost-benchmark.md) for source
 semantics, formulas, layer paths, review rules, and refresh instructions.

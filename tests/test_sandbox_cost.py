@@ -1,5 +1,6 @@
 import copy
 import json
+import statistics
 import tempfile
 import unittest
 from pathlib import Path
@@ -342,6 +343,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertEqual(first.row_counts["sandbox_current_rates"], 11)
         self.assertEqual(first.row_counts["sandbox_fixed_rate"], 4)
         self.assertEqual(first.row_counts["sandbox_workload_batch_history"], 38)
+        self.assertEqual(first.row_counts["sandbox_workload_run_history"], 7)
         self.assertEqual(
             first.row_counts["sandbox_workload_latest_replicates"],
             69,
@@ -369,6 +371,8 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertEqual(public["workload"]["source_batch_count"], 7)
         self.assertEqual(public["workload"]["calendar_day_count"], 5)
         self.assertEqual(public["workload"]["methodology_generation_count"], 6)
+        self.assertEqual(public["workload"]["fixed_service_count"], 6)
+        self.assertEqual(public["workload"]["complete_run_count"], 3)
         self.assertEqual(public["workload"]["latest_replicate_count"], 69)
         self.assertEqual(
             public["workload"]["latest_source_replicate_slot_count"],
@@ -394,6 +398,32 @@ class SandboxCostPipelineTests(unittest.TestCase):
         )
         self.assertEqual(len(public["workload"]["service_summary"]), 6)
         self.assertEqual(len(public["workload"]["phase_summary"]), 60)
+        self.assertEqual(len(public["workload"]["run_history"]), 7)
+        complete_runs = [
+            row
+            for row in public["workload"]["run_history"]
+            if row["fixed_cohort_complete"]
+        ]
+        self.assertEqual(
+            [row["benchmark_run_id"] for row in complete_runs],
+            ["29937467891", "29982453127", "30019301067"],
+        )
+        latest_run_rows = [
+            row
+            for row in public["workload"]["batch_history"]
+            if row["benchmark_run_id"] == "30019301067"
+        ]
+        latest_run = public["workload"]["run_history"][-1]
+        self.assertAlmostEqual(
+            latest_run["median_estimated_cost_usd"],
+            statistics.median(
+                row["estimated_cost_usd"] for row in latest_run_rows
+            ),
+        )
+        self.assertAlmostEqual(
+            latest_run["median_runtime_seconds"],
+            statistics.median(row["runtime_seconds"] for row in latest_run_rows),
+        )
         self.assertEqual(public["combined"]["rows"][0]["gpu_base_100"], 100.0)
         self.assertEqual(public["combined"]["rows"][1]["gpu_base_100"], 90.0)
         self.assertFalse(
@@ -586,6 +616,25 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertEqual(result["engine"], "datafusion")
         self.assertEqual(len(result["rows"]), 5)
         self.assertEqual(result["rows"][1]["stage_id"], "rented")
+
+    def test_workload_run_history_query_preserves_intraday_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            build_sandbox_cost(output_root=tmpdir)
+            result = query_sandbox_gold(
+                output_root=tmpdir,
+                query_id="workload-run-history",
+            )
+
+        self.assertEqual(result["engine"], "datafusion")
+        self.assertEqual(len(result["rows"]), 7)
+        july_22 = [
+            row
+            for row in result["rows"]
+            if row["observed_date"] == "2026-07-22"
+        ]
+        self.assertEqual(len(july_22), 2)
+        self.assertFalse(july_22[0]["fixed_cohort_complete"])
+        self.assertTrue(july_22[1]["fixed_cohort_complete"])
 
     def test_repeated_intraday_runs_are_not_collapsed(self) -> None:
         prices = _read_local_json(PRICE_EVIDENCE)["rows"]

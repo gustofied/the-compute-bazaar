@@ -29,7 +29,7 @@ Use this order when two copies disagree:
 | Compute market state | Hourly where the source exposes a usable measure | Provider response retained with the provider run | `lake/silver/compute_market_state/...` | `fact_compute_market_state` and cumulative deduplicated `fact_compute_market_state_history` | Akash active/total CPU, GPU, memory, and storage capacity; Clore rental occupancy; Prime and direct-provider availability |
 | Exact-shape VM offers | Hourly Windmill market run | Official catalog responses under `raw/sandbox-cost/vm-capacity/...` and discovery prefixes, with retrieval time and checksum | Cumulative offer, discovery, marketplace, current, and expanded-cohort Parquet tables under `lake/sandbox_cost/silver/` | Current seven-vendor cross-section; hourly median/p25/p75/min/max in USD and base-100 form; legacy four-vendor history; separate marketplace indication | VM-versus-sandbox reference, relative-price comparison, and source audit |
 | Managed sandbox rate cards | Manual reviewed evidence; gold rebuilt hourly | Versioned source register, archived URLs, dates, and arithmetic in package evidence and `lake/sandbox_cost/bronze/` | `sandbox_hourly_prices.parquet` | Current rates, fixed eight-service median/p25/p75, and dated price events | Public sandbox rate comparison |
-| StarSling workload runs | Daily public source poll; upstream publication cadence | One immutable retrieval capture and checksum ledger per poll | Content-addressed run metadata, provider-batch summaries, replicate-aligned jobs, and task phases | Latest job distribution, service summaries, phase summaries, and all compatible historical provider-batch summaries | Same-workload estimated processor-and-memory cost, with runtime audit |
+| StarSling workload runs | Daily public source poll; upstream publication cadence | One immutable retrieval capture and checksum ledger per poll | Content-addressed run metadata, provider-batch summaries, replicate-aligned jobs, and task phases | Latest job distribution, service summaries, phase summaries, all compatible historical provider-batch summaries, and one source-run summary per retained run | Same-workload estimated processor-and-memory cost and measured-runtime history |
 | GPU/VM/sandbox relative prices | Rebuilt after each market run | Uses retained GPU, VM, and sandbox evidence above | Uses eligible GPU benchmark history, exact VM offer history, and normalized sandbox prices | H100/sandbox common-start series, independently based VM series, and H100 coverage history | Exploratory relative advertised-rate chart only |
 
 ## History Contracts
@@ -73,6 +73,10 @@ Use this order when two copies disagree:
   phase rows. Missing replicate slots are not imputed.
 - Historical evidence contains 38 provider-batch summaries from seven source
   batches over five days and six harness methodologies.
+- `sandbox_workload_run_history` preserves those seven source runs separately,
+  including both 22 July intraday runs. Three runs contain the complete fixed
+  six-service cohort and are eligible for the article headline history; four
+  incomplete runs remain in gold and the public audit payload.
 - Those 38 rows are durable audit history, not one homogeneous performance
   time series. A frontend may inspect or group them by methodology, but must
   not draw one smooth line across harness revisions.
@@ -108,6 +112,11 @@ The article intentionally shows fewer views than the payload contains. Hidden
 or removed charts do not delete their underlying data. New frontends should
 compose the existing gold objects for the question they need rather than
 copying calculations into JavaScript.
+
+The article's market pulse is one such composition. It filters precomputed gold
+series into 1D, 7D, 1M, and All windows and draws them. It does not calculate
+the H100 benchmark, VM median, capacity shares, StarSling medians, or
+percentiles in the browser.
 
 ## Refresh And Verification
 
