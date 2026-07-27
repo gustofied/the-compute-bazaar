@@ -58,8 +58,12 @@ Prime B300                    100 KiB
 capacity market state         520 KiB
 ```
 
-No generated card contained an `s3://` reference. The card export used Gold run
-`gold-market-20260727T200000-e8b60201`.
+The first deployed overview inherited three private S3 manifest references
+from the older market-run summary. They were not credentials and CloudFront
+could not read those prefixes, but they violated the publication boundary.
+The overview now selects an explicit compact run summary, and public market-run
+serialization recursively removes private S3 references. Regression tests
+cover both paths.
 
 ## Verification
 
@@ -75,9 +79,9 @@ uv run gpu-prices export-gold-dashboard \
   --output-root /tmp/compute-bazaar-view-models-v2
 ```
 
-The focused suite passed 79 tests. The complete repository suite passed 93
-tests in 11.489 seconds. Browser verification is recorded after the rollout
-checks.
+The focused suite passed 79 tests. After the public-reference regression fix,
+the complete repository suite passed 95 tests in 8.337 seconds. Browser
+verification is recorded after the rollout checks.
 
 ## Next UI Work
 

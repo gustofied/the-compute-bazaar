@@ -388,6 +388,25 @@ def market_overview_view(
     sandbox_headline = (
         dict(sandbox_rates.get("headline") or {}) if sandbox_rates else None
     )
+    public_run = {
+        key: manifest.get(key)
+        for key in [
+            "manifest_version",
+            "market_run_id",
+            "run_id",
+            "status",
+            "data_quality_status",
+            "observed_at",
+            "observed_date",
+            "providers",
+            "successful_providers",
+            "failed_providers",
+            "gold_run_id",
+            "dashboard_export_id",
+            "row_counts",
+        ]
+        if manifest.get(key) is not None
+    }
     return _card(
         card_type="market_overview",
         card_id="market:overview",
@@ -414,7 +433,7 @@ def market_overview_view(
         sources=[],
         drilldown_ref="market-run.json",
         data={
-            "market_run": dict(manifest),
+            "market_run": public_run,
             "benchmarks": benchmarks,
             "sandbox_rates": sandbox_headline,
         },

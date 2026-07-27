@@ -689,5 +689,23 @@ def _public_market_run_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "dashboard_export_id": payload.get("dashboard_export_id"),
         "row_counts": payload.get("row_counts"),
         "checks": payload.get("checks"),
-        "data_quality": payload.get("data_quality"),
+        "data_quality": _without_private_refs(payload.get("data_quality")),
     }
+
+
+def _without_private_refs(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: cleaned
+            for key, item in value.items()
+            if (cleaned := _without_private_refs(item)) is not None
+        }
+    if isinstance(value, list):
+        return [
+            cleaned
+            for item in value
+            if (cleaned := _without_private_refs(item)) is not None
+        ]
+    if isinstance(value, str) and value.startswith("s3://"):
+        return None
+    return value
