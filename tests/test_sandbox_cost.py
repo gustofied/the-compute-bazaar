@@ -326,6 +326,12 @@ class SandboxCostPipelineTests(unittest.TestCase):
                 gpu_history_ref=str(gpu_history),
             )
             public = json.loads((root / "dashboard" / "sandbox-cost.json").read_text())
+            rate_card = json.loads(
+                (root / "dashboard" / "sandbox" / "rates.json").read_text()
+            )
+            workload_card = json.loads(
+                (root / "dashboard" / "sandbox" / "workload.json").read_text()
+            )
 
         self.assertEqual(first.build_id, second.build_id)
         self.assertIn(
@@ -368,6 +374,14 @@ class SandboxCostPipelineTests(unittest.TestCase):
             5,
         )
         self.assertEqual(public["manifest"]["manifest_version"], "sandbox_cost_gold_v5")
+        self.assertEqual(rate_card["schema_version"], "compute_bazaar_card_v1")
+        self.assertEqual(rate_card["card_type"], "compute_rate_market")
+        self.assertEqual(workload_card["schema_version"], "compute_bazaar_card_v1")
+        self.assertEqual(workload_card["card_type"], "sandbox_workload")
+        self.assertEqual(
+            workload_card["coverage"]["latest_replicate_count"],
+            69,
+        )
         self.assertEqual(public["workload"]["source_batch_count"], 7)
         self.assertEqual(public["workload"]["calendar_day_count"], 5)
         self.assertEqual(public["workload"]["methodology_generation_count"], 6)

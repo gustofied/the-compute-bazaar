@@ -45,6 +45,18 @@ SNAPSHOT_FILES = {
     "market-state": "market-state.json",
     "prime-frontier-offer-market": "prime-frontier-offer-market.json",
     "prime-h100-offer-reference": "prime-h100-offer-reference.json",
+    "market-overview": "market-overview.json",
+    "gpu-benchmark-h100": "gpu-benchmark/h100.json",
+    "gpu-benchmark-h200": "gpu-benchmark/h200.json",
+    "gpu-benchmark-b200": "gpu-benchmark/b200.json",
+    "gpu-benchmark-b300": "gpu-benchmark/b300.json",
+    "prime-frontier-h100": "prime-frontier/h100.json",
+    "prime-frontier-h200": "prime-frontier/h200.json",
+    "prime-frontier-b200": "prime-frontier/b200.json",
+    "prime-frontier-b300": "prime-frontier/b300.json",
+    "capacity-market-state": "capacity/market-state.json",
+    "sandbox-rates": "sandbox/rates.json",
+    "sandbox-workload": "sandbox/workload.json",
 }
 
 
@@ -124,7 +136,7 @@ def create_app(
         _no_store(response)
         return _read_snapshot(snapshot_dir, name, source=source, s3_prefix=s3_prefix)
 
-    @app.get("/api/dashboard-snapshots/{filename}")
+    @app.get("/api/dashboard-snapshots/{filename:path}")
     def dashboard_snapshot(filename: str, response: Response) -> Any:
         _no_store(response)
         name = _snapshot_name_for_filename(filename)
@@ -298,7 +310,12 @@ def _available_snapshots(
         if not s3_prefix:
             return []
         try:
-            filenames = {ref.rsplit("/", 1)[-1] for ref in list_refs(s3_prefix, suffix=".json")}
+            prefix = s3_prefix.rstrip("/") + "/"
+            filenames = {
+                ref[len(prefix) :]
+                for ref in list_refs(s3_prefix, suffix=".json")
+                if ref.startswith(prefix)
+            }
         except Exception:
             return []
         return [name for name, filename in SNAPSHOT_FILES.items() if filename in filenames]
@@ -351,7 +368,11 @@ def _read_optional_snapshot(
 
 
 def _snapshot_name_for_filename(filename: str) -> str:
-    if "/" in filename or "\\" in filename:
+    if (
+        "\\" in filename
+        or filename.startswith("/")
+        or any(part in {"", ".", ".."} for part in filename.split("/"))
+    ):
         raise HTTPException(status_code=404, detail="Snapshot not found")
     for name, candidate in SNAPSHOT_FILES.items():
         if filename == candidate:

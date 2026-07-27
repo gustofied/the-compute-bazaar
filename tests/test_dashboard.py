@@ -45,8 +45,18 @@ class DashboardSnapshotTests(unittest.TestCase):
             _snapshot_name_for_filename("prime-h100-offer-reference.json"),
             "prime-h100-offer-reference",
         )
+        self.assertEqual(
+            _snapshot_name_for_filename("gpu-benchmark/h100.json"),
+            "gpu-benchmark-h100",
+        )
+        self.assertEqual(
+            _snapshot_name_for_filename("sandbox/workload.json"),
+            "sandbox-workload",
+        )
         with self.assertRaises(HTTPException):
             _snapshot_name_for_filename("../manifest.json")
+        with self.assertRaises(HTTPException):
+            _snapshot_name_for_filename("gpu-benchmark/../manifest.json")
         with self.assertRaises(HTTPException):
             _snapshot_name_for_filename("secret.json")
 

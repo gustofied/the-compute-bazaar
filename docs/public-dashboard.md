@@ -37,13 +37,61 @@ is an S3 URI. If that is not set, it infers
 The browser reads same-origin JSON from:
 
 ```text
-/api/dashboard-snapshots/*.json
+/api/dashboard-snapshots/{allowlisted path}.json
 ```
 
-That route is intentionally limited to the public-safe snapshot filenames below. It can read from
-S3 for live local inspection, or from `data/dashboard/compute-bazaar/` when the source is `local`.
+That route is intentionally limited to the public-safe snapshot paths below. It can read from S3
+for live local inspection, or from `data/dashboard/compute-bazaar/` when the source is `local`.
 
-## Snapshot Files
+## Card Views
+
+Product pages should prefer the versioned card views:
+
+```text
+market-overview.json
+gpu-benchmark/h100.json
+gpu-benchmark/h200.json
+gpu-benchmark/b200.json
+gpu-benchmark/b300.json
+prime-frontier/h100.json
+prime-frontier/h200.json
+prime-frontier/b200.json
+prime-frontier/b300.json
+capacity/market-state.json
+sandbox/rates.json
+sandbox/workload.json
+```
+
+Every card uses `compute_bazaar_card_v1` and declares:
+
+```text
+card_type
+card_id
+as_of
+observation_window
+status
+unit
+methodology
+headline
+series
+band
+coverage
+sources
+drilldown_ref
+data
+```
+
+The card layer is a public projection of Gold, not another source of truth. Numeric products are
+calculated by the maintained DataFusion queries before publication. Each history row is serialized
+once; compatibility code may reconstruct the old shape in browser memory while caches and old
+workers expire. `drilldown_ref` names the larger public audit file where appropriate.
+
+`market-overview.json` is the small article bootstrap. The four GPU benchmark files own their
+family-specific price histories. Prime files own one family each, avoiding the old four-family
+history duplication. Sandbox rates and workload are separated because they have different units,
+refresh semantics, and claims.
+
+## Audit Snapshots
 
 ```text
 manifest.json
@@ -64,8 +112,9 @@ provider-comparison.json
 listings-sample.json
 ```
 
-These files are safe for a browser because they contain product/query outputs, counts, checks, and
-public-facing rows. `featured-benchmarks.json` is the public strip for the current H100,
+These compatibility and audit files remain public-safe and are retained for lineage, operator
+inspection, and old clients. They contain product/query outputs, counts, checks, and public-facing
+rows. `featured-benchmarks.json` is the public strip for the current H100,
 H200, B200, and B300 benchmark families. `benchmark-constituents.json` is still public-safe, but it is
 for operator/product inspection rather than the minimal AdamSioud label. Its `complete` and
 `row_count` fields confirm that the file contains the full current constituent set rather than the
@@ -78,7 +127,7 @@ coverage counts. Each export merges the newest observations into the existing hi
 hourly job does not need to rescan the full lake. Use it instead of downloading the much larger
 all-product `index-history.json` on public story pages.
 
-`prime-frontier-offer-market.json` is the maintained public-safe Prime shelf
+`prime-frontier-offer-market.json` is the compatibility public-safe Prime shelf
 for H100, H200, B200, and B300. Each product carries the Prime
 provider-balanced reference, wider Compute Bazaar benchmark, retained
 histories, current benchmark-centered price levels, named upstream sources,
@@ -86,10 +135,10 @@ eligible configuration details, and observable lifecycle events. It removes
 private S3 references and credentials. Counts are visible configurations and
 distinct upstream providers, not physical GPU inventory or traded volume.
 
-`prime-h100-offer-reference.json` is a compatibility projection of the H100
-product from the same build. New consumers should use the four-family file.
+`prime-h100-offer-reference.json` is an older compatibility projection of the H100
+product from the same build. New consumers should use the family-specific card files.
 
-`sandbox-cost.json` is the version 5 public article payload for the sandbox and
+`sandbox-cost.json` is the version 5 public audit payload for the sandbox and
 underlying-capacity benchmark. It contains the current exact-shape,
 seven-provider VM offer cohort; its retained fixed-membership median/p25-p75
 history; the current VM/sandbox cohort comparison; 33 dated managed-sandbox

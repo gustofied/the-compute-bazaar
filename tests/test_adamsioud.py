@@ -12,7 +12,7 @@ class AdamSioudServerTests(unittest.TestCase):
         paths = {getattr(route, "path", "") for route in app.routes}
 
         self.assertIn("/api/health", paths)
-        self.assertIn("/api/dashboard-snapshots/{filename}", paths)
+        self.assertIn("/api/dashboard-snapshots/{filename:path}", paths)
         self.assertIn("/api/snapshots/{name}", paths)
         self.assertIn("/", paths)
 
@@ -101,10 +101,10 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertNotIn('id="sandbox-batch-history"', article)
         self.assertIn('href="./compute-viz.css?v=5"', article)
         self.assertIn('src="./compute-viz.js?v=6"', article)
-        self.assertIn('src="./compute-market.js?v=10"', article)
-        self.assertIn('src="./compute-market-history.js?v=7"', article)
-        self.assertIn('src="./prime-frontier-market.js?v=1"', article)
-        self.assertIn('src="./sandbox-cost.js?v=25"', article)
+        self.assertIn('src="./compute-market.js?v=11"', article)
+        self.assertIn('src="./compute-market-history.js?v=8"', article)
+        self.assertIn('src="./prime-frontier-market.js?v=2"', article)
+        self.assertIn('src="./sandbox-cost.js?v=26"', article)
         self.assertEqual(article.count("data-viz-card"), 14)
         for status_label in {
             "Hourly benchmark history",

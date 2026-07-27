@@ -69,7 +69,7 @@ def create_app(
         _no_store(response)
         return _read_snapshot(snapshot_dir, name, source=source, s3_prefix=s3_prefix)
 
-    @app.get("/api/dashboard-snapshots/{filename}")
+    @app.get("/api/dashboard-snapshots/{filename:path}")
     def dashboard_snapshot(filename: str, response: Response) -> Any:
         _no_store(response)
         name = _snapshot_name_for_filename(filename)

@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from the_compute_bazaar.prices.datafusion import query_tables
+from the_compute_bazaar.prices.public_views import (
+    sandbox_rate_view,
+    sandbox_workload_view,
+)
 from the_compute_bazaar.prices.storage import (
     exclusive_lease,
     read_bytes,
@@ -2111,32 +2115,38 @@ order by series_order, observed_date, point_order
     public_ref = None
     if dashboard_output_root:
         public_ref = _join(dashboard_output_root, "sandbox-cost.json")
+        public_payload = _public_payload(
+            manifest=manifest,
+            hourly_rows=hourly_gold,
+            fixed_rate=fixed_rate,
+            price_events=price_events,
+            current_rates=current_rates,
+            workload_batches=workload_batches,
+            workload_run_history=workload_run_history,
+            latest_replicates=latest_replicates,
+            latest_phases=latest_phases,
+            phase_summary=phase_summary,
+            workload_summary=workload_summary,
+            run_metadata=run_metadata,
+            gpu_daily_coverage=gpu_daily_coverage,
+            combined=combined,
+            vm_current=vm_current,
+            vm_fixed_rate=vm_fixed_rate,
+            vm_expanded_current=vm_expanded_current,
+            vm_expanded_rate=vm_expanded_rate,
+            vm_marketplace_current=vm_marketplace_current,
+            vm_marketplace_history=vm_marketplace_history,
+            vm_sandbox_comparison=vm_sandbox_comparison,
+            utilization_ladder=utilization_ladder,
+        )
+        write_json(public_ref, public_payload)
         write_json(
-            public_ref,
-            _public_payload(
-                manifest=manifest,
-                hourly_rows=hourly_gold,
-                fixed_rate=fixed_rate,
-                price_events=price_events,
-                current_rates=current_rates,
-                workload_batches=workload_batches,
-                workload_run_history=workload_run_history,
-                latest_replicates=latest_replicates,
-                latest_phases=latest_phases,
-                phase_summary=phase_summary,
-                workload_summary=workload_summary,
-                run_metadata=run_metadata,
-                gpu_daily_coverage=gpu_daily_coverage,
-                combined=combined,
-                vm_current=vm_current,
-                vm_fixed_rate=vm_fixed_rate,
-                vm_expanded_current=vm_expanded_current,
-                vm_expanded_rate=vm_expanded_rate,
-                vm_marketplace_current=vm_marketplace_current,
-                vm_marketplace_history=vm_marketplace_history,
-                vm_sandbox_comparison=vm_sandbox_comparison,
-                utilization_ladder=utilization_ladder,
-            ),
+            _join(dashboard_output_root, "sandbox/rates.json"),
+            sandbox_rate_view(public_payload),
+        )
+        write_json(
+            _join(dashboard_output_root, "sandbox/workload.json"),
+            sandbox_workload_view(public_payload),
         )
 
     return SandboxCostBuild(

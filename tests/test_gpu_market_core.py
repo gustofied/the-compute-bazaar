@@ -2196,6 +2196,15 @@ class GoldQueryTests(unittest.TestCase):
                 output_root=dashboard_root,
             )
             public = read_json(export["output_refs"]["prime_frontier_offer_market"])
+            h100_benchmark_card = read_json(
+                export["output_refs"]["gpu_benchmark_h100"]
+            )
+            h100_prime_card = read_json(
+                export["output_refs"]["prime_frontier_h100"]
+            )
+            capacity_card = read_json(
+                export["output_refs"]["capacity_market_state"]
+            )
             reference_query = run_operator_query(
                 lake_root=lake_root,
                 query_id="prime_frontier_offer_reference",
@@ -2259,6 +2268,15 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual(h100_compatibility["current"]["reference_usd_gpu_hr"], 4.0)
         self.assertNotIn("raw_ref", json.dumps(public))
         self.assertNotIn("s3://", json.dumps(public))
+        self.assertEqual(
+            h100_benchmark_card["schema_version"],
+            "compute_bazaar_card_v1",
+        )
+        self.assertEqual(h100_benchmark_card["card_type"], "gpu_benchmark")
+        self.assertEqual(h100_prime_card["card_type"], "prime_frontier_offer_market")
+        self.assertEqual(h100_prime_card["data"]["family_id"], "H100")
+        self.assertEqual(capacity_card["card_type"], "compute_market_state")
+        self.assertNotIn("s3://", json.dumps(h100_prime_card))
         self.assertIn(
             "prime_frontier_offer_market",
             export["output_refs"],

@@ -28,6 +28,13 @@ from .offer_reference import (
     prime_frontier_ladder_sql,
     prime_frontier_reference_history_sql,
 )
+from .public_views import (
+    GPU_FAMILIES,
+    gpu_benchmark_view,
+    market_overview_view,
+    market_state_view,
+    prime_frontier_view,
+)
 from .schemas import to_jsonable, utc_now
 from .storage import (
     list_refs,
@@ -1183,6 +1190,12 @@ def export_gold_dashboard_snapshot(
         "prime_h100_offer_reference": "/".join(
             [output_root.rstrip("/"), "prime-h100-offer-reference.json"]
         ),
+        "market_overview": "/".join(
+            [output_root.rstrip("/"), "market-overview.json"]
+        ),
+        "capacity_market_state": "/".join(
+            [output_root.rstrip("/"), "capacity", "market-state.json"]
+        ),
     }
     prime_frontier_products = _public_prime_frontier_products(
         payload=prime_frontier_payload,
@@ -1227,6 +1240,70 @@ def export_gold_dashboard_snapshot(
         },
         "products": prime_frontier_products,
     }
+    benchmark_by_family = {
+        str(row.get("benchmark_family_id") or ""): row
+        for row in public_benchmark_values
+    }
+    benchmark_cards = {
+        family: gpu_benchmark_view(
+            manifest=public_manifest,
+            family_id=family,
+            current=benchmark_by_family.get(family),
+            history=public_benchmark_history,
+            constituents=public_benchmark_constituents,
+            methodology_version=BENCHMARK_METHODOLOGY_VERSION,
+        )
+        for family in GPU_FAMILIES
+    }
+    for family in GPU_FAMILIES:
+        output_refs[f"gpu_benchmark_{family.lower()}"] = "/".join(
+            [output_root.rstrip("/"), "gpu-benchmark", f"{family.lower()}.json"]
+        )
+    prime_cards = {
+        str(product.get("family_id") or ""): prime_frontier_view(
+            manifest=public_manifest,
+            product=product,
+            methodology_version=PRIME_FRONTIER_METHOD_VERSION,
+            source=prime_frontier_public["source"],
+            measurement_notes=prime_frontier_public["measurement_notes"],
+            execution_data=prime_frontier_public["execution_data"],
+        )
+        for product in prime_frontier_products
+    }
+    for family in GPU_FAMILIES:
+        output_refs[f"prime_frontier_{family.lower()}"] = "/".join(
+            [output_root.rstrip("/"), "prime-frontier", f"{family.lower()}.json"]
+        )
+    public_market_state_payload = {
+        "schema_version": "compute_market_state_public_v1",
+        "manifest": public_manifest,
+        "methodology_version": MARKET_STATE_METHODOLOGY_VERSION,
+        "measurement_kinds": {
+            "rental_occupancy": "Rented units divided by a source-defined total.",
+            "availability_pressure": "Current deployability or free stock; not rented share unless a denominator is present.",
+        },
+        "current_row_count": len(public_market_state),
+        "current_rows": public_market_state,
+        "history_manifest_count": market_state_history_payload[
+            "history_manifest_count"
+        ],
+        "history_row_count": len(public_market_state_history),
+        "history_rows": public_market_state_history,
+        "vm_and_sandbox": {
+            "status": "price_and_workload_only",
+            "note": "Current VM and sandbox sources expose prices or workload timing, but no comparable public rented-and-total fleet denominator.",
+        },
+    }
+    capacity_card = market_state_view(public_market_state_payload)
+    market_overview = market_overview_view(
+        manifest={
+            **public_manifest,
+            "status": "live",
+            "successful_providers": public_manifest.get("provider_scope") or [],
+            "failed_providers": [],
+        },
+        benchmark_cards=list(benchmark_cards.values()),
+    )
     write_json(output_refs["manifest"], public_manifest)
     write_json(
         output_refs["latest_index"], {"manifest": public_manifest, "rows": index}
@@ -1301,26 +1378,7 @@ def export_gold_dashboard_snapshot(
     )
     write_json(
         output_refs["market_state"],
-        {
-            "schema_version": "compute_market_state_public_v1",
-            "manifest": public_manifest,
-            "methodology_version": MARKET_STATE_METHODOLOGY_VERSION,
-            "measurement_kinds": {
-                "rental_occupancy": "Rented units divided by a source-defined total.",
-                "availability_pressure": "Current deployability or free stock; not rented share unless a denominator is present.",
-            },
-            "current_row_count": len(public_market_state),
-            "current_rows": public_market_state,
-            "history_manifest_count": market_state_history_payload[
-                "history_manifest_count"
-            ],
-            "history_row_count": len(public_market_state_history),
-            "history_rows": public_market_state_history,
-            "vm_and_sandbox": {
-                "status": "price_and_workload_only",
-                "note": "Current VM and sandbox sources expose prices or workload timing, but no comparable public rented-and-total fleet denominator.",
-            },
-        },
+        public_market_state_payload,
     )
     write_json(
         output_refs["prime_frontier_offer_market"],
@@ -1351,6 +1409,12 @@ def export_gold_dashboard_snapshot(
             "offers": (h100_product or {}).get("offers", []),
         },
     )
+    for family, card in benchmark_cards.items():
+        write_json(output_refs[f"gpu_benchmark_{family.lower()}"], card)
+    for family, card in prime_cards.items():
+        write_json(output_refs[f"prime_frontier_{family.lower()}"], card)
+    write_json(output_refs["capacity_market_state"], capacity_card)
+    write_json(output_refs["market_overview"], market_overview)
 
     return {
         "output_refs": output_refs,
@@ -1373,6 +1437,9 @@ def export_gold_dashboard_snapshot(
             "prime_frontier_ladder": len(prime_frontier_payload.get("ladder", [])),
             "prime_frontier_events": len(prime_frontier_payload.get("events", [])),
             "prime_frontier_offers": len(prime_frontier_payload.get("offers", [])),
+            "gpu_benchmark_cards": len(benchmark_cards),
+            "prime_frontier_cards": len(prime_cards),
+            "capacity_cards": 1,
         },
         "source_gold_manifest_ref": manifest.get("manifest_ref"),
         "warnings": warnings,

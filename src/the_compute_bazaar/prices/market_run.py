@@ -51,6 +51,7 @@ from .pipeline import (
     ingest_vultr,
 )
 from .providers.rate_cards import DEFAULT_RATE_CARD_PROVIDER, rate_card_providers
+from .public_views import GPU_FAMILIES, market_overview_view
 from .schemas import to_jsonable, utc_now
 from .storage import list_refs, read_json, write_json
 
@@ -316,6 +317,12 @@ def run_market_hourly(
     dashboard_output_refs = {
         **dashboard_export["output_refs"],
         "sandbox_cost": str(sandbox_cost.public_ref),
+        "sandbox_rates": "/".join(
+            [dashboard_output_root.rstrip("/"), "sandbox", "rates.json"]
+        ),
+        "sandbox_workload": "/".join(
+            [dashboard_output_root.rstrip("/"), "sandbox", "workload.json"]
+        ),
         "market_run": _dashboard_market_run_ref(dashboard_output_root),
         "market_history": _dashboard_market_history_ref(dashboard_output_root),
     }
@@ -396,6 +403,19 @@ def run_market_hourly(
         "checks": checks,
         "data_quality": data_quality,
     }
+    benchmark_cards = [
+        read_json(dashboard_output_refs[f"gpu_benchmark_{family.lower()}"])
+        for family in GPU_FAMILIES
+    ]
+    sandbox_rates = read_json(dashboard_output_refs["sandbox_rates"])
+    write_json(
+        dashboard_output_refs["market_overview"],
+        market_overview_view(
+            manifest=_public_market_run_manifest(payload),
+            benchmark_cards=benchmark_cards,
+            sandbox_rates=sandbox_rates,
+        ),
+    )
     manifest_ref = write_market_run_manifest(
         lake_root=lake_root,
         observed_date=observed_date,
