@@ -20,7 +20,7 @@ a runtime dependency. The maintained implementation is:
 external/AdamSioud/exemplars/compute/compute-viz.css
 external/AdamSioud/exemplars/compute/compute-viz.js
 external/AdamSioud/exemplars/compute/compute-market-history.js
-external/AdamSioud/exemplars/compute/prime-h100-market.js
+external/AdamSioud/exemplars/compute/prime-frontier-market.js
 external/AdamSioud/exemplars/compute/sandbox-cost.js
 ```
 
@@ -62,6 +62,25 @@ methodology action, expanded-view action, share action, and accessible status
 message. Compact figures can visually suppress repeated status copy while
 retaining it for assistive technology.
 
+The visible market-card primitive translates useful chart-card conventions
+into the article's native HTML, CSS, and D3 system rather than importing a
+React/Tailwind component. Its stable anatomy is:
+
+```text
+market-card
+  header       identity, headline value, state, product control
+  controls     compact current facts and time range
+  body         one or more analytical panels
+  observation  selected point written by ComputeViz
+  caption      units and evidence boundary
+  footer       provenance, methodology, expanded view, share
+```
+
+The primitive uses fine rules, restrained surfaces, semantic controls, and
+one product accent. A chart can keep its own composition inside the body.
+Cards do not gain decorative metrics, redundant icons, or rounded subcards
+merely to resemble a component gallery.
+
 The stable live-card URL is:
 
 ```text
@@ -73,6 +92,11 @@ provenance, article link, copy-link action, and copy-embed action. This is a
 presentation mode of the article, not a second renderer or a copied dataset.
 It does not serialize a temporary hover state or claim that the underlying
 data will never change.
+
+Cards with a meaningful product state can declare
+`data-viz-state-params="gpu"`. `ComputeViz` then retains that state in card,
+embed, article, and share URLs. The Prime frontier card therefore opens the
+same H100, H200, B200, or B300 view that the reader selected.
 
 The iframe-safe URL is:
 
@@ -183,9 +207,12 @@ membership. It is not a visual license to invent an order book.
 - Do not use bid, ask, fill, cancel, remaining volume, liquidity, or execution
   language unless the source exposes those objects.
 
-The Prime H100 ladder uses $0.25 rungs, configuration breadth, distinct
-upstream-provider breadth, and a provider-balanced reference. Its hover and
-focus detail can link to Prime's matching catalogue, but it cannot claim an
+The Prime frontier shelf uses $0.25 rungs, configuration breadth, distinct
+upstream-provider breadth, a provider-balanced Prime reference, and the wider
+Compute Bazaar benchmark. Exact returned configurations appear as requestable
+marks. Historical diamonds appear only for observable entries, exits,
+repricings, or stock-label changes. Hover and focus detail can link to Prime's
+matching catalogue, but the card cannot claim fills, quantities, or an
 individual public URL for every configuration when none exists.
 
 ## Semantic Series Configuration

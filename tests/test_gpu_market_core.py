@@ -19,6 +19,7 @@ from the_compute_bazaar.prices.gold import (
     query_gold_listings,
     query_gold_market_state,
     query_gold_market_state_history,
+    query_gold_prime_frontier_offer_market,
     query_gold_prime_h100_offer_reference,
     query_gold_provider_comparison,
     read_latest_gold_manifest,
@@ -618,10 +619,7 @@ class GpuNormalizationTests(unittest.TestCase):
     def test_scaleway_converts_public_zone_prices_and_preserves_stock_state(
         self,
     ) -> None:
-        fx_csv = (
-            "TIME_PERIOD,OBS_VALUE\n"
-            "2026-07-23,1.14\n"
-        )
+        fx_csv = "TIME_PERIOD,OBS_VALUE\n2026-07-23,1.14\n"
         session = _FakeSession(
             [
                 fx_csv,
@@ -857,9 +855,7 @@ class GpuNormalizationTests(unittest.TestCase):
                     "plans": [
                         {
                             "planCode": "project",
-                            "addonFamilies": [
-                                {"addons": [hourly_plan, monthly_plan]}
-                            ],
+                            "addonFamilies": [{"addons": [hourly_plan, monthly_plan]}],
                         }
                     ],
                 },
@@ -992,17 +988,13 @@ class GpuNormalizationTests(unittest.TestCase):
                             "source_url": "https://example.test/pricing",
                             "hardware": {
                                 "selection": "fixed",
-                                "options": [
-                                    {"slug": "b300", "name": "NVIDIA B300"}
-                                ],
+                                "options": [{"slug": "b300", "name": "NVIDIA B300"}],
                                 "gpu_count": "1",
                                 "gpu_memory_per_device_gb": 268,
                             },
                             "availability": "available",
                             "freshness": {"state": "current"},
-                            "provenance": {
-                                "verified_at": "2026-07-23T12:00:00Z"
-                            },
+                            "provenance": {"verified_at": "2026-07-23T12:00:00Z"},
                             "variants": [
                                 {
                                     "id": "variant-standard",
@@ -1030,9 +1022,7 @@ class GpuNormalizationTests(unittest.TestCase):
                                         "pricing_structure": "additive_components",
                                         "fixed_gpu_eligible": True,
                                         "total_price_eligible": False,
-                                        "reason_codes": [
-                                            "additive_price_not_total"
-                                        ],
+                                        "reason_codes": ["additive_price_not_total"],
                                     },
                                 },
                             ],
@@ -2060,7 +2050,7 @@ class GpuNormalizationTests(unittest.TestCase):
 
 
 class GoldQueryTests(unittest.TestCase):
-    def test_prime_h100_offer_reference_tracks_provider_floors_and_events(
+    def test_prime_frontier_offer_market_tracks_families_and_events(
         self,
     ) -> None:
         first_observed = datetime(2026, 7, 27, 10, 0, tzinfo=timezone.utc)
@@ -2071,15 +2061,18 @@ class GoldQueryTests(unittest.TestCase):
             offer_id: str,
             price: float,
             observed_at: datetime,
+            *,
+            gpu_model: str = "H100_80GB",
+            vram_gb: int = 80,
         ) -> GpuOffer:
             return _offer(
                 provider=provider,
                 source_connector="prime_intellect",
                 source_offer_id=offer_id,
                 price_usd_hr=price,
-                gpu_raw_name="H100_80GB",
-                gpu_model="H100_80GB",
-                vram_gb=80,
+                gpu_raw_name=gpu_model,
+                gpu_model=gpu_model,
+                vram_gb=vram_gb,
                 observed_at=observed_at,
                 is_spot=False,
                 is_secure=True,
@@ -2105,6 +2098,38 @@ class GoldQueryTests(unittest.TestCase):
                     prime_offer("alpha", "alpha-h100", 3.0, first_observed),
                     prime_offer("beta", "beta-h100", 4.0, first_observed),
                     prime_offer("charlie", "charlie-h100", 5.0, first_observed),
+                    prime_offer(
+                        "alpha",
+                        "alpha-h200",
+                        4.0,
+                        first_observed,
+                        gpu_model="H200_141GB",
+                        vram_gb=141,
+                    ),
+                    prime_offer(
+                        "beta",
+                        "beta-h200",
+                        5.0,
+                        first_observed,
+                        gpu_model="H200_141GB",
+                        vram_gb=141,
+                    ),
+                    prime_offer(
+                        "charlie",
+                        "charlie-h200",
+                        6.0,
+                        first_observed,
+                        gpu_model="H200_141GB",
+                        vram_gb=141,
+                    ),
+                    prime_offer(
+                        "alpha",
+                        "alpha-b300",
+                        7.5,
+                        first_observed,
+                        gpu_model="B300_288GB",
+                        vram_gb=288,
+                    ),
                 ],
             )
             first = build_gold_market_tables(
@@ -2123,6 +2148,38 @@ class GoldQueryTests(unittest.TestCase):
                     prime_offer("alpha", "alpha-h100", 3.0, second_observed),
                     prime_offer("beta", "beta-h100", 4.5, second_observed),
                     prime_offer("delta", "delta-h100", 4.0, second_observed),
+                    prime_offer(
+                        "alpha",
+                        "alpha-h200",
+                        4.5,
+                        second_observed,
+                        gpu_model="H200_141GB",
+                        vram_gb=141,
+                    ),
+                    prime_offer(
+                        "beta",
+                        "beta-h200",
+                        5.5,
+                        second_observed,
+                        gpu_model="H200_141GB",
+                        vram_gb=141,
+                    ),
+                    prime_offer(
+                        "charlie",
+                        "charlie-h200",
+                        6.5,
+                        second_observed,
+                        gpu_model="H200_141GB",
+                        vram_gb=141,
+                    ),
+                    prime_offer(
+                        "alpha",
+                        "alpha-b300",
+                        7.5,
+                        second_observed,
+                        gpu_model="B300_288GB",
+                        vram_gb=288,
+                    ),
                 ],
             )
             second = build_gold_market_tables(
@@ -2130,68 +2187,94 @@ class GoldQueryTests(unittest.TestCase):
                 providers=["prime_intellect"],
                 run_id="gold-market-20260727T110000-00000002",
             )
-            result = query_gold_prime_h100_offer_reference(
+            result = query_gold_prime_frontier_offer_market(lake_root=lake_root)
+            h100_compatibility = query_gold_prime_h100_offer_reference(
                 lake_root=lake_root
             )
             export = export_gold_dashboard_snapshot(
                 lake_root=lake_root,
                 output_root=dashboard_root,
             )
-            public = read_json(
-                export["output_refs"]["prime_h100_offer_reference"]
-            )
+            public = read_json(export["output_refs"]["prime_frontier_offer_market"])
             reference_query = run_operator_query(
                 lake_root=lake_root,
-                query_id="prime_h100_offer_reference",
+                query_id="prime_frontier_offer_reference",
                 limit=10,
             )
             ladder_query = run_operator_query(
                 lake_root=lake_root,
-                query_id="prime_h100_offer_ladder",
-                limit=20,
+                query_id="prime_frontier_offer_ladder",
+                limit=100,
             )
 
         self.assertEqual(
-            first.row_counts["fact_prime_h100_offer_reference_history"],
-            1,
+            first.row_counts["fact_prime_frontier_offer_reference_history"],
+            3,
         )
         self.assertEqual(
-            second.row_counts["fact_prime_h100_offer_reference_history"],
-            2,
+            second.row_counts["fact_prime_frontier_offer_reference_history"],
+            6,
         )
-        self.assertEqual(len(result["history"]), 2)
-        self.assertEqual(result["current"]["reference_usd_gpu_hr"], 4.0)
-        self.assertEqual(result["current"]["provider_count"], 3)
-        self.assertEqual(result["current"]["configuration_count"], 3)
-        self.assertEqual(result["current"]["low_price_provider_count"], 2)
-        self.assertEqual(result["current"]["status"], "observed")
+        self.assertEqual(len(result["history"]), 6)
         self.assertEqual(
-            result["current"]["gold_observed_at"],
+            set(result["current"]),
+            {"H100", "H200", "B300"},
+        )
+        self.assertEqual(result["current"]["H100"]["reference_usd_gpu_hr"], 4.0)
+        self.assertEqual(result["current"]["H100"]["provider_count"], 3)
+        self.assertEqual(result["current"]["H100"]["configuration_count"], 3)
+        self.assertEqual(result["current"]["H100"]["low_price_provider_count"], 2)
+        self.assertEqual(result["current"]["H100"]["status"], "observed")
+        self.assertEqual(result["current"]["H200"]["reference_usd_gpu_hr"], 5.5)
+        self.assertEqual(result["current"]["B300"]["status"], "indicative")
+        self.assertEqual(
+            result["current"]["H100"]["gold_observed_at"],
             second_observed.isoformat(),
         )
         self.assertEqual(
-            {row["event_type"] for row in result["events"]},
+            {
+                row["event_type"]
+                for row in result["events"]
+                if row["gpu_family_id"] == "H100"
+            },
             {"entered", "left_availability", "remained", "repriced_up"},
         )
         self.assertTrue(
-            any(row["is_reference_level"] for row in result["ladder"])
+            any(
+                row["is_market_benchmark_level"]
+                for row in result["ladder"]
+                if row["gpu_family_id"] == "H100"
+            )
         )
-        self.assertGreaterEqual(len(result["ladder"]), 11)
-        self.assertEqual(public["current"]["reference_usd_gpu_hr"], 4.0)
-        self.assertEqual(len(public["history"]), 2)
+        self.assertGreaterEqual(len(result["ladder"]), 39)
+        products = {row["family_id"]: row for row in public["products"]}
+        self.assertEqual(set(products), {"H100", "H200", "B200", "B300"})
+        self.assertEqual(products["H100"]["current"]["reference_usd_gpu_hr"], 4.0)
+        self.assertEqual(len(products["H100"]["history"]), 2)
+        self.assertIsNone(products["B200"]["current"])
+        self.assertEqual(
+            {row["provider"] for row in products["H100"]["sources"]},
+            {"alpha", "beta", "delta"},
+        )
+        self.assertEqual(h100_compatibility["current"]["reference_usd_gpu_hr"], 4.0)
         self.assertNotIn("raw_ref", json.dumps(public))
         self.assertNotIn("s3://", json.dumps(public))
         self.assertIn(
-            "prime_h100_offer_reference",
+            "prime_frontier_offer_market",
             export["output_refs"],
         )
         self.assertEqual(reference_query["query"]["engine"], "datafusion")
-        self.assertEqual(reference_query["rows"][0]["reference_usd_gpu_hr"], 4.0)
+        self.assertEqual(
+            {row["gpu_family_id"] for row in reference_query["rows"]},
+            {"H100", "H200", "B300"},
+        )
         self.assertTrue(
-            any(row["is_reference_level"] for row in ladder_query["rows"])
+            any(row["is_market_benchmark_level"] for row in ladder_query["rows"])
         )
 
-    def test_market_state_history_accumulates_without_rewriting_prior_rows(self) -> None:
+    def test_market_state_history_accumulates_without_rewriting_prior_rows(
+        self,
+    ) -> None:
         first_observed = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
         second_observed = datetime(2026, 7, 25, 13, 0, tzinfo=timezone.utc)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2248,8 +2331,7 @@ class GoldQueryTests(unittest.TestCase):
             state_rows = [
                 row
                 for row in history["rows"]
-                if row["provider"] == "runpod"
-                and row["resource_type"] == "H100_80GB"
+                if row["provider"] == "runpod" and row["resource_type"] == "H100_80GB"
             ]
             latest = read_latest_gold_manifest(lake_root)
 
@@ -2266,10 +2348,7 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual(public_state["current_row_count"], 1)
         self.assertEqual(public_state["history_row_count"], 0)
         self.assertEqual(
-            {
-                row["measurement_kind"]
-                for row in public_state["current_rows"]
-            },
+            {row["measurement_kind"] for row in public_state["current_rows"]},
             {"availability_pressure"},
         )
         self.assertNotIn("dashboard_output_root", public_state["manifest"])
@@ -2361,9 +2440,7 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual(len(availability), 2)
         by_connector = {row["source_connector"]: row for row in availability}
         self.assertTrue(by_connector["runpod"]["aggregation_eligible"])
-        self.assertFalse(
-            by_connector["prime_intellect"]["aggregation_eligible"]
-        )
+        self.assertFalse(by_connector["prime_intellect"]["aggregation_eligible"])
         self.assertEqual(
             by_connector["prime_intellect"]["aggregation_exclusion_reason"],
             "matching_direct_provider_source",
@@ -2594,9 +2671,7 @@ class GoldQueryTests(unittest.TestCase):
             public_history = read_json(export["output_refs"]["benchmark_history"])
 
         h100_rows = [
-            row
-            for row in history["rows"]
-            if row["benchmark_family_id"] == "H100"
+            row for row in history["rows"] if row["benchmark_family_id"] == "H100"
         ]
         self.assertEqual(history["history_manifest_count"], 2)
         self.assertEqual(
@@ -3133,9 +3208,7 @@ class GoldQueryTests(unittest.TestCase):
                     }
                 ],
             )
-            sandbox_manifest_ref = (
-                f"{sandbox_root}/_manifests/sandbox_cost/latest.json"
-            )
+            sandbox_manifest_ref = f"{sandbox_root}/_manifests/sandbox_cost/latest.json"
             write_json(
                 sandbox_manifest_ref,
                 {
@@ -3146,9 +3219,7 @@ class GoldQueryTests(unittest.TestCase):
                     "bronze_refs": {
                         "source_manifest": f"{sandbox_root}/bronze/source-manifest.json"
                     },
-                    "silver_refs": {
-                        "rates": f"{sandbox_root}/silver/rates.parquet"
-                    },
+                    "silver_refs": {"rates": f"{sandbox_root}/silver/rates.parquet"},
                     "table_refs": {
                         "vm_capacity_expanded_current": vm_ref,
                         "sandbox_current_rates": rates_ref,
@@ -3263,9 +3334,7 @@ class GoldQueryTests(unittest.TestCase):
             f"{dashboard_root}/sandbox-cost.json",
         )
         self.assertEqual(
-            sandbox_public["manifest"]["row_counts"][
-                "sandbox_hourly_price_series"
-            ],
+            sandbox_public["manifest"]["row_counts"]["sandbox_hourly_price_series"],
             33,
         )
         self.assertEqual(sandbox_public["workload"]["source_batch_count"], 7)
@@ -3330,9 +3399,7 @@ def _write_provider_run(
     observed_at: datetime = OBSERVED_AT,
 ) -> None:
     observed_date = observed_at.date().isoformat()
-    raw_ref = (
-        f"{raw_root}/provider={provider}/date={observed_date}/run_id={run_id}/offers.json"
-    )
+    raw_ref = f"{raw_root}/provider={provider}/date={observed_date}/run_id={run_id}/offers.json"
     normalized_ref = f"{lake_root}/silver/gpu_offers/date={observed_date}/provider={provider}/run_id={run_id}/offers.parquet"
     manifest_ref = f"{lake_root}/_manifests/gpu_offers/provider={provider}/date={observed_date}/run_id={run_id}.json"
     latest_ref = f"{lake_root}/_manifests/gpu_offers/provider={provider}/latest.json"

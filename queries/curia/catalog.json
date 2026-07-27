@@ -57,20 +57,38 @@
       "default_limit": 200
     },
     {
+      "query_id": "prime_frontier_offer_reference",
+      "version": "v1",
+      "title": "Prime Frontier Offer References",
+      "description": "Provider-balanced Prime H100, H200, B200, and B300 base-rate history with market-benchmark context.",
+      "tables": ["fact_prime_frontier_offer_reference_history"],
+      "sql_path": "prime_frontier_offer_reference_v1.sql",
+      "default_limit": 672
+    },
+    {
+      "query_id": "prime_frontier_offer_ladder",
+      "version": "v1",
+      "title": "Prime Frontier Offer Shelf",
+      "description": "Latest quarter-dollar Prime frontier-GPU offer levels, benchmark markers, and observable configuration lifecycle counts.",
+      "tables": ["fact_prime_frontier_offer_ladder"],
+      "sql_path": "prime_frontier_offer_ladder_v1.sql",
+      "default_limit": 200
+    },
+    {
       "query_id": "prime_h100_offer_reference",
       "version": "v1",
-      "title": "Prime H100 Offer Reference",
-      "description": "Provider-balanced Prime H100 base-rate history with range, breadth, and evidence status.",
-      "tables": ["fact_prime_h100_offer_reference_history"],
+      "title": "Prime H100 Offer Reference (Compatibility)",
+      "description": "H100-only compatibility view over the maintained Prime frontier offer-reference history.",
+      "tables": ["fact_prime_frontier_offer_reference_history"],
       "sql_path": "prime_h100_offer_reference_v1.sql",
       "default_limit": 168
     },
     {
       "query_id": "prime_h100_offer_ladder",
       "version": "v1",
-      "title": "Prime H100 Offer Ladder",
-      "description": "Latest quarter-dollar Prime H100 offer levels and observable configuration lifecycle counts.",
-      "tables": ["fact_prime_h100_offer_ladder"],
+      "title": "Prime H100 Offer Shelf (Compatibility)",
+      "description": "H100-only compatibility view over the maintained Prime frontier offer shelf.",
+      "tables": ["fact_prime_frontier_offer_ladder"],
       "sql_path": "prime_h100_offer_ladder_v1.sql",
       "default_limit": 100
     },

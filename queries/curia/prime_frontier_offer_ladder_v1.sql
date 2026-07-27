@@ -1,4 +1,5 @@
 select
+  gpu_family_id,
   price_level_usd_gpu_hr,
   configuration_count,
   provider_count,
@@ -11,12 +12,15 @@ select
   stock_status_changed_count,
   remained_count,
   reference_usd_gpu_hr,
-  distance_from_prime_reference_usd_gpu_hr as distance_from_reference_usd_gpu_hr,
-  is_prime_reference_level as is_reference_level,
+  market_benchmark_usd_gpu_hr,
+  distance_from_prime_reference_usd_gpu_hr,
+  distance_from_market_benchmark_usd_gpu_hr,
+  premium_to_market_benchmark_fraction,
+  is_prime_reference_level,
+  is_market_benchmark_level,
   status,
   gold_observed_at,
   gold_run_id,
   methodology_version
 from fact_prime_frontier_offer_ladder
-where gpu_family_id = 'H100'
-order by price_level_usd_gpu_hr desc
+order by gpu_family_id, price_level_usd_gpu_hr desc

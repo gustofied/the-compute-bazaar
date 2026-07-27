@@ -62,10 +62,10 @@ APIs, CLI queries, agents, and index calculations:
 - `gold.fact_index_constituents`
 - `gold.fact_benchmark_values`
 - `gold.fact_benchmark_constituents`
-- `gold.fact_prime_h100_offer_history`
-- `gold.fact_prime_h100_offer_events`
-- `gold.fact_prime_h100_offer_reference_history`
-- `gold.fact_prime_h100_offer_ladder`
+- `gold.fact_prime_frontier_offer_history`
+- `gold.fact_prime_frontier_offer_events`
+- `gold.fact_prime_frontier_offer_reference_history`
+- `gold.fact_prime_frontier_offer_ladder`
 - `gold.dim_gpu_products`
 - `gold.dim_providers`
 - `gold.dim_regions`
@@ -158,7 +158,7 @@ read-only and can access only tables declared by those manifests. Useful
 queries should be promoted into the Curia catalog before they become stable
 inspection views or methodology.
 
-### Prime H100 Offer Shelf
+### Prime Frontier Offer Market
 
 Prime's availability API is also used for one intentionally narrow market
 microstructure view:
@@ -166,15 +166,17 @@ microstructure view:
 ```text
 Prime immutable API snapshots
   -> silver Prime configurations
-  -> cumulative H100 offer history
+  -> cumulative H100/H200/B200/B300 offer history
   -> observable lifecycle events
   -> provider-balanced reference history
-  -> centered $0.25 offer ladder
+  -> $0.25 shelf centered on the wider benchmark
   -> public-safe JSON / D3 card / Curia SQL
 ```
 
-The reference is the median of one lowest eligible H100 base rate per upstream
-provider. The ladder groups configurations, not physical GPUs. The event
+Each family reference is the median of one lowest eligible base rate per
+upstream provider. The current shelf also carries the matching Compute Bazaar
+benchmark so Prime's requestable configurations can be read relative to the
+broader market. The shelf groups configurations, not physical GPUs. The event
 classifier records appearance, disappearance, stock-label changes, and
 repricing, but it never invents fills or cancellations. This keeps the
 high-frequency market view useful without promoting catalogue presence into

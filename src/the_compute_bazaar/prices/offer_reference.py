@@ -1,4 +1,4 @@
-"""Prime H100 offer-reference history, lifecycle events, and ladder SQL."""
+"""Prime frontier-GPU offer history, lifecycle events, and shelf SQL."""
 
 from __future__ import annotations
 
@@ -6,27 +6,55 @@ import hashlib
 import math
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 
-PRIME_H100_METHOD_VERSION = "prime_h100_offer_reference_v1"
-PRIME_H100_SCOPE = "prime_secure_ondemand_all_shapes"
-PRIME_H100_PRICE_INCREMENT = 0.25
-PRIME_H100_SOURCE_URL = (
+PRIME_FRONTIER_METHOD_VERSION = "prime_frontier_offer_market_v1"
+PRIME_FRONTIER_SCOPE = "prime_secure_ondemand_frontier_all_shapes"
+PRIME_FRONTIER_PRICE_INCREMENT = 0.25
+PRIME_FRONTIER_SOURCE_URL = (
     "https://app.primeintellect.ai/dashboard/on-demand-gpus"
     "?image=ubuntu_22_cuda_12&security=Cheapest&pricing_type=Cheapest"
-    "&location=Cheapest&gpu_type=H100_80GB&quantity=1"
+    "&location=Cheapest"
 )
-PRIME_H100_API_DOCS_URL = (
+PRIME_FRONTIER_API_DOCS_URL = (
     "https://docs.primeintellect.ai/api-reference/check-gpu-availability"
 )
+PRIME_FRONTIER_PROVISION_DOCS_URL = (
+    "https://docs.primeintellect.ai/api-reference/provision-gpu"
+)
 
-PRIME_H100_HISTORY_COLUMNS = (
+
+@dataclass(frozen=True)
+class PrimeFrontierProduct:
+    family_id: str
+    label: str
+    canonical_model: str
+    api_gpu_type: str
+
+    @property
+    def market_url(self) -> str:
+        return f"{PRIME_FRONTIER_SOURCE_URL}&gpu_type={self.api_gpu_type}&quantity=1"
+
+
+PRIME_FRONTIER_PRODUCTS = (
+    PrimeFrontierProduct("H100", "H100", "H100_80GB", "H100_80GB"),
+    PrimeFrontierProduct("H200", "H200", "H200_141GB", "H200_141GB"),
+    PrimeFrontierProduct("B200", "B200", "B200_180GB", "B200_180GB"),
+    PrimeFrontierProduct("B300", "B300", "B300_288GB", "B300_262GB"),
+)
+PRIME_FRONTIER_PRODUCT_BY_FAMILY = {
+    product.family_id: product for product in PRIME_FRONTIER_PRODUCTS
+}
+
+PRIME_FRONTIER_HISTORY_COLUMNS = (
     "listing_id",
     "provider_id",
     "provider",
     "source_offer_id",
+    "gpu_family_id",
     "gpu_product_id",
     "gpu_model",
     "gpu_raw_name",
@@ -64,18 +92,31 @@ PRIME_H100_HISTORY_COLUMNS = (
 )
 
 
-def normalize_prime_h100_history(
+def prime_frontier_product_for_model(
+    gpu_model: Any,
+) -> PrimeFrontierProduct | None:
+    model = str(gpu_model or "")
+    for product in PRIME_FRONTIER_PRODUCTS:
+        if model == product.canonical_model or model.startswith(
+            f"{product.canonical_model}_x"
+        ):
+            return product
+    return None
+
+
+def normalize_prime_frontier_history(
     rows: Iterable[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Keep one schema across historical Gold versions."""
+    """Keep one schema across historical Gold versions and four GPU families."""
     normalized: list[dict[str, Any]] = []
     for source in rows:
         if str(source.get("source_connector") or "") != "prime_intellect":
             continue
-        gpu_model = str(source.get("gpu_model") or "")
-        if gpu_model != "H100_80GB" and not gpu_model.startswith("H100_80GB_x"):
+        product = prime_frontier_product_for_model(source.get("gpu_model"))
+        if product is None:
             continue
-        row = {column: source.get(column) for column in PRIME_H100_HISTORY_COLUMNS}
+        row = {column: source.get(column) for column in PRIME_FRONTIER_HISTORY_COLUMNS}
+        row["gpu_family_id"] = product.family_id
         row["source_connector"] = "prime_intellect"
         row["price_basis"] = (
             source.get("price_basis") or "provider_reported_gpu_base_rate"
@@ -85,9 +126,8 @@ def normalize_prime_h100_history(
             or source.get("calculated_at")
             or source.get("observed_at")
         )
-        row["gold_observed_date"] = (
-            source.get("gold_observed_date")
-            or _date_part(row["gold_observed_at"])
+        row["gold_observed_date"] = source.get("gold_observed_date") or _date_part(
+            row["gold_observed_at"]
         )
         normalized.append(row)
 
@@ -101,6 +141,7 @@ def normalize_prime_h100_history(
         key=lambda row: (
             str(row.get("gold_observed_at") or ""),
             str(row.get("gold_run_id") or ""),
+            str(row.get("gpu_family_id") or ""),
             str(row.get("provider") or ""),
             float(row.get("price_usd_gpu_hr") or math.inf),
             str(row.get("listing_id") or ""),
@@ -108,120 +149,131 @@ def normalize_prime_h100_history(
     )
 
 
-def build_prime_h100_offer_events(
+def build_prime_frontier_offer_events(
     history_rows: Iterable[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Classify observable listing changes without inventing fills."""
-    snapshots: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for row in normalize_prime_h100_history(history_rows):
+    """Classify observable configuration changes without inventing fills."""
+    normalized = normalize_prime_frontier_history(history_rows)
+    run_keys = sorted(
+        {
+            (
+                str(row.get("gold_observed_at") or ""),
+                str(row.get("gold_run_id") or ""),
+            )
+            for row in normalized
+        }
+    )
+    snapshots: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in normalized:
         snapshots[
             (
+                str(row.get("gpu_family_id") or ""),
                 str(row.get("gold_observed_at") or ""),
                 str(row.get("gold_run_id") or ""),
             )
         ].append(row)
 
-    ordered = sorted(snapshots.items())
     events: list[dict[str, Any]] = []
-    previous_key: tuple[str, str] | None = None
-    previous_rows: dict[str, dict[str, Any]] = {}
-    for (observed_at, run_id), snapshot_rows in ordered:
-        current_rows = {
-            str(row["listing_id"]): row
-            for row in snapshot_rows
-            if _is_eligible_offer(row)
-        }
-        previous_observed_at = previous_key[0] if previous_key else None
-        previous_run_id = previous_key[1] if previous_key else None
-        comparison_gap_seconds = _seconds_between(
-            previous_observed_at, observed_at
-        )
-        identities = sorted(set(previous_rows) | set(current_rows))
-        for listing_id in identities:
-            previous = previous_rows.get(listing_id)
-            current = current_rows.get(listing_id)
-            event_type = _event_type(previous, current)
-            before = _float_or_none(
-                previous.get("price_usd_gpu_hr") if previous else None
-            )
-            after = _float_or_none(
-                current.get("price_usd_gpu_hr") if current else None
-            )
-            active = current or previous
-            if active is None:
-                continue
-            event_price = after if after is not None else before
-            delta = (
-                after - before
-                if before is not None and after is not None
-                else None
-            )
-            delta_pct = (
-                delta / before
-                if delta is not None and before not in {None, 0}
-                else None
-            )
-            event_id = hashlib.sha256(
-                f"{run_id}|{listing_id}|{event_type}".encode("utf-8")
-            ).hexdigest()[:24]
-            events.append(
-                {
-                    "event_id": event_id,
-                    "event_type": event_type,
-                    "event_label": _event_label(event_type),
-                    "listing_id": listing_id,
-                    "provider": active.get("provider"),
-                    "source_connector": "prime_intellect",
-                    "gpu_model": active.get("gpu_model"),
-                    "gpu_count": active.get("gpu_count"),
-                    "gpu_socket": active.get("gpu_socket"),
-                    "region": active.get("region"),
-                    "stock_status_before": (
-                        previous.get("stock_status") if previous else None
-                    ),
-                    "stock_status_after": (
-                        current.get("stock_status") if current else None
-                    ),
-                    "price_before_usd_gpu_hr": before,
-                    "price_after_usd_gpu_hr": after,
-                    "price_delta_usd_gpu_hr": delta,
-                    "price_delta_fraction": delta_pct,
-                    "price_level_usd_gpu_hr": (
-                        _price_level(event_price)
-                        if event_price is not None
-                        else None
-                    ),
-                    "previous_observed_at": previous_observed_at,
-                    "observed_at": observed_at,
-                    "comparison_gap_seconds": comparison_gap_seconds,
-                    "previous_gold_run_id": previous_run_id,
-                    "gold_run_id": run_id,
-                    "methodology_version": PRIME_H100_METHOD_VERSION,
-                    "source_url": PRIME_H100_SOURCE_URL,
-                    "notes": (
-                        "Observable availability event; left availability is "
-                        "not evidence of a rental, fill, or cancellation."
-                    ),
-                }
-            )
-        previous_rows = current_rows
-        previous_key = (observed_at, run_id)
+    for product in PRIME_FRONTIER_PRODUCTS:
+        previous_key: tuple[str, str] | None = None
+        previous_rows: dict[str, dict[str, Any]] = {}
+        for observed_at, run_id in run_keys:
+            snapshot_rows = snapshots.get((product.family_id, observed_at, run_id), [])
+            current_rows = {
+                str(row["listing_id"]): row
+                for row in snapshot_rows
+                if _is_eligible_offer(row)
+            }
+            previous_observed_at = previous_key[0] if previous_key else None
+            previous_run_id = previous_key[1] if previous_key else None
+            comparison_gap_seconds = _seconds_between(previous_observed_at, observed_at)
+            identities = sorted(set(previous_rows) | set(current_rows))
+            for listing_id in identities:
+                previous = previous_rows.get(listing_id)
+                current = current_rows.get(listing_id)
+                event_type = _event_type(previous, current)
+                before = _float_or_none(
+                    previous.get("price_usd_gpu_hr") if previous else None
+                )
+                after = _float_or_none(
+                    current.get("price_usd_gpu_hr") if current else None
+                )
+                active = current or previous
+                if active is None:
+                    continue
+                event_price = after if after is not None else before
+                delta = (
+                    after - before if before is not None and after is not None else None
+                )
+                delta_pct = (
+                    delta / before
+                    if delta is not None and before not in {None, 0}
+                    else None
+                )
+                event_id = hashlib.sha256(
+                    (f"{run_id}|{product.family_id}|{listing_id}|{event_type}").encode(
+                        "utf-8"
+                    )
+                ).hexdigest()[:24]
+                events.append(
+                    {
+                        "event_id": event_id,
+                        "event_type": event_type,
+                        "event_label": _event_label(event_type),
+                        "listing_id": listing_id,
+                        "provider": active.get("provider"),
+                        "source_connector": "prime_intellect",
+                        "gpu_family_id": product.family_id,
+                        "gpu_model": active.get("gpu_model"),
+                        "gpu_count": active.get("gpu_count"),
+                        "gpu_socket": active.get("gpu_socket"),
+                        "region": active.get("region"),
+                        "stock_status_before": (
+                            previous.get("stock_status") if previous else None
+                        ),
+                        "stock_status_after": (
+                            current.get("stock_status") if current else None
+                        ),
+                        "price_before_usd_gpu_hr": before,
+                        "price_after_usd_gpu_hr": after,
+                        "price_delta_usd_gpu_hr": delta,
+                        "price_delta_fraction": delta_pct,
+                        "price_level_usd_gpu_hr": (
+                            _price_level(event_price)
+                            if event_price is not None
+                            else None
+                        ),
+                        "previous_observed_at": previous_observed_at,
+                        "observed_at": observed_at,
+                        "comparison_gap_seconds": comparison_gap_seconds,
+                        "previous_gold_run_id": previous_run_id,
+                        "gold_run_id": run_id,
+                        "methodology_version": PRIME_FRONTIER_METHOD_VERSION,
+                        "source_url": product.market_url,
+                        "notes": (
+                            "Observable availability event; leaving public "
+                            "availability is not evidence of a rental, fill, "
+                            "or cancellation."
+                        ),
+                    }
+                )
+            previous_rows = current_rows
+            previous_key = (observed_at, run_id)
     return events
 
 
-def prime_h100_reference_history_sql() -> str:
-    """DataFusion SQL for a provider-balanced Prime H100 reference."""
+def prime_frontier_reference_history_sql() -> str:
+    """DataFusion SQL for provider-balanced Prime frontier references."""
     return f"""
 with eligible as (
   select
     *,
     row_number() over(
-      partition by gold_run_id, provider
+      partition by gold_run_id, gpu_family_id, provider
       order by price_usd_gpu_hr asc, gpu_count asc, listing_id asc
     ) as provider_rank
-  from fact_prime_h100_offer_history
+  from fact_prime_frontier_offer_history
   where source_connector = 'prime_intellect'
-    and (gpu_model = 'H100_80GB' or gpu_model like 'H100_80GB_x%')
     and availability_status = 'available'
     and price_usd_gpu_hr > 0
     and coalesce(is_spot, false) = false
@@ -235,6 +287,8 @@ provider_floors as (
 reference_base as (
   select
     gold_run_id,
+    gpu_family_id,
+    max(gpu_product_id) as gpu_product_family,
     max(gold_observed_at) as gold_observed_at,
     max(gold_observed_date) as gold_observed_date,
     median(price_usd_gpu_hr) as reference_usd_gpu_hr,
@@ -258,34 +312,41 @@ reference_base as (
     end as minimum_executable_reference_usd_gpu_hr,
     max(observed_at) as latest_source_observed_at
   from provider_floors
-  group by gold_run_id
+  group by gold_run_id, gpu_family_id
 ),
 configuration_counts as (
   select
     gold_run_id,
+    gpu_family_id,
     count(*) as configuration_count,
     sum(case when gpu_count = 1 then 1 else 0 end)
       as single_gpu_configuration_count,
     count(distinct gpu_socket) as socket_count
   from eligible
-  group by gold_run_id
+  group by gold_run_id, gpu_family_id
 ),
 low_price_breadth as (
   select
     floors.gold_run_id,
+    floors.gpu_family_id,
     count(*) as low_price_provider_count
   from provider_floors floors
   join reference_base reference
     on floors.gold_run_id = reference.gold_run_id
+   and floors.gpu_family_id = reference.gpu_family_id
   where floors.price_usd_gpu_hr <= reference.reference_usd_gpu_hr * 1.10
-  group by floors.gold_run_id
+  group by floors.gold_run_id, floors.gpu_family_id
 )
 select
-  concat('PRIME-H100-OFFER-REFERENCE:', reference.gold_run_id)
-    as offer_reference_id,
-  'PRIME-H100-OFFER-REFERENCE' as offer_reference_symbol,
-  '{PRIME_H100_SCOPE}' as reference_scope,
-  'H100_80GB' as gpu_product_family,
+  concat(
+    'PRIME-', reference.gpu_family_id, '-OFFER-REFERENCE:',
+    reference.gold_run_id
+  ) as offer_reference_id,
+  concat('PRIME-', reference.gpu_family_id, '-OFFER-REFERENCE')
+    as offer_reference_symbol,
+  '{PRIME_FRONTIER_SCOPE}' as reference_scope,
+  reference.gpu_family_id,
+  reference.gpu_product_family,
   'USD_GPU_HOUR' as unit,
   'provider_reported_gpu_base_rate' as price_basis,
   reference.reference_usd_gpu_hr,
@@ -308,34 +369,64 @@ select
   reference.gold_run_id,
   reference.gold_observed_at,
   reference.gold_observed_date,
-  '{PRIME_H100_METHOD_VERSION}' as methodology_version
+  '{PRIME_FRONTIER_METHOD_VERSION}' as methodology_version
 from reference_base reference
 join configuration_counts configurations
   on reference.gold_run_id = configurations.gold_run_id
+ and reference.gpu_family_id = configurations.gpu_family_id
 join low_price_breadth breadth
   on reference.gold_run_id = breadth.gold_run_id
-order by reference.gold_observed_at, reference.gold_run_id
+ and reference.gpu_family_id = breadth.gpu_family_id
+order by
+  reference.gold_observed_at,
+  reference.gold_run_id,
+  reference.gpu_family_id
 """
 
 
-def prime_h100_ladder_sql() -> str:
-    """DataFusion SQL for the latest price-level breadth and lifecycle marks."""
-    increment = PRIME_H100_PRICE_INCREMENT
+def prime_frontier_ladder_sql(*, current_gold_run_id: str) -> str:
+    """DataFusion SQL for current benchmark-centered offer-level breadth."""
+    increment = PRIME_FRONTIER_PRICE_INCREMENT
+    run_id = _sql_literal(current_gold_run_id)
     return f"""
 with latest_reference as (
   select *
-  from fact_prime_h100_offer_reference_history
-  order by gold_observed_at desc, gold_run_id desc
-  limit 1
+  from fact_prime_frontier_offer_reference_history
+  where gold_run_id = {run_id}
+),
+benchmark_current as (
+  select
+    benchmark_family_id as gpu_family_id,
+    benchmark_usd_gpu_hr as market_benchmark_usd_gpu_hr,
+    provider_floor_p25_usd_gpu_hr as market_benchmark_p25_usd_gpu_hr,
+    provider_floor_p75_usd_gpu_hr as market_benchmark_p75_usd_gpu_hr,
+    provider_count as market_benchmark_provider_count
+  from fact_benchmark_values
+),
+reference_with_benchmark as (
+  select
+    reference.*,
+    benchmark.market_benchmark_usd_gpu_hr,
+    benchmark.market_benchmark_p25_usd_gpu_hr,
+    benchmark.market_benchmark_p75_usd_gpu_hr,
+    benchmark.market_benchmark_provider_count,
+    coalesce(
+      benchmark.market_benchmark_usd_gpu_hr,
+      reference.reference_usd_gpu_hr
+    ) as center_usd_gpu_hr
+  from latest_reference reference
+  left join benchmark_current benchmark
+    on reference.gpu_family_id = benchmark.gpu_family_id
 ),
 current_offers as (
   select
     history.*,
     round(history.price_usd_gpu_hr / {increment}) * {increment}
       as price_level_usd_gpu_hr
-  from fact_prime_h100_offer_history history
-  join latest_reference reference
+  from fact_prime_frontier_offer_history history
+  join reference_with_benchmark reference
     on history.gold_run_id = reference.gold_run_id
+   and history.gpu_family_id = reference.gpu_family_id
   where history.availability_status = 'available'
     and history.price_usd_gpu_hr > 0
     and coalesce(history.is_spot, false) = false
@@ -343,6 +434,7 @@ current_offers as (
 ),
 offer_levels as (
   select
+    gpu_family_id,
     price_level_usd_gpu_hr,
     count(*) as configuration_count,
     count(distinct provider) as provider_count,
@@ -351,16 +443,18 @@ offer_levels as (
     min(price_usd_gpu_hr) as minimum_offer_usd_gpu_hr,
     max(price_usd_gpu_hr) as maximum_offer_usd_gpu_hr
   from current_offers
-  group by price_level_usd_gpu_hr
+  group by gpu_family_id, price_level_usd_gpu_hr
 ),
 latest_events as (
   select events.*
-  from fact_prime_h100_offer_events events
-  join latest_reference reference
+  from fact_prime_frontier_offer_events events
+  join reference_with_benchmark reference
     on events.gold_run_id = reference.gold_run_id
+   and events.gpu_family_id = reference.gpu_family_id
 ),
 event_levels as (
   select
+    gpu_family_id,
     price_level_usd_gpu_hr,
     sum(case when event_type = 'entered' then 1 else 0 end) as entered_count,
     sum(
@@ -375,26 +469,29 @@ event_levels as (
     sum(case when event_type = 'remained' then 1 else 0 end) as remained_count
   from latest_events
   where price_level_usd_gpu_hr is not null
-  group by price_level_usd_gpu_hr
+  group by gpu_family_id, price_level_usd_gpu_hr
 ),
 reference_grid as (
   select
-    round(reference.reference_usd_gpu_hr / {increment}) * {increment}
+    reference.gpu_family_id,
+    round(reference.center_usd_gpu_hr / {increment}) * {increment}
       + offsets.offset * {increment} as price_level_usd_gpu_hr
-  from latest_reference reference
+  from reference_with_benchmark reference
   cross join (
-    values (-5), (-4), (-3), (-2), (-1), (0), (1), (2), (3), (4), (5)
+    values (-6), (-5), (-4), (-3), (-2), (-1), (0),
+           (1), (2), (3), (4), (5), (6)
   ) as offsets(offset)
 ),
 all_levels as (
-  select price_level_usd_gpu_hr from reference_grid
+  select gpu_family_id, price_level_usd_gpu_hr from reference_grid
   union
-  select price_level_usd_gpu_hr from offer_levels
+  select gpu_family_id, price_level_usd_gpu_hr from offer_levels
   union
-  select price_level_usd_gpu_hr from event_levels
+  select gpu_family_id, price_level_usd_gpu_hr from event_levels
 ),
 joined as (
   select
+    levels.gpu_family_id,
     levels.price_level_usd_gpu_hr,
     coalesce(offers.configuration_count, 0) as configuration_count,
     coalesce(offers.provider_count, 0) as provider_count,
@@ -409,26 +506,46 @@ joined as (
       as stock_status_changed_count,
     coalesce(events.remained_count, 0) as remained_count,
     reference.reference_usd_gpu_hr,
+    reference.market_benchmark_usd_gpu_hr,
+    reference.market_benchmark_p25_usd_gpu_hr,
+    reference.market_benchmark_p75_usd_gpu_hr,
+    reference.market_benchmark_provider_count,
     levels.price_level_usd_gpu_hr - reference.reference_usd_gpu_hr
-      as distance_from_reference_usd_gpu_hr,
+      as distance_from_prime_reference_usd_gpu_hr,
+    levels.price_level_usd_gpu_hr - reference.center_usd_gpu_hr
+      as distance_from_market_benchmark_usd_gpu_hr,
+    case
+      when reference.market_benchmark_usd_gpu_hr > 0
+      then levels.price_level_usd_gpu_hr
+        / reference.market_benchmark_usd_gpu_hr - 1
+      else cast(null as double)
+    end as premium_to_market_benchmark_fraction,
     abs(levels.price_level_usd_gpu_hr - reference.reference_usd_gpu_hr)
-      <= {increment / 2} as is_reference_level,
+      <= {increment / 2} as is_prime_reference_level,
+    abs(levels.price_level_usd_gpu_hr - reference.center_usd_gpu_hr)
+      <= {increment / 2} as is_market_benchmark_level,
     reference.gold_run_id,
     reference.gold_observed_at,
     reference.status,
     reference.methodology_version
   from all_levels levels
-  cross join latest_reference reference
+  join reference_with_benchmark reference
+    on levels.gpu_family_id = reference.gpu_family_id
   left join offer_levels offers
-    on levels.price_level_usd_gpu_hr = offers.price_level_usd_gpu_hr
+    on levels.gpu_family_id = offers.gpu_family_id
+   and levels.price_level_usd_gpu_hr = offers.price_level_usd_gpu_hr
   left join event_levels events
-    on levels.price_level_usd_gpu_hr = events.price_level_usd_gpu_hr
+    on levels.gpu_family_id = events.gpu_family_id
+   and levels.price_level_usd_gpu_hr = events.price_level_usd_gpu_hr
 )
 select
   *,
-  row_number() over(order by price_level_usd_gpu_hr desc) as price_level_rank
+  row_number() over(
+    partition by gpu_family_id
+    order by price_level_usd_gpu_hr desc
+  ) as price_level_rank
 from joined
-order by price_level_usd_gpu_hr desc
+order by gpu_family_id, price_level_usd_gpu_hr desc
 """
 
 
@@ -453,8 +570,10 @@ def _event_type(
         return "left_availability"
     before = _float_or_none(previous.get("price_usd_gpu_hr"))
     after = _float_or_none(current.get("price_usd_gpu_hr"))
-    if before is not None and after is not None and not math.isclose(
-        before, after, rel_tol=1e-9, abs_tol=1e-9
+    if (
+        before is not None
+        and after is not None
+        and not math.isclose(before, after, rel_tol=1e-9, abs_tol=1e-9)
     ):
         return "repriced_up" if after > before else "repriced_down"
     if str(previous.get("stock_status") or "") != str(
@@ -477,8 +596,8 @@ def _event_label(event_type: str) -> str:
 
 def _price_level(value: float) -> float:
     return (
-        math.floor(value / PRIME_H100_PRICE_INCREMENT + 0.5)
-        * PRIME_H100_PRICE_INCREMENT
+        math.floor(value / PRIME_FRONTIER_PRICE_INCREMENT + 0.5)
+        * PRIME_FRONTIER_PRICE_INCREMENT
     )
 
 
@@ -507,3 +626,7 @@ def _seconds_between(start: Any, end: Any) -> float | None:
     except ValueError:
         return None
     return (right - left).total_seconds()
+
+
+def _sql_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"

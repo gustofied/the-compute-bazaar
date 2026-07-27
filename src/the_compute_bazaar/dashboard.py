@@ -43,6 +43,7 @@ SNAPSHOT_FILES = {
     "provider-comparison": "provider-comparison.json",
     "listings-sample": "listings-sample.json",
     "market-state": "market-state.json",
+    "prime-frontier-offer-market": "prime-frontier-offer-market.json",
     "prime-h100-offer-reference": "prime-h100-offer-reference.json",
 }
 

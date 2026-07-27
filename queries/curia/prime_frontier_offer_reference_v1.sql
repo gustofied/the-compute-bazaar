@@ -1,6 +1,7 @@
 select
   offer_reference_symbol,
   reference_scope,
+  gpu_family_id,
   gpu_product_family,
   unit,
   price_basis,
@@ -19,5 +20,4 @@ select
   gold_run_id,
   methodology_version
 from fact_prime_frontier_offer_reference_history
-where gpu_family_id = 'H100'
-order by gold_observed_at desc, gold_run_id desc
+order by gold_observed_at desc, gpu_family_id, gold_run_id desc

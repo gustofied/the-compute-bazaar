@@ -150,25 +150,33 @@ The calculation is authored as DataFusion SQL in
 - `gold.fact_benchmark_values`
 - `gold.fact_benchmark_constituents`
 
-## Prime H100 Offer Reference
+## Prime Frontier Offer Market
 
-The Prime H100 offer reference is a narrower product than the cross-provider
-benchmark above. It describes the H100 shelf visible through Prime Intellect at
-one observation time. Prime aggregates configurations from several upstream
-providers, so this view can examine how their visible prices cluster and
-change without treating Prime as one additional independent provider in the
-calculation.
+The Prime frontier offer market is a narrower product than the cross-provider
+benchmark above. It describes the H100, H200, B200, and B300 configurations
+visible through Prime Intellect at each observation time. Prime aggregates
+several upstream providers, so this view can examine how their visible prices
+cluster and change without treating Prime as one additional independent
+provider in the wider benchmark.
 
-The hourly connector requests every page for `H100_80GB`, retains the exact
-response in bronze, and normalizes each returned configuration in silver. A
-configuration identity is based on the upstream provider's `cloudId`,
-datacenter, and machine shape. Prime documents `cloudId` as the provider
-identifier needed to provision a configuration and `dataCenter` as a required
-disambiguator when present.
+The hourly connector requests every page for `H100_80GB`, `H200_141GB`,
+`B200_180GB`, and `B300_262GB`, retains the exact responses in bronze, and
+normalizes each returned configuration in silver. B300 is canonicalized as
+`B300_288GB` in the shared product dimension while retaining Prime's raw model
+name. A configuration identity is based on the upstream provider's `cloudId`,
+datacenter, GPU family, and machine shape. Prime documents `cloudId` as the
+provider identifier needed to provision a configuration and `dataCenter` as a
+required disambiguator when present.
+
+Prime does not need a separate source-directory endpoint for this view: every
+availability item carries its upstream `provider`, and the current source list
+is the distinct set of those values after eligibility filtering. The response
+`totalCount` is the number of matching configurations across pages, not a
+physical fleet or free-GPU denominator.
 
 An eligible configuration must be:
 
-- H100 80 GB, including multi-GPU H100 80 GB machine shapes;
+- one of the four declared frontier GPU families, including multi-GPU shapes;
 - `secure_cloud`;
 - on-demand rather than spot;
 - marked available;
@@ -183,6 +191,8 @@ For each retained hourly Gold run:
    middle-half range.
 5. Count providers whose floor is within 10 percent of the reference as
    low-price breadth.
+6. Join the matching wider Compute Bazaar benchmark by GPU family and Gold
+   run for comparison.
 
 One upstream provider receives one constituent even if it exposes several
 regions or machine shapes. The status is `observed` with at least three
@@ -198,13 +208,14 @@ both:
 - `minimum_executable_price_usd_hr`: the machine base rate plus the minimum
   separately billed resources exposed by the response.
 
-The public headline and ladder use the GPU base rate so a new storage choice
-does not silently rewrite the retained H100 price history. The minimum
+The public headline and shelf use the GPU base rate so a new storage choice
+does not silently rewrite retained price history. The minimum
 executable total remains available in Gold and in offer details.
 
-The ladder rounds configurations to $0.25 per-GPU-hour levels. Gold emits
-eleven centered rungs around the latest rounded reference and retains occupied
-or recently changed levels outside that window. A rung counts visible
+The shelf rounds configurations to $0.25 per-GPU-hour display levels. Gold
+emits thirteen rungs centered on the latest rounded wider benchmark and
+retains occupied or recently changed levels outside that window. It marks both
+the wider benchmark and the narrower Prime reference. A rung counts visible
 configurations and distinct upstream providers. It never treats `gpuCount` as
 inventory: Prime defines that field as the requested machine shape.
 
@@ -219,20 +230,26 @@ Across consecutive retained snapshots, the lifecycle table can classify only:
 Leaving public availability is not a fill, rental, cancellation, or proof of
 demand. Prime does not expose executed transactions or the upstream providers'
 complete fleet denominator through this endpoint. Accordingly, the view is
-not volume-weighted, occupancy-weighted, or an order book.
+not volume-weighted, occupancy-weighted, or an order book. An exact current
+offer can be called requestable because Prime documents how `cloudId`,
+datacenter, provider, shape, and an optional price cap feed the provisioning
+API. It is not called executed until a future procurement system records an
+attempt and outcome.
 
 The methodology version is:
 
 ```text
-prime_h100_offer_reference_v1
+prime_frontier_offer_market_v1
 ```
 
 DataFusion materializes:
 
-- `gold.fact_prime_h100_offer_history`
-- `gold.fact_prime_h100_offer_events`
-- `gold.fact_prime_h100_offer_reference_history`
-- `gold.fact_prime_h100_offer_ladder`
+- `gold.fact_prime_frontier_offer_history`
+- `gold.fact_prime_frontier_offer_events`
+- `gold.fact_prime_frontier_offer_reference_history`
+- `gold.fact_prime_frontier_offer_ladder`
 
 Curia exposes the same products through
-`prime_h100_offer_reference:v1` and `prime_h100_offer_ladder:v1`.
+`prime_frontier_offer_reference:v1` and
+`prime_frontier_offer_ladder:v1`. H100-only compatibility queries and JSON
+remain available during migration.

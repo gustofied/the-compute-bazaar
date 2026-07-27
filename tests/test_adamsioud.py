@@ -31,7 +31,7 @@ class AdamSioudServerTests(unittest.TestCase):
         history_script = (article_root / "compute-market-history.js").read_text(
             encoding="utf-8"
         )
-        prime_h100_script = (article_root / "prime-h100-market.js").read_text(
+        prime_frontier_script = (article_root / "prime-frontier-market.js").read_text(
             encoding="utf-8"
         )
         payload = json.loads(
@@ -90,18 +90,20 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="market-state-current"', article)
         self.assertIn('id="market-occupancy-chart"', article)
         self.assertIn('id="market-state-availability"', article)
-        self.assertIn("data-prime-h100-market", article)
-        self.assertIn('id="prime-h100-reference-chart"', article)
-        self.assertIn('id="prime-h100-ladder"', article)
-        self.assertIn("provider does not receive more weight", article)
-        self.assertIn("not proof that somebody rented it", article)
+        self.assertIn("data-prime-frontier-market", article)
+        self.assertIn('id="prime-frontier-reference-chart"', article)
+        self.assertIn('id="prime-frontier-ladder"', article)
+        for family in ["H100", "H200", "B200", "B300"]:
+            self.assertIn(f'data-prime-product="{family}"', article)
+        self.assertIn("more weight for listing more machine shapes", article)
+        self.assertIn("fills, cancellations", article)
         self.assertNotIn('id="vm-hourly-chart"', article)
         self.assertNotIn('id="sandbox-batch-history"', article)
-        self.assertIn('href="./compute-viz.css?v=4"', article)
-        self.assertIn('src="./compute-viz.js?v=5"', article)
+        self.assertIn('href="./compute-viz.css?v=5"', article)
+        self.assertIn('src="./compute-viz.js?v=6"', article)
         self.assertIn('src="./compute-market.js?v=10"', article)
         self.assertIn('src="./compute-market-history.js?v=7"', article)
-        self.assertIn('src="./prime-h100-market.js?v=1"', article)
+        self.assertIn('src="./prime-frontier-market.js?v=1"', article)
         self.assertIn('src="./sandbox-cost.js?v=25"', article)
         self.assertEqual(article.count("data-viz-card"), 14)
         for status_label in {
@@ -118,7 +120,7 @@ class AdamSioudServerTests(unittest.TestCase):
         )
         for card_id in {
             "gpu-price-card",
-            "prime-h100-offer-card",
+            "prime-frontier-market-card",
             "gpu-price-pulse-card",
             "gpu-availability-pulse-card",
             "cpu-price-pulse-card",
@@ -144,6 +146,7 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn("embedUrl", viz_script)
         self.assertIn("articleUrl", viz_script)
         self.assertIn("cardLayout", viz_script)
+        self.assertIn("syncCardLinks", viz_script)
         self.assertIn('"card", "embed"', viz_script)
         self.assertIn("viz-standalone-shell", viz_script)
         self.assertIn("Open expanded", viz_script)
@@ -157,14 +160,20 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('attr("role", "slider")', history_script)
         self.assertIn('attr("aria-valuenow", focusIndex)', history_script)
         self.assertIn("viz.localPointer", history_script)
-        self.assertIn("prime-h100-offer-reference.json", prime_h100_script)
-        self.assertIn("viz.localPointer", prime_h100_script)
-        self.assertIn("viz.positionTooltip", prime_h100_script)
-        self.assertIn("viz.observe", prime_h100_script)
-        self.assertIn("provider-balanced offer reference", prime_h100_script)
-        self.assertIn("left public availability", prime_h100_script)
-        self.assertNotIn("filled", prime_h100_script.lower())
-        self.assertNotIn("traded volume", prime_h100_script.lower())
+        self.assertIn(
+            "prime-frontier-offer-market.json",
+            prime_frontier_script,
+        )
+        self.assertIn("viz.localPointer", prime_frontier_script)
+        self.assertIn("viz.positionTooltip", prime_frontier_script)
+        self.assertIn("viz.observe", prime_frontier_script)
+        self.assertIn("market benchmark", prime_frontier_script)
+        self.assertIn("left public availability", prime_frontier_script)
+        self.assertIn("requestable", prime_frontier_script.lower())
+        self.assertNotIn("traded volume", prime_frontier_script.lower())
+        self.assertNotIn("remaining volume", prime_frontier_script.lower())
+        self.assertIn(".market-card", viz_styles)
+        self.assertIn(".offer-market-products", viz_styles)
         self.assertIn("sandbox-cost.json", script)
         self.assertIn('"sandbox_cost_gold_v5"', script)
         self.assertNotIn('"sandbox_cost_gold_v4"', script)

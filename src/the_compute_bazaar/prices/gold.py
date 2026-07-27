@@ -16,15 +16,17 @@ from .benchmark_queries import (
 from .datafusion import query_parquet, query_tables
 from .manifest import read_latest_manifest
 from .offer_reference import (
-    PRIME_H100_API_DOCS_URL,
-    PRIME_H100_METHOD_VERSION,
-    PRIME_H100_PRICE_INCREMENT,
-    PRIME_H100_SCOPE,
-    PRIME_H100_SOURCE_URL,
-    build_prime_h100_offer_events,
-    normalize_prime_h100_history,
-    prime_h100_ladder_sql,
-    prime_h100_reference_history_sql,
+    PRIME_FRONTIER_API_DOCS_URL,
+    PRIME_FRONTIER_METHOD_VERSION,
+    PRIME_FRONTIER_PRICE_INCREMENT,
+    PRIME_FRONTIER_PRODUCTS,
+    PRIME_FRONTIER_PROVISION_DOCS_URL,
+    PRIME_FRONTIER_SCOPE,
+    PRIME_FRONTIER_SOURCE_URL,
+    build_prime_frontier_offer_events,
+    normalize_prime_frontier_history,
+    prime_frontier_ladder_sql,
+    prime_frontier_reference_history_sql,
 )
 from .schemas import to_jsonable, utc_now
 from .storage import (
@@ -38,7 +40,7 @@ from .storage import (
 
 GOLD_MANIFEST_TABLE = "gold_market"
 GOLD_MANIFEST_VERSION = "v1"
-GOLD_METHODOLOGY_VERSION = "gold_gpu_market_v3"
+GOLD_METHODOLOGY_VERSION = "gold_gpu_market_v4"
 MARKET_STATE_METHODOLOGY_VERSION = "compute_market_state_gold_v1"
 PUBLIC_MARKET_STATE_HISTORY_RESOURCES = {
     "ALL_GPU",
@@ -61,11 +63,13 @@ GOLD_TABLES = {
     "fact_compute_market_state": "compute_market_state.parquet",
     "fact_compute_market_state_history": "compute_market_state_history.parquet",
 }
-PRIME_H100_GOLD_TABLES = {
-    "fact_prime_h100_offer_history": "prime_h100_offer_history.parquet",
-    "fact_prime_h100_offer_events": "prime_h100_offer_events.parquet",
-    "fact_prime_h100_offer_reference_history": "prime_h100_offer_reference_history.parquet",
-    "fact_prime_h100_offer_ladder": "prime_h100_offer_ladder.parquet",
+PRIME_FRONTIER_GOLD_TABLES = {
+    "fact_prime_frontier_offer_history": "prime_frontier_offer_history.parquet",
+    "fact_prime_frontier_offer_events": "prime_frontier_offer_events.parquet",
+    "fact_prime_frontier_offer_reference_history": (
+        "prime_frontier_offer_reference_history.parquet"
+    ),
+    "fact_prime_frontier_offer_ladder": "prime_frontier_offer_ladder.parquet",
 }
 
 FEATURED_INDEX_PRODUCTS = [
@@ -105,9 +109,7 @@ def build_gold_market_tables(
     except (FileNotFoundError, OSError):
         previous_gold_manifest = {}
     except Exception as exc:  # noqa: BLE001 - S3 returns provider-specific not-found errors.
-        error_code = (
-            getattr(exc, "response", {}).get("Error", {}).get("Code")
-        )
+        error_code = getattr(exc, "response", {}).get("Error", {}).get("Code")
         if str(error_code or "") not in {"404", "NoSuchKey", "NotFound"}:
             raise
         previous_gold_manifest = {}
@@ -202,7 +204,9 @@ def build_gold_market_tables(
         ),
     }
     market_state_tables = {
-        f"silver_compute_market_state_{index}": source_market_state_refs[source_provider]
+        f"silver_compute_market_state_{index}": source_market_state_refs[
+            source_provider
+        ]
         for index, source_provider in enumerate(provider_scope)
         if source_provider in source_market_state_refs
     }
@@ -237,16 +241,17 @@ def build_gold_market_tables(
         rows = rows_by_table[table_name]
         write_parquet_rows(table_refs[table_name], rows)
 
-    prime_h100_rows, prime_h100_refs = _build_prime_h100_gold_products(
+    prime_frontier_rows, prime_frontier_refs = _build_prime_frontier_gold_products(
         lake_root=lake_root,
         previous_gold_manifest=previous_gold_manifest,
         current_listing_rows=rows_by_table["fact_gpu_listings"],
         observed_date=observed_date,
         gold_run_id=gold_run_id,
+        benchmark_values_ref=table_refs["fact_benchmark_values"],
     )
-    rows_by_table.update(prime_h100_rows)
-    table_refs.update(prime_h100_refs)
-    for table_name in PRIME_H100_GOLD_TABLES:
+    rows_by_table.update(prime_frontier_rows)
+    table_refs.update(prime_frontier_refs)
+    for table_name in PRIME_FRONTIER_GOLD_TABLES:
         rows_by_table.setdefault(table_name, [])
 
     row_counts = {table_name: len(rows) for table_name, rows in rows_by_table.items()}
@@ -862,9 +867,7 @@ def query_gold_market_state_history(
     lake_root: str,
 ) -> dict[str, Any]:
     manifest = read_latest_gold_manifest(lake_root)
-    table_ref = manifest.get("table_refs", {}).get(
-        "fact_compute_market_state_history"
-    )
+    table_ref = manifest.get("table_refs", {}).get("fact_compute_market_state_history")
     if not table_ref:
         table_ref = manifest.get("table_refs", {}).get("fact_compute_market_state")
     if not table_ref:
@@ -880,9 +883,7 @@ order by gold_observed_at, measurement_kind, provider, resource_type, source_con
 """,
     )
     run_ids = {
-        str(row.get("gold_run_id") or "")
-        for row in rows
-        if row.get("gold_run_id")
+        str(row.get("gold_run_id") or "") for row in rows if row.get("gold_run_id")
     }
     return {
         "manifest": manifest,
@@ -891,83 +892,152 @@ order by gold_observed_at, measurement_kind, provider, resource_type, source_con
     }
 
 
-def query_gold_prime_h100_offer_reference(
+def query_gold_prime_frontier_offer_market(
     *,
     lake_root: str,
 ) -> dict[str, Any]:
-    """Read the maintained Prime H100 reference, ladder, and evidence rows."""
+    """Read the maintained Prime frontier references, shelf, and evidence."""
     manifest = read_latest_gold_manifest(lake_root)
     refs = manifest.get("table_refs", {})
-    reference_ref = refs.get("fact_prime_h100_offer_reference_history")
+    reference_ref = refs.get("fact_prime_frontier_offer_reference_history")
     if not reference_ref:
         return {
             "manifest": manifest,
-            "current": None,
+            "current": {},
+            "last_seen": {},
             "history": [],
             "ladder": [],
             "events": [],
+            "event_history": [],
             "offers": [],
         }
     history = query_parquet(
         parquet_uri=str(reference_ref),
-        table_name="fact_prime_h100_offer_reference_history",
+        table_name="fact_prime_frontier_offer_reference_history",
         sql="""
 select *
-from fact_prime_h100_offer_reference_history
-order by gold_observed_at, gold_run_id
+from fact_prime_frontier_offer_reference_history
+order by gold_observed_at, gold_run_id, gpu_family_id
 """,
     )
-    current = history[-1] if history else None
-    current_run_id = str((current or {}).get("gold_run_id") or "")
+    current_run_id = str(manifest.get("run_id") or "")
+    current = {
+        str(row.get("gpu_family_id") or ""): row
+        for row in history
+        if str(row.get("gold_run_id") or "") == current_run_id
+    }
+    last_seen: dict[str, dict[str, Any]] = {}
+    for row in history:
+        family_id = str(row.get("gpu_family_id") or "")
+        if family_id:
+            last_seen[family_id] = row
     ladder: list[dict[str, Any]] = []
     events: list[dict[str, Any]] = []
+    event_history: list[dict[str, Any]] = []
     offers: list[dict[str, Any]] = []
-    ladder_ref = refs.get("fact_prime_h100_offer_ladder")
+    ladder_ref = refs.get("fact_prime_frontier_offer_ladder")
     if ladder_ref:
         ladder = query_parquet(
             parquet_uri=str(ladder_ref),
-            table_name="fact_prime_h100_offer_ladder",
+            table_name="fact_prime_frontier_offer_ladder",
             sql="""
 select *
-from fact_prime_h100_offer_ladder
-order by price_level_usd_gpu_hr desc
+from fact_prime_frontier_offer_ladder
+order by gpu_family_id, price_level_usd_gpu_hr desc
 """,
         )
-    events_ref = refs.get("fact_prime_h100_offer_events")
-    if events_ref and current_run_id:
-        events = query_parquet(
+    events_ref = refs.get("fact_prime_frontier_offer_events")
+    if events_ref:
+        event_history = query_parquet(
             parquet_uri=str(events_ref),
-            table_name="fact_prime_h100_offer_events",
+            table_name="fact_prime_frontier_offer_events",
+            sql="""
+select *
+from fact_prime_frontier_offer_events
+where event_type <> 'remained'
+order by observed_at, gpu_family_id, event_type, provider
+""",
+        )
+    if events_ref and current_run_id:
+        events = [
+            row
+            for row in event_history
+            if str(row.get("gold_run_id") or "") == current_run_id
+        ]
+        remained = query_parquet(
+            parquet_uri=str(events_ref),
+            table_name="fact_prime_frontier_offer_events",
             sql=f"""
 select *
-from fact_prime_h100_offer_events
+from fact_prime_frontier_offer_events
 where gold_run_id = {_sql_literal(current_run_id)}
-order by price_level_usd_gpu_hr desc, event_type, provider
+  and event_type = 'remained'
+order by gpu_family_id, price_level_usd_gpu_hr desc, provider
 """,
         )
-    offer_history_ref = refs.get("fact_prime_h100_offer_history")
+        events.extend(remained)
+        events.sort(
+            key=lambda row: (
+                str(row.get("gpu_family_id") or ""),
+                -float(row.get("price_level_usd_gpu_hr") or 0),
+                str(row.get("event_type") or ""),
+                str(row.get("provider") or ""),
+            )
+        )
+    offer_history_ref = refs.get("fact_prime_frontier_offer_history")
     if offer_history_ref and current_run_id:
         offers = query_parquet(
             parquet_uri=str(offer_history_ref),
-            table_name="fact_prime_h100_offer_history",
+            table_name="fact_prime_frontier_offer_history",
             sql=f"""
 select *
-from fact_prime_h100_offer_history
+from fact_prime_frontier_offer_history
 where gold_run_id = {_sql_literal(current_run_id)}
   and availability_status = 'available'
   and price_usd_gpu_hr > 0
   and coalesce(is_spot, false) = false
   and coalesce(is_secure, false) = true
-order by price_usd_gpu_hr asc, provider, gpu_count
+order by gpu_family_id, price_usd_gpu_hr asc, provider, gpu_count
 """,
         )
     return {
         "manifest": manifest,
         "current": current,
+        "last_seen": last_seen,
         "history": history,
         "ladder": ladder,
         "events": events,
+        "event_history": event_history,
         "offers": offers,
+    }
+
+
+def query_gold_prime_h100_offer_reference(
+    *,
+    lake_root: str,
+) -> dict[str, Any]:
+    """Compatibility projection for callers that still request H100 only."""
+    payload = query_gold_prime_frontier_offer_market(lake_root=lake_root)
+    return {
+        "manifest": payload["manifest"],
+        "current": payload["current"].get("H100"),
+        "history": [
+            row for row in payload["history"] if row.get("gpu_family_id") == "H100"
+        ],
+        "ladder": [
+            row for row in payload["ladder"] if row.get("gpu_family_id") == "H100"
+        ],
+        "events": [
+            row for row in payload["events"] if row.get("gpu_family_id") == "H100"
+        ],
+        "event_history": [
+            row
+            for row in payload["event_history"]
+            if row.get("gpu_family_id") == "H100"
+        ],
+        "offers": [
+            row for row in payload["offers"] if row.get("gpu_family_id") == "H100"
+        ],
     }
 
 
@@ -1018,9 +1088,7 @@ def export_gold_dashboard_snapshot(
     benchmark_history_ref = "/".join(
         [output_root.rstrip("/"), "benchmark-history.json"]
     )
-    existing_benchmark_history = _read_existing_benchmark_history(
-        benchmark_history_ref
-    )
+    existing_benchmark_history = _read_existing_benchmark_history(benchmark_history_ref)
     public_benchmark_history = _merge_public_benchmark_history(
         existing_benchmark_history,
         public_benchmark_history,
@@ -1049,8 +1117,7 @@ def export_gold_dashboard_snapshot(
     public_market_state = [
         _public_market_state_row(row)
         for row in market_state
-        if row.get("measurement_kind")
-        in {"rental_occupancy", "availability_pressure"}
+        if row.get("measurement_kind") in {"rental_occupancy", "availability_pressure"}
     ]
     public_market_state_history = _merge_public_market_state_history(
         _read_existing_market_state_history(market_state_ref),
@@ -1058,24 +1125,25 @@ def export_gold_dashboard_snapshot(
             _public_market_state_row(row)
             for row in market_state_history_payload["rows"]
             if row.get("measurement_kind") == "rental_occupancy"
-            and row.get("resource_type")
-            in PUBLIC_MARKET_STATE_HISTORY_RESOURCES
+            and row.get("resource_type") in PUBLIC_MARKET_STATE_HISTORY_RESOURCES
             and row.get("aggregation_eligible") is not False
         ],
     )
     try:
-        prime_h100_payload = query_gold_prime_h100_offer_reference(
+        prime_frontier_payload = query_gold_prime_frontier_offer_market(
             lake_root=lake_root
         )
     except Exception as exc:  # noqa: BLE001 - other public products should still publish.
-        prime_h100_payload = {
-            "current": None,
+        prime_frontier_payload = {
+            "current": {},
+            "last_seen": {},
             "history": [],
             "ladder": [],
             "events": [],
+            "event_history": [],
             "offers": [],
         }
-        warnings.append(f"Prime H100 offer-reference export skipped: {exc}")
+        warnings.append(f"Prime frontier offer-market export skipped: {exc}")
     try:
         constituents = query_gold_index_constituents(lake_root=lake_root, limit=limit)[
             "rows"
@@ -1109,9 +1177,55 @@ def export_gold_dashboard_snapshot(
         ),
         "listings_sample": "/".join([output_root.rstrip("/"), "listings-sample.json"]),
         "market_state": market_state_ref,
+        "prime_frontier_offer_market": "/".join(
+            [output_root.rstrip("/"), "prime-frontier-offer-market.json"]
+        ),
         "prime_h100_offer_reference": "/".join(
             [output_root.rstrip("/"), "prime-h100-offer-reference.json"]
         ),
+    }
+    prime_frontier_products = _public_prime_frontier_products(
+        payload=prime_frontier_payload,
+        benchmark_values=public_benchmark_values,
+        benchmark_history=public_benchmark_history,
+    )
+    prime_frontier_public = {
+        "schema_version": "prime_frontier_offer_market_public_v1",
+        "manifest": public_manifest,
+        "methodology_version": PRIME_FRONTIER_METHOD_VERSION,
+        "reference_scope": PRIME_FRONTIER_SCOPE,
+        "source": {
+            "name": "Prime Intellect GPU availability",
+            "market_url": PRIME_FRONTIER_SOURCE_URL,
+            "api_documentation_url": PRIME_FRONTIER_API_DOCS_URL,
+            "provisioning_documentation_url": (PRIME_FRONTIER_PROVISION_DOCS_URL),
+        },
+        "measurement_notes": [
+            "Each family reference is the median of one lowest eligible base rate per upstream provider.",
+            "Prime rows are requestable configurations, not physical GPU inventory or executed rentals.",
+            "Configuration depth counts returned configurations and named upstream providers; it is not posted quantity.",
+            "A configuration leaving availability is not classified as a fill or cancellation.",
+            "Required storage or configurable resource charges can make the executable machine total higher.",
+        ],
+        "execution_data": {
+            "status": "not_exposed_by_availability_api",
+            "available_fields": [
+                "configuration identity",
+                "upstream provider",
+                "price",
+                "machine shape",
+                "region",
+                "stock label",
+            ],
+            "unavailable_fields": [
+                "posted GPU quantity",
+                "filled quantity",
+                "canceled quantity",
+                "remaining quantity",
+                "transaction price",
+            ],
+        },
+        "products": prime_frontier_products,
     }
     write_json(output_refs["manifest"], public_manifest)
     write_json(
@@ -1209,46 +1323,32 @@ def export_gold_dashboard_snapshot(
         },
     )
     write_json(
+        output_refs["prime_frontier_offer_market"],
+        prime_frontier_public,
+    )
+    h100_product = next(
+        (
+            product
+            for product in prime_frontier_products
+            if product.get("family_id") == "H100"
+        ),
+        None,
+    )
+    write_json(
         output_refs["prime_h100_offer_reference"],
         {
-            "schema_version": "prime_h100_offer_reference_public_v1",
+            "schema_version": "prime_h100_offer_reference_public_v2",
             "manifest": public_manifest,
-            "methodology_version": PRIME_H100_METHOD_VERSION,
-            "reference_scope": PRIME_H100_SCOPE,
-            "source": {
-                "name": "Prime Intellect GPU availability",
-                "market_url": PRIME_H100_SOURCE_URL,
-                "api_documentation_url": PRIME_H100_API_DOCS_URL,
-            },
-            "measurement_notes": [
-                "The reference is the median of one lowest eligible H100 base rate per upstream provider.",
-                "Prime rows are deployable configurations, not physical GPU inventory or executed rentals.",
-                "A configuration leaving availability is not classified as a fill or cancellation.",
-                "Required storage or configurable resource charges can make the executable machine total higher.",
-            ],
-            "current": _public_prime_h100_reference(
-                prime_h100_payload.get("current")
-            ),
-            "history": [
-                _public_prime_h100_reference(row)
-                for row in prime_h100_payload.get("history", [])
-            ],
-            "ladder": [
-                _public_prime_h100_ladder_row(
-                    row,
-                    offers=prime_h100_payload.get("offers", []),
-                    events=prime_h100_payload.get("events", []),
-                )
-                for row in prime_h100_payload.get("ladder", [])
-            ],
-            "events": [
-                _public_prime_h100_event(row)
-                for row in prime_h100_payload.get("events", [])
-            ],
-            "offers": [
-                _public_prime_h100_offer(row)
-                for row in prime_h100_payload.get("offers", [])
-            ],
+            "methodology_version": PRIME_FRONTIER_METHOD_VERSION,
+            "reference_scope": PRIME_FRONTIER_SCOPE,
+            "source": prime_frontier_public["source"],
+            "measurement_notes": prime_frontier_public["measurement_notes"],
+            "current": (h100_product or {}).get("current"),
+            "history": (h100_product or {}).get("history", []),
+            "ladder": (h100_product or {}).get("ladder", []),
+            "events": (h100_product or {}).get("events", []),
+            "event_history": (h100_product or {}).get("event_history", []),
+            "offers": (h100_product or {}).get("offers", []),
         },
     )
 
@@ -1267,12 +1367,12 @@ def export_gold_dashboard_snapshot(
             "listings_sample": len(listings),
             "market_state": len(public_market_state),
             "market_state_history": len(public_market_state_history),
-            "prime_h100_reference_history": len(
-                prime_h100_payload.get("history", [])
+            "prime_frontier_reference_history": len(
+                prime_frontier_payload.get("history", [])
             ),
-            "prime_h100_ladder": len(prime_h100_payload.get("ladder", [])),
-            "prime_h100_events": len(prime_h100_payload.get("events", [])),
-            "prime_h100_offers": len(prime_h100_payload.get("offers", [])),
+            "prime_frontier_ladder": len(prime_frontier_payload.get("ladder", [])),
+            "prime_frontier_events": len(prime_frontier_payload.get("events", [])),
+            "prime_frontier_offers": len(prime_frontier_payload.get("offers", [])),
         },
         "source_gold_manifest_ref": manifest.get("manifest_ref"),
         "warnings": warnings,
@@ -1782,26 +1882,40 @@ order by measurement_kind, provider, resource_type, source_connector
 """
 
 
-def _build_prime_h100_gold_products(
+def _build_prime_frontier_gold_products(
     *,
     lake_root: str,
     previous_gold_manifest: dict[str, Any],
     current_listing_rows: list[dict[str, Any]],
     observed_date: str,
     gold_run_id: str,
+    benchmark_values_ref: str,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
     previous_history_ref = previous_gold_manifest.get("table_refs", {}).get(
-        "fact_prime_h100_offer_history"
+        "fact_prime_frontier_offer_history"
     )
     historical_rows: list[dict[str, Any]] = []
     if previous_history_ref:
         historical_rows = query_parquet(
             parquet_uri=str(previous_history_ref),
-            table_name="fact_prime_h100_offer_history",
-            sql="select * from fact_prime_h100_offer_history",
+            table_name="fact_prime_frontier_offer_history",
+            sql="select * from fact_prime_frontier_offer_history",
         )
     else:
+        legacy_h100_ref = previous_gold_manifest.get("table_refs", {}).get(
+            "fact_prime_h100_offer_history"
+        )
+        if legacy_h100_ref:
+            historical_rows.extend(
+                query_parquet(
+                    parquet_uri=str(legacy_h100_ref),
+                    table_name="fact_prime_h100_offer_history",
+                    sql="select * from fact_prime_h100_offer_history",
+                )
+            )
         for manifest in reversed(list_gold_manifests(lake_root, limit=1000)):
+            if not _is_canonical_market_run_id(manifest.get("run_id")):
+                continue
             if "prime_intellect" not in set(manifest.get("provider_scope") or []):
                 continue
             listing_ref = manifest.get("table_refs", {}).get("fact_gpu_listings")
@@ -1814,14 +1928,18 @@ def _build_prime_h100_gold_products(
 select *
 from fact_gpu_listings
 where source_connector = 'prime_intellect'
-  and (gpu_model = 'H100_80GB' or gpu_model like 'H100_80GB_x%')
+  and (
+    gpu_model = 'H100_80GB' or gpu_model like 'H100_80GB_x%'
+    or gpu_model = 'H200_141GB' or gpu_model like 'H200_141GB_x%'
+    or gpu_model = 'B200_180GB' or gpu_model like 'B200_180GB_x%'
+    or gpu_model = 'B300_288GB' or gpu_model like 'B300_288GB_x%'
+  )
 """,
             )
             historical_rows.extend(
                 {
                     **row,
-                    "gold_run_id": row.get("gold_run_id")
-                    or manifest.get("run_id"),
+                    "gold_run_id": row.get("gold_run_id") or manifest.get("run_id"),
                     "gold_observed_at": row.get("gold_observed_at")
                     or manifest.get("observed_at"),
                     "gold_observed_date": row.get("gold_observed_date")
@@ -1830,7 +1948,7 @@ where source_connector = 'prime_intellect'
                 for row in manifest_rows
             )
 
-    offer_history = normalize_prime_h100_history(
+    offer_history = normalize_prime_frontier_history(
         [
             *historical_rows,
             *[
@@ -1857,58 +1975,60 @@ where source_connector = 'prime_intellect'
             run_id=gold_run_id,
             filename=filename,
         )
-        for table_name, filename in PRIME_H100_GOLD_TABLES.items()
+        for table_name, filename in PRIME_FRONTIER_GOLD_TABLES.items()
     }
     rows_by_table: dict[str, list[dict[str, Any]]] = {
-        "fact_prime_h100_offer_history": offer_history,
+        "fact_prime_frontier_offer_history": offer_history,
     }
-    write_parquet_rows(refs["fact_prime_h100_offer_history"], offer_history)
+    write_parquet_rows(refs["fact_prime_frontier_offer_history"], offer_history)
 
-    events = build_prime_h100_offer_events(offer_history)
-    rows_by_table["fact_prime_h100_offer_events"] = events
+    events = build_prime_frontier_offer_events(offer_history)
+    rows_by_table["fact_prime_frontier_offer_events"] = events
     if events:
-        write_parquet_rows(refs["fact_prime_h100_offer_events"], events)
+        write_parquet_rows(refs["fact_prime_frontier_offer_events"], events)
     else:
-        refs.pop("fact_prime_h100_offer_events")
+        refs.pop("fact_prime_frontier_offer_events")
 
     reference_history = query_parquet(
-        parquet_uri=refs["fact_prime_h100_offer_history"],
-        table_name="fact_prime_h100_offer_history",
-        sql=prime_h100_reference_history_sql(),
+        parquet_uri=refs["fact_prime_frontier_offer_history"],
+        table_name="fact_prime_frontier_offer_history",
+        sql=prime_frontier_reference_history_sql(),
     )
-    rows_by_table["fact_prime_h100_offer_reference_history"] = reference_history
+    rows_by_table["fact_prime_frontier_offer_reference_history"] = reference_history
     if not reference_history:
-        refs.pop("fact_prime_h100_offer_reference_history")
-        rows_by_table["fact_prime_h100_offer_ladder"] = []
-        refs.pop("fact_prime_h100_offer_ladder")
+        refs.pop("fact_prime_frontier_offer_reference_history")
+        rows_by_table["fact_prime_frontier_offer_ladder"] = []
+        refs.pop("fact_prime_frontier_offer_ladder")
         return rows_by_table, refs
     write_parquet_rows(
-        refs["fact_prime_h100_offer_reference_history"], reference_history
+        refs["fact_prime_frontier_offer_reference_history"],
+        reference_history,
     )
 
     if not events:
-        rows_by_table["fact_prime_h100_offer_ladder"] = []
-        refs.pop("fact_prime_h100_offer_ladder")
+        rows_by_table["fact_prime_frontier_offer_ladder"] = []
+        refs.pop("fact_prime_frontier_offer_ladder")
         return rows_by_table, refs
     ladder = query_tables(
         tables={
-            "fact_prime_h100_offer_history": refs[
-                "fact_prime_h100_offer_history"
+            "fact_prime_frontier_offer_history": refs[
+                "fact_prime_frontier_offer_history"
             ],
-            "fact_prime_h100_offer_events": refs[
-                "fact_prime_h100_offer_events"
+            "fact_prime_frontier_offer_events": refs[
+                "fact_prime_frontier_offer_events"
             ],
-            "fact_prime_h100_offer_reference_history": refs[
-                "fact_prime_h100_offer_reference_history"
+            "fact_prime_frontier_offer_reference_history": refs[
+                "fact_prime_frontier_offer_reference_history"
             ],
+            "fact_benchmark_values": benchmark_values_ref,
         },
-        sql=prime_h100_ladder_sql(),
+        sql=prime_frontier_ladder_sql(current_gold_run_id=gold_run_id),
     )
-    rows_by_table["fact_prime_h100_offer_ladder"] = ladder
+    rows_by_table["fact_prime_frontier_offer_ladder"] = ladder
     if ladder:
-        write_parquet_rows(refs["fact_prime_h100_offer_ladder"], ladder)
+        write_parquet_rows(refs["fact_prime_frontier_offer_ladder"], ladder)
     else:
-        refs.pop("fact_prime_h100_offer_ladder")
+        refs.pop("fact_prime_frontier_offer_ladder")
     return rows_by_table, refs
 
 
@@ -2007,14 +2127,137 @@ def _public_gold_manifest(
     }
 
 
-def _public_prime_h100_reference(row: Any) -> dict[str, Any] | None:
+def _public_prime_frontier_products(
+    *,
+    payload: dict[str, Any],
+    benchmark_values: list[dict[str, Any]],
+    benchmark_history: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    current_benchmarks = {
+        str(row.get("benchmark_family_id") or ""): row for row in benchmark_values
+    }
+    benchmark_by_run = {
+        (
+            str(row.get("benchmark_family_id") or ""),
+            str(row.get("gold_run_id") or ""),
+        ): row
+        for row in benchmark_history
+        if row.get("gold_run_id")
+    }
+    products: list[dict[str, Any]] = []
+    for product in PRIME_FRONTIER_PRODUCTS:
+        family_id = product.family_id
+        raw_history = [
+            row
+            for row in payload.get("history", [])
+            if row.get("gpu_family_id") == family_id
+        ]
+        history = [
+            _public_prime_frontier_reference(
+                row,
+                benchmark=benchmark_by_run.get(
+                    (family_id, str(row.get("gold_run_id") or ""))
+                ),
+            )
+            for row in raw_history
+        ]
+        benchmark_current = current_benchmarks.get(family_id)
+        current = _public_prime_frontier_reference(
+            payload.get("current", {}).get(family_id),
+            benchmark=benchmark_current,
+        )
+        last_seen = _public_prime_frontier_reference(
+            payload.get("last_seen", {}).get(family_id),
+            benchmark=(
+                benchmark_by_run.get(
+                    (
+                        family_id,
+                        str(
+                            payload.get("last_seen", {})
+                            .get(family_id, {})
+                            .get("gold_run_id")
+                            or ""
+                        ),
+                    )
+                )
+            ),
+        )
+        raw_offers = [
+            row
+            for row in payload.get("offers", [])
+            if row.get("gpu_family_id") == family_id
+        ]
+        raw_events = [
+            row
+            for row in payload.get("events", [])
+            if row.get("gpu_family_id") == family_id
+        ]
+        raw_event_history = [
+            row
+            for row in payload.get("event_history", [])
+            if row.get("gpu_family_id") == family_id
+        ]
+        offers = [
+            _public_prime_frontier_offer(
+                row,
+                benchmark=benchmark_current,
+                source_url=product.market_url,
+            )
+            for row in raw_offers
+        ]
+        events = [_public_prime_frontier_event(row) for row in raw_events]
+        ladder = [
+            _public_prime_frontier_ladder_row(
+                row,
+                offers=raw_offers,
+                events=raw_events,
+                benchmark=benchmark_current,
+                source_url=product.market_url,
+            )
+            for row in payload.get("ladder", [])
+            if row.get("gpu_family_id") == family_id
+        ]
+        products.append(
+            {
+                "family_id": family_id,
+                "label": product.label,
+                "gpu_product_family": product.canonical_model,
+                "prime_api_gpu_type": product.api_gpu_type,
+                "market_url": product.market_url,
+                "current": current,
+                "last_seen": last_seen,
+                "benchmark_current": benchmark_current,
+                "history": [row for row in history if row],
+                "benchmark_history": [
+                    row
+                    for row in benchmark_history
+                    if row.get("benchmark_family_id") == family_id
+                ],
+                "ladder": ladder,
+                "events": events,
+                "event_history": [
+                    _public_prime_frontier_event(row) for row in raw_event_history
+                ],
+                "offers": offers,
+                "sources": _public_prime_frontier_sources(offers),
+            }
+        )
+    return products
+
+
+def _public_prime_frontier_reference(
+    row: Any,
+    *,
+    benchmark: dict[str, Any] | None,
+) -> dict[str, Any] | None:
     if not isinstance(row, dict):
         return None
-    return {
+    result = {
         key: row.get(key)
         for key in [
             "offer_reference_symbol",
             "reference_scope",
+            "gpu_family_id",
             "gpu_product_family",
             "unit",
             "price_basis",
@@ -2040,28 +2283,62 @@ def _public_prime_h100_reference(row: Any) -> dict[str, Any] | None:
             "methodology_version",
         ]
     }
+    market_value = _float_or_none((benchmark or {}).get("benchmark_usd_gpu_hr"))
+    prime_value = _float_or_none(row.get("reference_usd_gpu_hr"))
+    result.update(
+        {
+            "market_benchmark_usd_gpu_hr": market_value,
+            "market_benchmark_p25_usd_gpu_hr": (
+                (benchmark or {}).get("provider_floor_p25_usd_gpu_hr")
+            ),
+            "market_benchmark_p75_usd_gpu_hr": (
+                (benchmark or {}).get("provider_floor_p75_usd_gpu_hr")
+            ),
+            "market_benchmark_provider_count": (
+                (benchmark or {}).get("provider_count")
+            ),
+            "premium_to_market_benchmark_fraction": (
+                prime_value / market_value - 1
+                if prime_value is not None
+                and market_value is not None
+                and market_value > 0
+                else None
+            ),
+        }
+    )
+    return result
 
 
-def _public_prime_h100_ladder_row(
+def _public_prime_frontier_ladder_row(
     row: dict[str, Any],
     *,
     offers: list[dict[str, Any]],
     events: list[dict[str, Any]],
+    benchmark: dict[str, Any] | None,
+    source_url: str,
 ) -> dict[str, Any]:
     level = row.get("price_level_usd_gpu_hr")
+    family_id = row.get("gpu_family_id")
     level_offers = [
-        _public_prime_h100_offer(offer)
+        _public_prime_frontier_offer(
+            offer,
+            benchmark=benchmark,
+            source_url=source_url,
+        )
         for offer in offers
+        if offer.get("gpu_family_id") == family_id
         if _same_price_level(offer.get("price_usd_gpu_hr"), level)
     ]
     level_events = [
-        _public_prime_h100_event(event)
+        _public_prime_frontier_event(event)
         for event in events
+        if event.get("gpu_family_id") == family_id
         if _same_number(event.get("price_level_usd_gpu_hr"), level)
     ]
     return {
         key: row.get(key)
         for key in [
+            "gpu_family_id",
             "price_level_usd_gpu_hr",
             "price_level_rank",
             "configuration_count",
@@ -2075,8 +2352,15 @@ def _public_prime_h100_ladder_row(
             "stock_status_changed_count",
             "remained_count",
             "reference_usd_gpu_hr",
-            "distance_from_reference_usd_gpu_hr",
-            "is_reference_level",
+            "market_benchmark_usd_gpu_hr",
+            "market_benchmark_p25_usd_gpu_hr",
+            "market_benchmark_p75_usd_gpu_hr",
+            "market_benchmark_provider_count",
+            "distance_from_prime_reference_usd_gpu_hr",
+            "distance_from_market_benchmark_usd_gpu_hr",
+            "premium_to_market_benchmark_fraction",
+            "is_prime_reference_level",
+            "is_market_benchmark_level",
             "gold_run_id",
             "gold_observed_at",
             "status",
@@ -2088,13 +2372,14 @@ def _public_prime_h100_ladder_row(
     }
 
 
-def _public_prime_h100_event(row: dict[str, Any]) -> dict[str, Any]:
+def _public_prime_frontier_event(row: dict[str, Any]) -> dict[str, Any]:
     return {
         key: row.get(key)
         for key in [
             "event_type",
             "event_label",
             "provider",
+            "gpu_family_id",
             "gpu_model",
             "gpu_count",
             "gpu_socket",
@@ -2117,7 +2402,12 @@ def _public_prime_h100_event(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _public_prime_h100_offer(row: dict[str, Any]) -> dict[str, Any]:
+def _public_prime_frontier_offer(
+    row: dict[str, Any],
+    *,
+    benchmark: dict[str, Any] | None,
+    source_url: str,
+) -> dict[str, Any]:
     minimum_total = row.get("minimum_executable_price_usd_hr")
     gpu_count = row.get("gpu_count")
     try:
@@ -2128,8 +2418,12 @@ def _public_prime_h100_offer(row: dict[str, Any]) -> dict[str, Any]:
         )
     except (TypeError, ValueError, ZeroDivisionError):
         minimum_total_per_gpu = None
+    market_value = _float_or_none((benchmark or {}).get("benchmark_usd_gpu_hr"))
+    offer_value = _float_or_none(row.get("price_usd_gpu_hr"))
     return {
+        "source_offer_id": row.get("source_offer_id"),
         "provider": row.get("provider"),
+        "gpu_family_id": row.get("gpu_family_id"),
         "gpu_model": row.get("gpu_model"),
         "gpu_count": row.get("gpu_count"),
         "gpu_socket": row.get("gpu_socket"),
@@ -2141,20 +2435,81 @@ def _public_prime_h100_offer(row: dict[str, Any]) -> dict[str, Any]:
         "price_usd_gpu_hr": row.get("price_usd_gpu_hr"),
         "price_usd_instance_hr": row.get("price_usd_instance_hr"),
         "minimum_executable_price_usd_gpu_hr": minimum_total_per_gpu,
-        "required_resource_price_usd_hr": row.get(
-            "required_resource_price_usd_hr"
-        ),
+        "required_resource_price_usd_hr": row.get("required_resource_price_usd_hr"),
         "price_basis": row.get("price_basis"),
         "observed_at": row.get("observed_at"),
-        "source_url": PRIME_H100_SOURCE_URL,
+        "market_benchmark_usd_gpu_hr": market_value,
+        "premium_to_market_benchmark_fraction": (
+            offer_value / market_value - 1
+            if offer_value is not None and market_value is not None and market_value > 0
+            else None
+        ),
+        "requestable_via_prime": True,
+        "source_url": source_url,
     }
+
+
+def _public_prime_frontier_sources(
+    offers: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for offer in offers:
+        provider = str(offer.get("provider") or "")
+        if provider:
+            grouped.setdefault(provider, []).append(offer)
+    rows: list[dict[str, Any]] = []
+    for provider, provider_offers in grouped.items():
+        prices = [
+            float(offer["price_usd_gpu_hr"])
+            for offer in provider_offers
+            if _float_or_none(offer.get("price_usd_gpu_hr")) is not None
+        ]
+        rows.append(
+            {
+                "provider": provider,
+                "configuration_count": len(provider_offers),
+                "best_usd_gpu_hr": min(prices) if prices else None,
+                "highest_usd_gpu_hr": max(prices) if prices else None,
+                "regions": sorted(
+                    {
+                        str(offer.get("region"))
+                        for offer in provider_offers
+                        if offer.get("region")
+                    }
+                ),
+                "gpu_counts": sorted(
+                    {
+                        int(offer.get("gpu_count") or 0)
+                        for offer in provider_offers
+                        if int(offer.get("gpu_count") or 0) > 0
+                    }
+                ),
+            }
+        )
+    return sorted(
+        rows,
+        key=lambda row: (
+            float(row.get("best_usd_gpu_hr") or float("inf")),
+            str(row.get("provider") or ""),
+        ),
+    )
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number
 
 
 def _same_price_level(value: Any, level: Any) -> bool:
     try:
         rounded = (
-            int(float(value) / PRIME_H100_PRICE_INCREMENT + 0.5)
-            * PRIME_H100_PRICE_INCREMENT
+            int(float(value) / PRIME_FRONTIER_PRICE_INCREMENT + 0.5)
+            * PRIME_FRONTIER_PRICE_INCREMENT
         )
         return _same_number(rounded, level)
     except (TypeError, ValueError):
@@ -2338,9 +2693,7 @@ def _merge_public_market_state_history(
     candidates.extend(current_rows)
     for row in candidates:
         observation_id = str(row.get("observation_id") or "")
-        observed_at = str(
-            row.get("gold_observed_at") or row.get("observed_at") or ""
-        )
+        observed_at = str(row.get("gold_observed_at") or row.get("observed_at") or "")
         run_id = str(row.get("gold_run_id") or "")
         if not observation_id or not observed_at:
             continue
