@@ -45,6 +45,12 @@ The first implementation accidentally serialized history in both `series` and
 stores each history once and reconstructs compatibility shapes only in browser
 memory.
 
+The Prime article reader initially requested all four family cards at startup,
+which preserved the old transfer cost despite the split. It now loads only the
+selected family and fetches H200, B200, or B300 when the reader opens that tab.
+The compatibility four-family shelf is fetched only when a card view is
+unavailable.
+
 Measured uncompressed files from a real Gold export:
 
 ```text

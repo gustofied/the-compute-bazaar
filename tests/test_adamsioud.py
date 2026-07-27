@@ -103,7 +103,7 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('src="./compute-viz.js?v=6"', article)
         self.assertIn('src="./compute-market.js?v=11"', article)
         self.assertIn('src="./compute-market-history.js?v=8"', article)
-        self.assertIn('src="./prime-frontier-market.js?v=2"', article)
+        self.assertIn('src="./prime-frontier-market.js?v=3"', article)
         self.assertIn('src="./sandbox-cost.js?v=26"', article)
         self.assertEqual(article.count("data-viz-card"), 14)
         for status_label in {
