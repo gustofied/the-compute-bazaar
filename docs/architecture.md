@@ -62,6 +62,10 @@ APIs, CLI queries, agents, and index calculations:
 - `gold.fact_index_constituents`
 - `gold.fact_benchmark_values`
 - `gold.fact_benchmark_constituents`
+- `gold.fact_prime_h100_offer_history`
+- `gold.fact_prime_h100_offer_events`
+- `gold.fact_prime_h100_offer_reference_history`
+- `gold.fact_prime_h100_offer_ladder`
 - `gold.dim_gpu_products`
 - `gold.dim_providers`
 - `gold.dim_regions`
@@ -153,6 +157,28 @@ keeping each component manifest and lineage chain explicit. Scratch SQL is
 read-only and can access only tables declared by those manifests. Useful
 queries should be promoted into the Curia catalog before they become stable
 inspection views or methodology.
+
+### Prime H100 Offer Shelf
+
+Prime's availability API is also used for one intentionally narrow market
+microstructure view:
+
+```text
+Prime immutable API snapshots
+  -> silver Prime configurations
+  -> cumulative H100 offer history
+  -> observable lifecycle events
+  -> provider-balanced reference history
+  -> centered $0.25 offer ladder
+  -> public-safe JSON / D3 card / Curia SQL
+```
+
+The reference is the median of one lowest eligible H100 base rate per upstream
+provider. The ladder groups configurations, not physical GPUs. The event
+classifier records appearance, disappearance, stock-label changes, and
+repricing, but it never invents fills or cancellations. This keeps the
+high-frequency market view useful without promoting catalogue presence into
+transaction evidence.
 
 ## Sandbox Cost Product
 

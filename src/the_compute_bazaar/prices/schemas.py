@@ -79,6 +79,12 @@ class GpuOffer:
     availability_status: str = "available"
     raw_ref: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    gpu_socket: str | None = None
+    stock_status: str | None = None
+    price_is_variable: bool | None = None
+    minimum_executable_price_usd_hr: float | None = None
+    required_resource_price_usd_hr: float | None = None
+    price_basis: str | None = None
 
     def event_key(self) -> str:
         return f"{self.provider}:{self.gpu_model}:{self.source_offer_id}"

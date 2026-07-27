@@ -53,6 +53,7 @@ latest-index.json
 featured-index.json
 featured-benchmarks.json
 benchmark-history.json
+prime-h100-offer-reference.json
 sandbox-cost.json
 index-history.json
 index-quality.json
@@ -75,6 +76,13 @@ B200, and B300 benchmark observations plus the provider-floor interquartile rang
 coverage counts. Each export merges the newest observations into the existing history, so the
 hourly job does not need to rescan the full lake. Use it instead of downloading the much larger
 all-product `index-history.json` on public story pages.
+
+`prime-h100-offer-reference.json` is the public-safe Prime H100 shelf. It
+contains the provider-balanced reference history, the current centered price
+ladder, current eligible configuration details, and observable lifecycle
+events. It removes private S3 references and provider credentials. Counts are
+visible configurations and distinct upstream providers, not physical GPU
+inventory or traded volume.
 
 `sandbox-cost.json` is the version 5 public article payload for the sandbox and
 underlying-capacity benchmark. It contains the current exact-shape,

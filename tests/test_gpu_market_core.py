@@ -19,6 +19,7 @@ from the_compute_bazaar.prices.gold import (
     query_gold_listings,
     query_gold_market_state,
     query_gold_market_state_history,
+    query_gold_prime_h100_offer_reference,
     query_gold_provider_comparison,
     read_latest_gold_manifest,
 )
@@ -1422,12 +1423,23 @@ class GpuNormalizationTests(unittest.TestCase):
                             "gpuCount": 2,
                             "gpuMemory": 80,
                             "security": "secure_cloud",
-                            "prices": {"currency": "USD", "onDemand": 4.2},
+                            "prices": {
+                                "currency": "USD",
+                                "onDemand": 4.2,
+                                "isVariable": False,
+                            },
                             "region": "united_states",
                             "dataCenter": "US-KS-2",
                             "country": "US",
                             "stockStatus": "Available",
                             "isSpot": False,
+                            "socket": "PCIe",
+                            "disk": {
+                                "minCount": 80,
+                                "defaultCount": 80,
+                                "pricePerUnit": 0.00014,
+                                "defaultIncludedInPrice": False,
+                            },
                         }
                     ],
                     "totalCount": 1,
@@ -1451,6 +1463,22 @@ class GpuNormalizationTests(unittest.TestCase):
         self.assertEqual(offers[0].source_connector, "prime_intellect")
         self.assertEqual(offers[0].gpu_model, "H100_80GB_x2")
         self.assertEqual(offers[0].price_usd_hr, 4.2)
+        self.assertIsNone(offers[0].available_gpu_count)
+        self.assertEqual(offers[0].gpu_socket, "PCIe")
+        self.assertEqual(offers[0].stock_status, "Available")
+        self.assertFalse(offers[0].price_is_variable)
+        self.assertAlmostEqual(
+            offers[0].required_resource_price_usd_hr or 0,
+            0.0112,
+        )
+        self.assertAlmostEqual(
+            offers[0].minimum_executable_price_usd_hr or 0,
+            4.2112,
+        )
+        self.assertEqual(
+            offers[0].metadata["capacity_basis"],
+            "configuration_presence",
+        )
         self.assertEqual(offers[0].metadata["upstream_provider"], "runpod")
         self.assertEqual(session.calls[0]["params"]["gpu_type"], "H100_80GB")
 
@@ -2032,6 +2060,137 @@ class GpuNormalizationTests(unittest.TestCase):
 
 
 class GoldQueryTests(unittest.TestCase):
+    def test_prime_h100_offer_reference_tracks_provider_floors_and_events(
+        self,
+    ) -> None:
+        first_observed = datetime(2026, 7, 27, 10, 0, tzinfo=timezone.utc)
+        second_observed = datetime(2026, 7, 27, 11, 0, tzinfo=timezone.utc)
+
+        def prime_offer(
+            provider: str,
+            offer_id: str,
+            price: float,
+            observed_at: datetime,
+        ) -> GpuOffer:
+            return _offer(
+                provider=provider,
+                source_connector="prime_intellect",
+                source_offer_id=offer_id,
+                price_usd_hr=price,
+                gpu_raw_name="H100_80GB",
+                gpu_model="H100_80GB",
+                vram_gb=80,
+                observed_at=observed_at,
+                is_spot=False,
+                is_secure=True,
+                gpu_socket="SXM",
+                stock_status="Available",
+                price_is_variable=False,
+                minimum_executable_price_usd_hr=price + 0.01,
+                required_resource_price_usd_hr=0.01,
+                price_basis="provider_reported_gpu_base_rate",
+            )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lake_root = str(Path(tmpdir) / "lake")
+            raw_root = str(Path(tmpdir) / "raw")
+            dashboard_root = str(Path(tmpdir) / "dashboard")
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="prime_intellect",
+                run_id="prime-1000",
+                observed_at=first_observed,
+                offers=[
+                    prime_offer("alpha", "alpha-h100", 3.0, first_observed),
+                    prime_offer("beta", "beta-h100", 4.0, first_observed),
+                    prime_offer("charlie", "charlie-h100", 5.0, first_observed),
+                ],
+            )
+            first = build_gold_market_tables(
+                lake_root=lake_root,
+                providers=["prime_intellect"],
+                run_id="gold-market-20260727T100000-00000001",
+            )
+
+            _write_provider_run(
+                lake_root=lake_root,
+                raw_root=raw_root,
+                provider="prime_intellect",
+                run_id="prime-1100",
+                observed_at=second_observed,
+                offers=[
+                    prime_offer("alpha", "alpha-h100", 3.0, second_observed),
+                    prime_offer("beta", "beta-h100", 4.5, second_observed),
+                    prime_offer("delta", "delta-h100", 4.0, second_observed),
+                ],
+            )
+            second = build_gold_market_tables(
+                lake_root=lake_root,
+                providers=["prime_intellect"],
+                run_id="gold-market-20260727T110000-00000002",
+            )
+            result = query_gold_prime_h100_offer_reference(
+                lake_root=lake_root
+            )
+            export = export_gold_dashboard_snapshot(
+                lake_root=lake_root,
+                output_root=dashboard_root,
+            )
+            public = read_json(
+                export["output_refs"]["prime_h100_offer_reference"]
+            )
+            reference_query = run_operator_query(
+                lake_root=lake_root,
+                query_id="prime_h100_offer_reference",
+                limit=10,
+            )
+            ladder_query = run_operator_query(
+                lake_root=lake_root,
+                query_id="prime_h100_offer_ladder",
+                limit=20,
+            )
+
+        self.assertEqual(
+            first.row_counts["fact_prime_h100_offer_reference_history"],
+            1,
+        )
+        self.assertEqual(
+            second.row_counts["fact_prime_h100_offer_reference_history"],
+            2,
+        )
+        self.assertEqual(len(result["history"]), 2)
+        self.assertEqual(result["current"]["reference_usd_gpu_hr"], 4.0)
+        self.assertEqual(result["current"]["provider_count"], 3)
+        self.assertEqual(result["current"]["configuration_count"], 3)
+        self.assertEqual(result["current"]["low_price_provider_count"], 2)
+        self.assertEqual(result["current"]["status"], "observed")
+        self.assertEqual(
+            result["current"]["gold_observed_at"],
+            second_observed.isoformat(),
+        )
+        self.assertEqual(
+            {row["event_type"] for row in result["events"]},
+            {"entered", "left_availability", "remained", "repriced_up"},
+        )
+        self.assertTrue(
+            any(row["is_reference_level"] for row in result["ladder"])
+        )
+        self.assertGreaterEqual(len(result["ladder"]), 11)
+        self.assertEqual(public["current"]["reference_usd_gpu_hr"], 4.0)
+        self.assertEqual(len(public["history"]), 2)
+        self.assertNotIn("raw_ref", json.dumps(public))
+        self.assertNotIn("s3://", json.dumps(public))
+        self.assertIn(
+            "prime_h100_offer_reference",
+            export["output_refs"],
+        )
+        self.assertEqual(reference_query["query"]["engine"], "datafusion")
+        self.assertEqual(reference_query["rows"][0]["reference_usd_gpu_hr"], 4.0)
+        self.assertTrue(
+            any(row["is_reference_level"] for row in ladder_query["rows"])
+        )
+
     def test_market_state_history_accumulates_without_rewriting_prior_rows(self) -> None:
         first_observed = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
         second_observed = datetime(2026, 7, 25, 13, 0, tzinfo=timezone.utc)
@@ -3123,22 +3282,40 @@ def _offer(
     vram_gb: float = 24,
     available_gpu_count: int | None = None,
     source_connector: str | None = None,
+    observed_at: datetime = OBSERVED_AT,
+    gpu_count: int = 1,
+    is_spot: bool | None = None,
+    is_secure: bool | None = None,
+    gpu_socket: str | None = None,
+    stock_status: str | None = None,
+    price_is_variable: bool | None = None,
+    minimum_executable_price_usd_hr: float | None = None,
+    required_resource_price_usd_hr: float | None = None,
+    price_basis: str | None = None,
 ) -> GpuOffer:
     return GpuOffer(
         provider=provider,
         source_offer_id=source_offer_id,
-        observed_at=OBSERVED_AT,
+        observed_at=observed_at,
         gpu_raw_name=gpu_raw_name,
         gpu_model=gpu_model,
-        gpu_count=1,
+        gpu_count=gpu_count,
         vram_gb=vram_gb,
         price_usd_hr=price_usd_hr,
         available_gpu_count=available_gpu_count,
         source_connector=source_connector,
         country="US",
         region="California",
+        is_spot=is_spot,
+        is_secure=is_secure,
         availability_status=availability_status,
         raw_ref=f"raw/{provider}.json",
+        gpu_socket=gpu_socket,
+        stock_status=stock_status,
+        price_is_variable=price_is_variable,
+        minimum_executable_price_usd_hr=minimum_executable_price_usd_hr,
+        required_resource_price_usd_hr=required_resource_price_usd_hr,
+        price_basis=price_basis,
     )
 
 
@@ -3150,15 +3327,17 @@ def _write_provider_run(
     run_id: str,
     offers: list[GpuOffer],
     market_state: list[ComputeMarketState] | None = None,
+    observed_at: datetime = OBSERVED_AT,
 ) -> None:
+    observed_date = observed_at.date().isoformat()
     raw_ref = (
-        f"{raw_root}/provider={provider}/date=2026-06-17/run_id={run_id}/offers.json"
+        f"{raw_root}/provider={provider}/date={observed_date}/run_id={run_id}/offers.json"
     )
-    normalized_ref = f"{lake_root}/silver/gpu_offers/date=2026-06-17/provider={provider}/run_id={run_id}/offers.parquet"
-    manifest_ref = f"{lake_root}/_manifests/gpu_offers/provider={provider}/date=2026-06-17/run_id={run_id}.json"
+    normalized_ref = f"{lake_root}/silver/gpu_offers/date={observed_date}/provider={provider}/run_id={run_id}/offers.parquet"
+    manifest_ref = f"{lake_root}/_manifests/gpu_offers/provider={provider}/date={observed_date}/run_id={run_id}.json"
     latest_ref = f"{lake_root}/_manifests/gpu_offers/provider={provider}/latest.json"
     market_state_ref = (
-        f"{lake_root}/silver/compute_market_state/date=2026-06-17/"
+        f"{lake_root}/silver/compute_market_state/date={observed_date}/"
         f"provider={provider}/run_id={run_id}/observations.parquet"
         if market_state
         else None
@@ -3168,7 +3347,7 @@ def _write_provider_run(
         "table": "gpu_offers",
         "provider": provider,
         "run_id": run_id,
-        "observed_at": OBSERVED_AT.isoformat(),
+        "observed_at": observed_at.isoformat(),
         "raw_ref": raw_ref,
         "normalized_ref": normalized_ref,
         "raw_offer_count": len(offers),

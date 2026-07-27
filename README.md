@@ -361,6 +361,8 @@ uv run gpu-prices gold-benchmarks --limit 10
 uv run gpu-prices gold-benchmark-constituents --benchmark-family-id H100 --limit 50
 uv run gpu-prices gold-provider-comparison --limit 20
 uv run gpu-prices operator-query compute_market_state --version v1 --limit 200
+uv run gpu-prices operator-query prime_h100_offer_reference --version v1 --limit 168
+uv run gpu-prices operator-query prime_h100_offer_ladder --version v1 --limit 100
 uv run gpu-prices operator-query compute_price_cross_section --version v0 --limit 100
 uv run gpu-prices operator-query sandbox_workload_costs --version v0 --limit 50
 uv run gpu-prices export-gold-dashboard --limit 100
@@ -376,6 +378,14 @@ stock evidence, not physical fleet occupancy. RunPod and Hyperstack contribute
 availability observations without a compatible fleet denominator. Prime
 preserves the upstream provider identity, and matching direct observations are
 preferred without deleting the aggregate row.
+
+When Prime is in the provider scope, the same hourly Gold build also retains a
+cumulative H100 offer shelf. It calculates one lowest secure on-demand base
+rate per upstream provider, publishes their median and p25-p75 range, and
+materializes a centered $0.25 ladder with observable entered, repriced,
+remained, and left-availability events. These are configuration observations,
+not physical inventory, fills, or transaction volume. The public projection is
+`prime-h100-offer-reference.json`.
 
 Clore's marketplace endpoint requires a read API key. Without
 `CLORE_API_KEY`, the hourly scope omits the source while retaining prior Clore

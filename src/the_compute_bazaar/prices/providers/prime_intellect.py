@@ -132,6 +132,10 @@ def normalize_availability(
         price = _float_or_none(prices.get("onDemand"))
         if price is None or price <= 0:
             continue
+        required_resource_price, resource_components = (
+            _minimum_required_resource_price(entry)
+        )
+        minimum_executable_price = price + required_resource_price
         if gpu_count > 1:
             gpu_model = f"{gpu_model}_x{gpu_count}"
 
@@ -173,7 +177,7 @@ def normalize_availability(
                 gpu_count=gpu_count,
                 vram_gb=gpu_memory_gb,
                 price_usd_hr=price,
-                available_gpu_count=gpu_count if is_available else None,
+                available_gpu_count=None,
                 currency=str(prices.get("currency") or "USD"),
                 country=country,
                 region=region,
@@ -181,6 +185,12 @@ def normalize_availability(
                 is_secure=str(entry.get("security") or "").lower() == "secure_cloud",
                 availability_status=availability_status,
                 raw_ref=raw_ref,
+                gpu_socket=_string_or_none(entry.get("socket")),
+                stock_status=stock_status or None,
+                price_is_variable=_bool_or_none(prices.get("isVariable")),
+                minimum_executable_price_usd_hr=minimum_executable_price,
+                required_resource_price_usd_hr=required_resource_price,
+                price_basis="provider_reported_gpu_base_rate",
                 metadata={
                     "upstream_provider": provider_name,
                     "cloud_id": cloud_id,
@@ -190,7 +200,9 @@ def normalize_availability(
                     "security": entry.get("security"),
                     "community_price": prices.get("communityPrice"),
                     "is_variable_price": prices.get("isVariable"),
-                    "capacity_basis": "available_bundle_lower_bound",
+                    "capacity_basis": "configuration_presence",
+                    "gpu_count_semantics": "machine_shape_not_inventory",
+                    "required_resource_price_components": resource_components,
                 },
             )
         )
@@ -255,3 +267,26 @@ def _string_or_none(value: Any) -> str | None:
 def _provider_id(value: str) -> str:
     normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
     return PROVIDER_ALIASES.get(normalized, normalized) or "prime_intellect"
+
+
+def _minimum_required_resource_price(
+    entry: Mapping[str, Any],
+) -> tuple[float, dict[str, float]]:
+    """Estimate the least separately billed resource cost for this shape."""
+    components: dict[str, float] = {}
+    for resource_name in ("disk", "sharedDisk", "vcpu", "memory"):
+        resource = entry.get(resource_name)
+        if not isinstance(resource, Mapping):
+            continue
+        if _bool_or_none(resource.get("defaultIncludedInPrice")):
+            continue
+        price_per_unit = _float_or_none(resource.get("pricePerUnit"))
+        if price_per_unit is None or price_per_unit <= 0:
+            continue
+        units = _float_or_none(resource.get("minCount"))
+        if units is None:
+            units = _float_or_none(resource.get("defaultCount"))
+        if units is None or units <= 0:
+            continue
+        components[resource_name] = price_per_unit * units
+    return sum(components.values()), components

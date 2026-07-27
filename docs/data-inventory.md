@@ -26,6 +26,7 @@ Use this order when two copies disagree:
 | Dataset | Cadence | Bronze | Silver | Gold | Publication use |
 | --- | --- | --- | --- | --- | --- |
 | GPU provider offers | Hourly Windmill market run | One immutable provider response and manifest per run under `raw/provider=.../date=.../run_id=...` | Per-run normalized offers under `lake/silver/gpu_offers/...` | Listings, provider/GPU/region dimensions, index values and constituents, benchmark values and constituents | GPU cards, price history, provider comparison, future search/API |
+| Prime H100 offer shelf | Hourly Windmill market run when `PRIME_INTELLECT_API_KEY` is configured | Prime paginated availability response retained with each provider run | Prime configurations with upstream provider, `cloudId`, datacenter, shape, socket, stock label, base rate, and minimum separately billed resources | Cumulative offer history, observable lifecycle events, provider-balanced reference history, and centered $0.25 ladder | H100 reference/ladder card, Curia queries, future sourcing context |
 | Compute market state | Hourly where the source exposes a usable measure | Provider response retained with the provider run | `lake/silver/compute_market_state/...` | `fact_compute_market_state` and cumulative deduplicated `fact_compute_market_state_history` | Akash active/total CPU, GPU, memory, and storage capacity; Clore rental occupancy; Prime and direct-provider availability |
 | Exact-shape VM offers | Hourly Windmill market run | Official catalog responses under `raw/sandbox-cost/vm-capacity/...` and discovery prefixes, with retrieval time and checksum | Cumulative offer, discovery, marketplace, current, and expanded-cohort Parquet tables under `lake/sandbox_cost/silver/` | Current seven-vendor cross-section; hourly median/p25/p75/min/max in USD and base-100 form; legacy four-vendor history; separate marketplace indication | VM-versus-sandbox reference, relative-price comparison, and source audit |
 | Managed sandbox rate cards | Manual reviewed evidence; gold rebuilt hourly | Versioned source register, archived URLs, dates, and arithmetic in package evidence and `lake/sandbox_cost/bronze/` | `sandbox_hourly_prices.parquet` | Current rates, fixed eight-service median/p25/p75, and dated price events | Public sandbox rate comparison |
@@ -42,6 +43,14 @@ Use this order when two copies disagree:
   plus constituents.
 - A benchmark value is not complete without its provider count, included
   offers, excluded rows, methodology version, and source run references.
+- Prime's `gpuCount` is a machine-shape field, not an available-inventory
+  count. The Prime H100 ladder counts returned configurations and distinct
+  upstream providers only.
+- A missing Prime configuration is retained as `left_availability`; it is not
+  relabeled as a rental, fill, cancellation, or occupancy observation.
+- The Prime reference history is cumulative and deduplicated by Gold run and
+  stable listing identity. A current export can therefore be rebuilt without
+  making the browser the historical store.
 
 ### VM capacity
 
@@ -103,6 +112,7 @@ The maintained public files are:
 ```text
 dashboard/compute-bazaar/featured-benchmarks.json
 dashboard/compute-bazaar/benchmark-history.json
+dashboard/compute-bazaar/prime-h100-offer-reference.json
 dashboard/compute-bazaar/sandbox-cost.json
 dashboard/compute-bazaar/market-state.json
 dashboard/compute-bazaar/manifest.json

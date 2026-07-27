@@ -37,6 +37,10 @@ class DashboardSnapshotTests(unittest.TestCase):
             _snapshot_name_for_filename("sandbox-cost.json"),
             "sandbox-cost",
         )
+        self.assertEqual(
+            _snapshot_name_for_filename("prime-h100-offer-reference.json"),
+            "prime-h100-offer-reference",
+        )
         with self.assertRaises(HTTPException):
             _snapshot_name_for_filename("../manifest.json")
         with self.assertRaises(HTTPException):

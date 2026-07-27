@@ -149,3 +149,90 @@ The calculation is authored as DataFusion SQL in
 
 - `gold.fact_benchmark_values`
 - `gold.fact_benchmark_constituents`
+
+## Prime H100 Offer Reference
+
+The Prime H100 offer reference is a narrower product than the cross-provider
+benchmark above. It describes the H100 shelf visible through Prime Intellect at
+one observation time. Prime aggregates configurations from several upstream
+providers, so this view can examine how their visible prices cluster and
+change without treating Prime as one additional independent provider in the
+calculation.
+
+The hourly connector requests every page for `H100_80GB`, retains the exact
+response in bronze, and normalizes each returned configuration in silver. A
+configuration identity is based on the upstream provider's `cloudId`,
+datacenter, and machine shape. Prime documents `cloudId` as the provider
+identifier needed to provision a configuration and `dataCenter` as a required
+disambiguator when present.
+
+An eligible configuration must be:
+
+- H100 80 GB, including multi-GPU H100 80 GB machine shapes;
+- `secure_cloud`;
+- on-demand rather than spot;
+- marked available;
+- quoted in positive USD.
+
+For each retained hourly Gold run:
+
+1. Normalize the provider-reported GPU base rate to USD per GPU-hour.
+2. Keep the lowest eligible configuration from each upstream provider.
+3. Publish the median of those provider floors as the reference.
+4. Publish p25 and p75 across the same provider floors as the visible
+   middle-half range.
+5. Count providers whose floor is within 10 percent of the reference as
+   low-price breadth.
+
+One upstream provider receives one constituent even if it exposes several
+regions or machine shapes. The status is `observed` with at least three
+provider floors and `indicative` below that threshold. The threshold is a
+display-quality label, not a claim that three providers make a
+settlement-grade index.
+
+Prime documents that adjustable disk, CPU, memory, or shared-storage resources
+can be charged separately from `prices.onDemand`. Silver therefore preserves
+both:
+
+- `price_usd_gpu_hr`: the comparable provider-reported GPU base rate;
+- `minimum_executable_price_usd_hr`: the machine base rate plus the minimum
+  separately billed resources exposed by the response.
+
+The public headline and ladder use the GPU base rate so a new storage choice
+does not silently rewrite the retained H100 price history. The minimum
+executable total remains available in Gold and in offer details.
+
+The ladder rounds configurations to $0.25 per-GPU-hour levels. Gold emits
+eleven centered rungs around the latest rounded reference and retains occupied
+or recently changed levels outside that window. A rung counts visible
+configurations and distinct upstream providers. It never treats `gpuCount` as
+inventory: Prime defines that field as the requested machine shape.
+
+Across consecutive retained snapshots, the lifecycle table can classify only:
+
+- entered public availability;
+- remained available;
+- repriced higher or lower;
+- changed public stock label;
+- left public availability.
+
+Leaving public availability is not a fill, rental, cancellation, or proof of
+demand. Prime does not expose executed transactions or the upstream providers'
+complete fleet denominator through this endpoint. Accordingly, the view is
+not volume-weighted, occupancy-weighted, or an order book.
+
+The methodology version is:
+
+```text
+prime_h100_offer_reference_v1
+```
+
+DataFusion materializes:
+
+- `gold.fact_prime_h100_offer_history`
+- `gold.fact_prime_h100_offer_events`
+- `gold.fact_prime_h100_offer_reference_history`
+- `gold.fact_prime_h100_offer_ladder`
+
+Curia exposes the same products through
+`prime_h100_offer_reference:v1` and `prime_h100_offer_ladder:v1`.

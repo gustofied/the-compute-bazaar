@@ -31,6 +31,9 @@ class AdamSioudServerTests(unittest.TestCase):
         history_script = (article_root / "compute-market-history.js").read_text(
             encoding="utf-8"
         )
+        prime_h100_script = (article_root / "prime-h100-market.js").read_text(
+            encoding="utf-8"
+        )
         payload = json.loads(
             (article_root / "sandbox-cost.json").read_text(encoding="utf-8")
         )
@@ -87,14 +90,20 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('id="market-state-current"', article)
         self.assertIn('id="market-occupancy-chart"', article)
         self.assertIn('id="market-state-availability"', article)
+        self.assertIn("data-prime-h100-market", article)
+        self.assertIn('id="prime-h100-reference-chart"', article)
+        self.assertIn('id="prime-h100-ladder"', article)
+        self.assertIn("provider does not receive more weight", article)
+        self.assertIn("not proof that somebody rented it", article)
         self.assertNotIn('id="vm-hourly-chart"', article)
         self.assertNotIn('id="sandbox-batch-history"', article)
-        self.assertIn('href="./compute-viz.css?v=3"', article)
-        self.assertIn('src="./compute-viz.js?v=3"', article)
+        self.assertIn('href="./compute-viz.css?v=4"', article)
+        self.assertIn('src="./compute-viz.js?v=4"', article)
         self.assertIn('src="./compute-market.js?v=10"', article)
         self.assertIn('src="./compute-market-history.js?v=7"', article)
+        self.assertIn('src="./prime-h100-market.js?v=1"', article)
         self.assertIn('src="./sandbox-cost.js?v=25"', article)
-        self.assertEqual(article.count("data-viz-card"), 13)
+        self.assertEqual(article.count("data-viz-card"), 14)
         for status_label in {
             "Hourly benchmark history",
             "Hourly seven-vendor cohort",
@@ -109,6 +118,7 @@ class AdamSioudServerTests(unittest.TestCase):
         )
         for card_id in {
             "gpu-price-card",
+            "prime-h100-offer-card",
             "gpu-price-pulse-card",
             "gpu-availability-pulse-card",
             "cpu-price-pulse-card",
@@ -147,6 +157,14 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn('attr("role", "slider")', history_script)
         self.assertIn('attr("aria-valuenow", focusIndex)', history_script)
         self.assertIn("viz.localPointer", history_script)
+        self.assertIn("prime-h100-offer-reference.json", prime_h100_script)
+        self.assertIn("viz.localPointer", prime_h100_script)
+        self.assertIn("viz.positionTooltip", prime_h100_script)
+        self.assertIn("viz.observe", prime_h100_script)
+        self.assertIn("provider-balanced offer reference", prime_h100_script)
+        self.assertIn("left public availability", prime_h100_script)
+        self.assertNotIn("filled", prime_h100_script.lower())
+        self.assertNotIn("traded volume", prime_h100_script.lower())
         self.assertIn("sandbox-cost.json", script)
         self.assertIn('"sandbox_cost_gold_v5"', script)
         self.assertNotIn('"sandbox_cost_gold_v4"', script)

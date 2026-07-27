@@ -20,6 +20,7 @@ a runtime dependency. The maintained implementation is:
 external/AdamSioud/exemplars/compute/compute-viz.css
 external/AdamSioud/exemplars/compute/compute-viz.js
 external/AdamSioud/exemplars/compute/compute-market-history.js
+external/AdamSioud/exemplars/compute/prime-h100-market.js
 external/AdamSioud/exemplars/compute/sandbox-cost.js
 ```
 
@@ -164,6 +165,28 @@ A band must encode an explicit range in the gold data.
 - A sparse series must not be presented with a synthetic confidence interval.
 
 Legends and captions name the range. Tooltips expose its numerical bounds.
+
+### Offer Ladders
+
+An offer ladder is allowed only when Gold supplies explicit price levels and
+membership. It is not a visual license to invent an order book.
+
+- The center marker is a named reference calculated in Gold.
+- Every occupied level represents source-observed offers rounded by a declared
+  increment.
+- Empty centered rungs may be shown to make distance from the reference
+  legible, but their count remains zero.
+- Bar length may encode visible configuration count or provider count only
+  when the label names that unit.
+- Entered, repriced, remained, and left-availability marks are based on
+  consecutive retained snapshots.
+- Do not use bid, ask, fill, cancel, remaining volume, liquidity, or execution
+  language unless the source exposes those objects.
+
+The Prime H100 ladder uses $0.25 rungs, configuration breadth, distinct
+upstream-provider breadth, and a provider-balanced reference. Its hover and
+focus detail can link to Prime's matching catalogue, but it cannot claim an
+individual public URL for every configuration when none exists.
 
 ## Semantic Series Configuration
 
