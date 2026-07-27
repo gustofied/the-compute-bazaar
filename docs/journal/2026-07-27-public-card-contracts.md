@@ -95,3 +95,44 @@ The visual redesign should use these contracts rather than inspect Gold-shaped
 documents. The first redesign unit is the GPU benchmark card. Prime depth,
 capacity, VM rates, and sandbox workload should retain distinct visual
 grammars because they measure different things.
+
+## Deployment
+
+The recurring worker was rebuilt from committed revision `00b202b` as:
+
+```text
+compute-bazaar-windmill-worker:2026-07-27-card-contracts-v2
+image sha256:4d9533a4bbdb38290a4f70a29e3add74c728c992e520819a37d7f804f4b5f2da
+```
+
+Only `windmill_worker` was recreated. Windmill Postgres, server, Caddy,
+AutoMQ, and their volumes remained running.
+
+The corrected Windmill smoke run was:
+
+```text
+market-card-contracts-v2-smoke-20260727T202000Z
+status                 success
+configured sources     18 successful, 0 failed
+Gold listings          1,848
+GPU products           239
+market-state rows      872
+sandbox job rows       69
+exact-shape VM offers  7
+```
+
+CloudFront returned all 11 card paths with HTTP 200 and
+`compute_bazaar_card_v1`. A recursive production audit found zero `s3://`
+references in every card, `market-overview.json`, and `market-run.json`.
+The corrected overview is 3,619 bytes and reports all four benchmark families.
+
+AdamSioud Pages deployment `30302287504` completed successfully for commit
+`a7509fc`. Browser verification on the public article found:
+
+```text
+14 chart cards rendered
+H200 lazy family switch succeeded
+desktop horizontal overflow  0 px
+375 px mobile overflow        0 px
+console warnings/errors       0
+```
