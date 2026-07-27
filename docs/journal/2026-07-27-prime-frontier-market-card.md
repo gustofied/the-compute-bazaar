@@ -197,3 +197,12 @@ Windmill still completed that job successfully; the client merely lost its
 long-held HTTP response. Verification therefore used the durable Windmill job
 record and S3 outputs, and the normal scheduled run completed immediately
 afterward.
+
+## Publication
+
+The AdamSioud article commit is `0e286b9` and the matching Compute Bazaar
+pipeline commit is `f71fb35`. GitHub Pages deployment `30279002252` completed
+successfully. The production article at
+<https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html#prime-frontier-market-card>
+loaded the new script and CloudFront payload without console errors; product
+switching and selected-product standalone links also worked there.
