@@ -168,4 +168,6 @@ and 390 x 844. The page had no horizontal document overflow. History range
 controls, pointer tracking, keyboard arrow inspection, ladder
 hover/focus details, source actions, and the standalone share view worked
 without console warnings or errors. Tooltips stayed inside the viewport on
-mobile.
+mobile. Production QA also caught and fixed a standalone-view delay for an
+`indicative` current snapshot: the shared card loader now recognizes any
+completed `data-viz-tone`, rather than waiting only for `live` or `warning`.

@@ -98,7 +98,7 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertNotIn('id="vm-hourly-chart"', article)
         self.assertNotIn('id="sandbox-batch-history"', article)
         self.assertIn('href="./compute-viz.css?v=4"', article)
-        self.assertIn('src="./compute-viz.js?v=4"', article)
+        self.assertIn('src="./compute-viz.js?v=5"', article)
         self.assertIn('src="./compute-market.js?v=10"', article)
         self.assertIn('src="./compute-market-history.js?v=7"', article)
         self.assertIn('src="./prime-h100-market.js?v=1"', article)
