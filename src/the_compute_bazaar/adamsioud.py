@@ -26,6 +26,7 @@ from .dashboard import (
 
 
 ADAM_SIOUD_DIR = PROJECT_ROOT / "external" / "AdamSioud"
+COMPUTE_BAZAAR_PAGE = "/exemplars/compute-bazaar/"
 
 
 def create_app(
@@ -48,7 +49,7 @@ def create_app(
             "snapshot_s3_prefix": s3_prefix,
             "snapshot_api_base": "/api/dashboard-snapshots",
             "available_snapshots": _available_snapshots(snapshot_dir, source=source, s3_prefix=s3_prefix),
-            "compute_page": "/exemplars/compute/feeling_the_compute.html",
+            "compute_page": COMPUTE_BAZAAR_PAGE,
         }
 
     @app.get("/api/snapshots")
@@ -77,7 +78,7 @@ def create_app(
 
     @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def home() -> RedirectResponse:
-        return RedirectResponse(url="/exemplars/compute/feeling_the_compute.html")
+        return RedirectResponse(url=COMPUTE_BAZAAR_PAGE)
 
     app.mount("/", StaticFiles(directory=site_dir, html=True), name="adamsioud")
     return app

@@ -248,5 +248,5 @@ For the published site, replace that value with the Terraform `dashboard_data_ba
 without editing HTML:
 
 ```text
-https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html?data=https://DISTRIBUTION.cloudfront.net
+https://www.adamsioud.com/exemplars/compute-bazaar/?data=https://DISTRIBUTION.cloudfront.net
 ```

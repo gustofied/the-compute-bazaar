@@ -556,7 +556,13 @@ external/AdamSioud
 ```
 
 This lets us work against the real website page without vendoring the site into
-this project. The useful target is:
+this project. The maintained public market surface is:
+
+```text
+external/AdamSioud/exemplars/compute-bazaar/index.html
+```
+
+The prose article is a deliberately unindexed rebuild shell:
 
 ```text
 external/AdamSioud/exemplars/compute/feeling_the_compute.html
@@ -568,7 +574,8 @@ For a fresh clone:
 ```sh
 git submodule update --init --depth 1 --filter=blob:none external/AdamSioud
 git -C external/AdamSioud sparse-checkout set \
-  CNAME README.md edit.js exemplars/compute exemplars/images index.html script.js style.css tendrils.js
+  CNAME README.md edit.js exemplars/compute exemplars/compute-bazaar \
+  exemplars/images index.html script.js style.css tendrils.js
 ```
 
 Run the publication-shaped local site:
@@ -580,15 +587,15 @@ uv run compute-bazaar-adamsioud
 Then open the local equivalent of the public URL:
 
 ```text
-http://127.0.0.1:8777/exemplars/compute/feeling_the_compute.html
+http://127.0.0.1:8777/exemplars/compute-bazaar/
 ```
 
 That server also exposes `/api/dashboard-snapshots/*.json`, so the AdamSioud page can keep its
-static-site shape while syncing small public-safe labels from the latest S3 gold snapshot. The first
-publication signal is the H100/H200/B200/B300 benchmark strip from
+static-site shape while syncing public-safe views from the latest S3 gold snapshot. The first
+market signal is the H100/H200/B200/B300 benchmark strip from
 `featured-benchmarks.json`, with `featured-index.json` as a floor fallback while old snapshots age
-out. The prototype dashboard remains the draft surface; AdamSioud should receive only composed,
-publication-ready signals.
+out. The hidden prose shell should adopt only composed, publication-ready cards from the maintained
+market surface, one editorial decision at a time.
 
 If the laptop is on mobile/5G and the Windmill tunnel stops connecting, refresh the dev runtime
 security-group ingress for the current `/32`:

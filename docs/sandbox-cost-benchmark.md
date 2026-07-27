@@ -944,9 +944,9 @@ The AdamSioud article prefers CloudFront in production and keeps a checked-in
 fallback for local and failure-safe rendering:
 
 ```text
-external/AdamSioud/exemplars/compute/feeling_the_compute.html
-external/AdamSioud/exemplars/compute/sandbox-cost.js
-external/AdamSioud/exemplars/compute/sandbox-cost.json
+external/AdamSioud/exemplars/compute-bazaar/index.html
+external/AdamSioud/exemplars/compute-bazaar/sandbox-cost.js
+external/AdamSioud/exemplars/compute-bazaar/sandbox-cost.json
 ```
 
 The browser does not derive benchmark values from provider rows. DataFusion
@@ -980,7 +980,7 @@ uv run python -m unittest \
   tests.test_vm_capacity \
   tests.test_adamsioud -v
 
-node --check external/AdamSioud/exemplars/compute/sandbox-cost.js
+node --check external/AdamSioud/exemplars/compute-bazaar/sandbox-cost.js
 ```
 
 Browser QA must cover desktop and mobile layout, no page-level horizontal
@@ -991,5 +991,5 @@ console/network errors.
 Public page:
 
 ```text
-https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html
+https://www.adamsioud.com/exemplars/compute-bazaar/
 ```

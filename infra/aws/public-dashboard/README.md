@@ -56,7 +56,7 @@ After apply, copy `dashboard_data_base_url` into the AdamSioud compute page:
 For local testing, the same page still works with the same-origin FastAPI proxy:
 
 ```text
-http://127.0.0.1:8777/exemplars/compute/feeling_the_compute.html
+http://127.0.0.1:8777/exemplars/compute-bazaar/
 ```
 
 You can also override the data source without editing HTML:

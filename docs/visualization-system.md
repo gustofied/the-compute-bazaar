@@ -17,16 +17,34 @@ composition, active marks, shared configuration, and loading states; it is not
 a runtime dependency. The maintained implementation is:
 
 ```text
-external/AdamSioud/exemplars/compute/compute-viz.css
-external/AdamSioud/exemplars/compute/compute-viz.js
-external/AdamSioud/exemplars/compute/compute-market-history.js
-external/AdamSioud/exemplars/compute/prime-frontier-market.js
-external/AdamSioud/exemplars/compute/sandbox-cost.js
+external/AdamSioud/exemplars/compute-bazaar/compute-viz.css
+external/AdamSioud/exemplars/compute-bazaar/compute-viz.js
+external/AdamSioud/exemplars/compute-bazaar/compute-market-history.js
+external/AdamSioud/exemplars/compute-bazaar/prime-frontier-market.js
+external/AdamSioud/exemplars/compute-bazaar/sandbox-cost.js
 ```
 
 The browser renders publication-ready gold data. It must not become a second
 calculation engine. DataFusion and the recurring pipeline remain responsible
 for medians, percentiles, benchmark membership, and public-safe exports.
+
+## Publication Boundaries
+
+The live market surface and the essay have separate ownership:
+
+```text
+exemplars/compute-bazaar/
+  maintained public product, chart runtime, and publication payload fallbacks
+
+exemplars/compute/feeling_the_compute.html
+  unindexed prose shell rebuilt deliberately from the original article
+```
+
+The public product can evolve without turning the essay into an accidental
+dashboard. A chart enters the essay only when its question, evidence, and
+place in the narrative are ready. The product remains the canonical
+implementation; the essay should reuse its contract instead of forking
+calculations or data.
 
 ## The Card Contract
 

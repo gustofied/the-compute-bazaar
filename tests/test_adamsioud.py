@@ -15,12 +15,20 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn("/api/dashboard-snapshots/{filename:path}", paths)
         self.assertIn("/api/snapshots/{name}", paths)
         self.assertIn("/", paths)
-
-    def test_compute_article_contains_the_maintained_sandbox_views(self) -> None:
-        article_root = Path("external/AdamSioud/exemplars/compute")
-        article = (article_root / "feeling_the_compute.html").read_text(
-            encoding="utf-8"
+        home = next(route for route in app.routes if route.path == "/")
+        health = next(route for route in app.routes if route.path == "/api/health")
+        self.assertEqual(
+            home.endpoint().headers["location"],
+            "/exemplars/compute-bazaar/",
         )
+        self.assertEqual(
+            health.endpoint()["compute_page"],
+            "/exemplars/compute-bazaar/",
+        )
+
+    def test_compute_bazaar_surface_contains_the_maintained_views(self) -> None:
+        article_root = Path("external/AdamSioud/exemplars/compute-bazaar")
+        article = (article_root / "index.html").read_text(encoding="utf-8")
         script = (article_root / "sandbox-cost.js").read_text(encoding="utf-8")
         viz_script = (article_root / "compute-viz.js").read_text(
             encoding="utf-8"
@@ -100,11 +108,11 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertNotIn('id="vm-hourly-chart"', article)
         self.assertNotIn('id="sandbox-batch-history"', article)
         self.assertIn('href="./compute-viz.css?v=5"', article)
-        self.assertIn('src="./compute-viz.js?v=6"', article)
-        self.assertIn('src="./compute-market.js?v=11"', article)
-        self.assertIn('src="./compute-market-history.js?v=8"', article)
-        self.assertIn('src="./prime-frontier-market.js?v=3"', article)
-        self.assertIn('src="./sandbox-cost.js?v=26"', article)
+        self.assertIn('src="./compute-viz.js?v=7"', article)
+        self.assertIn('src="./compute-market.js?v=12"', article)
+        self.assertIn('src="./compute-market-history.js?v=9"', article)
+        self.assertIn('src="./prime-frontier-market.js?v=4"', article)
+        self.assertIn('src="./sandbox-cost.js?v=28"', article)
         self.assertEqual(article.count("data-viz-card"), 14)
         for status_label in {
             "Hourly benchmark history",
@@ -139,6 +147,7 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn("effectiveCssZoom", viz_script)
         self.assertIn("localPointer", viz_script)
         self.assertIn("positionTooltip", viz_script)
+        self.assertIn("resolveDataBase", viz_script)
         self.assertIn("observe", viz_script)
         self.assertIn("cardUrl", viz_script)
         self.assertIn("embedCode", viz_script)
@@ -363,6 +372,24 @@ class AdamSioudServerTests(unittest.TestCase):
             [row["stage_id"] for row in payload["utilization"]["rows"]],
             ["available", "rented", "allocated", "active", "productive"],
         )
+
+    def test_compute_article_is_a_hidden_prose_shell(self) -> None:
+        site_root = Path("external/AdamSioud")
+        shell = (
+            site_root / "exemplars" / "compute" / "feeling_the_compute.html"
+        ).read_text(encoding="utf-8")
+        public_index = (site_root / "index.html").read_text(encoding="utf-8")
+        exemplar_index = (
+            site_root / "exemplars" / "exemplars.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('<meta name="robots" content="noindex,nofollow">', shell)
+        self.assertIn("Lorem ipsum", shell)
+        self.assertNotIn("data-viz-card", shell)
+        self.assertNotIn("compute-market.js", shell)
+        self.assertNotIn("sandbox-cost.js", shell)
+        self.assertIn('href="exemplars/compute-bazaar/"', public_index)
+        self.assertIn('href="compute-bazaar/"', exemplar_index)
 
 
 if __name__ == "__main__":

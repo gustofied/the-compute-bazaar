@@ -225,7 +225,6 @@ RAW_EXAMPLE_ROWS = [
 
 DEFAULT_DATA_PATH = Path("data/gpu-price-tape/gpu_price_tape.csv")
 DEFAULT_RAW_PATH = Path("data/gpu-price-tape/raw_observations.csv")
-DEFAULT_SITE_PATH = Path("external/AdamSioud/exemplars/compute/gpu-price-tape.csv")
 
 
 @dataclass(frozen=True)
@@ -540,8 +539,7 @@ def main() -> None:
     parser.add_argument(
         "--site-out",
         type=Path,
-        default=DEFAULT_SITE_PATH,
-        help="Static copy for the local article page.",
+        help="Optional static copy for a research page.",
     )
     parser.add_argument("--no-raw", action="store_true", help="Ignore raw observations and emit only comparisons/mocks.")
     parser.add_argument("--init-raw-only", action="store_true", help="Create the raw observations template and exit.")
@@ -564,7 +562,7 @@ def main() -> None:
     if raw_lines:
         print(f"included {len(raw_lines)} research traces from {args.raw}")
 
-    if not args.no_site_copy:
+    if args.site_out is not None and not args.no_site_copy:
         site_row_count = write_csv(args.site_out, lines)
         print(f"wrote {site_row_count} observations across {len(lines)} lines to {args.site_out}")
 
