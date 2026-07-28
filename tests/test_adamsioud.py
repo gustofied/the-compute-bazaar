@@ -7,6 +7,52 @@ from the_compute_bazaar.adamsioud import create_app
 
 
 class AdamSioudServerTests(unittest.TestCase):
+    def test_clean_article_gpu_card_reads_the_public_gold_contract(self) -> None:
+        article_root = Path("external/AdamSioud/exemplars/compute")
+        article = (article_root / "feeling_the_compute.html").read_text(
+            encoding="utf-8"
+        )
+        script = (article_root / "gpu-benchmark-card.js").read_text(
+            encoding="utf-8"
+        )
+        styles = (article_root / "compute-card.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="gpu-benchmark-card"', article)
+        self.assertIn("data-gpu-benchmark-card", article)
+        self.assertNotIn("Provider-floor median", article)
+        self.assertNotIn("Median line · provider-floor p25–p75 band", article)
+        self.assertNotIn("benchmark-methodology.md", article)
+        self.assertNotIn("benchmark-constituents.json", article)
+        self.assertNotIn("27 providers · 27 eligible prices", article)
+        self.assertIn('src="./gpu-benchmark-card.js?v=4"', article)
+        self.assertIn('src="./compute-card.js?v=5"', article)
+        self.assertIn('src="./compute-card-motion.js?v=2"', article)
+        self.assertIn("compute_bazaar_card_v1", script)
+        self.assertIn('payload?.card_type !== "gpu_benchmark"', script)
+        self.assertIn("payload.series", script)
+        self.assertIn("row?.lower === null", script)
+        self.assertIn("row?.upper === null", script)
+        self.assertIn("root.dataset.cardShareState", script)
+        self.assertNotIn("statistics", script)
+        self.assertNotIn("Math.min(...", script)
+        share_script = (article_root / "compute-card.js").read_text(
+            encoding="utf-8"
+        )
+        motion_script = (article_root / "compute-card-motion.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("remapCloneIds", share_script)
+        self.assertIn("data-share-portrait", share_script)
+        self.assertIn('toggleAttribute("inert"', share_script)
+        self.assertIn("motion@12.42.2", motion_script)
+        self.assertIn("compute-card:flip", motion_script)
+        self.assertIn("rotateY", motion_script)
+        self.assertIn(".gpu-benchmark__band", styles)
+        self.assertIn(".gpu-benchmark__line", styles)
+        self.assertIn(".gpu-benchmark__tooltip", styles)
+        self.assertIn(".compute-share-card__front", styles)
+        self.assertIn(".compute-share-card__back", styles)
+
     def test_publication_server_registers_site_and_snapshot_routes(self) -> None:
         app = create_app(site_dir=Path("external/AdamSioud"), snapshot_source="local")
         paths = {getattr(route, "path", "") for route in app.routes}

@@ -91,6 +91,17 @@ family-specific price histories. Prime files own one family each, avoiding the o
 history duplication. Sandbox rates and workload are separated because they have different units,
 refresh semantics, and claims.
 
+### Article Card Boundary
+
+The clean AdamSioud article renders its GPU benchmark card directly from the four
+`gpu-benchmark/{family}.json` documents. The card must not calculate a replacement benchmark in
+JavaScript. It may select a family, select a retained time window, calculate a display-only change
+between two published values, and render the published benchmark and p25-p75 band.
+
+On `www.adamsioud.com`, the card uses the CloudFront data base. On localhost, it uses the
+same-origin `/api/dashboard-snapshots` route from `compute-bazaar-adamsioud`; this preserves the
+CloudFront CORS allowlist and exercises the exact local snapshot allowlist.
+
 ## Audit Snapshots
 
 ```text
