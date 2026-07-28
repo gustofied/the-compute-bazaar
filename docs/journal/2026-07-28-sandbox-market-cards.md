@@ -118,6 +118,74 @@ The common-start card remained `pending` against the pre-deployment public
 worker, as expected. Final QA must be repeated after the worker publishes
 `sandbox/relative.json`.
 
+## Deployment And Final QA
+
+The maintained article bundle was published from AdamSioud commit `46904cf`.
+GitHub Pages deployment `30322521977` completed successfully.
+
+The DataFusion/public-contract implementation was published in Compute Bazaar
+commit `b7df2a2`. A live smoke run then exposed one bookkeeping omission:
+`sandbox/relative.json` was published successfully but was absent from the
+top-level market run's `dashboard_output_refs`. Commit `364562c` added that
+reference and a regression test before the final worker deployment.
+
+The final worker image is:
+
+```text
+compute-bazaar-windmill-worker:2026-07-28-sandbox-cards-v2
+image sha256:abc19de7469c75efee9be4f2df521ef4a96836a6176e76e58d91c1915407fc94
+```
+
+Only `windmill_worker` was recreated. Windmill Postgres, server, Caddy,
+AutoMQ, and their volumes remained running.
+
+The final named smoke observation was:
+
+```text
+market-sandbox-cards-v2-smoke-20260728T022700Z
+status                              success
+configured providers               18
+provider checks                     all ok
+Gold listings                       1,863
+GPU products                        233
+compute market-state rows           874
+sandbox benchmark jobs               69
+sandbox price observations           33
+exact-shape VM offers                 7
+common-start observations             70
+```
+
+Its market-run output explicitly lists all three publication contracts:
+
+```text
+sandbox/rates.json
+sandbox/workload.json
+sandbox/relative.json
+```
+
+CloudFront returned each contract with `compute_bazaar_card_v1`. The relative
+contract begins at the first real shared observation on 25 July 2026 and has:
+
+```text
+H100 minimum provider count          24
+VM fixed members                      7
+sandbox fixed members                 8
+H100 index range             93.996-104.398
+VM index range              100.000-100.000
+sandbox index range         100.000-100.000
+```
+
+The flat VM and sandbox lines are an observed result, not imputed movement:
+their retained public rate cards did not change during this short common
+window. Absolute dollars remain in every row and in the tooltip.
+
+Final production browser QA covered the public article at 1,440 by 1,000 and
+390 by 844 CSS pixels. All three cards reached `data-card-ready="true"`;
+the relative chart rendered three lines and the selected interquartile band;
+keyboard `Home`/arrow inspection exposed all three indexes and absolute
+prices; share and API flip state persisted in the URL; every image loaded;
+and page-level horizontal overflow was zero at both widths.
+
 ## Build And Verification
 
 ```text
@@ -130,7 +198,15 @@ uv run --with pytest pytest \
   tests/test_sandbox_cost.py \
   tests/test_vm_capacity.py \
   tests/test_adamsioud.py
+uv run --with pytest pytest -q
+uv run ruff check [changed Python and test files]
+uv run sandbox-cost validate
 ```
+
+The complete test suite passed 214 tests, skipped one intentional case, and
+passed 112 subtests. A whole-tree Ruff run still reports seven pre-existing
+unused-import/style findings under `src/the_compute_bazaar/tangents/`; those
+unrelated research scripts were not changed in this work.
 
 ## Next Refresh
 
