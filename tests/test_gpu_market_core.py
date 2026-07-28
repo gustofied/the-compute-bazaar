@@ -3333,6 +3333,9 @@ class GoldQueryTests(unittest.TestCase):
             latest = read_latest_market_run(lake_root)
             public_latest = read_json(f"{dashboard_root}/market-run.json")
             sandbox_public = read_json(f"{dashboard_root}/sandbox-cost.json")
+            sandbox_relative = read_json(
+                result.dashboard_output_refs["sandbox_relative"]
+            )
 
         self.assertEqual(result.status, "warning")
         self.assertEqual(result.successful_providers, ["crusoe"])
@@ -3350,6 +3353,14 @@ class GoldQueryTests(unittest.TestCase):
         self.assertEqual(
             result.dashboard_output_refs["sandbox_cost"],
             f"{dashboard_root}/sandbox-cost.json",
+        )
+        self.assertEqual(
+            result.dashboard_output_refs["sandbox_relative"],
+            f"{dashboard_root}/sandbox/relative.json",
+        )
+        self.assertEqual(
+            sandbox_relative["card_type"],
+            "compute_relative_prices",
         )
         self.assertEqual(
             sandbox_public["manifest"]["row_counts"]["sandbox_hourly_price_series"],

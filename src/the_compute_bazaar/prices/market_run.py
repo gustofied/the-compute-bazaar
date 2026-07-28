@@ -323,6 +323,9 @@ def run_market_hourly(
         "sandbox_workload": "/".join(
             [dashboard_output_root.rstrip("/"), "sandbox", "workload.json"]
         ),
+        "sandbox_relative": "/".join(
+            [dashboard_output_root.rstrip("/"), "sandbox", "relative.json"]
+        ),
         "market_run": _dashboard_market_run_ref(dashboard_output_root),
         "market_history": _dashboard_market_history_ref(dashboard_output_root),
     }
