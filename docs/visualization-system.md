@@ -55,12 +55,44 @@ analytical view with one compact 16:9 chart artifact; API flips that artifact
 to its endpoint reverse. There are no modals, cloned charts, or stacked
 page-level depth states.
 
+The AdamSioud article applies `zoom: 0.8` at the document root. Transition
+heights must therefore be measured in CSS layout coordinates with
+`offsetHeight`. A rectangle returned by `getBoundingClientRect()` is already
+visually scaled; assigning that number back as a CSS height reproduces an
+80-percent opening followed by a late layout drop. Incoming content is
+prepared before measurement, observed until its layout height settles, and
+then animated as one continuous container-height change.
+
 The article cards keep action chrome outside the object. A quiet rail owns
-Open, API, Share, Close, Copy endpoint, and Return to chart. The card surface
-therefore remains useful as a portable market object rather than becoming a
-toolbar container. Share serializes the visible SVG artifact to a 1600 by 900
-PNG, uses native file sharing when the browser supports it, and otherwise
-downloads the same image.
+Open, API, Share, Close, Copy link, Copy endpoint, and Return to chart. The
+card surface therefore remains useful as a portable market object rather than
+becoming a toolbar container. Share serializes the visible SVG artifact to a
+1600 by 900 PNG, uses native file sharing when the browser supports it, and
+otherwise downloads the same image. The share payload carries a stable
+card-only URL for the same selected Gold state.
+
+For the unindexed Compute article, the standalone contract is:
+
+```text
+?card=gpu-index&view=card&present=card&gpu=H100&range=1d
+```
+
+`present=card` suppresses the article shell and centers the original live card.
+It is deliberately separate from the older public-product `view=card`
+contract documented below. Both preserve one renderer and one data contract;
+neither copies observations into query parameters.
+
+The API reverse uses a shared market-object grammar:
+
+```text
+artwork | object, scope, unit, cadence/basis
+        | exact public endpoint
+        | current published value
+```
+
+Those fields are semantic slots, not a fixed benchmark schema. Future deal,
+RFQ, reservation, or contract cards can replace them with structured terms
+while reusing the same standalone, share, and reverse-face behavior.
 
 The browser renders publication-ready gold data. It must not become a second
 calculation engine. DataFusion and the recurring pipeline remain responsible

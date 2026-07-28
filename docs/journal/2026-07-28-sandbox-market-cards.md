@@ -217,3 +217,25 @@ new compatible, schema-valid run. Managed-sandbox marketing-page rates remain
 manual reviewed evidence; adding a price observation requires checking its
 billing unit, requested shape, effective/observed date, and archive link before
 the next hourly build.
+
+## Shared Card Presentation Pass
+
+The sandbox and common-start cards now use the same maintained standalone
+contract as the GPU card. `Copy link` retains the selected sandbox question,
+measure, or relative-series state and opens one centered live card through
+`present=card`. Share exports the exact selected SVG and includes that URL.
+
+Their API reverses use the shared artwork-and-fields grammar while preserving
+distinct semantics:
+
+```text
+sandbox_rate        four CPU / 8 GiB       USD/hour
+sandbox_workload    StarSling HPC           runtime or estimated cost
+relative_rate_index GPU / VM / sandbox      index points, base 100
+```
+
+The common grammar is intentionally capable of carrying future structured
+deal terms, but these three objects remain read-only publication contracts.
+The shared transition now prepares dynamic chart content before measuring it
+and uses layout-space `offsetHeight`, fixing the root-zoom late-drop behavior
+for all cards rather than adding a per-card timing patch.

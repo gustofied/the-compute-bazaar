@@ -232,3 +232,36 @@ market object into one chart grammar. Prime offer depth, capacity, sandbox
 workload cost, and future deal cards can reuse its production build, state
 discipline, type scale, and sharing behavior while keeping a visual form
 appropriate to each measurement.
+
+## Standalone Object And Transition Correction
+
+The final card pass made the share object a real destination instead of a
+temporary face inside the article. `Copy link` now produces a scoped
+`present=card` URL that suppresses the prose shell and centers the original
+live card. The URL retains only the selected card's relevant state. Share
+exports the exact 16:9 SVG as a 1600 by 900 PNG and includes that permalink in
+the native share payload.
+
+The API reverse was rebuilt as an artwork-backed market object with reusable
+key/value fields, one exact endpoint, and the current published value. The
+field vocabulary can later hold RFQ or contract terms without treating the
+current benchmark contract as an executable deal.
+
+Browser tracing also isolated the late bottom-drop animation. The inherited
+page applies `zoom: 0.8`; `getBoundingClientRect().height` therefore returned
+80 percent of the layout-space height and that scaled value was written back
+as CSS pixels. The transition now prepares the destination before measurement,
+waits for its height to settle, and uses `offsetHeight` throughout.
+
+Measured desktop opening after the fix:
+
+```text
+cover natural height                    334.4 px
+intermediate measured heights           342.4, 356.7, 361.8, 366.4 px
+detail natural height                   366.2 px
+late post-animation drop                none
+```
+
+The reverse close followed the same continuous path back to 334.4 px.
+Standalone desktop and 390 by 844 mobile views retained one centered card,
+working Copy link, and zero page-level horizontal overflow.
