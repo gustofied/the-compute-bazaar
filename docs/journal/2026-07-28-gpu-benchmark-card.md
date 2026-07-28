@@ -278,3 +278,14 @@ standalone layer. The control now reads `Back to article` in standalone mode.
 It routes to the selected chart inline in the prose page, retains only that
 card's product/range state, removes the standalone parameter, and anchors the
 reader at the card.
+
+## Official Article Route
+
+The AdamSioud homepage and Exemplars index now point to
+`exemplars/compute/feeling_the_compute.html`. Its old `noindex,nofollow`
+directive was removed and the production URL was declared canonical.
+
+`exemplars/compute-bazaar/` remains available as the broader project
+workhouse. The public article is the deliberate editorial entry; the
+workhouse is where wider operational and experimental market views can keep
+evolving.

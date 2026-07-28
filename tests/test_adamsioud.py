@@ -7,6 +7,33 @@ from the_compute_bazaar.adamsioud import create_app
 
 
 class AdamSioudServerTests(unittest.TestCase):
+    def test_compute_article_is_the_public_exemplar_entry(self) -> None:
+        site_root = Path("external/AdamSioud")
+        home = (site_root / "index.html").read_text(encoding="utf-8")
+        exemplars = (site_root / "exemplars/exemplars.html").read_text(
+            encoding="utf-8"
+        )
+        article = (
+            site_root / "exemplars/compute/feeling_the_compute.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'href="exemplars/compute/feeling_the_compute.html"',
+            home,
+        )
+        self.assertIn(
+            'href="compute/feeling_the_compute.html"',
+            exemplars,
+        )
+        self.assertNotIn('href="exemplars/compute-bazaar/"', home)
+        self.assertNotIn('href="compute-bazaar/"', exemplars)
+        self.assertNotIn("noindex,nofollow", article)
+        self.assertIn(
+            'rel="canonical" href="https://www.adamsioud.com/'
+            'exemplars/compute/feeling_the_compute.html"',
+            article,
+        )
+
     def test_clean_article_cards_read_versioned_public_gold_contracts(self) -> None:
         article_root = Path("external/AdamSioud/exemplars/compute")
         article = (article_root / "feeling_the_compute.html").read_text(
@@ -522,23 +549,16 @@ class AdamSioudServerTests(unittest.TestCase):
             ["available", "rented", "allocated", "active", "productive"],
         )
 
-    def test_compute_article_is_a_hidden_prose_shell(self) -> None:
+    def test_compute_article_remains_an_editorial_prose_shell(self) -> None:
         site_root = Path("external/AdamSioud")
         shell = (
             site_root / "exemplars" / "compute" / "feeling_the_compute.html"
         ).read_text(encoding="utf-8")
-        public_index = (site_root / "index.html").read_text(encoding="utf-8")
-        exemplar_index = (
-            site_root / "exemplars" / "exemplars.html"
-        ).read_text(encoding="utf-8")
 
-        self.assertIn('<meta name="robots" content="noindex,nofollow">', shell)
         self.assertIn("Lorem ipsum", shell)
         self.assertNotIn("data-viz-card", shell)
         self.assertNotIn("compute-market.js", shell)
         self.assertNotIn("sandbox-cost.js", shell)
-        self.assertIn('href="exemplars/compute-bazaar/"', public_index)
-        self.assertIn('href="compute-bazaar/"', exemplar_index)
 
 
 if __name__ == "__main__":

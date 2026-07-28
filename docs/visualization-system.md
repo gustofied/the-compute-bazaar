@@ -14,7 +14,7 @@ forms because they answer different questions.
 
 The system uses D3 and SVG. EvilCharts is a design reference for composition,
 active marks, shared configuration, and loading states; it is not a runtime
-dependency. The public product remains a direct HTML/CSS/D3 implementation:
+dependency. The project workhouse remains a direct HTML/CSS/D3 implementation:
 
 ```text
 external/AdamSioud/exemplars/compute-bazaar/compute-viz.css
@@ -24,7 +24,7 @@ external/AdamSioud/exemplars/compute-bazaar/prime-frontier-market.js
 external/AdamSioud/exemplars/compute-bazaar/sandbox-cost.js
 ```
 
-The unindexed Compute article has a separate production card build:
+The public Compute article has a separate production card build:
 
 ```text
 gpu-index-card.tailwind.css -> compute-card.css
@@ -71,7 +71,7 @@ becoming a toolbar container. Share serializes the visible SVG artifact to a
 otherwise downloads the same image. The share payload carries a stable
 card-only URL for the same selected Gold state.
 
-For the unindexed Compute article, the standalone contract is:
+For the public Compute article, the standalone contract is:
 
 ```text
 ?card=gpu-index&view=card&present=card&gpu=H100&range=1d
@@ -115,21 +115,20 @@ sandbox observations in JavaScript.
 
 ## Publication Boundaries
 
-The live market surface and the essay have separate ownership:
+The official article and the operational workhouse have separate ownership:
 
 ```text
-exemplars/compute-bazaar/
-  maintained public product, chart runtime, and publication payload fallbacks
-
 exemplars/compute/feeling_the_compute.html
-  unindexed prose shell with deliberately promoted article components
+  canonical public article linked from the homepage and Exemplars index
+
+exemplars/compute-bazaar/
+  maintained workhouse, broader market views, and publication payload fallbacks
 ```
 
-The public product can evolve without turning the essay into an accidental
-dashboard. A chart enters the essay only when its question, evidence, and
-place in the narrative are ready. The product remains the canonical
-implementation; the essay should reuse its contract instead of forking
-calculations or data.
+The workhouse can evolve without turning the article into an accidental
+dashboard. A chart enters the article only when its question, evidence, and
+place in the narrative are ready. Both surfaces consume the same published
+Gold contracts; neither should fork benchmark calculations or data.
 
 ## The Card Contract
 
