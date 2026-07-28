@@ -51,8 +51,16 @@ Rate Movement
 
 All three use one measured-height Motion transition helper. A cover expands
 downward into its analytical view in normal document flow. Share replaces the
-analytical view with one portrait object; API flips only that portrait. There
-are no modals, cloned charts, or stacked page-level depth states.
+analytical view with one compact 16:9 chart artifact; API flips that artifact
+to its endpoint reverse. There are no modals, cloned charts, or stacked
+page-level depth states.
+
+The article cards keep action chrome outside the object. A quiet rail owns
+Open, API, Share, Close, Copy endpoint, and Return to chart. The card surface
+therefore remains useful as a portable market object rather than becoming a
+toolbar container. Share serializes the visible SVG artifact to a 1600 by 900
+PNG, uses native file sharing when the browser supports it, and otherwise
+downloads the same image.
 
 The browser renders publication-ready gold data. It must not become a second
 calculation engine. DataFusion and the recurring pipeline remain responsible

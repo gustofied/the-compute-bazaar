@@ -72,10 +72,11 @@ two new cards.
 
 The cover is a compact portrait object. Opening it expands downward to the
 full analytical view in the same document position. Share replaces the detail
-with a portrait publication card. API flips only that card and exposes one
-HTTPS endpoint. The transition uses measured incoming and outgoing heights,
-distance-aware duration, and a non-bouncy ease. Reduced-motion users receive
-the same state changes immediately.
+with a compact 16:9 chart artifact. API flips only that card and exposes one
+HTTPS endpoint. The July 28 refinement moved every action into a quiet rail
+outside the object. The transition uses measured incoming and outgoing
+heights, distance-aware duration, and a non-bouncy ease. Reduced-motion users
+receive the same state changes immediately.
 
 Dots remain information marks. The fixed-rate chart shows the four retained
 source-rate events. The workload chart shows every complete job because each
