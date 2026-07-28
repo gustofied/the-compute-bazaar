@@ -67,12 +67,13 @@ npm run build:compute
 
 ## Visual And Interaction Grammar
 
-The initial object is a small portrait publication card with original market
-signal artwork, a plain `GPU Price Index` title, and the selected family at
-the foot. It follows the proportions of the supplied planning-card reference
-without copying its brand or artwork.
+The initial object is a small portrait publication card with the blue-ocean
+artwork supplied in the approved card sheet, a plain `GPU Price Index` title,
+and the selected family at the foot. The committed WebP is an exact
+`514 x 424` crop from the supplied screenshot at offset `+727+128`; it is not
+the generated market-signal image used in the discarded pass.
 
-The detail state is a compact black market instrument:
+The detail state uses the supplied palette as a restrained market instrument:
 
 ```text
 identity                                         API Share Close
@@ -81,13 +82,18 @@ selected GPU                                         time range
 published benchmark line and published price range
 ```
 
-The share front is a portrait editorial object. Its reverse keeps the artwork,
-selected family, current price, and exactly one HTTPS Gold endpoint. It does
-not expose methodology clutter or a second price source.
+Soft Linen (`#EFEDE4`) is the surface, Soft Azure (`#91AECB`) is the structural
+color, and a deeper blue carries the line and selected controls. The share
+front is a portrait editorial object. Its reverse keeps the artwork, selected
+family, current price, and exactly one HTTPS Gold endpoint. It does not expose
+methodology clutter or a second price source.
 
-Motion drives the in-flow panel transition and portrait spring. CSS owns
-layout and 3D face geometry. Reduced-motion users receive immediate state
-changes.
+Motion measures the outgoing and incoming panels and animates the article's
+actual height over 720 milliseconds. The incoming state reveals vertically
+while the outgoing state recedes, so the card opens and closes in flow instead
+of flashing between fixed boxes. The portrait reverse uses the same measured
+ease over 700 milliseconds rather than a bouncy spring. CSS owns layout and 3D
+face geometry. Reduced-motion users receive immediate state changes.
 
 ## Data And Accessibility Decisions
 
@@ -127,8 +133,9 @@ Desktop:
 
 ```text
 cover -> detail transition                         passed
+chart populated during unfold                      passed
 detail -> share front transition                   passed
-share front -> API reverse spring                  passed
+share front -> API reverse                         passed
 API endpoint                                       exact HTTPS Gold URL
 console warnings/errors                            0
 horizontal overflow                                0 px
@@ -141,7 +148,7 @@ portrait cover fits article column                 passed
 expanded controls wrap without clipping            passed
 chart remains readable                             passed
 share and API portrait fit viewport                passed
-document scroll width                              390 px
+document scroll width equals viewport               passed
 ```
 
 ## Files
