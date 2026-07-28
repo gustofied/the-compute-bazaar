@@ -13,6 +13,7 @@ from typing import Any, Mapping
 from the_compute_bazaar.prices.datafusion import query_tables
 from the_compute_bazaar.prices.public_views import (
     sandbox_rate_view,
+    sandbox_relative_view,
     sandbox_workload_view,
 )
 from the_compute_bazaar.prices.storage import (
@@ -66,6 +67,7 @@ GPU_COMPARISON_MIN_PROVIDERS = 10
 GPU_DAILY_QUERY_ID = "h100_daily_broad_coverage_v1"
 GPU_ELIGIBLE_QUERY_ID = "h100_broad_coverage_prints_v1"
 COMBINED_QUERY_ID = "sandbox_gpu_cpu_common_start_v3"
+RELATIVE_COMMON_START_QUERY_ID = "gpu_vm_sandbox_common_start_v1"
 VM_CURRENT_QUERY_ID = "vm_capacity_current_cross_section_v1"
 VM_FIXED_RATE_QUERY_ID = "vm_capacity_fixed_cohort_rate_v3"
 VM_EXPANDED_CURRENT_QUERY_ID = "vm_capacity_expanded_current_v1"
@@ -892,6 +894,119 @@ cross join baseline
 order by comparable.gold_observed_at
 """
 
+RELATIVE_COMMON_START_SQL = """
+with gpu_with_sandbox as (
+  select
+    gpu.gold_observed_at,
+    gpu.observed_date,
+    gpu.benchmark_usd_gpu_hr,
+    gpu.provider_count,
+    gpu.included_offer_count,
+    gpu.provider_floor_p25_usd_gpu_hr,
+    gpu.provider_floor_p75_usd_gpu_hr,
+    gpu.methodology_version as gpu_methodology_version,
+    gpu.benchmark_basis as gpu_benchmark_basis,
+    sandbox.observed_date as sandbox_price_date,
+    sandbox.median_usd_per_hour as sandbox_median_usd_per_hour,
+    sandbox.p25_usd_per_hour as sandbox_p25_usd_per_hour,
+    sandbox.p75_usd_per_hour as sandbox_p75_usd_per_hour,
+    sandbox.member_count as sandbox_member_count,
+    row_number() over (
+      partition by gpu.gold_observed_at
+      order by sandbox.observed_date desc
+    ) as sandbox_recency_rank
+  from gpu_h100_eligible_history gpu
+  join sandbox_fixed_rate sandbox
+    on cast(sandbox.observed_date as date) <= gpu.observed_date
+),
+gpu_with_latest_sandbox as (
+  select *
+  from gpu_with_sandbox
+  where sandbox_recency_rank = 1
+),
+all_candidates as (
+  select
+    gpu.*,
+    vm.observed_at as vm_source_observed_at,
+    vm.median_usd_per_hour as vm_median_usd_per_hour,
+    vm.p25_usd_per_hour as vm_p25_usd_per_hour,
+    vm.p75_usd_per_hour as vm_p75_usd_per_hour,
+    vm.member_count as vm_member_count,
+    vm.methodology_version as vm_methodology_version,
+    row_number() over (
+      partition by gpu.gold_observed_at
+      order by vm.observed_at desc
+    ) as vm_recency_rank
+  from gpu_with_latest_sandbox gpu
+  join vm_capacity_observed_rate vm
+    on cast(vm.observed_at as timestamp)
+      <= cast(gpu.gold_observed_at as timestamp)
+),
+comparable as (
+  select *
+  from all_candidates
+  where vm_recency_rank = 1
+),
+baseline_ranked as (
+  select
+    *,
+    row_number() over (order by gold_observed_at) as baseline_rank
+  from comparable
+),
+baseline as (
+  select
+    gold_observed_at as common_start_at,
+    benchmark_usd_gpu_hr as first_gpu_value,
+    vm_median_usd_per_hour as first_vm_value,
+    sandbox_median_usd_per_hour as first_sandbox_value
+  from baseline_ranked
+  where baseline_rank = 1
+)
+select
+  comparable.gold_observed_at as observed_at,
+  comparable.observed_date,
+  baseline.common_start_at,
+  comparable.benchmark_usd_gpu_hr,
+  comparable.provider_count,
+  comparable.included_offer_count,
+  comparable.provider_floor_p25_usd_gpu_hr,
+  comparable.provider_floor_p75_usd_gpu_hr,
+  comparable.gpu_methodology_version,
+  comparable.gpu_benchmark_basis,
+  comparable.vm_source_observed_at,
+  comparable.vm_median_usd_per_hour,
+  comparable.vm_p25_usd_per_hour,
+  comparable.vm_p75_usd_per_hour,
+  comparable.vm_member_count,
+  comparable.vm_methodology_version,
+  comparable.sandbox_price_date,
+  comparable.sandbox_median_usd_per_hour,
+  comparable.sandbox_p25_usd_per_hour,
+  comparable.sandbox_p75_usd_per_hour,
+  comparable.sandbox_member_count,
+  comparable.benchmark_usd_gpu_hr
+    / baseline.first_gpu_value * 100.0 as gpu_base_100,
+  comparable.provider_floor_p25_usd_gpu_hr
+    / baseline.first_gpu_value * 100.0 as gpu_p25_base_100,
+  comparable.provider_floor_p75_usd_gpu_hr
+    / baseline.first_gpu_value * 100.0 as gpu_p75_base_100,
+  comparable.vm_median_usd_per_hour
+    / baseline.first_vm_value * 100.0 as vm_base_100,
+  comparable.vm_p25_usd_per_hour
+    / baseline.first_vm_value * 100.0 as vm_p25_base_100,
+  comparable.vm_p75_usd_per_hour
+    / baseline.first_vm_value * 100.0 as vm_p75_base_100,
+  comparable.sandbox_median_usd_per_hour
+    / baseline.first_sandbox_value * 100.0 as sandbox_base_100,
+  comparable.sandbox_p25_usd_per_hour
+    / baseline.first_sandbox_value * 100.0 as sandbox_p25_base_100,
+  comparable.sandbox_p75_usd_per_hour
+    / baseline.first_sandbox_value * 100.0 as sandbox_p75_base_100
+from comparable
+cross join baseline
+order by comparable.gold_observed_at
+"""
+
 VM_CURRENT_SQL = """
 select *
 from vm_capacity_current
@@ -1141,6 +1256,11 @@ order by gold_observed_at
 select *
 from sandbox_gpu_cpu_common_start
 order by gold_observed_at
+""",
+    "relative-common-start": """
+select *
+from gpu_vm_sandbox_common_start
+order by observed_at
 """,
     "vm-current": """
 select *
@@ -1662,6 +1782,7 @@ order by series_order, observed_date, point_order
     vm_marketplace_current: list[dict[str, Any]] = []
     vm_marketplace_history: list[dict[str, Any]] = []
     vm_sandbox_comparison: list[dict[str, Any]] = []
+    vm_observed_rate_ref: str | None = None
     if vm_history_rows:
         vm_current = _canonicalize_numeric_rows(
             query_tables(
@@ -1747,6 +1868,7 @@ order by series_order, observed_date, point_order
 
     gpu_rows, gpu_manifest = _load_gpu_history(gpu_history_ref)
     combined: list[dict[str, Any]] = []
+    relative_common_start: list[dict[str, Any]] = []
     gpu_daily_coverage: list[dict[str, Any]] = []
     gpu_eligible_history: list[dict[str, Any]] = []
     gpu_silver_ref: str | None = None
@@ -1780,6 +1902,17 @@ order by series_order, observed_date, point_order
                 sql=COMBINED_COMMON_START_SQL,
             )
         )
+        if vm_observed_rate_ref:
+            relative_common_start = _canonicalize_numeric_rows(
+                query_tables(
+                    tables={
+                        "gpu_h100_eligible_history": gpu_eligible_ref,
+                        "sandbox_fixed_rate": fixed_rate_ref,
+                        "vm_capacity_observed_rate": vm_observed_rate_ref,
+                    },
+                    sql=RELATIVE_COMMON_START_SQL,
+                )
+            )
 
     table_refs = {
         "sandbox_hourly_price_series": _join(
@@ -1812,6 +1945,9 @@ order by series_order, observed_date, point_order
         ),
         "sandbox_gpu_cpu_common_start": _join(
             output_root, "gold/sandbox_gpu_cpu_common_start.parquet"
+        ),
+        "gpu_vm_sandbox_common_start": _join(
+            output_root, "gold/gpu_vm_sandbox_common_start.parquet"
         ),
         "compute_utilization_public_ladder": _join(
             output_root, "gold/compute_utilization_public_ladder.parquet"
@@ -1898,6 +2034,10 @@ order by series_order, observed_date, point_order
     write_parquet_rows(table_refs["gpu_h100_eligible_history"], gpu_eligible_history)
     write_parquet_rows(table_refs["sandbox_gpu_cpu_common_start"], combined)
     write_parquet_rows(
+        table_refs["gpu_vm_sandbox_common_start"],
+        relative_common_start,
+    )
+    write_parquet_rows(
         table_refs["compute_utilization_public_ladder"],
         utilization_ladder,
     )
@@ -1953,6 +2093,7 @@ order by series_order, observed_date, point_order
         "gpu_daily_coverage": _sha256_text(GPU_DAILY_COVERAGE_SQL),
         "gpu_eligible_history": _sha256_text(GPU_ELIGIBLE_HISTORY_SQL),
         "combined": _sha256_text(COMBINED_COMMON_START_SQL),
+        "relative_common_start": _sha256_text(RELATIVE_COMMON_START_SQL),
         "vm_current": _sha256_text(VM_CURRENT_SQL),
         "vm_fixed_rate": _sha256_text(VM_FIXED_RATE_SQL),
         "vm_expanded_current": _sha256_text(VM_EXPANDED_CURRENT_SQL),
@@ -2032,6 +2173,7 @@ order by series_order, observed_date, point_order
         "gpu_h100_daily_coverage": len(gpu_daily_coverage),
         "gpu_h100_eligible_history": len(gpu_eligible_history),
         "sandbox_gpu_cpu_common_start": len(combined),
+        "gpu_vm_sandbox_common_start": len(relative_common_start),
         "vm_capacity_current": len(vm_current),
         "vm_capacity_fixed_rate": len(vm_fixed_rate),
         "vm_capacity_expanded_current": len(vm_expanded_current),
@@ -2083,6 +2225,7 @@ order by series_order, observed_date, point_order
             "gpu_daily_coverage": GPU_DAILY_QUERY_ID,
             "gpu_eligible_history": GPU_ELIGIBLE_QUERY_ID,
             "combined": COMBINED_QUERY_ID,
+            "relative_common_start": RELATIVE_COMMON_START_QUERY_ID,
             "vm_current": VM_CURRENT_QUERY_ID,
             "vm_fixed_rate": VM_FIXED_RATE_QUERY_ID,
             "vm_expanded_current": VM_EXPANDED_CURRENT_QUERY_ID,
@@ -2130,6 +2273,7 @@ order by series_order, observed_date, point_order
             run_metadata=run_metadata,
             gpu_daily_coverage=gpu_daily_coverage,
             combined=combined,
+            relative_common_start=relative_common_start,
             vm_current=vm_current,
             vm_fixed_rate=vm_fixed_rate,
             vm_expanded_current=vm_expanded_current,
@@ -2147,6 +2291,10 @@ order by series_order, observed_date, point_order
         write_json(
             _join(dashboard_output_root, "sandbox/workload.json"),
             sandbox_workload_view(public_payload),
+        )
+        write_json(
+            _join(dashboard_output_root, "sandbox/relative.json"),
+            sandbox_relative_view(public_payload),
         )
 
     return SandboxCostBuild(
@@ -2721,6 +2869,7 @@ def _public_payload(
     run_metadata: list[dict[str, Any]],
     gpu_daily_coverage: list[dict[str, Any]],
     combined: list[dict[str, Any]],
+    relative_common_start: list[dict[str, Any]],
     vm_current: list[dict[str, Any]],
     vm_fixed_rate: list[dict[str, Any]],
     vm_expanded_current: list[dict[str, Any]],
@@ -2983,6 +3132,37 @@ def _public_payload(
             ),
             "coverage_history": gpu_daily_coverage,
             "rows": combined,
+        },
+        "relative_prices": {
+            "title": "GPU, VM, and sandbox rates from one common start",
+            "methodology_version": RELATIVE_COMMON_START_QUERY_ID,
+            "basis": (
+                "The eligible H100 benchmark, seven-vendor exact-shape VM "
+                "median, and fixed eight-service sandbox median each equal "
+                "100 at the first broad-coverage H100 print after a complete "
+                "seven-vendor VM observation exists."
+            ),
+            "gpu_input": (
+                "Hourly H100 observed provider-floor benchmark with at least "
+                f"{GPU_COMPARISON_MIN_PROVIDERS} contributing providers"
+            ),
+            "vm_input": (
+                "Latest complete seven-vendor four-vCPU, 8-GiB public VM "
+                "offer cross-section at each H100 observation"
+            ),
+            "sandbox_input": (
+                "Latest fixed eight-service managed-sandbox public rate-card "
+                "cross-section at each H100 observation"
+            ),
+            "can_show": (
+                "relative advertised-rate movement and cross-sectional "
+                "p25-p75 dispersion after one shared starting observation"
+            ),
+            "cannot_show": (
+                "equal delivered work, executed transactions, demand, volume, "
+                "utilization, causality, or total customer invoices"
+            ),
+            "rows": relative_common_start,
         },
         "utilization": {
             "title": "From available capacity to useful work",

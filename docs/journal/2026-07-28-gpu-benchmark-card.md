@@ -47,7 +47,7 @@ boundary makes the component maintainable:
 
 ```text
 gpu-index-card.tailwind.css -> compute-card.css
-gpu-index-card.source.js    -> gpu-index-card.js
+compute-cards.source.js     -> compute-cards.js
 ```
 
 Tailwind `4.3.3` compiles the semantic component stylesheet. D3 `7.9.0` and
@@ -89,11 +89,12 @@ family, current price, and exactly one HTTPS Gold endpoint. It does not expose
 methodology clutter or a second price source.
 
 Motion measures the outgoing and incoming panels and animates the article's
-actual height over 720 milliseconds. The incoming state reveals vertically
-while the outgoing state recedes, so the card opens and closes in flow instead
-of flashing between fixed boxes. The portrait reverse uses the same measured
-ease over 700 milliseconds rather than a bouncy spring. CSS owns layout and 3D
-face geometry. Reduced-motion users receive immediate state changes.
+actual height with a distance-aware 780-1080 millisecond transition. The
+incoming state reveals vertically while the outgoing state recedes, so the
+card opens and closes in flow instead of flashing between fixed boxes. The
+portrait reverse uses a measured 700 millisecond ease rather than a bouncy
+spring. CSS owns layout and 3D face geometry. Reduced-motion users receive
+immediate state changes.
 
 ## Data And Accessibility Decisions
 
@@ -162,7 +163,7 @@ external/AdamSioud/exemplars/compute/feeling_the_compute.html
 external/AdamSioud/exemplars/compute/gpu-index-card.tailwind.css
 external/AdamSioud/exemplars/compute/gpu-index-card.source.js
 external/AdamSioud/exemplars/compute/compute-card.css
-external/AdamSioud/exemplars/compute/gpu-index-card.js
+external/AdamSioud/exemplars/compute/compute-cards.js
 tests/test_adamsioud.py
 ```
 

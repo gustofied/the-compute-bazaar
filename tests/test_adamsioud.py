@@ -7,60 +7,97 @@ from the_compute_bazaar.adamsioud import create_app
 
 
 class AdamSioudServerTests(unittest.TestCase):
-    def test_clean_article_gpu_card_reads_the_public_gold_contract(self) -> None:
+    def test_clean_article_cards_read_versioned_public_gold_contracts(self) -> None:
         article_root = Path("external/AdamSioud/exemplars/compute")
         article = (article_root / "feeling_the_compute.html").read_text(
             encoding="utf-8"
         )
-        source = (article_root / "gpu-index-card.source.js").read_text(
+        gpu_source = (article_root / "gpu-index-card.source.js").read_text(
             encoding="utf-8"
         )
-        bundle = (article_root / "gpu-index-card.js").read_text(encoding="utf-8")
+        sandbox_source = (article_root / "sandbox-market-card.source.js").read_text(
+            encoding="utf-8"
+        )
+        transitions = (article_root / "card-transitions.js").read_text(
+            encoding="utf-8"
+        )
+        bundle = (article_root / "compute-cards.js").read_text(encoding="utf-8")
         styles = (article_root / "compute-card.css").read_text(encoding="utf-8")
         package = json.loads(
             Path("external/AdamSioud/package.json").read_text(encoding="utf-8")
         )
 
         self.assertIn('id="gpu-benchmark-card"', article)
+        self.assertIn('id="sandbox-benchmark-card"', article)
+        self.assertIn('id="relative-market-card"', article)
         self.assertIn("data-gpu-benchmark-card", article)
+        self.assertIn("data-sandbox-benchmark-card", article)
+        self.assertIn("data-relative-market-card", article)
         self.assertIn('data-index-panel="cover"', article)
         self.assertIn('data-index-panel="detail"', article)
         self.assertIn('data-index-panel="share"', article)
+        self.assertIn('data-story-panel="cover"', article)
+        self.assertIn('data-story-panel="detail"', article)
+        self.assertIn('data-story-panel="share"', article)
         self.assertIn("data-share-api-url", article)
+        self.assertIn("data-story-share-api-url", article)
         self.assertIn(
             "https://d3n0n6h709c83f.cloudfront.net/gpu-benchmark/h100.json",
             article,
         )
+        self.assertIn(
+            "https://d3n0n6h709c83f.cloudfront.net/sandbox/rates.json",
+            article,
+        )
+        self.assertIn(
+            "https://d3n0n6h709c83f.cloudfront.net/sandbox/relative.json",
+            article,
+        )
+        self.assertIn("Seven matching source runs over five calendar days", article)
+        self.assertIn("Every complete aligned job", article)
         self.assertNotIn("Provider-floor median", article)
         self.assertNotIn("Median line · provider-floor p25–p75 band", article)
         self.assertNotIn("benchmark-methodology.md", article)
         self.assertNotIn("benchmark-constituents.json", article)
         self.assertNotIn("27 providers · 27 eligible prices", article)
-        self.assertIn('src="./gpu-index-card.js?v=5"', article)
+        self.assertIn('src="./compute-cards.js?v=2"', article)
+        self.assertIn('href="./compute-card.css?v=8"', article)
         self.assertIn('width="514"', article)
         self.assertIn('height="424"', article)
         self.assertNotIn("gpu-benchmark-card.js", article)
         self.assertNotIn("compute-card-motion.js", article)
-        self.assertIn('import * as d3 from "d3"', source)
-        self.assertIn('import { animate } from "motion"', source)
-        self.assertIn("compute_bazaar_card_v1", source)
-        self.assertIn('payload?.card_type !== "gpu_benchmark"', source)
-        self.assertIn("payload.series", source)
-        self.assertIn("row?.lower === null", source)
-        self.assertIn("row?.upper === null", source)
-        self.assertIn('toggleAttribute("inert"', source)
-        self.assertIn("unfoldPanels", source)
-        self.assertIn("duration: 0.72", source)
-        self.assertIn('height: [`${fromHeight}px`, `${toHeight}px`]', source)
-        self.assertIn("rotateY", source)
-        self.assertIn("event.clientX - bounds.left", source)
+        self.assertIn('import * as d3 from "d3"', gpu_source)
+        self.assertIn('import * as d3 from "d3"', sandbox_source)
+        self.assertIn('import { animate } from "motion"', transitions)
+        self.assertIn("compute_bazaar_card_v1", gpu_source)
+        self.assertIn("compute_bazaar_card_v1", sandbox_source)
+        self.assertIn('payload?.card_type !== "gpu_benchmark"', gpu_source)
+        self.assertIn('"compute_rate_market"', sandbox_source)
+        self.assertIn('"sandbox_workload"', sandbox_source)
+        self.assertIn('"compute_relative_prices"', sandbox_source)
+        self.assertIn("payload.series", gpu_source)
+        self.assertIn("row?.lower === null", gpu_source)
+        self.assertIn("row?.upper === null", gpu_source)
+        self.assertIn('toggleAttribute("inert"', gpu_source)
+        self.assertIn('toggleAttribute("inert"', sandbox_source)
+        self.assertIn("swapCardPanels", transitions)
+        self.assertIn("heightDelta", transitions)
+        self.assertIn("duration = Math.min(1.08", transitions)
+        self.assertIn('height: [`${fromHeight}px`, `${toHeight}px`]', transitions)
+        self.assertIn("rotateY", transitions)
+        self.assertIn("event.clientX - bounds.left", gpu_source)
+        self.assertIn("event.clientX - bounds.left", sandbox_source)
+        self.assertIn("latest_replicate_count", sandbox_source)
+        self.assertIn("source_replicate_slot_count", sandbox_source)
         self.assertIn("gpu-benchmark/h100.json", article)
-        self.assertNotIn("statistics", source)
-        self.assertNotIn("Math.min(...", source)
-        self.assertGreater(len(bundle), 100_000)
+        self.assertNotIn("statistics", gpu_source)
+        self.assertNotIn("statistics", sandbox_source)
+        self.assertNotIn("Math.min(...", gpu_source)
+        self.assertGreater(len(bundle), 150_000)
         self.assertEqual(package["dependencies"]["motion"], "12.42.2")
         self.assertEqual(package["dependencies"]["d3"], "7.9.0")
         self.assertIn("build:compute", package["scripts"])
+        self.assertFalse((article_root / "gpu-index-card.js").exists())
         self.assertFalse((article_root / "gpu-benchmark-card.js").exists())
         self.assertFalse((article_root / "compute-card.js").exists())
         self.assertFalse((article_root / "compute-card-motion.js").exists())
@@ -70,8 +107,16 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn(".gpu-index-cover", styles)
         self.assertIn(".gpu-share-card__front", styles)
         self.assertIn(".gpu-share-card__back", styles)
+        self.assertIn(".story-index-cover", styles)
+        self.assertIn(".story-index-detail", styles)
+        self.assertIn(".story-share-card__front", styles)
+        self.assertIn(".story-share-card__back", styles)
+        self.assertIn(".sandbox-workload__job", styles)
+        self.assertIn(".relative-market__line.is-gpu", styles)
         self.assertIn("--index-azure:#91aecb", styles)
         self.assertIn("--index-linen:#efede4", styles)
+        self.assertIn("--story-accent:#b7d07b", styles)
+        self.assertIn("--story-accent:#f3c888", styles)
 
     def test_publication_server_registers_site_and_snapshot_routes(self) -> None:
         app = create_app(site_dir=Path("external/AdamSioud"), snapshot_source="local")

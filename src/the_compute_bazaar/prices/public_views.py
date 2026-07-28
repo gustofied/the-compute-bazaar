@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import statistics
 from collections.abc import Mapping
 from typing import Any
 
@@ -306,14 +305,20 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
     manifest = payload.get("manifest") or {}
     workload = payload.get("workload") or {}
     summaries = list(workload.get("service_summary") or [])
-    costs = [
-        _number(row.get("median_estimated_cost_usd"))
-        for row in summaries
-        if isinstance(row, Mapping)
-    ]
-    costs = [value for value in costs if value is not None]
     latest_run = workload.get("latest_run") or {}
     run_history = list(workload.get("run_history") or [])
+    complete_runs = [
+        row
+        for row in run_history
+        if isinstance(row, Mapping) and row.get("fixed_cohort_complete") is True
+    ]
+    latest_complete_run = (
+        complete_runs[-1]
+        if complete_runs
+        else run_history[-1]
+        if run_history
+        else {}
+    )
     timestamps = [
         {"observed_at": row.get("observed_at") or row.get("observed_date")}
         for row in run_history
@@ -332,10 +337,33 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
         },
         headline={
             "label": "Same measured software job",
-            "median_service_cost": (
-                statistics.median(costs) if costs else None
+            "median_estimated_cost_usd": _number(
+                latest_complete_run.get("median_estimated_cost_usd")
+            ),
+            "median_runtime_seconds": _number(
+                latest_complete_run.get("median_runtime_seconds")
+            ),
+            # Compatibility alias for the first card contract.
+            "median_service_cost": _number(
+                latest_complete_run.get("median_estimated_cost_usd")
             ),
             "service_count": len(summaries),
+            "complete_job_count": int(
+                workload.get("latest_replicate_count") or 0
+            ),
+            "incomplete_slot_count": int(
+                workload.get("latest_incomplete_replicate_count") or 0
+            ),
+            "total_source_replicate_slot_count": int(
+                workload.get("latest_replicate_count") or 0
+            )
+            + int(workload.get("latest_incomplete_replicate_count") or 0),
+            "source_replicate_slot_count": int(
+                workload.get("latest_source_replicate_slot_count") or 0
+            ),
+            "benchmark_run_id": latest_complete_run.get("benchmark_run_id"),
+            "observed_at": latest_complete_run.get("generated_at")
+            or latest_complete_run.get("observed_date"),
         },
         series=run_history,
         band={
@@ -358,6 +386,75 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
             "workload": _without(workload, "run_history"),
         },
         observation_window=_observation_window(timestamps),
+    )
+
+
+def sandbox_relative_view(payload: Mapping[str, Any]) -> dict[str, Any]:
+    manifest = payload.get("manifest") or {}
+    relative = payload.get("relative_prices") or {}
+    rows = [
+        dict(row)
+        for row in relative.get("rows", [])
+        if isinstance(row, Mapping)
+    ]
+    rows.sort(key=lambda row: str(row.get("observed_at") or ""))
+    latest = rows[-1] if rows else {}
+    common_start_at = (
+        rows[0].get("common_start_at")
+        if rows
+        else relative.get("common_start_at")
+    )
+    return _card(
+        card_type="compute_relative_prices",
+        card_id="market:relative-prices",
+        as_of=latest.get("observed_at") or manifest.get("built_at"),
+        status="live" if rows else "unavailable",
+        unit="index points; 100 at the common start",
+        methodology={
+            "id": relative.get("methodology_version"),
+            "query_id": (manifest.get("query_ids") or {}).get(
+                "relative_common_start"
+            ),
+            "basis": relative.get("basis"),
+        },
+        headline={
+            "label": "Compute rates from one common start",
+            "common_start_at": common_start_at,
+            "gpu_base_100": _number(latest.get("gpu_base_100")),
+            "vm_base_100": _number(latest.get("vm_base_100")),
+            "sandbox_base_100": _number(latest.get("sandbox_base_100")),
+        },
+        series=rows,
+        band={
+            "kind": "cross_section_interquartile_range",
+            "gpu_lower_field": "gpu_p25_base_100",
+            "gpu_upper_field": "gpu_p75_base_100",
+            "vm_lower_field": "vm_p25_base_100",
+            "vm_upper_field": "vm_p75_base_100",
+            "sandbox_lower_field": "sandbox_p25_base_100",
+            "sandbox_upper_field": "sandbox_p75_base_100",
+        },
+        coverage={
+            "observation_count": len(rows),
+            "gpu_minimum_provider_count": min(
+                (int(row.get("provider_count") or 0) for row in rows),
+                default=0,
+            ),
+            "vm_member_count": int(latest.get("vm_member_count") or 0),
+            "sandbox_member_count": int(
+                latest.get("sandbox_member_count") or 0
+            ),
+        },
+        sources=list(payload.get("sources") or []),
+        drilldown_ref="sandbox-cost.json",
+        data={
+            "can_show": relative.get("can_show"),
+            "cannot_show": relative.get("cannot_show"),
+            "gpu_input": relative.get("gpu_input"),
+            "vm_input": relative.get("vm_input"),
+            "sandbox_input": relative.get("sandbox_input"),
+        },
+        observation_window=_observation_window(rows),
     )
 
 

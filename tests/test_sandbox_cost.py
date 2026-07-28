@@ -332,6 +332,9 @@ class SandboxCostPipelineTests(unittest.TestCase):
             workload_card = json.loads(
                 (root / "dashboard" / "sandbox" / "workload.json").read_text()
             )
+            relative_card = json.loads(
+                (root / "dashboard" / "sandbox" / "relative.json").read_text()
+            )
 
         self.assertEqual(first.build_id, second.build_id)
         self.assertIn(
@@ -378,6 +381,12 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertEqual(rate_card["card_type"], "compute_rate_market")
         self.assertEqual(workload_card["schema_version"], "compute_bazaar_card_v1")
         self.assertEqual(workload_card["card_type"], "sandbox_workload")
+        self.assertEqual(relative_card["schema_version"], "compute_bazaar_card_v1")
+        self.assertEqual(
+            relative_card["card_type"],
+            "compute_relative_prices",
+        )
+        self.assertEqual(relative_card["status"], "unavailable")
         self.assertEqual(
             workload_card["coverage"]["latest_replicate_count"],
             69,
@@ -437,6 +446,18 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertAlmostEqual(
             latest_run["median_runtime_seconds"],
             statistics.median(row["runtime_seconds"] for row in latest_run_rows),
+        )
+        self.assertEqual(
+            workload_card["headline"]["benchmark_run_id"],
+            latest_run["benchmark_run_id"],
+        )
+        self.assertEqual(
+            workload_card["headline"]["median_estimated_cost_usd"],
+            latest_run["median_estimated_cost_usd"],
+        )
+        self.assertEqual(
+            workload_card["headline"]["median_runtime_seconds"],
+            latest_run["median_runtime_seconds"],
         )
         self.assertEqual(public["combined"]["rows"][0]["gpu_base_100"], 100.0)
         self.assertEqual(public["combined"]["rows"][1]["gpu_base_100"], 90.0)

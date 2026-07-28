@@ -57,6 +57,7 @@ SNAPSHOT_FILES = {
     "capacity-market-state": "capacity/market-state.json",
     "sandbox-rates": "sandbox/rates.json",
     "sandbox-workload": "sandbox/workload.json",
+    "sandbox-relative": "sandbox/relative.json",
 }
 
 

@@ -341,6 +341,12 @@ The allowlisted `workload-run-history` query reads
 `gold/sandbox_workload_run_history.parquet`; it preserves repeated intraday
 runs and identifies whether all six fixed services are present.
 
+The same sandbox build publishes three compact article contracts:
+`sandbox/rates.json`, `sandbox/workload.json`, and `sandbox/relative.json`.
+The last is backed by the allowlisted `relative-common-start` DataFusion query
+over `gold/gpu_vm_sandbox_common_start.parquet`; the frontend does not join or
+rebase GPU, VM, and sandbox series.
+
 See [docs/sandbox-cost-benchmark.md](docs/sandbox-cost-benchmark.md) for source
 semantics, formulas, layer paths, review rules, and refresh instructions.
 The article's reusable D3 card, interaction, and sharing rules live in

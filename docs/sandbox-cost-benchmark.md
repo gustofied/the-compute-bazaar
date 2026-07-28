@@ -98,7 +98,7 @@ all compatible inputs
   -> silver normalized Parquet
   -> named DataFusion queries
   -> gold publication tables
-  -> sandbox-cost.json
+  -> sandbox-cost.json and sandbox/*.json card contracts
   -> AdamSioud D3 article
 ```
 
@@ -797,6 +797,7 @@ vm-sandbox-current
 gpu-daily-coverage
 gpu-eligible-history
 combined-common-start
+relative-common-start
 utilization-ladder
 ```
 
@@ -933,12 +934,19 @@ The public-safe artifact is:
 
 ```text
 dashboard/compute-bazaar/sandbox-cost.json
+dashboard/compute-bazaar/sandbox/rates.json
+dashboard/compute-bazaar/sandbox/workload.json
+dashboard/compute-bazaar/sandbox/relative.json
 ```
 
 The version 5 payload contains the public VM current cohort, hourly observed
 history, current VM/sandbox comparison, managed-sandbox rate history, workload
 results, GPU comparison, and the source-linked utilization metric dictionary.
-Raw S3 refs and private manifests are removed at the public boundary.
+Raw S3 refs and private manifests are removed at the public boundary. The
+three split files use `compute_bazaar_card_v1`. `sandbox/relative.json` is built
+from `gold/gpu_vm_sandbox_common_start.parquet` by the allowlisted
+`relative-common-start` DataFusion query. The browser does not join or rebase
+the component series.
 
 The AdamSioud article prefers CloudFront in production and keeps a checked-in
 fallback for local and failure-safe rendering:

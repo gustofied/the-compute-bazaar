@@ -28,16 +28,39 @@ The unindexed Compute article has a separate production card build:
 
 ```text
 gpu-index-card.tailwind.css -> compute-card.css
-gpu-index-card.source.js    -> gpu-index-card.js
+compute-cards.source.js     -> compute-cards.js
 ```
 
 That build uses compiled Tailwind for the component stylesheet and bundles D3
 and Motion locally. It does not introduce a Svelte or React runtime and it
 does not load framework CDNs in production.
 
+The bundle currently owns three deliberately different cards:
+
+```text
+GPU Price Index
+  four GPU families and their published benchmark/range history
+
+Sandbox Cost
+  fixed-cohort hourly rates and every complete same-job observation
+
+Rate Movement
+  H100, exact-shape VM, and managed-sandbox rates rebased by DataFusion
+  to one actual common starting observation
+```
+
+All three use one measured-height Motion transition helper. A cover expands
+downward into its analytical view in normal document flow. Share replaces the
+analytical view with one portrait object; API flips only that portrait. There
+are no modals, cloned charts, or stacked page-level depth states.
+
 The browser renders publication-ready gold data. It must not become a second
 calculation engine. DataFusion and the recurring pipeline remain responsible
 for medians, percentiles, benchmark membership, and public-safe exports.
+
+The article card runtime follows the same rule. In particular, the common-start
+view reads `sandbox/relative.json`; it does not join or rebase GPU, VM, and
+sandbox observations in JavaScript.
 
 ## Publication Boundaries
 

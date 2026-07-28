@@ -53,6 +53,10 @@ class DashboardSnapshotTests(unittest.TestCase):
             _snapshot_name_for_filename("sandbox/workload.json"),
             "sandbox-workload",
         )
+        self.assertEqual(
+            _snapshot_name_for_filename("sandbox/relative.json"),
+            "sandbox-relative",
+        )
         with self.assertRaises(HTTPException):
             _snapshot_name_for_filename("../manifest.json")
         with self.assertRaises(HTTPException):

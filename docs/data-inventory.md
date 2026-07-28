@@ -31,7 +31,7 @@ Use this order when two copies disagree:
 | Exact-shape VM offers | Hourly Windmill market run | Official catalog responses under `raw/sandbox-cost/vm-capacity/...` and discovery prefixes, with retrieval time and checksum | Cumulative offer, discovery, marketplace, current, and expanded-cohort Parquet tables under `lake/sandbox_cost/silver/` | Current seven-vendor cross-section; hourly median/p25/p75/min/max in USD and base-100 form; legacy four-vendor history; separate marketplace indication | VM-versus-sandbox reference, relative-price comparison, and source audit |
 | Managed sandbox rate cards | Manual reviewed evidence; gold rebuilt hourly | Versioned source register, archived URLs, dates, and arithmetic in package evidence and `lake/sandbox_cost/bronze/` | `sandbox_hourly_prices.parquet` | Current rates, fixed eight-service median/p25/p75, and dated price events | Public sandbox rate comparison |
 | StarSling workload runs | Daily public source poll; upstream publication cadence | One immutable retrieval capture and checksum ledger per poll | Content-addressed run metadata, provider-batch summaries, replicate-aligned jobs, and task phases | Latest job distribution, service summaries, phase summaries, all compatible historical provider-batch summaries, and one source-run summary per retained run | Same-workload estimated processor-and-memory cost and measured-runtime history |
-| GPU/VM/sandbox relative prices | Rebuilt after each market run | Uses retained GPU, VM, and sandbox evidence above | Uses eligible GPU benchmark history, exact VM offer history, and normalized sandbox prices | H100/sandbox common-start series, independently based VM series, and H100 coverage history | Exploratory relative advertised-rate chart only |
+| GPU/VM/sandbox relative prices | Rebuilt after each market run | Uses retained GPU, VM, and sandbox evidence above | Uses eligible GPU benchmark history, exact VM offer history, and normalized sandbox prices | `gpu_vm_sandbox_common_start`: independently rebased H100, seven-vendor VM, and fixed sandbox medians plus p25-p75 ranges | Exploratory relative advertised-rate chart only |
 
 ## History Contracts
 
@@ -115,6 +115,9 @@ dashboard/compute-bazaar/benchmark-history.json
 dashboard/compute-bazaar/prime-frontier-offer-market.json
 dashboard/compute-bazaar/prime-h100-offer-reference.json
 dashboard/compute-bazaar/sandbox-cost.json
+dashboard/compute-bazaar/sandbox/rates.json
+dashboard/compute-bazaar/sandbox/workload.json
+dashboard/compute-bazaar/sandbox/relative.json
 dashboard/compute-bazaar/market-state.json
 dashboard/compute-bazaar/manifest.json
 ```

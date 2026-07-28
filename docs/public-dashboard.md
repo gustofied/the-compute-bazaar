@@ -60,6 +60,7 @@ prime-frontier/b300.json
 capacity/market-state.json
 sandbox/rates.json
 sandbox/workload.json
+sandbox/relative.json
 ```
 
 Every card uses `compute_bazaar_card_v1` and declares:
@@ -88,15 +89,20 @@ workers expire. `drilldown_ref` names the larger public audit file where appropr
 
 `market-overview.json` is the small article bootstrap. The four GPU benchmark files own their
 family-specific price histories. Prime files own one family each, avoiding the old four-family
-history duplication. Sandbox rates and workload are separated because they have different units,
-refresh semantics, and claims.
+history duplication. Sandbox rates, workload, and relative movement are separated because they
+have different units, refresh semantics, and claims.
 
 ### Article Card Boundary
 
-The clean AdamSioud article renders its GPU benchmark card directly from the four
-`gpu-benchmark/{family}.json` documents. The card must not calculate a replacement benchmark in
-JavaScript. It may select a family, select a retained time window, calculate a display-only change
-between two published values, and render the published benchmark and p25-p75 band.
+The clean AdamSioud article renders its GPU benchmark card directly from the
+four `gpu-benchmark/{family}.json` documents. It renders the sandbox rate and
+same-job views from `sandbox/rates.json` and `sandbox/workload.json`. Its
+exploratory common-start view reads `sandbox/relative.json`.
+
+The cards must not calculate replacement benchmark, cohort, workload, or
+rebasing values in JavaScript. They may select a family, measure, band, or
+retained time window; calculate a display-only change between two published
+GPU values; and draw the published values and p25-p75 ranges.
 
 On `www.adamsioud.com`, the card uses the CloudFront data base. On localhost, it uses the
 same-origin `/api/dashboard-snapshots` route from `compute-bazaar-adamsioud`; this preserves the
@@ -160,6 +166,20 @@ jobs reconstructed from 690 retained task phases; three incomplete slots from
 72 source slots; six workload summaries; seven source-run summaries with three
 complete fixed six-service cohorts; retained H100 coverage history; and the
 coverage-gated H100/sandbox common-start series.
+
+The same hourly build publishes three smaller article contracts:
+
+```text
+sandbox/rates.json
+  managed-sandbox fixed-cohort history and current source-linked cross-section
+
+sandbox/workload.json
+  latest complete-job distribution, six service summaries, and seven source runs
+
+sandbox/relative.json
+  coverage-qualified H100, seven-vendor VM, and fixed sandbox rates
+  independently rebased to 100 at their first shared retained observation
+```
 
 The payload declares timing, currency, machine shape, storage treatment, source
 URLs, and cost basis. It explicitly excludes lifecycle latency and does not

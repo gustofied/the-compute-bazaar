@@ -7,6 +7,7 @@ from the_compute_bazaar.prices.storage import (
     LeaseBusyError,
     exclusive_lease,
     read_parquet_rows,
+    write_parquet_rows,
 )
 from the_compute_bazaar.sandbox_cost.pipeline import (
     build_sandbox_cost,
@@ -579,9 +580,18 @@ class VmCapacityGoldTests(unittest.TestCase):
                 session=_Session(),
                 aws_pricing_client=_AwsPricingClient(),
             )
+            gpu_history = root / "gpu-history.parquet"
+            write_parquet_rows(
+                str(gpu_history),
+                [
+                    _gpu_row("2026-07-25T09:30:00Z", 2.5, 12),
+                    _gpu_row("2026-07-25T10:30:00Z", 2.75, 14),
+                ],
+            )
             result = build_sandbox_cost(
                 output_root=str(root / "publication-lake"),
                 dashboard_output_root=str(root / "dashboard"),
+                gpu_history_ref=str(gpu_history),
                 vm_capacity_history_ref=source.history_ref,
                 vm_capacity_current_ref=source.current_ref,
                 vm_capacity_manifest_ref=source.manifest_ref,
@@ -598,6 +608,13 @@ class VmCapacityGoldTests(unittest.TestCase):
                 output_root=str(root / "publication-lake"),
                 query_id="vm-observed-rate",
             )
+            relative = query_sandbox_gold(
+                output_root=str(root / "publication-lake"),
+                query_id="relative-common-start",
+            )
+            relative_card = json.loads(
+                (root / "dashboard" / "sandbox" / "relative.json").read_text()
+            )
 
         self.assertEqual(
             public["manifest"]["manifest_version"],
@@ -607,6 +624,7 @@ class VmCapacityGoldTests(unittest.TestCase):
         self.assertEqual(result.row_counts["vm_capacity_fixed_rate"], 2)
         self.assertEqual(result.row_counts["vm_capacity_expanded_current"], 7)
         self.assertEqual(result.row_counts["vm_capacity_expanded_rate"], 2)
+        self.assertEqual(result.row_counts["gpu_vm_sandbox_common_start"], 2)
         self.assertEqual(result.row_counts["vm_capacity_marketplace_current"], 1)
         self.assertEqual(
             result.row_counts["vm_sandbox_current_comparison"],
@@ -644,6 +662,23 @@ class VmCapacityGoldTests(unittest.TestCase):
         self.assertAlmostEqual(
             observed["rows"][0]["median_usd_per_hour"],
             0.072,
+        )
+        self.assertEqual(len(relative["rows"]), 2)
+        self.assertEqual(relative["rows"][0]["gpu_base_100"], 100.0)
+        self.assertEqual(relative["rows"][0]["vm_base_100"], 100.0)
+        self.assertEqual(relative["rows"][0]["sandbox_base_100"], 100.0)
+        self.assertEqual(relative["rows"][1]["gpu_base_100"], 110.0)
+        self.assertEqual(
+            relative_card["schema_version"],
+            "compute_bazaar_card_v1",
+        )
+        self.assertEqual(
+            relative_card["card_type"],
+            "compute_relative_prices",
+        )
+        self.assertEqual(
+            relative_card["headline"]["common_start_at"],
+            "2026-07-25T09:30:00Z",
         )
         self.assertEqual(observed["rows"][0]["base_100"], 100.0)
         self.assertEqual(
@@ -707,6 +742,25 @@ class VmCapacityGoldTests(unittest.TestCase):
                     output_root=f"{tmpdir}/publication",
                     vm_capacity_history_ref=source.history_ref,
                 )
+
+
+def _gpu_row(
+    observed_at: str,
+    price: float,
+    providers: int,
+) -> dict[str, object]:
+    return {
+        "gold_observed_at": observed_at,
+        "benchmark_family_id": "H100",
+        "benchmark_usd_gpu_hr": price,
+        "provider_count": providers,
+        "included_offer_count": providers,
+        "provider_floor_p25_usd_gpu_hr": price * 0.9,
+        "provider_floor_p75_usd_gpu_hr": price * 1.1,
+        "methodology_version": "advertised_provider_floor_median_v1",
+        "benchmark_basis": "advertised_hourly",
+        "calculated_at": observed_at,
+    }
 
 
 if __name__ == "__main__":
