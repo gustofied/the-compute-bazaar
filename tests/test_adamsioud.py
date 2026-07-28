@@ -12,46 +12,59 @@ class AdamSioudServerTests(unittest.TestCase):
         article = (article_root / "feeling_the_compute.html").read_text(
             encoding="utf-8"
         )
-        script = (article_root / "gpu-benchmark-card.js").read_text(
+        source = (article_root / "gpu-index-card.source.js").read_text(
             encoding="utf-8"
         )
+        bundle = (article_root / "gpu-index-card.js").read_text(encoding="utf-8")
         styles = (article_root / "compute-card.css").read_text(encoding="utf-8")
+        package = json.loads(
+            Path("external/AdamSioud/package.json").read_text(encoding="utf-8")
+        )
 
         self.assertIn('id="gpu-benchmark-card"', article)
         self.assertIn("data-gpu-benchmark-card", article)
+        self.assertIn('data-index-panel="cover"', article)
+        self.assertIn('data-index-panel="detail"', article)
+        self.assertIn('data-index-panel="share"', article)
+        self.assertIn("data-share-api-url", article)
+        self.assertIn(
+            "https://d3n0n6h709c83f.cloudfront.net/gpu-benchmark/h100.json",
+            article,
+        )
         self.assertNotIn("Provider-floor median", article)
         self.assertNotIn("Median line · provider-floor p25–p75 band", article)
         self.assertNotIn("benchmark-methodology.md", article)
         self.assertNotIn("benchmark-constituents.json", article)
         self.assertNotIn("27 providers · 27 eligible prices", article)
-        self.assertIn('src="./gpu-benchmark-card.js?v=4"', article)
-        self.assertIn('src="./compute-card.js?v=5"', article)
-        self.assertIn('src="./compute-card-motion.js?v=2"', article)
-        self.assertIn("compute_bazaar_card_v1", script)
-        self.assertIn('payload?.card_type !== "gpu_benchmark"', script)
-        self.assertIn("payload.series", script)
-        self.assertIn("row?.lower === null", script)
-        self.assertIn("row?.upper === null", script)
-        self.assertIn("root.dataset.cardShareState", script)
-        self.assertNotIn("statistics", script)
-        self.assertNotIn("Math.min(...", script)
-        share_script = (article_root / "compute-card.js").read_text(
-            encoding="utf-8"
-        )
-        motion_script = (article_root / "compute-card-motion.js").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("remapCloneIds", share_script)
-        self.assertIn("data-share-portrait", share_script)
-        self.assertIn('toggleAttribute("inert"', share_script)
-        self.assertIn("motion@12.42.2", motion_script)
-        self.assertIn("compute-card:flip", motion_script)
-        self.assertIn("rotateY", motion_script)
+        self.assertIn('src="./gpu-index-card.js?v=2"', article)
+        self.assertNotIn("gpu-benchmark-card.js", article)
+        self.assertNotIn("compute-card-motion.js", article)
+        self.assertIn('import * as d3 from "d3"', source)
+        self.assertIn('import { animate } from "motion"', source)
+        self.assertIn("compute_bazaar_card_v1", source)
+        self.assertIn('payload?.card_type !== "gpu_benchmark"', source)
+        self.assertIn("payload.series", source)
+        self.assertIn("row?.lower === null", source)
+        self.assertIn("row?.upper === null", source)
+        self.assertIn('toggleAttribute("inert"', source)
+        self.assertIn("rotateY", source)
+        self.assertIn("event.clientX - bounds.left", source)
+        self.assertIn("gpu-benchmark/h100.json", article)
+        self.assertNotIn("statistics", source)
+        self.assertNotIn("Math.min(...", source)
+        self.assertGreater(len(bundle), 100_000)
+        self.assertEqual(package["dependencies"]["motion"], "12.42.2")
+        self.assertEqual(package["dependencies"]["d3"], "7.9.0")
+        self.assertIn("build:compute", package["scripts"])
+        self.assertFalse((article_root / "gpu-benchmark-card.js").exists())
+        self.assertFalse((article_root / "compute-card.js").exists())
+        self.assertFalse((article_root / "compute-card-motion.js").exists())
         self.assertIn(".gpu-benchmark__band", styles)
         self.assertIn(".gpu-benchmark__line", styles)
         self.assertIn(".gpu-benchmark__tooltip", styles)
-        self.assertIn(".compute-share-card__front", styles)
-        self.assertIn(".compute-share-card__back", styles)
+        self.assertIn(".gpu-index-cover", styles)
+        self.assertIn(".gpu-share-card__front", styles)
+        self.assertIn(".gpu-share-card__back", styles)
 
     def test_publication_server_registers_site_and_snapshot_routes(self) -> None:
         app = create_app(site_dir=Path("external/AdamSioud"), snapshot_source="local")

@@ -12,9 +12,9 @@ plot composition. The GPU ticker, compact market pulse, sandbox evidence
 figures, workload distribution, and occupancy view keep distinct editorial
 forms because they answer different questions.
 
-The system uses raw D3 and SVG. EvilCharts is a design reference for
-composition, active marks, shared configuration, and loading states; it is not
-a runtime dependency. The maintained implementation is:
+The system uses D3 and SVG. EvilCharts is a design reference for composition,
+active marks, shared configuration, and loading states; it is not a runtime
+dependency. The public product remains a direct HTML/CSS/D3 implementation:
 
 ```text
 external/AdamSioud/exemplars/compute-bazaar/compute-viz.css
@@ -23,6 +23,17 @@ external/AdamSioud/exemplars/compute-bazaar/compute-market-history.js
 external/AdamSioud/exemplars/compute-bazaar/prime-frontier-market.js
 external/AdamSioud/exemplars/compute-bazaar/sandbox-cost.js
 ```
+
+The unindexed Compute article has a separate production card build:
+
+```text
+gpu-index-card.tailwind.css -> compute-card.css
+gpu-index-card.source.js    -> gpu-index-card.js
+```
+
+That build uses compiled Tailwind for the component stylesheet and bundles D3
+and Motion locally. It does not introduce a Svelte or React runtime and it
+does not load framework CDNs in production.
 
 The browser renders publication-ready gold data. It must not become a second
 calculation engine. DataFusion and the recurring pipeline remain responsible
@@ -37,7 +48,7 @@ exemplars/compute-bazaar/
   maintained public product, chart runtime, and publication payload fallbacks
 
 exemplars/compute/feeling_the_compute.html
-  unindexed prose shell rebuilt deliberately from the original article
+  unindexed prose shell with deliberately promoted article components
 ```
 
 The public product can evolve without turning the essay into an accidental
