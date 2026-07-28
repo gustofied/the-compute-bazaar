@@ -265,3 +265,9 @@ late post-animation drop                none
 The reverse close followed the same continuous path back to 334.4 px.
 Standalone desktop and 390 by 844 mobile views retained one centered card,
 working Copy link, and zero page-level horizontal overflow.
+
+The standalone backdrop was then refined from a flat dark field to a subdued
+local reproduction of Edvard Munch's *The Sun* (1912). The 3,364 by 1,792
+MUNCH source image was resized to 1,920 by 1,023 and encoded as a 307 KiB WebP.
+The image is decorative, low-opacity, and separately credited. Clicking the
+background returns to the clean article URL; card controls remain above it.

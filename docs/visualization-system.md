@@ -82,6 +82,11 @@ It is deliberately separate from the older public-product `view=card`
 contract documented below. Both preserve one renderer and one data contract;
 neither copies observations into query parameters.
 
+The standalone presentation uses an optimized local copy of Edvard Munch's
+*The Sun* (1912) as a low-opacity environmental layer. The backdrop is one
+large link to the article; a separate source credit links to MUNCH. It carries
+no data encoding and never competes with the foreground market object.
+
 The API reverse uses a shared market-object grammar:
 
 ```text
