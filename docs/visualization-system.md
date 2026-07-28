@@ -87,6 +87,12 @@ The standalone presentation uses an optimized local copy of Edvard Munch's
 large link to the article; a separate source credit links to MUNCH. It carries
 no data encoding and never competes with the foreground market object.
 
+The standalone rail changes `Return to chart` to `Back to article`. That route
+removes `present=card`, preserves only the selected card's relevant state,
+opens its detail view inline, and anchors the browser at the corresponding
+article card. It is a real presentation exit rather than another card-state
+transition.
+
 The API reverse uses a shared market-object grammar:
 
 ```text

@@ -271,3 +271,10 @@ local reproduction of Edvard Munch's *The Sun* (1912). The 3,364 by 1,792
 MUNCH source image was resized to 1,920 by 1,023 and encoded as a 307 KiB WebP.
 The image is decorative, low-opacity, and separately credited. Clicking the
 background returns to the clean article URL; card controls remain above it.
+
+The first backdrop pass left `Return to chart` with its original card-state
+meaning, so it retained `present=card` and appeared not to leave the
+standalone layer. The control now reads `Back to article` in standalone mode.
+It routes to the selected chart inline in the prose page, retains only that
+card's product/range state, removes the standalone parameter, and anchors the
+reader at the card.
