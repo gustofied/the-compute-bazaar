@@ -232,16 +232,15 @@ explicit; the ratio is not a margin or like-for-like product decomposition.
 
 The fixed hourly rate uses the same eight services at every event date and
 publishes the cohort median and p25-p75 range; the arithmetic mean remains a
-secondary descriptive field. The latest workload product reconstructs 69
-complete individual jobs from 690 phase samples with aligned upstream replicate
-indices and reports three incomplete slots from 72 source slots. Its cost field
-is
+secondary descriptive field. The latest workload product reconstructs 72
+complete individual jobs from 720 phase samples with aligned upstream replicate
+indices. Its cost field is
 `measured_phase_seconds / 3600 * hourly_price`, using only the public
 processor-and-memory component. It is a marginal rate-card estimate, not a
 provider bill.
 
-The historical workload table retains 38 provider-batch means from seven source
-batches. Those batches cross six harness revisions, so history is stratified by
+The historical workload table retains 44 provider-batch means from eight source
+batches. Those batches cross seven harness revisions, so history is stratified by
 methodology rather than rendered as one homogeneous performance series.
 Lifecycle latency, queueing, reliability, and concurrency remain separate
 future measurements.
@@ -250,8 +249,8 @@ DataFusion also groups the retained provider-batch rows by source run into
 `sandbox_workload_run_history`. Each row carries service count, fixed-cohort
 completeness, median/p25/p75 runtime, median/p25/p75 estimated
 processor-and-memory cost, source run ID, source commit, and methodology ID.
-All seven source runs remain present, including repeated intraday runs. The
-article's headline history uses only the three runs containing all six fixed
+All eight source runs remain present, including repeated intraday runs. The
+article's headline history uses only the four runs containing all six fixed
 services; it does not rewrite incomplete runs or average them by day.
 
 The combined GPU/sandbox series uses hourly H100 benchmark prints only when at

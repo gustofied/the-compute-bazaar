@@ -161,10 +161,10 @@ seven-provider VM offer cohort; its retained fixed-membership median/p25-p75
 history; the current VM/sandbox cohort comparison; 33 dated managed-sandbox
 hourly-price observations; 10 actual rate-change events; the current 11-service
 cross-section with explicit metering semantics; the fixed eight-service
-median/p25-p75 series; 38 historical provider-batch means; 69 complete latest
-jobs reconstructed from 690 retained task phases; three incomplete slots from
-72 source slots; six workload summaries; seven source-run summaries with three
-complete fixed six-service cohorts; retained H100 coverage history; and the
+median/p25-p75 series; 44 historical provider-batch means; 72 complete latest
+jobs reconstructed from 720 retained task phases; six workload summaries;
+eight source-run summaries with four complete fixed six-service cohorts;
+retained H100 coverage history; and the
 coverage-gated H100/sandbox common-start series.
 
 The same hourly build publishes three smaller article contracts:
@@ -174,7 +174,7 @@ sandbox/rates.json
   managed-sandbox fixed-cohort history and current source-linked cross-section
 
 sandbox/workload.json
-  latest complete-job distribution, six service summaries, and seven source runs
+  latest complete-job distribution, six service summaries, and eight source runs
 
 sandbox/relative.json
   coverage-qualified H100, seven-vendor VM, and fixed sandbox rates

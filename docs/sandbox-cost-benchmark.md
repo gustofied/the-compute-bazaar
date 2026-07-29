@@ -30,9 +30,9 @@ allocation target
   four schedulable processors, 8 GiB memory, 40 GB disk
 
 latest observation
-  69 complete fresh-sandbox jobs from 72 source replicate slots
-  11 or 12 complete jobs per service
-  690 retained phase measurements
+  72 complete fresh-sandbox jobs from 72 source replicate slots
+  12 complete jobs per service
+  720 retained phase measurements
 
 reported statistic
   every job, service median, and service p25-p75 range
@@ -332,11 +332,11 @@ The retained evidence has three levels:
 
 ### Phase
 
-The latest source batch exposes 690 retained task samples:
+The latest source run exposes 720 retained task samples:
 
 ```text
 6 service variants
-* 11 or 12 complete replicate-indexed sandboxes
+* 12 complete replicate-indexed sandboxes
 * 10 task phases
 ```
 
@@ -356,10 +356,11 @@ measured_phase_seconds(job) =
 ```
 
 The extractor rejects missing, duplicate, or misaligned task indices. The
-latest batch exposes 12 source replicate slots per service, or 72 total. It
-contains 69 complete jobs; three slots have no complete ten-phase result and are
-not imputed. These rows power the primary runtime distribution and the service
-median/p25/p75 summaries.
+latest run exposes 12 source replicate slots per service, or 72 total, and all
+72 have a complete ten-phase result. These rows power the primary runtime
+distribution and the service median/p25/p75 summaries. The preceding
+replicate-indexed run remains in retained history with 69 complete jobs from 72
+slots; its three missing jobs are not imputed.
 
 The ten windows do not all measure the same resource. Clone and cold install
 include network and registry wait. Build, lint, and type-check are mostly local
@@ -369,15 +370,15 @@ CPU benchmark.
 
 ### Provider-batch mean
 
-The public source currently retains seven compatible batches over five calendar
-days, 19-23 July 2026. They contain 38 provider-batch means:
+The public source currently retains eight compatible runs over six calendar
+days: 19-23 and 28 July 2026. They contain 44 provider-run means:
 
 ```text
 batch_active_seconds =
   sum(ten published task means)
 ```
 
-Repeated intraday batches remain distinct. The seven batches use six upstream
+Repeated intraday runs remain distinct. The eight runs use seven upstream
 harness commits. The Better Auth app and task signature stayed pinned, but a
 harness change is still a methodology boundary. The article therefore draws no
 continuous trend line across different methodology IDs. Earlier two-processor
@@ -387,14 +388,14 @@ runs remain in commit-pinned bronze and are rejected before silver.
 
 The latest comparison publishes:
 
-- all 69 complete individual jobs;
-- 69-of-72 completion accounting;
+- all 72 complete individual jobs;
+- 72-of-72 completion accounting;
 - median measured phase time per service;
 - p25-p75 measured phase time per service;
 - minimum, maximum, and arithmetic mean in the gold table;
 - the same descriptive summaries for the marginal cost estimate.
 
-With 11-12 complete jobs per service, medians and interquartile ranges are useful
+With 12 complete jobs per service, medians and interquartile ranges are useful
 descriptions. The sample is too small for a stable p95, SLA claim, or narrow
 confidence-bound ranking. No outlier is removed.
 
@@ -423,14 +424,14 @@ The maintained data products are broader than the public article. The article
 keeps one absolute VM/VPS-versus-sandbox rate view, one latest same-workload
 cost distribution, one independently rebased H100/VM/sandbox comparison, and
 one source-selectable rental-occupancy view. Current vendor offers and
-historical provider-batch summaries remain available in collapsed audit
+historical provider-run summaries remain available in collapsed audit
 tables.
 
 The young seven-vendor hourly VM series is not repeated as a standalone chart.
 Instead, every unchanged hourly point appears in the absolute rate view and
-the VM median appears in the relative-price view. The historical
-provider-batch chart remains outside the main narrative because its 38 rows
-cross six harness methodologies. Those rows remain queryable and auditable;
+the VM median appears in the relative-price view. The historical provider-run
+chart remains outside the main narrative because its 44 rows cross seven
+harness methodologies. Those rows remain queryable and auditable;
 they have not been collapsed, averaged by day, or deleted.
 
 This is a presentation decision, not a data-retention rule. A future frontend
@@ -477,14 +478,15 @@ fixed-cohort completeness, and median/p25/p75 values for measured runtime and
 estimated processor-and-memory cost. Repeated runs on the same calendar day
 remain separate.
 
-The current public source has seven matching four-processor runs over five
-calendar days. Four early runs contain five service rows. Three later runs
+The current public source has eight matching four-processor runs over six
+calendar days. Four early runs contain five service rows. Four later runs
 contain all six fixed services and are eligible for the article headline:
 
 ```text
 29937467891
 29982453127
 30019301067
+30322186937
 ```
 
 No missing service is imputed. The incomplete source runs remain in the gold
@@ -492,27 +494,33 @@ table and public audit payload. The frontend may filter to
 `fixed_cohort_complete = true`, but it does not recompute medians or collapse
 intraday runs.
 
-## Market Pulse Rendering
+## Article Card Rendering
 
-The article opens the maintained section with six separate panes:
+The public article currently opens the maintained section with three card
+objects:
 
 ```text
-H100 observed benchmark | Akash available GPU share
-seven-vendor VM median  | Akash available CPU share
-StarSling job-cost median | StarSling measured-runtime median
+GPU Price Index
+  H100, H200, B200, and B300 observed benchmark history
+
+Sandbox Cost
+  fixed-cohort public hourly rates
+  latest complete same-workload runtime and cost distribution
+
+Rate Movement
+  H100, fixed-cohort VM, and sandbox rates rebased to separate starting values
 ```
 
-H100 and VM panes use their precomputed gold medians and cross-sectional
-p25-p75 bands. Akash panes use the published
-`available_units / total_units` share and retain GPU units or CPU millicores as
-reported. StarSling panes use only complete six-service source-run summaries.
-Price, available share, estimated cost, and runtime never share an axis.
+The cards read precomputed Gold payloads. The browser selects product, measure,
+and time range, but does not recompute medians, percentiles, cost estimates, or
+common-start values. Price, measured runtime, and estimated
+processor-and-memory cost remain separate measures.
 
-The default window is 1D, followed by 7D, 1M, and All. GPU, VM, and Akash
-series are filtered against the latest live market observation. If no
-compatible StarSling batch falls inside that live window, the latest source
-point remains visible for context with its actual timestamp and an explicit
-outside-window note. It is not copied forward or relabelled as hourly.
+Akash and other availability or occupancy products remain in the broader
+Compute Bazaar data/workhouse surfaces. They are not silently inserted into
+the three public article cards. If an older source point is shown beside a
+live hourly series, it keeps its actual timestamp and explicit source-run
+identity; it is never copied forward or relabelled as hourly.
 
 ## Lifecycle V2
 

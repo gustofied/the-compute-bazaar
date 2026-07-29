@@ -237,13 +237,14 @@ exact VM catalog APIs + reviewed sandbox prices + StarSling benchmark runs
 ```
 
 The current record has 33 dated price observations for 11 services. Workload
-evidence retains 38 provider-batch means from seven source batches over five
-calendar days, plus 69 complete individual jobs reconstructed from 690 aligned
-phase samples in the latest batch. That batch exposes 72
-provider-and-replicate slots; three lack a complete ten-phase result and remain
-visible as incomplete rather than being imputed. Repeated intraday batches
-remain distinct. Earlier two-processor runs are captured but rejected because
-the publication shape is four processors, 8 GiB memory, and 40 GB disk.
+evidence retains 44 provider-run means from eight compatible source runs over
+six calendar days. The two replicate-indexed runs retain 141 complete jobs and
+1,410 aligned phase samples in total. The latest run is complete across all 72
+provider-and-replicate slots and contributes 720 phase samples; the earlier
+replicate-indexed run retains its 69-of-72 completion accounting rather than
+imputing three missing jobs. Repeated intraday runs remain distinct. Earlier
+two-processor runs are captured but rejected because the publication shape is
+four processors, 8 GiB memory, and 40 GB disk.
 
 The underlying capacity view checks a fixed seven-vendor cohort of exact
 four-vCPU, 8 GiB public VM offers each hour: Akamai Linode, Vultr, Scaleway,
@@ -262,13 +263,15 @@ low-coverage observations stay in the coverage table; they are not connected
 into a misleading continuous price line. Provider count is coverage, not
 transaction volume or GPU utilization.
 
-The article's default 1D market pulse places three pairs in aligned panes:
-H100 price beside Akash available GPU share, the seven-vendor VM median beside
+The broader workhouse/dashboard can place three pairs in aligned panes: H100
+price beside Akash available GPU share, the seven-vendor VM median beside
 Akash available CPU share, and the latest complete StarSling six-service
 estimated job-cost median beside its measured-runtime median. These are six
-separate measures, not one blended index. GPU, VM, and Akash series grow with
-the hourly heartbeat. StarSling history changes only when the daily public
-source poll finds a new compatible upstream run.
+separate measures, not one blended index. The public article currently keeps
+three tighter card objects instead: GPU Price Index, Sandbox Cost, and Rate
+Movement. GPU, VM, and Akash series grow with the hourly heartbeat. StarSling
+history changes only when the daily public source poll finds a new compatible
+upstream run.
 
 The project does not use a generic `utilization` field. Availability, active
 capacity, rental occupancy, scheduler allocation, processor activity, and
