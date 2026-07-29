@@ -586,3 +586,28 @@ browser horizontal overflow                              0 px
 Windmill job                                              success
 full Python suite                                         101 passed
 ```
+
+## X Large-Image Compatibility
+
+Telegram and Discord rendered the first publication image, while X read its
+title and description but displayed a generic document tile. Direct
+Twitterbot requests returned HTTP 200 for both the HTML and PNG, ruling out
+authentication, robots, TLS, and CloudFront access as the immediate cause.
+
+The successful TradingView publication used a stricter social profile than
+the first Compute Bazaar exporter: an opaque near-2:1 RGB PNG, a declared
+1200-by-630 Open Graph frame, and an explicit `twitter:url`. The publication
+exporter now uses that compatibility profile:
+
+```text
+publication schema        compute_bazaar_publication_v2
+publication path          publications/gpu-index/v2/...
+social image              1200 x 630 opaque RGB PNG
+card metadata             Open Graph + summary_large_image + twitter:url
+```
+
+The live 1600-by-900 share download is unchanged. Social render settings and
+schema version are included in the publication revision hash. This is
+important operationally: X caches publication cards aggressively, so a
+renderer fix must generate a new immutable URL instead of mutating the old
+cached page.

@@ -17,7 +17,9 @@ from urllib.parse import urlencode
 from .storage import write_bytes, write_json
 
 
-PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v1"
+PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v2"
+PUBLICATION_PATH_VERSION = "v2"
+PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630"
 DEFAULT_PUBLIC_DATA_BASE_URL = "https://d3n0n6h709c83f.cloudfront.net"
 DEFAULT_ARTICLE_URL = (
     "https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html"
@@ -28,8 +30,8 @@ GPU_RANGES: dict[str, timedelta | None] = {
     "7d": timedelta(days=7),
     "all": None,
 }
-IMAGE_WIDTH = 1600
-IMAGE_HEIGHT = 900
+IMAGE_WIDTH = 1200
+IMAGE_HEIGHT = 630
 
 
 def publish_gpu_benchmark_publications(
@@ -62,7 +64,8 @@ def publish_gpu_benchmark_publications(
         range_links: dict[str, dict[str, Any]] = {}
         for range_id in GPU_RANGES:
             prefix = (
-                f"publications/gpu-index/{family.lower()}/{range_id}/{revision}"
+                f"publications/gpu-index/{PUBLICATION_PATH_VERSION}/"
+                f"{family.lower()}/{range_id}/{revision}"
             )
             page_path = f"{prefix}.html"
             image_path = f"{prefix}.png"
@@ -406,9 +409,20 @@ def render_gpu_benchmark_publication(
         horizontalalignment="right",
     )
 
-    buffer = io.BytesIO()
-    canvas.print_png(buffer)
-    return buffer.getvalue()
+    rgba_buffer = io.BytesIO()
+    canvas.print_png(rgba_buffer)
+    rgba_buffer.seek(0)
+
+    from PIL import Image
+
+    rgb_buffer = io.BytesIO()
+    with Image.open(rgba_buffer) as source:
+        source.convert("RGB").save(
+            rgb_buffer,
+            format="PNG",
+            optimize=True,
+        )
+    return rgb_buffer.getvalue()
 
 
 def _gpu_publication_metadata(
@@ -485,6 +499,7 @@ def _publication_html(metadata: Mapping[str, Any]) -> str:
   <link rel="canonical" href="{page_url}">
   <meta property="og:title" content="{title}">
   <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Compute Bazaar">
   <meta property="og:url" content="{page_url}">
   <meta property="og:description" content="{description}">
   <meta property="og:image" content="{image_url}">
@@ -494,6 +509,7 @@ def _publication_html(metadata: Mapping[str, Any]) -> str:
   <meta property="og:image:height" content="{IMAGE_HEIGHT}">
   <meta property="og:image:alt" content="{image_alt}">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="{page_url}">
   <meta name="twitter:title" content="{title}">
   <meta name="twitter:description" content="{description}">
   <meta name="twitter:image" content="{image_url}">
@@ -613,8 +629,16 @@ def _publication_revision(cards: Mapping[str, Mapping[str, Any]]) -> str:
         }
         for family, card in cards.items()
     }
+    publication_material = {
+        "schema_version": PUBLICATION_SCHEMA_VERSION,
+        "path_version": PUBLICATION_PATH_VERSION,
+        "render_profile": PUBLICATION_RENDER_PROFILE,
+        "image_width": IMAGE_WIDTH,
+        "image_height": IMAGE_HEIGHT,
+        "cards": canonical_cards,
+    }
     canonical = json.dumps(
-        canonical_cards,
+        publication_material,
         sort_keys=True,
         separators=(",", ":"),
         default=str,

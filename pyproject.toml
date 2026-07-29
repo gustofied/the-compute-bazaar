@@ -14,6 +14,7 @@ dependencies = [
     "numpy>=2.3.5",
     "openpyxl>=3.1.5",
     "pandas>=3.0.2",
+    "pillow>=12.0.0",
     "prime>=0.6.19",
     "pyarrow>=22.0.0",
     "requests>=2.33.1",

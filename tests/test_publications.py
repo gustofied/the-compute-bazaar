@@ -8,6 +8,8 @@ from tempfile import TemporaryDirectory
 from the_compute_bazaar.prices.publications import (
     IMAGE_HEIGHT,
     IMAGE_WIDTH,
+    PUBLICATION_PATH_VERSION,
+    PUBLICATION_SCHEMA_VERSION,
     publish_gpu_benchmark_publications,
     render_gpu_benchmark_publication,
 )
@@ -39,6 +41,7 @@ class GpuPublicationTests(unittest.TestCase):
                 root
                 / "publications"
                 / "gpu-index"
+                / PUBLICATION_PATH_VERSION
                 / "h100"
                 / "all"
                 / f"{result['revision']}.html"
@@ -50,8 +53,13 @@ class GpuPublicationTests(unittest.TestCase):
             self.assertEqual(manifest["publication_count"], 12)
             self.assertEqual(
                 h100_all["url"],
-                f"https://data.example.test/publications/gpu-index/h100/all/"
+                "https://data.example.test/publications/gpu-index/"
+                f"{PUBLICATION_PATH_VERSION}/h100/all/"
                 f"{result['revision']}.html",
+            )
+            self.assertEqual(
+                cards["H100"]["publication"]["schema_version"],
+                PUBLICATION_SCHEMA_VERSION,
             )
             self.assertIn(
                 "?card=gpu-index&view=detail&gpu=H100&range=all",
@@ -67,6 +75,10 @@ class GpuPublicationTests(unittest.TestCase):
                 '<meta name="twitter:card" content="summary_large_image">',
                 html,
             )
+            self.assertIn(
+                f'<meta name="twitter:url" content="{h100_all["url"]}">',
+                html,
+            )
             self.assertIn("Open live chart", html)
             self.assertNotIn("s3://", html)
 
@@ -74,6 +86,7 @@ class GpuPublicationTests(unittest.TestCase):
             self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
             width, height = struct.unpack(">II", png[16:24])
             self.assertEqual((width, height), (IMAGE_WIDTH, IMAGE_HEIGHT))
+            self.assertEqual(png[25], 2)
 
     def test_render_rejects_unknown_family_and_range(self) -> None:
         cards = _cards()

@@ -234,7 +234,7 @@ For every hourly Gold revision it publishes:
 ```text
 4 GPU families x 3 ranges = 12 immutable publication pages
 12 crawler-readable Open Graph documents
-12 matching 1600 x 900 PNG chart previews
+12 matching 1200 x 630 opaque RGB PNG chart previews
 1 latest publication manifest
 ```
 
@@ -243,6 +243,13 @@ The article's `Publication link` control copies that frozen URL; `Share image`
 continues to share or download the visible PNG. A publication page links back
 to the selected live chart and public JSON. Sandbox and common-start
 publication pages remain a later extension of the same contract.
+
+The two image formats are intentionally different. The interactive share
+artifact is a 16:9 chart composed for direct download. The crawler preview is
+an opaque 1200 by 630 image composed for Open Graph and X large-image cards.
+Publication paths and revision hashes include the publication schema and
+render profile. A social-image change therefore creates a new immutable URL
+instead of asking a social crawler to invalidate a cached old one.
 
 ## Information Marks
 
