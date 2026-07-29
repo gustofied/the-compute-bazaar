@@ -51,6 +51,9 @@ class AdamSioudServerTests(unittest.TestCase):
         presentation = (article_root / "card-presentation.js").read_text(
             encoding="utf-8"
         )
+        feed_source = (article_root / "compute-card-feed.js").read_text(
+            encoding="utf-8"
+        )
         bundle = (article_root / "compute-cards.js").read_text(encoding="utf-8")
         styles = (article_root / "compute-card.css").read_text(encoding="utf-8")
         package = json.loads(
@@ -102,8 +105,18 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertNotIn("benchmark-methodology.md", article)
         self.assertNotIn("benchmark-constituents.json", article)
         self.assertNotIn("27 providers · 27 eligible prices", article)
-        self.assertIn('src="./compute-cards.js?v=6"', article)
-        self.assertIn('href="./compute-card.css?v=11"', article)
+        self.assertIn('src="./compute-cards.js?v=7"', article)
+        self.assertIn('href="./compute-card.css?v=12"', article)
+        self.assertEqual(article.count("data-card-feed="), 3)
+        self.assertIn("data-card-feed-track", article)
+        self.assertIn("createCardFeed", gpu_source)
+        self.assertIn("createCardFeed", sandbox_source)
+        self.assertIn('import { animate } from "motion"', feed_source)
+        self.assertIn("(prefers-reduced-motion: reduce)", feed_source)
+        self.assertIn('root.addEventListener("pointerenter", pause)', feed_source)
+        self.assertIn('root.addEventListener("focusin", pause)', feed_source)
+        self.assertIn('document.addEventListener("visibilitychange"', feed_source)
+        self.assertIn('row.rel = "noopener noreferrer"', feed_source)
         self.assertIn('width="514"', article)
         self.assertIn('height="424"', article)
         self.assertNotIn("gpu-benchmark-card.js", article)
