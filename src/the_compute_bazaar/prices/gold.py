@@ -35,6 +35,7 @@ from .public_views import (
     market_state_view,
     prime_frontier_view,
 )
+from .publications import publish_gpu_benchmark_publications
 from .schemas import to_jsonable, utc_now
 from .storage import (
     list_refs,
@@ -1255,6 +1256,11 @@ def export_gold_dashboard_snapshot(
         )
         for family in GPU_FAMILIES
     }
+    gpu_publications = publish_gpu_benchmark_publications(
+        output_root=output_root,
+        cards=benchmark_cards,
+    )
+    output_refs["gpu_publications"] = gpu_publications["manifest_ref"]
     for family in GPU_FAMILIES:
         output_refs[f"gpu_benchmark_{family.lower()}"] = "/".join(
             [output_root.rstrip("/"), "gpu-benchmark", f"{family.lower()}.json"]
@@ -1438,6 +1444,7 @@ def export_gold_dashboard_snapshot(
             "prime_frontier_events": len(prime_frontier_payload.get("events", [])),
             "prime_frontier_offers": len(prime_frontier_payload.get("offers", [])),
             "gpu_benchmark_cards": len(benchmark_cards),
+            "gpu_publications": gpu_publications["publication_count"],
             "prime_frontier_cards": len(prime_cards),
             "capacity_cards": 1,
         },

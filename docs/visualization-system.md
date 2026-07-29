@@ -224,12 +224,25 @@ the title, so evidence figures suppress their repeated internal title in that
 mode only. Embeds retain the internal title because they have no page header.
 This is a presentation distinction, not a separate chart implementation.
 
-These are live, view-only artifacts. They intentionally differ from a frozen
-chart snapshot: refreshing a live card can show a newer hourly observation.
-The static GitHub Pages article cannot emit unique server-rendered Open Graph
-metadata for every query-string card. Rich social preview images therefore
-require a separate deterministic snapshot/export step and must not be implied
-by the live sharing control.
+Live article cards intentionally differ from frozen publications: refreshing a
+live card can show a newer hourly observation. The static GitHub Pages article
+cannot emit unique server-rendered metadata for query-string state, so the Gold
+export performs that deterministic snapshot step for the GPU index.
+
+For every hourly Gold revision it publishes:
+
+```text
+4 GPU families x 3 ranges = 12 immutable publication pages
+12 crawler-readable Open Graph documents
+12 matching 1600 x 900 PNG chart previews
+1 latest publication manifest
+```
+
+The public GPU card contract carries the exact publication URL for each range.
+The article's `Publication link` control copies that frozen URL; `Share image`
+continues to share or download the visible PNG. A publication page links back
+to the selected live chart and public JSON. Sandbox and common-start
+publication pages remain a later extension of the same contract.
 
 ## Information Marks
 

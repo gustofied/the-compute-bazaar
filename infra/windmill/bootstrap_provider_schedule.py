@@ -22,6 +22,7 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8081"
 DEFAULT_WORKSPACE = "compute-bazaar"
 DEFAULT_FOLDER = "compute-bazaar"
 DEFAULT_CRON = "0 0 * * * *"
+WAIT_RESULT_TIMEOUT_SECONDS = 900
 
 
 @dataclass(frozen=True)
@@ -200,7 +201,7 @@ class WindmillClient:
             f"/w/{self.workspace}/jobs/run_wait_result/p/{path}",
             args,
             ok_statuses={200},
-            timeout=300,
+            timeout=WAIT_RESULT_TIMEOUT_SECONDS,
         )
         return json.loads(payload.decode("utf-8"))
 

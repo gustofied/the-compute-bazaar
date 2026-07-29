@@ -405,7 +405,7 @@ pixels. A brief attempt to restore the original angled Soft Linen ribbon made
 the new tinted frames feel over-layered, so the ribbon was removed again. The
 image treatment and crops were left unchanged.
 
-## Work Drawer And Share Action
+## Work View And Share Card
 
 The final interaction audit removed the old API reverse and kept four clear
 behaviors:
@@ -417,14 +417,21 @@ Work publication record
 Share PNG and standalone link
 ```
 
-The new `compute-card-work.js` primitive renders expandable rows from each
-public Gold payload. The browser does not invent a task stream. GPU rows report
-the benchmark schema, retained observation window, four-family preparation,
+The `compute-card-work.js` primitive renders a horizontal activity reel from
+each public Gold payload. Selecting a stage updates one compact inspector below
+the reel. The browser does not invent a task stream. GPU stages report the
+benchmark schema, retained observation window, four-family preparation,
 constituent coverage, methodology, history count, cadence, and endpoint.
-Sandbox rows report retained StarSling batches, comparable jobs, service
+Sandbox stages report retained StarSling batches, comparable jobs, service
 coverage, cost basis, and endpoint. The common-start card reports its three
 aligned series, observation window, DataFusion query output, coverage floor,
 and endpoint.
+
+The Share action was restored as a visible fourth state after the direct-export
+version proved too implicit. The share view centers the exact 16:9 SVG inside a
+small tinted publication sleeve. Readers can return to Chart, open Work, copy a
+standalone link, or export the previewed image. API and provenance details stay
+inside Work.
 
 The cover and Work artwork use local 600 by 600 ordered-dither WebP derivatives.
 Their combined transfer size is about 486 KiB. The public source images remain
@@ -469,4 +476,113 @@ Results:
 relevant tests                                              76 passed
 public snapshot freshness                                   passed
 partial public source runs                                  none
+```
+
+## Four-State Card Follow-Up
+
+The later interaction pass made the four states explicit instead of treating
+Share as an immediate export:
+
+```text
+cover -> chart -> share
+               -> work
+```
+
+Share now previews the exact 16:9 SVG that will be exported. Its rail offers
+Chart, Work, Publication link, Share image, and Close. The GPU publication link
+comes from the public Gold card contract and identifies an immutable
+Open Graph page for the selected family and range. Until that contract reaches
+the browser, the control falls back to the existing standalone article URL.
+The sandbox workload artifact no longer
+uses the generic `SAME SOFTWARE JOB` corner label, leaving the measured cost,
+unit, service ranges, observation time, and completed-job count to carry the
+card.
+
+The hourly Gold export writes 12 GPU publication pairs: four GPU families by
+three ranges. Every pair contains a crawler-readable HTML document and a
+1600-by-900 PNG generated from the same compact Gold series used by the live
+D3 card. Revisioned URLs prevent a later hourly run from changing a shared
+publication underneath a social cache.
+
+Work was tightened around a source-backed activity reel. The three retained
+publication stages form a horizontal tablist, and one inspector shows the
+selected stage's real payload fields. Text sizes were raised from chart-
+annotation scale, long stage names wrap, arrow-key navigation works, and the
+reel scrolls without exposing a scrollbar on narrow screens. No synthetic
+agent events were introduced.
+
+Follow-up browser checks:
+
+```text
+GPU cover, chart, share, and Work states                    passed
+sandbox share without generic corner tagline               passed
+common-start Work and share states                          passed
+detail -> Work -> share repeated transition loop            passed
+stale inline transition height/overflow                     none
+standalone 16:9 share artifact                              passed
+390 x 844 Work and share layouts                            passed
+document horizontal overflow                               0 px
+broken images                                              0
+```
+
+Follow-up verification:
+
+```text
+npm run build:compute                                      passed
+node --check exemplars/compute/compute-cards.js            passed
+uv run python -m unittest \
+  tests.test_adamsioud \
+  tests.test_gpu_market_core \
+  tests.test_sandbox_cost -v                               76 passed
+git diff --check                                           passed
+git -C external/AdamSioud diff --check                     passed
+```
+
+## Production Publication Rollout
+
+The production Windmill worker was rebuilt and moved from the 28 July card
+release to:
+
+```text
+compute-bazaar-windmill-worker:2026-07-30-gpu-publications-v1
+image sha256:34c3439e7989c892428085d88eb312300a8b685ddb53e62d9683a76aa85b4391
+```
+
+Only `windmill_worker` was recreated. PostgreSQL, the Windmill server, AutoMQ,
+and the existing hourly schedule remained running. The health endpoint reported
+a healthy database and live workers after the change.
+
+The first synchronous smoke request reached the client's old 300-second timeout
+and Windmill canceled it when the HTTP connection closed. This was a smoke
+client defect, not a provider or publication failure. The client allowance is
+now 900 seconds, and the production-equivalent verification was resubmitted
+asynchronously:
+
+```text
+Windmill job     019fb030-0395-57cf-0060-0ee8604817d4
+market run       market-publication-smoke-20260730b
+duration         383,839 ms
+result           success
+```
+
+That run published all 12 family/range page-image pairs. The verified H100
+all-history publication was:
+
+```text
+https://d3n0n6h709c83f.cloudfront.net/publications/gpu-index/h100/all/gold-market-20260729t230000-a5df46ac-0e1dfe874c.html
+```
+
+Production checks:
+
+```text
+HTML status/content type                                  200 / text/html
+PNG status/content type                                   200 / image/png
+HTML and PNG cache policy                                 one-year immutable
+Open Graph image dimensions                              1600 x 900
+Twitter card                                              summary_large_image
+live-chart return state                                   H100 / all / detail
+browser image natural size                               1600 x 900
+browser horizontal overflow                              0 px
+Windmill job                                              success
+full Python suite                                         101 passed
 ```

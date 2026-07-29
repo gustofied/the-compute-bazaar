@@ -297,6 +297,12 @@ uv run python infra/windmill/bootstrap_market_schedule.py \
   --run-id market-stage1-smoke-YYYYMMDD
 ```
 
+The bootstrap client's synchronous wait allowance is 15 minutes. The broad
+provider-to-publication cycle currently takes about six to seven minutes, so a
+shorter client timeout can cancel an otherwise healthy Windmill job when the
+HTTP connection closes. Scheduled runs and asynchronous `--run-now` submissions
+do not depend on an open client connection.
+
 The success marker is a market-run manifest with provider checks, nonzero gold row counts, dashboard
 output refs, and provider manifests with `publish_mode: kafka`.
 

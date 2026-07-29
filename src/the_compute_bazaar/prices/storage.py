@@ -123,7 +123,13 @@ def write_jsonl(uri: str, rows: Iterable[Any]) -> str:
     return write_bytes(uri, payload, content_type="application/x-ndjson")
 
 
-def write_bytes(uri: str, data: bytes, *, content_type: str | None = None) -> str:
+def write_bytes(
+    uri: str,
+    data: bytes,
+    *,
+    content_type: str | None = None,
+    cache_control: str | None = None,
+) -> str:
     if uri.startswith("s3://"):
         parsed = urlparse(uri)
         bucket = parsed.netloc
@@ -131,6 +137,8 @@ def write_bytes(uri: str, data: bytes, *, content_type: str | None = None) -> st
         kwargs: dict[str, Any] = {"Bucket": bucket, "Key": key, "Body": data}
         if content_type:
             kwargs["ContentType"] = content_type
+        if cache_control:
+            kwargs["CacheControl"] = cache_control
         _s3_client().put_object(**kwargs)
         return uri
 
