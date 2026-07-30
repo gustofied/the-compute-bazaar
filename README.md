@@ -1,3 +1,9 @@
+> [!WARNING]
+> **Very much a work in progress.** I'm working, working: there are many ideas
+> here and a lot still to push through. Some ideas have been spun up, turned
+> around, or discarded with Codex, so the slop is big right now. I'm actively
+> scoping the project down and cleaning it up.
+
 # The Compute Bazaar
 
 The Compute Bazaar is a Stage 1 compute market-data platform. It ingests GPU
