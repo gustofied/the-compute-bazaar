@@ -2,16 +2,36 @@ provider "aws" {
   region = var.aws_region
 }
 
+provider "aws" {
+  alias  = "cloudfront"
+  region = "us-east-1"
+}
+
 locals {
-  dashboard_prefix = trimsuffix(trimprefix(var.dashboard_prefix, "/"), "/")
-  origin_id        = "${var.name}-s3-origin"
+  dashboard_prefix          = trimsuffix(trimprefix(var.dashboard_prefix, "/"), "/")
+  origin_id                 = "${var.name}-s3-origin"
+  custom_domain             = trimspace(coalesce(var.custom_domain_name, ""))
+  custom_domain_requested   = length(local.custom_domain) > 0
+  custom_domain_enabled     = var.enable_custom_domain && local.custom_domain_requested
+  requested_certificate_arn = try(aws_acm_certificate.dashboard[0].arn, null)
+  effective_aliases = local.custom_domain_enabled ? [
+    local.custom_domain,
+  ] : var.cloudfront_aliases
+  effective_certificate_arn = (
+    local.custom_domain_enabled
+    ? local.requested_certificate_arn
+    : var.acm_certificate_arn
+  )
 }
 
 check "custom_domain_certificate" {
   assert {
     condition = (
-      length(var.cloudfront_aliases) == 0
-      || (var.acm_certificate_arn != null && var.acm_certificate_arn != "")
+      length(local.effective_aliases) == 0
+      || (
+        local.effective_certificate_arn != null
+        && local.effective_certificate_arn != ""
+      )
     )
     error_message = "acm_certificate_arn is required when cloudfront_aliases is non-empty."
   }
@@ -19,6 +39,23 @@ check "custom_domain_certificate" {
 
 data "aws_s3_bucket" "dashboard" {
   bucket = var.dashboard_bucket_name
+}
+
+resource "aws_acm_certificate" "dashboard" {
+  provider = aws.cloudfront
+  count    = local.custom_domain_requested ? 1 : 0
+
+  domain_name       = local.custom_domain
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name    = "${var.name}-custom-domain"
+    Project = "compute-bazaar"
+  }
 }
 
 resource "aws_cloudfront_origin_access_control" "dashboard" {
@@ -89,7 +126,7 @@ resource "aws_cloudfront_distribution" "dashboard" {
   enabled         = true
   is_ipv6_enabled = true
   comment         = "Compute Bazaar public-safe dashboard JSON"
-  aliases         = var.cloudfront_aliases
+  aliases         = local.effective_aliases
   price_class     = var.price_class
 
   origin {
@@ -116,10 +153,10 @@ resource "aws_cloudfront_distribution" "dashboard" {
   }
 
   viewer_certificate {
-    acm_certificate_arn            = length(var.cloudfront_aliases) > 0 ? var.acm_certificate_arn : null
-    cloudfront_default_certificate = length(var.cloudfront_aliases) == 0
-    minimum_protocol_version       = length(var.cloudfront_aliases) > 0 ? "TLSv1.2_2021" : null
-    ssl_support_method             = length(var.cloudfront_aliases) > 0 ? "sni-only" : null
+    acm_certificate_arn            = length(local.effective_aliases) > 0 ? local.effective_certificate_arn : null
+    cloudfront_default_certificate = length(local.effective_aliases) == 0
+    minimum_protocol_version       = length(local.effective_aliases) > 0 ? "TLSv1.2_2021" : null
+    ssl_support_method             = length(local.effective_aliases) > 0 ? "sni-only" : null
   }
 }
 

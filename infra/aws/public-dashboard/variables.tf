@@ -42,14 +42,38 @@ variable "price_class" {
   default     = "PriceClass_100"
 }
 
+variable "custom_domain_name" {
+  description = "Branded hostname to request an ACM certificate for, such as bazaar.adamsioud.com."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = (
+      var.custom_domain_name == null
+      || can(regex(
+        "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$",
+        var.custom_domain_name,
+      ))
+    )
+    error_message = "custom_domain_name must be null or a lowercase DNS hostname."
+  }
+}
+
+variable "enable_custom_domain" {
+  description = "Attach custom_domain_name to CloudFront after its ACM certificate is issued."
+  type        = bool
+  default     = false
+}
+
 variable "cloudfront_aliases" {
-  description = "Optional custom domains for the distribution, for example data.adamsioud.com."
+  description = "Advanced: externally managed CloudFront aliases used when enable_custom_domain is false."
   type        = list(string)
   default     = []
 }
 
 variable "acm_certificate_arn" {
-  description = "ACM certificate ARN in us-east-1 when cloudfront_aliases is non-empty."
+  description = "Advanced: externally managed us-east-1 ACM certificate for cloudfront_aliases."
   type        = string
   default     = null
 }
