@@ -1,8 +1,5 @@
 > [!WARNING]
-> **Very much a work in progress.** I'm working, working: there are many ideas
-> here and a lot still to push through. Some ideas have been spun up, turned
-> around, or discarded with Codex, so the slop is big right now. I'm actively
-> scoping the project down and cleaning it up.
+> I'm working working, many ideas, a lot to push through, some ideas spinned and turned with codex, so the slop right now is big, working on scoping. down..
 
 # The Compute Bazaar
 
