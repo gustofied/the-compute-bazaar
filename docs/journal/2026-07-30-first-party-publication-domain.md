@@ -100,6 +100,87 @@ it cannot force X direct messages to render a large preview. Social unfurl
 behavior remains controlled by each client and its cache. The publication page
 now presents the strongest standards-compliant metadata we control.
 
+## Human-Readable Publication Routes
+
+The first first-party links still exposed two implementation details:
+
+```text
+publications/gpu-index/v2/b200/all/gold-market-...html
+```
+
+`v2` described the renderer schema, and `gold-market-...` described an internal
+pipeline run. Neither helped a reader understand the shared object. Newly
+generated links now use the shared publication route contract:
+
+```text
+publications/{card}/{subject}/{view}/{observed-at}-{content-digest}.html
+```
+
+The GPU example is:
+
+```text
+publications/gpu-index/b200/1-day/2026-07-30-0505-utc-c12a9c8572.html
+```
+
+The corresponding payload record names the GPU, selected range, displayed
+value, percentage change for that range, observation time, and stable
+publication ID. Open Graph and X titles now include the GPU name, current
+GPU-hour value, and selected-period change. Full-history links state the first
+retained observation date rather than claiming an undefined all-time period.
+
+The route builder is card-neutral. Future sandbox, relative-price, activity,
+and compute-deal publications can provide their own card, subject, and view
+segments while retaining the same immutable timestamp-plus-digest rule. Old
+`v2` objects remain untouched and valid.
+
+### Production rollout
+
+The shared route contract was deployed in:
+
+```text
+compute-bazaar-windmill-worker:2026-07-30-publication-routes-v3
+sha256:1359dbf5e86621b87fa652163e87929a9291a697d2565af23aa1e2cc7d360386
+```
+
+The production smoke run was:
+
+```text
+market-publication-routes-v3-20260730T0543
+```
+
+Gold, dashboard export, sandbox-cost processing, VM-capacity processing, and
+publication generation completed. The overall run was a warning because Cloud
+GPU Prices returned repeated HTTP 500 responses and Thunder Compute returned
+HTTP 525. Sixteen other providers completed, including Vast, Lium, Prime,
+Runpod, and the maintained rate-card sources.
+
+The generated manifest uses `compute_bazaar_publication_v3` and
+`compute_bazaar_publication_route_v1` and contains 12 immutable publications.
+The checked B200 one-day publication is:
+
+```text
+https://bazaar.adamsioud.com/publications/gpu-index/b200/1-day/2026-07-30-0505-utc-c12a9c8572.html
+```
+
+It publishes `$6.11/GPU-hour`, `Up 0.9% over 1 day`, 13 contributing providers,
+and the exact observed timestamp. Browser inspection confirmed the canonical
+URL, Open Graph image, `summary_large_image` metadata, live-chart and data
+links, no horizontal overflow at the checked desktop viewport, and no console
+warnings or errors. The previous `v2`/run-ID URL returned HTTP 200 after the
+rollout.
+
+Verification for this rollout:
+
+- `uv run python -m unittest discover -s tests`: 106 tests passed.
+- Focused Ruff checks passed for the route contract, publication generator,
+  and publication tests.
+- `git diff --check` passed.
+- Whole-repository Ruff still reports seven unrelated pre-existing findings in
+  `src/the_compute_bazaar/tangents/`.
+
+The temporary local SSH tunnel was closed after verification, and the
+single-IP TCP/22 security-group rule added for this deployment was revoked.
+
 ## Next Refresh
 
 No separate domain job is required. Every hourly market run receives

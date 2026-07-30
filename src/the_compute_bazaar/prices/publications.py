@@ -6,7 +6,6 @@ import io
 import json
 import math
 import os
-import re
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
@@ -14,11 +13,14 @@ from html import escape
 from typing import Any
 from urllib.parse import urlencode
 
+from ..publication_contract import (
+    PUBLICATION_ROUTE_SCHEMA_VERSION,
+    PublicationRoute,
+)
 from .storage import write_bytes, write_json
 
 
-PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v2"
-PUBLICATION_PATH_VERSION = "v2"
+PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v3"
 PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630"
 DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
 DEFAULT_ARTICLE_URL = (
@@ -29,6 +31,15 @@ GPU_RANGES: dict[str, timedelta | None] = {
     "1d": timedelta(days=1),
     "7d": timedelta(days=7),
     "all": None,
+}
+GPU_RANGE_PRESENTATION = {
+    "1d": {"path": "1-day", "label": "1 day", "short_label": "1D"},
+    "7d": {"path": "7-day", "label": "7 days", "short_label": "7D"},
+    "all": {
+        "path": "full-history",
+        "label": "full retained history",
+        "short_label": "ALL",
+    },
 }
 IMAGE_WIDTH = 1200
 IMAGE_HEIGHT = 630
@@ -53,22 +64,40 @@ def publish_gpu_benchmark_publications(
     normalized_cards = {
         family: cards[family] for family in GPU_FAMILIES if family in cards
     }
-    revision = _publication_revision(
+    content_digest = _publication_digest(
         normalized_cards,
         public_base_url=public_base,
         article_url=live_article,
     )
+    latest_observed_at = _latest_card_observed_at(normalized_cards)
+    revision = PublicationRoute.create(
+        card_id="gpu-index",
+        subject_id="market",
+        view_id="all-views",
+        observed_at=latest_observed_at,
+        content_digest=content_digest,
+    ).revision
     publication_rows: list[dict[str, Any]] = []
 
     for family, card in normalized_cards.items():
         range_links: dict[str, dict[str, Any]] = {}
         for range_id in GPU_RANGES:
-            prefix = (
-                f"publications/gpu-index/{PUBLICATION_PATH_VERSION}/"
-                f"{family.lower()}/{range_id}/{revision}"
+            range_presentation = GPU_RANGE_PRESENTATION[range_id]
+            visible_series = _visible_gpu_series(normalized_cards, range_id)
+            route_observed_at = (
+                _latest_observed_at(visible_series.get(family, []))
+                or _parse_datetime(card.get("as_of"))
+                or latest_observed_at
             )
-            page_path = f"{prefix}.html"
-            image_path = f"{prefix}.png"
+            route = PublicationRoute.create(
+                card_id="gpu-index",
+                subject_id=family,
+                view_id=range_presentation["path"],
+                observed_at=route_observed_at,
+                content_digest=content_digest,
+            )
+            page_path = route.page_path
+            image_path = route.image_path
             page_ref = _join(output_root, page_path)
             image_ref = _join(output_root, image_path)
             page_url = f"{public_base}/{page_path}"
@@ -90,7 +119,7 @@ def publish_gpu_benchmark_publications(
                 page_url=page_url,
                 image_url=image_url,
                 live_url=live_url,
-                revision=revision,
+                route=route,
             )
             write_bytes(
                 image_ref,
@@ -105,11 +134,28 @@ def publish_gpu_benchmark_publications(
                 cache_control="public, max-age=31536000, immutable",
             )
             range_links[range_id] = {
+                "publication_id": route.publication_id,
+                "card_id": "gpu-index",
+                "subject": {
+                    "id": family,
+                    "label": f"{family} GPU",
+                },
+                "view": {
+                    "id": range_id,
+                    "label": range_presentation["label"],
+                    "path": range_presentation["path"],
+                },
                 "url": page_url,
                 "image_url": image_url,
                 "live_url": live_url,
-                "revision": revision,
+                "revision": route.revision,
                 "observed_at": metadata["observed_at"],
+                "title": metadata["title"],
+                "description": metadata["description"],
+                "value": metadata["value"],
+                "change_pct": metadata["change_pct"],
+                "change_label": metadata["change_label"],
+                "change_direction": metadata["change_direction"],
             }
             publication_rows.append(
                 {
@@ -121,8 +167,10 @@ def publish_gpu_benchmark_publications(
 
         card["publication"] = {
             "schema_version": PUBLICATION_SCHEMA_VERSION,
+            "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
             "kind": "frozen_chart_snapshot",
-            "default_range": "all",
+            "card_id": "gpu-index",
+            "default_range": "1d",
             "ranges": range_links,
         }
 
@@ -132,6 +180,7 @@ def publish_gpu_benchmark_publications(
     )
     manifest = {
         "schema_version": PUBLICATION_SCHEMA_VERSION,
+        "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
         "publication_type": "gpu_benchmark",
         "revision": revision,
         "publication_count": len(publication_rows),
@@ -376,7 +425,7 @@ def render_gpu_benchmark_publication(
     for spine in axes.spines.values():
         spine.set_visible(False)
 
-    change = _range_change(selected_rows)
+    change = _range_change(selected_rows, range_id)
     figure.text(
         0.052,
         0.105,
@@ -389,7 +438,7 @@ def render_gpu_benchmark_publication(
     figure.text(
         0.5,
         0.105,
-        change.upper(),
+        change["label"].upper(),
         color=coral,
         fontsize=10,
         fontweight=700,
@@ -399,7 +448,7 @@ def render_gpu_benchmark_publication(
     figure.text(
         0.948,
         0.105,
-        f"{range_id.upper()} VIEW / HOURLY",
+        f"{GPU_RANGE_PRESENTATION[range_id]['short_label']} VIEW / HOURLY",
         color=muted,
         fontsize=11,
         family="sans-serif",
@@ -430,7 +479,7 @@ def _gpu_publication_metadata(
     page_url: str,
     image_url: str,
     live_url: str,
-    revision: str,
+    route: PublicationRoute,
 ) -> dict[str, Any]:
     series = _visible_gpu_series(cards, range_id)
     rows = series.get(selected_family, [])
@@ -440,10 +489,15 @@ def _gpu_publication_metadata(
     value = _format_usd(latest["value"]) if latest else "pending"
     observed_at = latest["date"].isoformat() if latest else str(card.get("as_of") or "")
     provider_count = int(coverage.get("provider_count") or 0)
-    title = f"{selected_family} GPU Price Index - {value} / GPU-hour"
+    change = _range_change(rows, range_id)
+    title_parts = [f"{selected_family} GPU Price Index", f"{value}/GPU-hour"]
+    if change["value"] is not None:
+        title_parts.append(change["label"])
+    title = " | ".join(title_parts)
     description = (
-        f"Frozen Compute Bazaar publication for the {selected_family} "
-        f"observed benchmark, showing the {range_id.upper()} view"
+        f"{selected_family} observed GPU benchmark at {value} per GPU-hour, "
+        f"{change['label'].lower()}. "
+        f"Observed through {_format_observed_date(latest['date'] if latest else None)}"
     )
     if provider_count:
         description += f" across {provider_count} providers"
@@ -459,17 +513,23 @@ def _gpu_publication_metadata(
             f"{selected_family.lower()}.json"
         ),
         "image_alt": (
-            f"{selected_family} GPU price index chart for the "
-            f"{range_id.upper()} publication range"
+            f"{selected_family} GPU price index at {value} per GPU-hour, "
+            f"{change['label'].lower()}"
         ),
         "family_id": selected_family,
         "range": range_id,
+        "range_label": GPU_RANGE_PRESENTATION[range_id]["label"],
         "value": value,
+        "change_pct": change["value"],
+        "change_label": change["label"],
+        "change_direction": change["direction"],
         "observed_at": observed_at,
         "observed_label": _format_observed(
             latest["date"] if latest else _parse_datetime(card.get("as_of"))
         ),
-        "revision": revision,
+        "revision": route.revision,
+        "publication_id": route.publication_id,
+        "route": route.as_dict(),
     }
 
 
@@ -482,6 +542,9 @@ def _publication_html(metadata: Mapping[str, Any]) -> str:
     data_url = escape(str(metadata["data_url"]), quote=True)
     image_alt = escape(str(metadata["image_alt"]), quote=True)
     observed_label = escape(str(metadata["observed_label"]))
+    family_id = escape(str(metadata["family_id"]))
+    range_label = escape(str(metadata["range_label"]))
+    change_label = escape(str(metadata["change_label"]))
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -554,7 +617,7 @@ def _publication_html(metadata: Mapping[str, Any]) -> str:
       <img src="{image_url}" width="{IMAGE_WIDTH}" height="{IMAGE_HEIGHT}" alt="{image_alt}">
     </a>
     <footer>
-      <p>Frozen publication / {observed_label.lower()}</p>
+      <p>{family_id} / {range_label} / {change_label.lower()} / {observed_label.lower()}</p>
       <nav aria-label="Publication links">
         <a href="{live_url}">Open live chart</a>
         <a href="{data_url}">Open data</a>
@@ -608,24 +671,19 @@ def _visible_gpu_series(
     }
 
 
-def _publication_revision(
+def _publication_digest(
     cards: Mapping[str, Mapping[str, Any]],
     *,
     public_base_url: str,
     article_url: str,
 ) -> str:
-    latest_run_id = ""
-    for family in GPU_FAMILIES:
-        rows = (cards.get(family) or {}).get("series") or []
-        if rows and isinstance(rows[-1], Mapping):
-            latest_run_id = str(rows[-1].get("run_id") or latest_run_id)
     canonical_cards = {
         family: {key: value for key, value in card.items() if key != "publication"}
         for family, card in cards.items()
     }
     publication_material = {
         "schema_version": PUBLICATION_SCHEMA_VERSION,
-        "path_version": PUBLICATION_PATH_VERSION,
+        "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
         "render_profile": PUBLICATION_RENDER_PROFILE,
         "image_width": IMAGE_WIDTH,
         "image_height": IMAGE_HEIGHT,
@@ -639,16 +697,24 @@ def _publication_revision(
         separators=(",", ":"),
         default=str,
     )
-    digest = sha256(canonical.encode("utf-8")).hexdigest()[:10]
-    stem = _slug(latest_run_id or _latest_card_timestamp(cards) or "publication")
-    return f"{stem}-{digest}"
+    return sha256(canonical.encode("utf-8")).hexdigest()[:10]
 
 
-def _latest_card_timestamp(cards: Mapping[str, Mapping[str, Any]]) -> str:
-    timestamps = [
-        str(card.get("as_of") or "") for card in cards.values() if card.get("as_of")
-    ]
-    return max(timestamps, default="")
+def _latest_card_observed_at(
+    cards: Mapping[str, Mapping[str, Any]],
+) -> datetime | None:
+    observations: list[datetime] = []
+    for card in cards.values():
+        parsed_as_of = _parse_datetime(card.get("as_of"))
+        if parsed_as_of:
+            observations.append(parsed_as_of)
+        for row in card.get("series") or []:
+            if not isinstance(row, Mapping):
+                continue
+            parsed_row = _parse_datetime(row.get("observed_at"))
+            if parsed_row:
+                observations.append(parsed_row)
+    return max(observations, default=None)
 
 
 def _live_gpu_url(*, article_url: str, family: str, range_id: str) -> str:
@@ -667,17 +733,53 @@ def _latest_observed_at(rows: list[Mapping[str, Any]]) -> datetime | None:
     return rows[-1]["date"] if rows else None
 
 
-def _range_change(rows: list[Mapping[str, Any]]) -> str:
+def _range_change(
+    rows: list[Mapping[str, Any]],
+    range_id: str,
+) -> dict[str, float | str | None]:
     if len(rows) < 2 or not rows[0]["value"]:
-        return "first retained observation"
+        return {
+            "value": None,
+            "label": "First retained observation",
+            "direction": "unknown",
+        }
     change = ((rows[-1]["value"] - rows[0]["value"]) / rows[0]["value"]) * 100
-    return f"{change:+.1f}% over range"
+    rounded_change = round(change, 1)
+    direction = "flat"
+    direction_label = "Unchanged"
+    if rounded_change > 0:
+        direction = "up"
+        direction_label = f"Up {abs(rounded_change):.1f}%"
+    elif rounded_change < 0:
+        direction = "down"
+        direction_label = f"Down {abs(rounded_change):.1f}%"
+    if range_id == "all":
+        label = (
+            f"{direction_label} since "
+            f"{rows[0]['date'].strftime('%d %b %Y')}"
+        )
+    else:
+        label = (
+            f"{direction_label} over "
+            f"{GPU_RANGE_PRESENTATION[range_id]['label']}"
+        )
+    return {
+        "value": round(change, 6),
+        "label": label,
+        "direction": direction,
+    }
 
 
 def _format_observed(value: datetime | None) -> str:
     if value is None:
         return "Observation pending"
     return f"Observed {value.strftime('%d %b %Y, %H:%M UTC')}"
+
+
+def _format_observed_date(value: datetime | None) -> str:
+    if value is None:
+        return "the latest retained observation"
+    return value.strftime("%d %b %Y at %H:%M UTC")
 
 
 def _format_usd(value: float) -> str:
@@ -718,11 +820,6 @@ def _parse_datetime(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
-
-
-def _slug(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug[:96] or "publication"
 
 
 def _join(root: str, path: str) -> str:

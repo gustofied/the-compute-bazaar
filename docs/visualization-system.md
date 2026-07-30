@@ -244,6 +244,31 @@ continues to share or download the visible PNG. A publication page links back
 to the selected live chart and public JSON. Sandbox and common-start
 publication pages remain a later extension of the same contract.
 
+Publication URLs follow one shared card-neutral route:
+
+```text
+/publications/{card}/{subject}/{view}/{observed-at}-{content-digest}.html
+```
+
+For example:
+
+```text
+/publications/gpu-index/b200/1-day/2026-07-30-0505-utc-c12a9c8572.html
+```
+
+The path is readable without giving up immutability. `card` identifies the
+product object, `subject` identifies what the card is about, and `view`
+identifies the selected presentation. The final timestamp says when the
+underlying observation was current; the short digest distinguishes different
+content or rendering methods at the same observation time. Publication schema
+versions belong in the manifest and payload metadata rather than the public
+path.
+
+Every publication record also carries structured `card_id`, `subject`, `view`,
+`value`, `change_pct`, `change_label`, and `publication_id` fields. Future
+sandbox, relative-price, market-activity, and compute-deal cards should use the
+same route builder and supply their own subject and view dimensions.
+
 The two image formats are intentionally different. The interactive share
 artifact is a 16:9 chart composed for direct download. The crawler preview is
 an opaque 1200 by 630 image composed for Open Graph and X large-image cards.

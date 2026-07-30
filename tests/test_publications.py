@@ -8,10 +8,13 @@ from tempfile import TemporaryDirectory
 from the_compute_bazaar.prices.publications import (
     IMAGE_HEIGHT,
     IMAGE_WIDTH,
-    PUBLICATION_PATH_VERSION,
     PUBLICATION_SCHEMA_VERSION,
     publish_gpu_benchmark_publications,
     render_gpu_benchmark_publication,
+)
+from the_compute_bazaar.publication_contract import (
+    PUBLICATION_ROUTE_SCHEMA_VERSION,
+    PublicationRoute,
 )
 
 
@@ -41,9 +44,8 @@ class GpuPublicationTests(unittest.TestCase):
                 root
                 / "publications"
                 / "gpu-index"
-                / PUBLICATION_PATH_VERSION
                 / "h100"
-                / "all"
+                / "full-history"
                 / f"{result['revision']}.html"
             )
             image = page.with_suffix(".png")
@@ -54,12 +56,28 @@ class GpuPublicationTests(unittest.TestCase):
             self.assertEqual(
                 h100_all["url"],
                 "https://data.example.test/publications/gpu-index/"
-                f"{PUBLICATION_PATH_VERSION}/h100/all/"
-                f"{result['revision']}.html",
+                f"h100/full-history/{result['revision']}.html",
             )
             self.assertEqual(
                 cards["H100"]["publication"]["schema_version"],
                 PUBLICATION_SCHEMA_VERSION,
+            )
+            self.assertEqual(
+                cards["H100"]["publication"]["route_schema_version"],
+                PUBLICATION_ROUTE_SCHEMA_VERSION,
+            )
+            self.assertEqual(
+                cards["H100"]["publication"]["default_range"],
+                "1d",
+            )
+            self.assertEqual(h100_all["view"]["label"], "full retained history")
+            self.assertEqual(h100_all["change_label"], "Up 22.5% since 20 Jul 2026")
+            self.assertEqual(h100_all["change_direction"], "up")
+            self.assertNotIn("/v2/", h100_all["url"])
+            self.assertNotIn("gold-market", h100_all["url"])
+            self.assertRegex(
+                result["revision"],
+                r"^2026-07-29-0000-utc-[a-f0-9]{10}$",
             )
             self.assertIn(
                 "?card=gpu-index&view=detail&gpu=H100&range=all",
@@ -77,6 +95,15 @@ class GpuPublicationTests(unittest.TestCase):
             )
             self.assertIn(
                 f'<meta name="twitter:url" content="{h100_all["url"]}">',
+                html,
+            )
+            self.assertIn(
+                "H100 GPU Price Index | $2.45/GPU-hour "
+                "| Up 22.5% since 20 Jul 2026",
+                html,
+            )
+            self.assertIn(
+                "H100 / full retained history / up 22.5% since 20 jul 2026",
                 html,
             )
             self.assertIn("Open live chart", html)
@@ -127,12 +154,53 @@ class GpuPublicationTests(unittest.TestCase):
                     Path(temporary_directory)
                     / "publications"
                     / "gpu-index"
-                    / PUBLICATION_PATH_VERSION
                     / "h100"
-                    / "all"
+                    / "full-history"
                     / f"{result['revision']}.html"
                 )
                 self.assertTrue(page.is_file())
+
+    def test_one_day_publication_exposes_human_change_metadata(self) -> None:
+        cards = _cards()
+
+        with TemporaryDirectory() as temporary_directory:
+            publish_gpu_benchmark_publications(
+                output_root=temporary_directory,
+                cards=cards,
+                public_base_url="https://data.example.test",
+                article_url="https://example.test/compute.html",
+            )
+
+            publication = cards["B200"]["publication"]["ranges"]["1d"]
+
+            self.assertIn("/gpu-index/b200/1-day/", publication["url"])
+            self.assertEqual(publication["subject"]["label"], "B200 GPU")
+            self.assertEqual(publication["view"]["label"], "1 day")
+            self.assertEqual(publication["change_pct"], 1.136364)
+            self.assertEqual(publication["change_label"], "Up 1.1% over 1 day")
+            self.assertEqual(publication["change_direction"], "up")
+            self.assertIn("B200 GPU Price Index", publication["title"])
+            self.assertIn("Up 1.1% over 1 day", publication["title"])
+
+    def test_shared_route_contract_is_card_agnostic(self) -> None:
+        route = PublicationRoute.create(
+            card_id="Compute Deal",
+            subject_id="H100 / EU West",
+            view_id="Signed Terms",
+            observed_at=datetime(2026, 7, 30, 4, tzinfo=timezone.utc),
+            content_digest="ABCDEF1234567890",
+        )
+
+        self.assertEqual(
+            route.page_path,
+            "publications/compute-deal/h100-eu-west/signed-terms/"
+            "2026-07-30-0400-utc-abcdef1234.html",
+        )
+        self.assertEqual(
+            route.publication_id,
+            "compute-deal:h100-eu-west:signed-terms:"
+            "2026-07-30-0400-utc-abcdef1234",
+        )
 
 
 def _cards() -> dict[str, dict[str, object]]:
