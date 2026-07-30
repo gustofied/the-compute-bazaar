@@ -104,6 +104,36 @@ class GpuPublicationTests(unittest.TestCase):
                 range_id="30d",
             )
 
+    def test_public_host_change_creates_a_new_immutable_revision(self) -> None:
+        cards = _cards()
+
+        with TemporaryDirectory() as temporary_directory:
+            first = publish_gpu_benchmark_publications(
+                output_root=temporary_directory,
+                cards=cards,
+                public_base_url="https://old.example.test",
+                article_url="https://example.test/compute.html",
+            )
+            second = publish_gpu_benchmark_publications(
+                output_root=temporary_directory,
+                cards=cards,
+                public_base_url="https://new.example.test",
+                article_url="https://example.test/compute.html",
+            )
+
+            self.assertNotEqual(first["revision"], second["revision"])
+            for result in (first, second):
+                page = (
+                    Path(temporary_directory)
+                    / "publications"
+                    / "gpu-index"
+                    / PUBLICATION_PATH_VERSION
+                    / "h100"
+                    / "all"
+                    / f"{result['revision']}.html"
+                )
+                self.assertTrue(page.is_file())
+
 
 def _cards() -> dict[str, dict[str, object]]:
     start = datetime(2026, 7, 20, tzinfo=timezone.utc)

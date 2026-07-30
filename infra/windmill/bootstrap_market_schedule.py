@@ -26,6 +26,7 @@ DEFAULT_PROVIDER_SCOPE = (
     "thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,akash,aws_spot,"
     "azure,runpod,verda,published_rate_cards"
 )
+DEFAULT_PUBLIC_BASE_URL = "https://bazaar.adamsioud.com"
 OPTIONAL_PROVIDER_VARIABLES = (
     ("CLORE_API_KEY", "clore_api_key", "Clore marketplace read API key"),
     (
@@ -237,6 +238,17 @@ def required_variables(folder: str) -> list[dict[str, Any]]:
             "description": "Public-safe dashboard JSON output root",
         }
     )
+    variables.append(
+        {
+            "path": f"f/{folder}/public_base_url",
+            "value": os.getenv(
+                "COMPUTE_BAZAAR_PUBLIC_BASE_URL",
+                DEFAULT_PUBLIC_BASE_URL,
+            ),
+            "is_secret": False,
+            "description": "Canonical public base URL for publication links",
+        }
+    )
     return variables
 
 
@@ -254,6 +266,7 @@ def schedule_args(
         "raw_root": f"$var:f/{folder}/raw_root",
         "lake_root": f"$var:f/{folder}/lake_root",
         "dashboard_output_root": f"$var:f/{folder}/dashboard_output_root",
+        "public_base_url": f"$var:f/{folder}/public_base_url",
         "automq_bootstrap_servers": f"$var:f/{folder}/kafka_bootstrap_servers",
         "kafka_security_protocol": "SASL_PLAINTEXT",
         "kafka_sasl_mechanism": "SCRAM-SHA-256",

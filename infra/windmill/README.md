@@ -141,6 +141,7 @@ AWS_REGION=eu-west-3
 AWS_DEFAULT_REGION=eu-west-3
 COMPUTE_BAZAAR_RAW_ROOT=s3://YOUR_BUCKET/raw
 COMPUTE_BAZAAR_LAKE_ROOT=s3://YOUR_BUCKET/lake
+COMPUTE_BAZAAR_PUBLIC_BASE_URL=https://bazaar.adamsioud.com
 COMPUTE_BAZAAR_KAFKA_BOOTSTRAP_SERVERS=...
 COMPUTE_BAZAAR_KAFKA_SECURITY_PROTOCOL=SASL_PLAINTEXT
 COMPUTE_BAZAAR_KAFKA_SASL_MECHANISM=SCRAM-SHA-256
@@ -223,6 +224,7 @@ Suggested schedule args, using Windmill variables/secrets:
   "raw_root": "$var:f/compute-bazaar/raw_root",
   "lake_root": "$var:f/compute-bazaar/lake_root",
   "dashboard_output_root": "$var:f/compute-bazaar/dashboard_output_root",
+  "public_base_url": "$var:f/compute-bazaar/public_base_url",
   "automq_bootstrap_servers": "$var:f/compute-bazaar/kafka_bootstrap_servers",
   "kafka_security_protocol": "SASL_PLAINTEXT",
   "kafka_sasl_mechanism": "SCRAM-SHA-256",

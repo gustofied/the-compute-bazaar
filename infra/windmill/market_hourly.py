@@ -33,6 +33,7 @@ def main(
     raw_root: str | None = None,
     lake_root: str | None = None,
     dashboard_output_root: str = "data/dashboard/compute-bazaar",
+    public_base_url: str | None = None,
     automq_bootstrap_servers: str | None = None,
     kafka_security_protocol: str | None = None,
     kafka_sasl_mechanism: str | None = None,
@@ -66,6 +67,7 @@ def main(
     _set_env_if_present(env, "VERDA_CLIENT_SECRET", verda_client_secret)
     _set_env_if_present(env, "COMPUTE_BAZAAR_RAW_ROOT", raw_root)
     _set_env_if_present(env, "COMPUTE_BAZAAR_LAKE_ROOT", lake_root)
+    _set_env_if_present(env, "COMPUTE_BAZAAR_PUBLIC_BASE_URL", public_base_url)
     _set_env_if_present(
         env, "COMPUTE_BAZAAR_KAFKA_BOOTSTRAP_SERVERS", automq_bootstrap_servers
     )

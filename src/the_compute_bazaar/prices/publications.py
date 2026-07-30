@@ -20,7 +20,7 @@ from .storage import write_bytes, write_json
 PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v2"
 PUBLICATION_PATH_VERSION = "v2"
 PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630"
-DEFAULT_PUBLIC_DATA_BASE_URL = "https://d3n0n6h709c83f.cloudfront.net"
+DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
 DEFAULT_ARTICLE_URL = (
     "https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html"
 )
@@ -48,16 +48,16 @@ def publish_gpu_benchmark_publications(
         or DEFAULT_PUBLIC_DATA_BASE_URL
     ).rstrip("/")
     live_article = (
-        article_url
-        or os.getenv("COMPUTE_BAZAAR_ARTICLE_URL")
-        or DEFAULT_ARTICLE_URL
+        article_url or os.getenv("COMPUTE_BAZAAR_ARTICLE_URL") or DEFAULT_ARTICLE_URL
     )
     normalized_cards = {
-        family: cards[family]
-        for family in GPU_FAMILIES
-        if family in cards
+        family: cards[family] for family in GPU_FAMILIES if family in cards
     }
-    revision = _publication_revision(normalized_cards)
+    revision = _publication_revision(
+        normalized_cards,
+        public_base_url=public_base,
+        article_url=live_article,
+    )
     publication_rows: list[dict[str, Any]] = []
 
     for family, card in normalized_cards.items():
@@ -304,10 +304,7 @@ def render_gpu_benchmark_publication(
     axes.set_axisbelow(True)
     all_rows = [row for rows in series.values() for row in rows]
     if all_rows:
-        maximum = max(
-            max(row["value"], row["upper"])
-            for row in all_rows
-        )
+        maximum = max(max(row["value"], row["upper"]) for row in all_rows)
         axes.set_ylim(0, max(maximum * 1.08, 1))
         for family in GPU_FAMILIES:
             rows = series.get(family, [])
@@ -441,11 +438,7 @@ def _gpu_publication_metadata(
     card = cards[selected_family]
     coverage = card.get("coverage") or {}
     value = _format_usd(latest["value"]) if latest else "pending"
-    observed_at = (
-        latest["date"].isoformat()
-        if latest
-        else str(card.get("as_of") or "")
-    )
+    observed_at = latest["date"].isoformat() if latest else str(card.get("as_of") or "")
     provider_count = int(coverage.get("provider_count") or 0)
     title = f"{selected_family} GPU Price Index - {value} / GPU-hour"
     description = (
@@ -615,18 +608,19 @@ def _visible_gpu_series(
     }
 
 
-def _publication_revision(cards: Mapping[str, Mapping[str, Any]]) -> str:
+def _publication_revision(
+    cards: Mapping[str, Mapping[str, Any]],
+    *,
+    public_base_url: str,
+    article_url: str,
+) -> str:
     latest_run_id = ""
     for family in GPU_FAMILIES:
         rows = (cards.get(family) or {}).get("series") or []
         if rows and isinstance(rows[-1], Mapping):
             latest_run_id = str(rows[-1].get("run_id") or latest_run_id)
     canonical_cards = {
-        family: {
-            key: value
-            for key, value in card.items()
-            if key != "publication"
-        }
+        family: {key: value for key, value in card.items() if key != "publication"}
         for family, card in cards.items()
     }
     publication_material = {
@@ -635,6 +629,8 @@ def _publication_revision(cards: Mapping[str, Mapping[str, Any]]) -> str:
         "render_profile": PUBLICATION_RENDER_PROFILE,
         "image_width": IMAGE_WIDTH,
         "image_height": IMAGE_HEIGHT,
+        "public_base_url": public_base_url,
+        "article_url": article_url,
         "cards": canonical_cards,
     }
     canonical = json.dumps(
@@ -650,9 +646,7 @@ def _publication_revision(cards: Mapping[str, Mapping[str, Any]]) -> str:
 
 def _latest_card_timestamp(cards: Mapping[str, Mapping[str, Any]]) -> str:
     timestamps = [
-        str(card.get("as_of") or "")
-        for card in cards.values()
-        if card.get("as_of")
+        str(card.get("as_of") or "") for card in cards.values() if card.get("as_of")
     ]
     return max(timestamps, default="")
 

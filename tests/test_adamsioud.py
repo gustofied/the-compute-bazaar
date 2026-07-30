@@ -171,15 +171,15 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertNotIn("story-index-detail__header", article)
         self.assertNotIn(">Front<", article.replace("\n", ""))
         self.assertIn(
-            "https://d3n0n6h709c83f.cloudfront.net/gpu-benchmark/h100.json",
+            "https://bazaar.adamsioud.com/gpu-benchmark/h100.json",
             article,
         )
         self.assertIn(
-            "https://d3n0n6h709c83f.cloudfront.net/sandbox/rates.json",
+            "https://bazaar.adamsioud.com/sandbox/rates.json",
             article,
         )
         self.assertIn(
-            "https://d3n0n6h709c83f.cloudfront.net/sandbox/relative.json",
+            "https://bazaar.adamsioud.com/sandbox/relative.json",
             article,
         )
         self.assertIn("data-workload-history-summary", article)

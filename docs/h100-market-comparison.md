@@ -6,7 +6,7 @@ match.
 
 | Source | H100 price | Update basis | Checked |
 | --- | ---: | --- | --- |
-| [Compute Bazaar](https://d3n0n6h709c83f.cloudfront.net/featured-benchmarks.json) | latest hourly value | prices collected from marketplaces and official provider pages | hourly |
+| [Compute Bazaar](https://bazaar.adamsioud.com/featured-benchmarks.json) | latest hourly value | prices collected from marketplaces and official provider pages | hourly |
 | [Ornn](https://ornn.com/) | $1.80-$1.90 | live traded spot prices | 24 Jul 2026 |
 | [Silicon Data](https://www.silicondata.com/products/silicon-index) | $2.70 | daily neo-cloud price | 22 Jul 2026 |
 | [Compute Desk](https://x.com/computedesk) | $2.42 | annual-rate snapshot shared on 17 Jun 2026 | 17 Jun 2026 |

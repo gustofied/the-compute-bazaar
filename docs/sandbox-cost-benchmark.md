@@ -922,7 +922,7 @@ The same check is available locally:
 
 ```sh
 uv run sandbox-cost check-public \
-  --url https://d3n0n6h709c83f.cloudfront.net/sandbox-cost.json \
+  --url https://bazaar.adamsioud.com/sandbox-cost.json \
   --max-age-hours 2.5
 ```
 

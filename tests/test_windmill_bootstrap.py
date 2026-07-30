@@ -10,7 +10,11 @@ WINDMILL_DIR = Path(__file__).parents[1] / "infra" / "windmill"
 sys.path.insert(0, str(WINDMILL_DIR))
 
 from bootstrap_provider_schedule import WindmillClient  # noqa: E402
+from bootstrap_market_schedule import (  # noqa: E402
+    schedule_args as market_schedule_args,
+)
 from bootstrap_sandbox_benchmark_schedule import schedule_args  # noqa: E402
+import market_hourly  # noqa: E402
 import sandbox_benchmark_daily  # noqa: E402
 
 
@@ -59,13 +63,42 @@ class WindmillScheduleTests(unittest.TestCase):
             args,
             {
                 "source_repository": (
-                    "$var:f/compute-bazaar/"
-                    "sandbox_benchmark_source_repository"
+                    "$var:f/compute-bazaar/sandbox_benchmark_source_repository"
                 ),
                 "source_ref": "main",
                 "lake_root": "$var:f/compute-bazaar/lake_root",
                 "aws_region": "eu-west-3",
             },
+        )
+
+    def test_market_schedule_passes_canonical_public_base_variable(self) -> None:
+        args = market_schedule_args(
+            "compute-bazaar",
+            dashboard_limit=100,
+            lium_size=200,
+            lium_max_pages=10,
+            lium_paginate=True,
+        )
+
+        self.assertEqual(
+            args["public_base_url"],
+            "$var:f/compute-bazaar/public_base_url",
+        )
+
+    def test_market_script_exports_public_base_to_cli_environment(self) -> None:
+        completed = SimpleNamespace(stdout="{}")
+        with patch.object(
+            market_hourly.subprocess,
+            "run",
+            return_value=completed,
+        ) as run:
+            market_hourly.main(
+                public_base_url="https://bazaar.adamsioud.com",
+            )
+
+        self.assertEqual(
+            run.call_args.kwargs["env"]["COMPUTE_BAZAAR_PUBLIC_BASE_URL"],
+            "https://bazaar.adamsioud.com",
         )
 
     def test_daily_script_publishes_operational_source(self) -> None:
