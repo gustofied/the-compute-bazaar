@@ -210,3 +210,54 @@ was retained. The unused v4 worker image was removed without pruning active
 containers or Docker volumes.
 
 Old publication URLs remain immutable and valid. They are not rewritten.
+
+## Unified Publication Rollout
+
+The final publication implementation was deployed from:
+
+```text
+Compute Bazaar commit: 7f1b6f4
+AdamSioud commit: 570499d
+worker image: compute-bazaar-windmill-worker:2026-07-30-unified-publications-v6
+worker image ID: sha256:46b67ca2120ca0aedf2d832a0a30c252d2b37b23ca2cabc2433392c9140dffb6
+Windmill job: 019fb39f-4990-5099-5437-033176db05bd
+market run: market-unified-publications-v6-20260730T1522
+gold run: gold-market-unified-publications-v6-20260730T1522
+dashboard export: dashboard-market-unified-publications-v6-20260730T1522
+```
+
+The job completed successfully with an overall `warning`: seventeen provider
+inputs succeeded and one provider input failed. Gold tables, card contracts,
+publication wrappers, and public images were still produced. The warning is
+retained because a publication should not imply complete provider coverage
+when one source was unavailable.
+
+The deployed payload now includes publication contracts for:
+
+- all four GPU families and each 1-day, 7-day, and retained-history view;
+- the fixed-cohort sandbox hourly-rate view;
+- both measured sandbox workload views, estimated cost and runtime;
+- GPU, VM, and sandbox relative-rate views for 1 day, 7 days, and retained
+  history.
+
+Fresh production checks confirmed that every publication wrapper has
+Open Graph and X metadata, a 1200-by-630 PNG, and an exact browser handoff to
+the polished standalone card. The following representative objects were
+checked end to end:
+
+```text
+https://bazaar.adamsioud.com/publications/gpu-index/b200/7-day/2026-07-30-1505-utc-e8769f9e26
+https://bazaar.adamsioud.com/publications/sandbox-cost/rates/hourly-rate/2026-07-24-0000-utc-9f22c066fe
+https://bazaar.adamsioud.com/publications/relative-prices/gpu/7-day/2026-07-30-1505-utc-9f22c066fe
+```
+
+All three opened their matching `view=share&present=card` state with no
+horizontal overflow or console errors. Their quiet publication labels also
+matched the Gold payload. The full repository suite now passes 107 tests, and
+the changed Python files pass Ruff.
+
+Publication URLs are content revisions rather than aliases. A URL created
+before the live-handoff implementation continues to show its original frozen
+page. It is deliberately not mutated into a different historical artifact.
+The current card payload always points Share at the newest publication
+contract for the selected state.
