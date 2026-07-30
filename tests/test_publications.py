@@ -10,6 +10,7 @@ from the_compute_bazaar.prices.publications import (
     IMAGE_WIDTH,
     PUBLICATION_SCHEMA_VERSION,
     publish_gpu_benchmark_publications,
+    publish_sandbox_market_publications,
     render_gpu_benchmark_publication,
 )
 from the_compute_bazaar.publication_contract import (
@@ -107,6 +108,11 @@ class GpuPublicationTests(unittest.TestCase):
                 html,
             )
             self.assertIn("Open interactive card", html)
+            self.assertIn("window.location.replace(", html)
+            self.assertIn(
+                "card=gpu-index&view=share&present=card&gpu=H100&range=all",
+                html,
+            )
             self.assertNotIn("s3://", html)
 
             png = image.read_bytes()
@@ -211,6 +217,84 @@ class GpuPublicationTests(unittest.TestCase):
         )
 
 
+class SandboxPublicationTests(unittest.TestCase):
+    def test_publish_creates_preview_wrappers_for_every_live_card_state(
+        self,
+    ) -> None:
+        rates, workload, relative = _sandbox_cards()
+
+        with TemporaryDirectory() as temporary_directory:
+            result = publish_sandbox_market_publications(
+                output_root=temporary_directory,
+                rates_card=rates,
+                workload_card=workload,
+                relative_card=relative,
+                public_base_url="https://data.example.test",
+                article_url="https://example.test/compute.html",
+            )
+            repeated = publish_sandbox_market_publications(
+                output_root=temporary_directory,
+                rates_card=rates,
+                workload_card=workload,
+                relative_card=relative,
+                public_base_url="https://data.example.test",
+                article_url="https://example.test/compute.html",
+            )
+            rate_publication = rates["publication"]["states"]["rates"]
+            workload_publication = workload["publication"]["states"]["cost"]
+            relative_publication = relative["publication"]["states"]["gpu:7d"]
+
+            self.assertEqual(result["publication_count"], 12)
+            self.assertEqual(repeated["revision"], result["revision"])
+            self.assertEqual(
+                rates["publication"]["kind"],
+                "crawler_preview_live_handoff",
+            )
+            self.assertIn(
+                "/publications/sandbox-cost/rates/hourly-rate/",
+                rate_publication["url"],
+            )
+            self.assertIn(
+                "?card=sandbox-cost&view=share&present=card&sandbox=rates",
+                rate_publication["live_url"],
+            )
+            self.assertIn(
+                "Sandbox / public hourly rate", rate_publication["display_line"]
+            )
+            self.assertIn(
+                "?card=sandbox-cost&view=share&present=card"
+                "&sandbox=workload&measure=cost",
+                workload_publication["live_url"],
+            )
+            self.assertIn(
+                "?card=relative-prices&view=share&present=card"
+                "&relativeRange=7d&relativeBand=gpu",
+                relative_publication["live_url"],
+            )
+            self.assertEqual(
+                relative_publication["change_label"],
+                "Up 6.9% over 7 days",
+            )
+            self.assertFalse(rate_publication["url"].endswith(".html"))
+
+            relative_page = (
+                Path(temporary_directory)
+                / relative_publication["url"].split("https://data.example.test/", 1)[1]
+            ).with_suffix(".html")
+            html = relative_page.read_text(encoding="utf-8")
+            self.assertIn(
+                '<meta name="twitter:card" content="summary_large_image">',
+                html,
+            )
+            self.assertIn("window.location.replace(", html)
+            self.assertIn(relative_publication["live_url"].replace("&", "&amp;"), html)
+
+            image = relative_page.with_suffix(".png")
+            png = image.read_bytes()
+            width, height = struct.unpack(">II", png[16:24])
+            self.assertEqual((width, height), (IMAGE_WIDTH, IMAGE_HEIGHT))
+
+
 def _cards() -> dict[str, dict[str, object]]:
     start = datetime(2026, 7, 20, tzinfo=timezone.utc)
     cards: dict[str, dict[str, object]] = {}
@@ -242,6 +326,85 @@ def _cards() -> dict[str, dict[str, object]]:
             },
         }
     return cards
+
+
+def _sandbox_cards() -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    start = datetime(2026, 7, 20, 14, 5, tzinfo=timezone.utc)
+    rate_rows = [
+        {
+            "observed_date": (start + timedelta(days=index)).isoformat(),
+            "median_usd_per_hour": 0.08 + index * 0.002,
+            "p25_usd_per_hour": 0.06 + index * 0.001,
+            "p75_usd_per_hour": 0.11 + index * 0.003,
+        }
+        for index in range(10)
+    ]
+    rates: dict[str, object] = {
+        "schema_version": "compute_bazaar_card_v1",
+        "card_type": "compute_rate_market",
+        "card_id": "sandbox:rates",
+        "as_of": rate_rows[-1]["observed_date"],
+        "series": {"sandbox": rate_rows, "vm": [], "combined": []},
+        "headline": {"sandbox_median": rate_rows[-1]["median_usd_per_hour"]},
+    }
+    workload: dict[str, object] = {
+        "schema_version": "compute_bazaar_card_v1",
+        "card_type": "sandbox_workload",
+        "card_id": "sandbox:workload",
+        "as_of": (start + timedelta(days=9)).isoformat(),
+        "headline": {
+            "median_estimated_cost_usd": 0.031,
+            "median_runtime_seconds": 184.0,
+            "observed_at": (start + timedelta(days=9)).isoformat(),
+        },
+        "series": [],
+        "data": {
+            "workload": {
+                "service_summary": [
+                    {
+                        "series_id": f"sandbox-{index}",
+                        "median_estimated_cost_usd": 0.02 + index * 0.004,
+                        "p25_estimated_cost_usd": 0.018 + index * 0.003,
+                        "p75_estimated_cost_usd": 0.024 + index * 0.005,
+                        "median_runtime_seconds": 150 + index * 20,
+                        "p25_runtime_seconds": 140 + index * 18,
+                        "p75_runtime_seconds": 165 + index * 22,
+                    }
+                    for index in range(6)
+                ]
+            }
+        },
+    }
+    relative_rows = []
+    for index in range(10):
+        observed_at = start + timedelta(days=index)
+        relative_rows.append(
+            {
+                "observed_at": observed_at.isoformat(),
+                "common_start_at": start.isoformat(),
+                "gpu_base_100": 100 + index,
+                "gpu_p25_base_100": 98 + index,
+                "gpu_p75_base_100": 102 + index,
+                "vm_base_100": 100 + index * 0.25,
+                "vm_p25_base_100": 99 + index * 0.2,
+                "vm_p75_base_100": 101 + index * 0.3,
+                "sandbox_base_100": 100 + index * 0.1,
+                "sandbox_p25_base_100": 99 + index * 0.05,
+                "sandbox_p75_base_100": 101 + index * 0.15,
+            }
+        )
+    relative: dict[str, object] = {
+        "schema_version": "compute_bazaar_card_v1",
+        "card_type": "compute_relative_prices",
+        "card_id": "market:relative-prices",
+        "as_of": relative_rows[-1]["observed_at"],
+        "series": relative_rows,
+    }
+    return rates, workload, relative
 
 
 if __name__ == "__main__":

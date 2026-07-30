@@ -16,6 +16,9 @@ from the_compute_bazaar.prices.public_views import (
     sandbox_relative_view,
     sandbox_workload_view,
 )
+from the_compute_bazaar.prices.publications import (
+    publish_sandbox_market_publications,
+)
 from the_compute_bazaar.prices.storage import (
     exclusive_lease,
     read_bytes,
@@ -2283,18 +2286,32 @@ order by series_order, observed_date, point_order
             vm_sandbox_comparison=vm_sandbox_comparison,
             utilization_ladder=utilization_ladder,
         )
+        rates_card = sandbox_rate_view(public_payload)
+        workload_card = sandbox_workload_view(public_payload)
+        relative_card = sandbox_relative_view(public_payload)
+        sandbox_publications = publish_sandbox_market_publications(
+            output_root=dashboard_output_root,
+            rates_card=rates_card,
+            workload_card=workload_card,
+            relative_card=relative_card,
+        )
+        public_payload["publications"] = {
+            "manifest_ref": sandbox_publications["manifest_ref"],
+            "revision": sandbox_publications["revision"],
+            "publication_count": sandbox_publications["publication_count"],
+        }
         write_json(public_ref, public_payload)
         write_json(
             _join(dashboard_output_root, "sandbox/rates.json"),
-            sandbox_rate_view(public_payload),
+            rates_card,
         )
         write_json(
             _join(dashboard_output_root, "sandbox/workload.json"),
-            sandbox_workload_view(public_payload),
+            workload_card,
         )
         write_json(
             _join(dashboard_output_root, "sandbox/relative.json"),
-            sandbox_relative_view(public_payload),
+            relative_card,
         )
 
     return SandboxCostBuild(

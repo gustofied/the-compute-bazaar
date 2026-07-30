@@ -246,6 +246,22 @@ A scoped viewer-request function maps that request to the corresponding
 `REVISION.html` object. It does not rewrite publication images, JSON objects,
 legacy `.html` links, or any route outside `/publications/`.
 
+The same publication contract is used by the three public card families:
+
+```text
+publications/gpu-index/{gpu}/{range}/{revision}
+publications/sandbox-cost/{view}/{measure}/{revision}
+publications/relative-prices/{series}/{range}/{revision}
+```
+
+Each immutable page contains Open Graph and X metadata plus a frozen
+1200-by-630 image. Social crawlers do not execute the page script, so they
+retain that metadata and image. A human browser is immediately handed to the
+matching `view=share&present=card` state in the main article. The Share control
+therefore copies one URL that has both a rich social preview and the polished
+interactive landing state. The public card JSON stores the publication URL,
+image URL, live URL, and compact display line for every supported state.
+
 The Terraform stack can output the bucket policy statement without applying it. Keep
 `manage_bucket_policy = false` when the bucket policy is already managed by hand, then merge the
 `bucket_policy_json` output manually. Set it to `true` only when Terraform should own the whole

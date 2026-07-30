@@ -106,6 +106,35 @@ The frozen 1200-by-630 GPU social image was rendered separately and inspected.
 It contains the selected GPU value, four contextual price paths, provider range,
 observation time, range label, and no terminal red dot.
 
+## Unified Share Link Contract
+
+The first Share implementation exposed two incomplete paths:
+
+- the immutable `bazaar.adamsioud.com/publications/...` object produced a rich
+  social preview but landed on the frozen fallback page;
+- the direct AdamSioud article query opened the polished standalone Share card
+  but could not publish per-state Open Graph metadata from static HTML.
+
+The publication wrapper now owns both jobs. It retains crawler-readable Open
+Graph and X tags and a frozen 1200-by-630 PNG, then uses
+`window.location.replace(...)` to hand a human browser to the exact
+`view=share&present=card` article state. Social crawlers do not execute that
+handoff. The canonical publication URL remains immutable and continues to
+identify the observation, view, and content revision.
+
+GPU, Sandbox Cost, and Relative Rate Movement now use the same contract. Their
+public card payloads expose one publication object per selectable state, and
+all three Share controls copy that immutable URL. A quiet line below the card
+keeps the selected subject, range or measure, change, and observation time
+visible. For example:
+
+```text
+B200 / 7 days / up 44.5% over 7 days / observed 30 Jul 2026, 14:05 UTC
+```
+
+The copy confirmation is temporary; the state description returns after it.
+The frontend does not calculate publication values or revisions.
+
 ## Verification Commands
 
 ```bash
