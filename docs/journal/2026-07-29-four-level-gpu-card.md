@@ -611,3 +611,48 @@ schema version are included in the publication revision hash. This is
 important operationally: X caches publication cards aggressively, so a
 renderer fix must generate a new immutable URL instead of mutating the old
 cached page.
+
+The production worker was rebuilt as:
+
+```text
+compute-bazaar-windmill-worker:2026-07-30-x-card-v2
+image sha256:332adbca2475297e37286d5f7bf0fab59a04e6869ed72d77f2c4f846121ce056
+```
+
+Only `windmill_worker` was recreated. The regular 00:00 UTC market heartbeat
+was already running on the new image, so the redundant one-off verification
+job was canceled before it started. The scheduled job completed successfully:
+
+```text
+Windmill job     019fb030-02f7-50d8-ec99-f6b57688aa04
+duration         548,222 ms
+gold run         gold-market-20260730T000000-32bb57e9
+dashboard export ok
+publication      compute_bazaar_publication_v2
+```
+
+`cloud_gpu_prices` returned an upstream warning during this market run. Core
+provider ingestion, Gold construction, dashboard export, and publication
+generation succeeded.
+
+The first verified H100 1D v2 publication is:
+
+```text
+https://d3n0n6h709c83f.cloudfront.net/publications/gpu-index/v2/h100/1d/gold-market-20260730t000000-32bb57e9-4aedfd60c9.html
+```
+
+Production verification with `Twitterbot/1.0`:
+
+```text
+HTML status/content type                                  200 / text/html
+PNG status/content type                                   200 / image/png
+Twitter card                                              summary_large_image
+twitter:url                                               exact canonical URL
+image dimensions                                          1200 x 630
+image mode                                                RGB
+image size                                                46,717 bytes
+public H100 Gold card                                     v2 URL present
+```
+
+The old v1 URL remains immutable and may remain cached by X without an image.
+External verification must use the new v2 URL.
