@@ -236,6 +236,16 @@ https://DISTRIBUTION.cloudfront.net/featured-benchmarks.json
 https://DISTRIBUTION.cloudfront.net/sandbox-cost.json
 ```
 
+Canonical publication pages omit the storage extension:
+
+```text
+https://bazaar.adamsioud.com/publications/gpu-index/h100/1-day/REVISION
+```
+
+A scoped viewer-request function maps that request to the corresponding
+`REVISION.html` object. It does not rewrite publication images, JSON objects,
+legacy `.html` links, or any route outside `/publications/`.
+
 The Terraform stack can output the bucket policy statement without applying it. Keep
 `manage_bucket_policy = false` when the bucket policy is already managed by hand, then merge the
 `bucket_policy_json` output manually. Set it to `true` only when Terraform should own the whole

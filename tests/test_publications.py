@@ -56,7 +56,7 @@ class GpuPublicationTests(unittest.TestCase):
             self.assertEqual(
                 h100_all["url"],
                 "https://data.example.test/publications/gpu-index/"
-                f"h100/full-history/{result['revision']}.html",
+                f"h100/full-history/{result['revision']}",
             )
             self.assertEqual(
                 cards["H100"]["publication"]["schema_version"],
@@ -75,6 +75,7 @@ class GpuPublicationTests(unittest.TestCase):
             self.assertEqual(h100_all["change_direction"], "up")
             self.assertNotIn("/v2/", h100_all["url"])
             self.assertNotIn("gold-market", h100_all["url"])
+            self.assertFalse(h100_all["url"].endswith(".html"))
             self.assertRegex(
                 result["revision"],
                 r"^2026-07-29-0000-utc-[a-f0-9]{10}$",
@@ -192,9 +193,18 @@ class GpuPublicationTests(unittest.TestCase):
         )
 
         self.assertEqual(
+            route.public_path,
+            "publications/compute-deal/h100-eu-west/signed-terms/"
+            "2026-07-30-0400-utc-abcdef1234",
+        )
+        self.assertEqual(
             route.page_path,
             "publications/compute-deal/h100-eu-west/signed-terms/"
             "2026-07-30-0400-utc-abcdef1234.html",
+        )
+        self.assertEqual(
+            route.as_dict()["page_object_path"],
+            route.page_path,
         )
         self.assertEqual(
             route.publication_id,

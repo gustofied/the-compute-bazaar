@@ -16,6 +16,17 @@ https://DISTRIBUTION.cloudfront.net/manifest.json
 https://DISTRIBUTION.cloudfront.net/latest-index.json
 ```
 
+Frozen publication pages use extensionless canonical URLs:
+
+```text
+https://bazaar.adamsioud.com/publications/gpu-index/b200/1-day/REVISION
+```
+
+The distribution's viewer-request function appends `.html` only when fetching
+an extensionless path below `/publications/`. S3 continues to store the
+immutable object as `REVISION.html`; existing `.html`, `.png`, JSON, and legacy
+publication URLs are not rewritten.
+
 ## Apply
 
 Copy the example vars and fill in the bucket:

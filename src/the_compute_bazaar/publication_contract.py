@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
-PUBLICATION_ROUTE_SCHEMA_VERSION = "compute_bazaar_publication_route_v1"
+PUBLICATION_ROUTE_SCHEMA_VERSION = "compute_bazaar_publication_route_v2"
 _SEGMENT_PATTERN = re.compile(r"[^a-z0-9]+")
 
 
@@ -69,7 +69,13 @@ class PublicationRoute:
         )
 
     @property
+    def public_path(self) -> str:
+        """Return the canonical extensionless path exposed through CloudFront."""
+        return self.prefix
+
+    @property
     def page_path(self) -> str:
+        """Return the physical HTML object path stored in S3."""
         return f"{self.prefix}.html"
 
     @property
@@ -84,6 +90,9 @@ class PublicationRoute:
             "view_id": self.view_id,
             "revision": self.revision,
             "publication_id": self.publication_id,
+            "public_path": self.public_path,
+            "page_object_path": self.page_path,
+            "image_path": self.image_path,
         }
 
 

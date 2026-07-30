@@ -113,13 +113,13 @@ pipeline run. Neither helped a reader understand the shared object. Newly
 generated links now use the shared publication route contract:
 
 ```text
-publications/{card}/{subject}/{view}/{observed-at}-{content-digest}.html
+publications/{card}/{subject}/{view}/{observed-at}-{content-digest}
 ```
 
 The GPU example is:
 
 ```text
-publications/gpu-index/b200/1-day/2026-07-30-0505-utc-c12a9c8572.html
+publications/gpu-index/b200/1-day/2026-07-30-0505-utc-c12a9c8572
 ```
 
 The corresponding payload record names the GPU, selected range, displayed
@@ -132,6 +132,11 @@ The route builder is card-neutral. Future sandbox, relative-price, activity,
 and compute-deal publications can provide their own card, subject, and view
 segments while retaining the same immutable timestamp-plus-digest rule. Old
 `v2` objects remain untouched and valid.
+
+The route contract now distinguishes the extensionless canonical path from the
+physical `.html` object path. A CloudFront viewer-request function appends
+`.html` internally only for extensionless paths below `/publications/`. PNG,
+JSON, existing `.html`, and legacy `v2` requests pass through unchanged.
 
 ### Production rollout
 
@@ -180,6 +185,59 @@ Verification for this rollout:
 
 The temporary local SSH tunnel was closed after verification, and the
 single-IP TCP/22 security-group rule added for this deployment was revoked.
+
+### Extensionless canonical URLs
+
+Publications now advertise an extensionless canonical URL while retaining the
+immutable `.html` object in S3. Terraform created and published:
+
+```text
+compute-bazaar-dashboard-publication-rewrite
+```
+
+and associated it with CloudFront distribution `EG24LY105UXSE` at
+`viewer-request`. The function rewrites only extensionless paths beginning
+with `/publications/`; existing `.html`, `.png`, JSON, and legacy requests pass
+through unchanged.
+
+The worker rollout used:
+
+```text
+compute-bazaar-windmill-worker:2026-07-30-extensionless-publications-v4
+sha256:19bdf390842856331a3911f57aa85adbdfd1e3fb61398898b092893421eb4b5a
+```
+
+The end-to-end smoke run was:
+
+```text
+market-extensionless-publications-v4-20260730T0615
+```
+
+Seventeen providers completed. Cloud GPU Prices timed out upstream, so the
+market run correctly retained `warning` status; Gold, sandbox cost, dashboard
+export, and publication generation all completed. The publication manifest
+uses `compute_bazaar_publication_v4` and route contract
+`compute_bazaar_publication_route_v2`.
+
+The checked canonical page is:
+
+```text
+https://bazaar.adamsioud.com/publications/gpu-index/b200/1-day/2026-07-30-0605-utc-93f925c276
+```
+
+Production checks confirmed:
+
+- the extensionless URL returns HTTP 200 as `text/html`;
+- the direct `.html` object URL still returns HTTP 200;
+- the `.png` URL still returns HTTP 200 as `image/png`;
+- the older `v2`/run-ID URL still returns HTTP 200;
+- canonical, Open Graph, and X URL metadata use the extensionless URL;
+- the rendered page has no horizontal overflow, warnings, or console errors;
+- all 106 Python tests, focused Ruff checks, Terraform validation, four rewrite
+  cases, and `git diff --check` pass.
+
+The temporary deployment tunnel and one-address TCP/22 rule were removed after
+verification.
 
 ## Next Refresh
 

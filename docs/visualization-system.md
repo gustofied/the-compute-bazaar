@@ -247,13 +247,13 @@ publication pages remain a later extension of the same contract.
 Publication URLs follow one shared card-neutral route:
 
 ```text
-/publications/{card}/{subject}/{view}/{observed-at}-{content-digest}.html
+/publications/{card}/{subject}/{view}/{observed-at}-{content-digest}
 ```
 
 For example:
 
 ```text
-/publications/gpu-index/b200/1-day/2026-07-30-0505-utc-c12a9c8572.html
+/publications/gpu-index/b200/1-day/2026-07-30-0505-utc-c12a9c8572
 ```
 
 The path is readable without giving up immutability. `card` identifies the
@@ -263,6 +263,10 @@ underlying observation was current; the short digest distinguishes different
 content or rendering methods at the same observation time. Publication schema
 versions belong in the manifest and payload metadata rather than the public
 path.
+
+The canonical URL is extensionless. CloudFront maps it internally to the
+immutable `.html` object in S3. The image remains a directly addressed `.png`,
+and previously published `.html` links remain valid.
 
 Every publication record also carries structured `card_id`, `subject`, `view`,
 `value`, `change_pct`, `change_label`, and `publication_id` fields. Future

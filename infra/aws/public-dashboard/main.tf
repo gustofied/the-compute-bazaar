@@ -122,6 +122,14 @@ resource "aws_cloudfront_response_headers_policy" "dashboard_cors" {
   }
 }
 
+resource "aws_cloudfront_function" "publication_request_rewrite" {
+  name    = "${var.name}-publication-rewrite"
+  runtime = "cloudfront-js-2.0"
+  comment = "Resolve extensionless Compute Bazaar publication URLs to S3 HTML objects"
+  publish = true
+  code    = file("${path.module}/publication-request-rewrite.js")
+}
+
 resource "aws_cloudfront_distribution" "dashboard" {
   enabled         = true
   is_ipv6_enabled = true
@@ -144,6 +152,11 @@ resource "aws_cloudfront_distribution" "dashboard" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.dashboard_cors.id
     target_origin_id           = local.origin_id
     viewer_protocol_policy     = "redirect-to-https"
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.publication_request_rewrite.arn
+    }
   }
 
   restrictions {

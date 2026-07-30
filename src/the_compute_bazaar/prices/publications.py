@@ -20,7 +20,7 @@ from ..publication_contract import (
 from .storage import write_bytes, write_json
 
 
-PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v3"
+PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v4"
 PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630"
 DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
 DEFAULT_ARTICLE_URL = (
@@ -100,7 +100,7 @@ def publish_gpu_benchmark_publications(
             image_path = route.image_path
             page_ref = _join(output_root, page_path)
             image_ref = _join(output_root, image_path)
-            page_url = f"{public_base}/{page_path}"
+            page_url = f"{public_base}/{route.public_path}"
             image_url = f"{public_base}/{image_path}"
             live_url = _live_gpu_url(
                 article_url=live_article,
