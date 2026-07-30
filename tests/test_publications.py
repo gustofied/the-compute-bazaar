@@ -81,7 +81,7 @@ class GpuPublicationTests(unittest.TestCase):
                 r"^2026-07-29-0000-utc-[a-f0-9]{10}$",
             )
             self.assertIn(
-                "?card=gpu-index&view=detail&gpu=H100&range=all",
+                "?card=gpu-index&view=share&present=card&gpu=H100&range=all",
                 h100_all["live_url"],
             )
             self.assertTrue(page.is_file())
@@ -99,15 +99,14 @@ class GpuPublicationTests(unittest.TestCase):
                 html,
             )
             self.assertIn(
-                "H100 GPU Price Index | $2.45/GPU-hour "
-                "| Up 22.5% since 20 Jul 2026",
+                "H100 GPU Price Index | $2.45/GPU-hour | Up 22.5% since 20 Jul 2026",
                 html,
             )
             self.assertIn(
                 "H100 / full retained history / up 22.5% since 20 jul 2026",
                 html,
             )
-            self.assertIn("Open live chart", html)
+            self.assertIn("Open interactive card", html)
             self.assertNotIn("s3://", html)
 
             png = image.read_bytes()
@@ -208,8 +207,7 @@ class GpuPublicationTests(unittest.TestCase):
         )
         self.assertEqual(
             route.publication_id,
-            "compute-deal:h100-eu-west:signed-terms:"
-            "2026-07-30-0400-utc-abcdef1234",
+            "compute-deal:h100-eu-west:signed-terms:2026-07-30-0400-utc-abcdef1234",
         )
 
 

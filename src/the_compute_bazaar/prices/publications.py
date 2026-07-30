@@ -20,7 +20,7 @@ from ..publication_contract import (
 from .storage import write_bytes, write_json
 
 
-PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v4"
+PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v5"
 PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630"
 DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
 DEFAULT_ARTICLE_URL = (
@@ -201,7 +201,7 @@ def render_gpu_benchmark_publication(
     selected_family: str,
     range_id: str,
 ) -> bytes:
-    """Render the same four-family market story as a static social image."""
+    """Render the selected benchmark with the other families as context."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
     from matplotlib.figure import Figure
@@ -215,14 +215,12 @@ def render_gpu_benchmark_publication(
     series = _visible_gpu_series(cards, range_id)
     selected_rows = series.get(selected_family, [])
     paper = "#f8f5eb"
-    linen = "#efede4"
     ink = "#142027"
     muted = "#5f6f76"
     selected_color = "#315f82"
     band_color = "#91aecb"
     coral = "#a96552"
     rule = "#a7b1b3"
-    pale = "#dbe5e9"
     family_colors = {
         "H100": "#587383",
         "H200": "#708690",
@@ -250,7 +248,7 @@ def render_gpu_benchmark_publication(
     figure.text(
         0.052,
         0.915,
-        "COMPUTE BAZAAR / GPU PRICE INDEX",
+        "GPU PRICE INDEX",
         color=muted,
         fontsize=13,
         fontweight=700,
@@ -267,88 +265,45 @@ def render_gpu_benchmark_publication(
         horizontalalignment="right",
     )
 
-    strip_left = 0.052
-    strip_bottom = 0.745
-    strip_width = 0.896
-    strip_height = 0.12
-    figure.patches.append(
-        Rectangle(
-            (strip_left, strip_bottom),
-            strip_width,
-            strip_height,
-            transform=figure.transFigure,
-            facecolor=linen,
-            edgecolor=rule,
-            linewidth=0.9,
-        )
+    selected_latest = selected_rows[-1] if selected_rows else None
+    change = _range_change(selected_rows, range_id)
+    figure.text(
+        0.052,
+        0.825,
+        selected_family,
+        color=selected_color,
+        fontsize=11,
+        fontweight=700,
+        family="sans-serif",
     )
-    quote_width = strip_width / len(GPU_FAMILIES)
-    for index, family in enumerate(GPU_FAMILIES):
-        left = strip_left + index * quote_width
-        is_selected = family == selected_family
-        if is_selected:
-            figure.patches.append(
-                Rectangle(
-                    (left, strip_bottom),
-                    quote_width,
-                    strip_height,
-                    transform=figure.transFigure,
-                    facecolor=pale,
-                    edgecolor="none",
-                )
-            )
-            figure.patches.append(
-                Rectangle(
-                    (left, strip_bottom + strip_height - 0.006),
-                    quote_width,
-                    0.006,
-                    transform=figure.transFigure,
-                    facecolor=selected_color,
-                    edgecolor="none",
-                )
-            )
-        if index:
-            figure.patches.append(
-                Rectangle(
-                    (left, strip_bottom + 0.02),
-                    0.0007,
-                    strip_height - 0.04,
-                    transform=figure.transFigure,
-                    facecolor=rule,
-                    edgecolor="none",
-                    alpha=0.7,
-                )
-            )
-        rows = series.get(family, [])
-        latest = rows[-1] if rows else None
-        figure.text(
-            left + 0.014,
-            strip_bottom + 0.083,
-            family,
-            color=selected_color if is_selected else muted,
-            fontsize=11,
-            fontweight=700 if is_selected else 400,
-            family="sans-serif",
-        )
-        figure.text(
-            left + 0.014,
-            strip_bottom + 0.027,
-            _format_usd(latest["value"]) if latest else "PENDING",
-            color=ink,
-            fontsize=25,
-            family="serif",
-        )
-        figure.text(
-            left + quote_width - 0.014,
-            strip_bottom + 0.03,
-            "USD / HR",
-            color=muted,
-            fontsize=7.5,
-            family="sans-serif",
-            horizontalalignment="right",
-        )
+    figure.text(
+        0.052,
+        0.748,
+        _format_usd(selected_latest["value"]) if selected_latest else "PENDING",
+        color=ink,
+        fontsize=36,
+        family="serif",
+    )
+    figure.text(
+        0.178,
+        0.755,
+        "USD / GPU-HOUR",
+        color=muted,
+        fontsize=8,
+        family="sans-serif",
+    )
+    figure.text(
+        0.948,
+        0.755,
+        str(change["label"]).upper(),
+        color=coral,
+        fontsize=9,
+        fontweight=700,
+        family="sans-serif",
+        horizontalalignment="right",
+    )
 
-    axes = figure.add_axes((0.052, 0.205, 0.896, 0.455), facecolor=paper)
+    axes = figure.add_axes((0.052, 0.19, 0.896, 0.47), facecolor=paper)
     axes.grid(axis="y", color=rule, alpha=0.28, linewidth=0.8)
     axes.set_axisbelow(True)
     all_rows = [row for rows in series.values() for row in rows]
@@ -384,17 +339,6 @@ def render_gpu_benchmark_publication(
                 solid_joinstyle="round",
                 zorder=4 if family == selected_family else 2,
             )
-        latest = selected_rows[-1] if selected_rows else None
-        if latest:
-            axes.scatter(
-                [latest["date"]],
-                [latest["value"]],
-                s=90,
-                facecolor=paper,
-                edgecolor=coral,
-                linewidth=2.8,
-                zorder=6,
-            )
         locator = AutoDateLocator(minticks=4, maxticks=6)
         axes.xaxis.set_major_locator(locator)
         axes.xaxis.set_major_formatter(ConciseDateFormatter(locator))
@@ -425,11 +369,10 @@ def render_gpu_benchmark_publication(
     for spine in axes.spines.values():
         spine.set_visible(False)
 
-    change = _range_change(selected_rows, range_id)
     figure.text(
         0.052,
         0.105,
-        f"{selected_family} SELECTED",
+        selected_family,
         color=selected_color,
         fontsize=11,
         fontweight=700,
@@ -438,10 +381,9 @@ def render_gpu_benchmark_publication(
     figure.text(
         0.5,
         0.105,
-        change["label"].upper(),
-        color=coral,
+        "OBSERVED PUBLIC MARKET PRICES",
+        color=muted,
         fontsize=10,
-        fontweight=700,
         family="sans-serif",
         horizontalalignment="center",
     )
@@ -613,13 +555,13 @@ def _publication_html(metadata: Mapping[str, Any]) -> str:
 </head>
 <body>
   <main>
-    <a class="preview" href="{live_url}" aria-label="Open the live chart">
+    <a class="preview" href="{live_url}" aria-label="Open the interactive card">
       <img src="{image_url}" width="{IMAGE_WIDTH}" height="{IMAGE_HEIGHT}" alt="{image_alt}">
     </a>
     <footer>
       <p>{family_id} / {range_label} / {change_label.lower()} / {observed_label.lower()}</p>
       <nav aria-label="Publication links">
-        <a href="{live_url}">Open live chart</a>
+        <a href="{live_url}">Open interactive card</a>
         <a href="{data_url}">Open data</a>
       </nav>
     </footer>
@@ -721,7 +663,8 @@ def _live_gpu_url(*, article_url: str, family: str, range_id: str) -> str:
     query = urlencode(
         {
             "card": "gpu-index",
-            "view": "detail",
+            "view": "share",
+            "present": "card",
             "gpu": family,
             "range": range_id,
         }
@@ -754,15 +697,9 @@ def _range_change(
         direction = "down"
         direction_label = f"Down {abs(rounded_change):.1f}%"
     if range_id == "all":
-        label = (
-            f"{direction_label} since "
-            f"{rows[0]['date'].strftime('%d %b %Y')}"
-        )
+        label = f"{direction_label} since {rows[0]['date'].strftime('%d %b %Y')}"
     else:
-        label = (
-            f"{direction_label} over "
-            f"{GPU_RANGE_PRESENTATION[range_id]['label']}"
-        )
+        label = f"{direction_label} over {GPU_RANGE_PRESENTATION[range_id]['label']}"
     return {
         "value": round(change, 6),
         "label": label,

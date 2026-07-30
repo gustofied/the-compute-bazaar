@@ -51,9 +51,9 @@ Rate Movement
 
 All three use one measured-height Motion transition helper. A cover expands
 downward into its analytical view in normal document flow. Share replaces the
-analytical view with one compact 16:9 chart artifact; API flips that artifact
-to its endpoint reverse. There are no modals, cloned charts, or stacked
-page-level depth states.
+analytical view with one compact 16:9 chart artifact. Work uses the same frame
+for the public endpoint, retained-series signal, and concise processing reel.
+There are no modals, cloned charts, or stacked page-level depth states.
 
 The AdamSioud article applies `zoom: 0.8` at the document root. Transition
 heights must therefore be measured in CSS layout coordinates with
@@ -64,41 +64,34 @@ prepared before measurement, observed until its layout height settles, and
 then animated as one continuous container-height change.
 
 The article cards keep action chrome outside the object. A quiet rail owns
-Open, API, Share, Close, Copy link, Copy endpoint, and Return to chart. The
-card surface therefore remains useful as a portable market object rather than
-becoming a toolbar container. Share serializes the visible SVG artifact to a
-1600 by 900 PNG, uses native file sharing when the browser supports it, and
-otherwise downloads the same image. The share payload carries a stable
-card-only URL for the same selected Gold state.
+Open, Work, Share, Close, and Return to chart. The card surface therefore
+remains useful as a portable market object rather than becoming a toolbar
+container. Share copies one stable publication URL for the selected Gold state;
+the chart is not rebuilt or recalculated in the browser.
 
 For the public Compute article, the standalone contract is:
 
 ```text
-?card=gpu-index&view=card&present=card&gpu=H100&range=1d
+?card=gpu-index&view=share&present=card&gpu=H100&range=1d
 ```
 
 `present=card` suppresses the article shell and centers the original live card.
-It is deliberately separate from the older public-product `view=card`
-contract documented below. Both preserve one renderer and one data contract;
-neither copies observations into query parameters.
+Legacy `view=card` links resolve to the same Share face. Neither route copies
+observations into query parameters.
 
 The standalone presentation uses an optimized local copy of Edvard Munch's
 *The Sun* (1912) as a low-opacity environmental layer. The backdrop is one
-large link to the article; a separate source credit links to MUNCH. It carries
-no data encoding and never competes with the foreground market object.
+inert image; a separate source credit links to MUNCH. A single top-left link
+returns to the corresponding inline detail state. The normal rail is hidden,
+and one attached control flips between Share and Work without leaving the
+standalone object.
 
-The standalone rail changes `Return to chart` to `Back to article`. That route
-removes `present=card`, preserves only the selected card's relevant state,
-opens its detail view inline, and anchors the browser at the corresponding
-article card. It is a real presentation exit rather than another card-state
-transition.
-
-The API reverse uses a shared market-object grammar:
+The Work reverse uses a shared market-object grammar:
 
 ```text
-artwork | object, scope, unit, cadence/basis
-        | exact public endpoint
-        | current published value
+artwork | exact public endpoint and state
+        | retained-series sparkline
+        | concise source-backed activity reel
 ```
 
 Those fields are semantic slots, not a fixed benchmark schema. Future deal,
@@ -239,10 +232,9 @@ For every hourly Gold revision it publishes:
 ```
 
 The public GPU card contract carries the exact publication URL for each range.
-The article's `Publication link` control copies that frozen URL; `Share image`
-continues to share or download the visible PNG. A publication page links back
-to the selected live chart and public JSON. Sandbox and common-start
-publication pages remain a later extension of the same contract.
+The article's `Share` control copies that frozen URL. A publication page links
+to the selected standalone Share/Work card and public JSON. Sandbox and
+common-start publication pages remain a later extension of the same contract.
 
 Publication URLs follow one shared card-neutral route:
 
@@ -273,12 +265,12 @@ Every publication record also carries structured `card_id`, `subject`, `view`,
 sandbox, relative-price, market-activity, and compute-deal cards should use the
 same route builder and supply their own subject and view dimensions.
 
-The two image formats are intentionally different. The interactive share
-artifact is a 16:9 chart composed for direct download. The crawler preview is
-an opaque 1200 by 630 image composed for Open Graph and X large-image cards.
-Publication paths and revision hashes include the publication schema and
-render profile. A social-image change therefore creates a new immutable URL
-instead of asking a social crawler to invalidate a cached old one.
+The live Share face is a responsive 16:9 SVG. The crawler preview is an opaque
+1200 by 630 image composed for Open Graph and X large-image cards. They use the
+same selected-product information hierarchy. Publication paths and revision
+hashes include the publication schema and render profile, so a social-image
+change creates a new immutable URL instead of asking a crawler to invalidate a
+cached old one.
 
 ## Information Marks
 

@@ -11,12 +11,10 @@ class AdamSioudServerTests(unittest.TestCase):
     def test_compute_article_is_the_public_exemplar_entry(self) -> None:
         site_root = Path("external/AdamSioud")
         home = (site_root / "index.html").read_text(encoding="utf-8")
-        exemplars = (site_root / "exemplars/exemplars.html").read_text(
+        exemplars = (site_root / "exemplars/exemplars.html").read_text(encoding="utf-8")
+        article = (site_root / "exemplars/compute/feeling_the_compute.html").read_text(
             encoding="utf-8"
         )
-        article = (
-            site_root / "exemplars/compute/feeling_the_compute.html"
-        ).read_text(encoding="utf-8")
 
         self.assertIn(
             'href="exemplars/compute/feeling_the_compute.html"',
@@ -71,7 +69,7 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn("IntersectionObserver", renderer)
         self.assertIn("requestIdleCallback", renderer)
         self.assertIn("(prefers-reduced-motion: reduce)", renderer)
-        self.assertIn('alpha: true', renderer)
+        self.assertIn("alpha: true", renderer)
         self.assertIn(
             '.compute-logo-title[data-embroidery-ready="true"]',
             styles,
@@ -83,8 +81,7 @@ class AdamSioudServerTests(unittest.TestCase):
             )
             self.assertTrue(
                 (
-                    article_root
-                    / f"assets/masthead/compute-masthead-{index:02d}.webp"
+                    article_root / f"assets/masthead/compute-masthead-{index:02d}.webp"
                 ).is_file()
             )
         self.assertNotIn("../images/stock/logo-mercator.jpg", article)
@@ -110,9 +107,7 @@ class AdamSioudServerTests(unittest.TestCase):
         sandbox_source = (article_root / "sandbox-market-card.source.js").read_text(
             encoding="utf-8"
         )
-        transitions = (article_root / "card-transitions.js").read_text(
-            encoding="utf-8"
-        )
+        transitions = (article_root / "card-transitions.js").read_text(encoding="utf-8")
         presentation = (article_root / "card-presentation.js").read_text(
             encoding="utf-8"
         )
@@ -149,21 +144,22 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertEqual(article.count("data-story-cover"), 2)
         self.assertIn("data-index-cover", article)
         self.assertEqual(article.count("story-index-share__window"), 2)
-        self.assertIn("data-share-native", article)
-        self.assertIn("data-story-share-native", article)
+        self.assertNotIn("data-share-native", article)
+        self.assertNotIn("data-story-share-native", article)
         self.assertIn("data-share-copy-link", article)
         self.assertIn("data-story-copy-link", article)
-        self.assertIn("Publication link", article)
+        self.assertNotIn("Publication link", article)
+        self.assertIn("Copied. Ready to share.", gpu_source)
         self.assertIn("payload?.publication?.ranges", gpu_source)
-        self.assertIn("Publication link copied", gpu_source)
         self.assertIn("data-share-artifact-svg", article)
         self.assertIn("data-story-share-artifact-svg", article)
         self.assertEqual(article.count("data-index-work"), 2)
         self.assertEqual(article.count("data-story-work"), 4)
         self.assertEqual(article.count("data-work-rows"), 3)
-        self.assertEqual(article.count("data-work-inspector"), 3)
-        self.assertEqual(article.count("data-work-copy-endpoint"), 3)
-        self.assertEqual(article.count("data-work-open-endpoint"), 3)
+        self.assertNotIn("data-work-inspector", article)
+        self.assertNotIn("data-work-copy-endpoint", article)
+        self.assertNotIn("data-work-open-endpoint", article)
+        self.assertEqual(article.count("data-work-endpoint"), 3)
         self.assertNotIn("compute-api-card", article)
         self.assertNotIn("data-share-api-url", article)
         self.assertNotIn("data-story-share-api-url", article)
@@ -246,8 +242,10 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn("export function createCardWork", work_source)
         self.assertIn("data-work-row-toggle", work_source)
         self.assertIn('button.setAttribute("role", "tab")', work_source)
-        self.assertIn("renderInspector", work_source)
-        self.assertIn("copyTextToClipboard", work_source)
+        self.assertNotIn("renderInspector", work_source)
+        self.assertNotIn("copyTextToClipboard", work_source)
+        self.assertIn("AUTO_ADVANCE_MS = 3600", work_source)
+        self.assertIn("renderSignal", work_source)
         self.assertIn(
             'button.addEventListener("click", () => showPanel("share", true))',
             gpu_source,
@@ -276,22 +274,23 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn("heightDelta", transitions)
         self.assertIn("duration = Math.min(0.48", transitions)
         self.assertIn("const ease = [0.32, 0.72, 0, 1]", transitions)
-        self.assertIn('height: [`${fromHeight}px`, `${toHeight}px`]', transitions)
+        self.assertIn("height: [`${fromHeight}px`, `${toHeight}px`]", transitions)
         self.assertIn("rotateY", transitions)
-        self.assertIn("shareSvgAsPng", transitions)
+        self.assertNotIn("shareSvgAsPng", transitions)
         self.assertIn("copyTextToClipboard", transitions)
         self.assertIn('document.execCommand("copy")', transitions)
-        self.assertIn('type: "image/png"', transitions)
+        self.assertNotIn('type: "image/png"', transitions)
         self.assertIn('url.searchParams.set("present", "card")', presentation)
         self.assertIn('url.searchParams.set("view", "share")', presentation)
         self.assertIn("setupStandaloneCardPresentation", presentation)
         self.assertIn("./assets/munch-the-sun.webp", presentation)
-        self.assertIn("Open The Compute Bazaar article", presentation)
+        self.assertIn("Return to The Compute Bazaar article", presentation)
         self.assertIn("MM.M.00822", presentation)
         self.assertIn("articleReturnUrl", presentation)
         self.assertIn('articleUrl.searchParams.set("view", "detail")', presentation)
-        self.assertIn('control.textContent = "Back to article"', presentation)
-        self.assertIn("event.stopImmediatePropagation()", presentation)
+        self.assertIn("compute-card-presentation__flip", presentation)
+        self.assertIn("syncFlipControl", presentation)
+        self.assertNotIn("event.stopImmediatePropagation()", presentation)
         self.assertIn("event.clientX - bounds.left", gpu_source)
         self.assertIn("event.clientX - bounds.left", sandbox_source)
         self.assertIn("latest_replicate_count", sandbox_source)
@@ -322,9 +321,11 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn(".compute-card-rail", styles)
         self.assertIn(".compute-share-artifact", styles)
         self.assertIn(".compute-work-card", styles)
+        self.assertIn(".compute-work-card__surface", styles)
         self.assertIn(".compute-work-row", styles)
-        self.assertIn(".compute-work-inspector", styles)
-        self.assertIn(".compute-work-endpoint", styles)
+        self.assertIn(".compute-work-signal", styles)
+        self.assertNotIn(".compute-work-inspector", styles)
+        self.assertNotIn(".compute-work-endpoint", styles)
         self.assertIn(".compute-share-card-frame", styles)
         self.assertNotIn(".compute-api-card", styles)
         self.assertIn("data-compute-card-presentation=standalone", styles)
@@ -364,12 +365,8 @@ class AdamSioudServerTests(unittest.TestCase):
         article_root = Path("external/AdamSioud/exemplars/compute-bazaar")
         article = (article_root / "index.html").read_text(encoding="utf-8")
         script = (article_root / "sandbox-cost.js").read_text(encoding="utf-8")
-        viz_script = (article_root / "compute-viz.js").read_text(
-            encoding="utf-8"
-        )
-        viz_styles = (article_root / "compute-viz.css").read_text(
-            encoding="utf-8"
-        )
+        viz_script = (article_root / "compute-viz.js").read_text(encoding="utf-8")
+        viz_styles = (article_root / "compute-viz.css").read_text(encoding="utf-8")
         history_script = (article_root / "compute-market-history.js").read_text(
             encoding="utf-8"
         )
@@ -567,10 +564,7 @@ class AdamSioudServerTests(unittest.TestCase):
             len(market_state["history_rows"]),
         )
         self.assertEqual(
-            {
-                row["measurement_kind"]
-                for row in market_state["current_rows"]
-            },
+            {row["measurement_kind"] for row in market_state["current_rows"]},
             {"rental_occupancy", "availability_pressure"},
         )
         self.assertTrue(
@@ -697,9 +691,7 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertEqual(len(payload["workload"]["latest_replicates"]), 72)
         self.assertFalse(payload["workload"]["lifecycle_included"])
         self.assertEqual(
-            payload["manifest"]["row_counts"][
-                "compute_utilization_public_ladder"
-            ],
+            payload["manifest"]["row_counts"]["compute_utilization_public_ladder"],
             5,
         )
         self.assertEqual(
