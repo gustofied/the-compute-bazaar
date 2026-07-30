@@ -163,4 +163,21 @@ Production checks confirmed:
 5. `Open interactive card` targets the matching
    `view=share&present=card` article state.
 
+The article implementation was published from AdamSioud commit `cfcfb30`.
+GitHub Pages workflow `30550366981` completed successfully. The corresponding
+Compute Bazaar pipeline and documentation commit is `5468e7f`.
+
+Final production browser checks used the canonical article and fresh H200
+publication:
+
+```text
+https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html
+https://bazaar.adamsioud.com/publications/gpu-index/h200/7-day/2026-07-30-1405-utc-3aad21c527
+```
+
+The deployment tunnel was closed afterward. The temporary TCP/8080 rule and
+two obsolete mobile-IP rules were revoked; the current one-address SSH rule
+was retained. The unused v4 worker image was removed without pruning active
+containers or Docker volumes.
+
 Old publication URLs remain immutable and valid. They are not rewritten.
