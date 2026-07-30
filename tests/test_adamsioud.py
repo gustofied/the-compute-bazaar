@@ -192,7 +192,7 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertNotIn("benchmark-constituents.json", article)
         self.assertNotIn("27 providers · 27 eligible prices", article)
         self.assertIn('src="./compute-cards.js?v=18"', article)
-        self.assertIn('href="./compute-card.css?v=23"', article)
+        self.assertIn('href="./compute-card.css?v=24"', article)
         self.assertIn("family=Geist:wght@400;500;600", article)
         self.assertEqual(article.count("data-card-feed="), 3)
         self.assertEqual(article.count('class="compute-card-prose"'), 3)
