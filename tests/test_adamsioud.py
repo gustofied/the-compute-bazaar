@@ -186,22 +186,33 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn("data-workload-history-note", article)
         self.assertIn("compute-ledger compute-ledger--scroll", article)
         self.assertIn("data-sandbox-rate-count", article)
+        self.assertIn("data-workload-count", article)
+        self.assertEqual(article.count("compute-ledger compute-ledger--scroll"), 2)
         self.assertIn(
             'aria-label="Current public sandbox rates. Scroll to review every '
             'source and billing basis."',
             article,
         )
         self.assertIn(
+            'aria-label="Latest same-job service distributions. Scroll to '
+            'review every service, source, cost, runtime, and completion count."',
+            article,
+        )
+        self.assertIn(
             "`${rows.length} ${plural(rows.length, \"source\")} · scroll`",
+            sandbox_source,
+        )
+        self.assertIn(
+            "`${summaries.length} ${plural(summaries.length, \"service\")} · scroll`",
             sandbox_source,
         )
         self.assertIn(".compute-ledger--scroll ol", style_source)
         self.assertIn("max-height: 126px;", style_source)
         self.assertIn("overscroll-behavior: contain;", style_source)
         self.assertIn("scrollbar-gutter: stable;", style_source)
-        self.assertIn("function configureRateLedger()", sandbox_source)
+        self.assertIn("function configureScrollingLedger(ledger)", sandbox_source)
         self.assertIn('event.key === "Home" || event.key === "End"', sandbox_source)
-        self.assertIn("nodes.rateTable.scrollBy", sandbox_source)
+        self.assertIn("ledger.scrollBy", sandbox_source)
         self.assertNotIn("Seven matching source runs over five calendar days", article)
         self.assertIn("Every complete aligned job", article)
         self.assertNotIn("Provider-floor median", article)
@@ -209,7 +220,7 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertNotIn("benchmark-methodology.md", article)
         self.assertNotIn("benchmark-constituents.json", article)
         self.assertNotIn("27 providers · 27 eligible prices", article)
-        self.assertIn('src="./compute-cards.js?v=19"', article)
+        self.assertIn('src="./compute-cards.js?v=20"', article)
         self.assertIn('href="./compute-card.css?v=25"', article)
         self.assertIn("family=Geist:wght@400;500;600", article)
         self.assertEqual(article.count("data-card-feed="), 3)
