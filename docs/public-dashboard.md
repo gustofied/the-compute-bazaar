@@ -158,7 +158,10 @@ and H200 visible-offer card. It retains the full reference and event histories,
 current configurations, stable listing and event identifiers, and public source
 URLs. The card groups simultaneous entries and exits for display, while the
 payload preserves the provider-level events used by tooltips and later
-analysis.
+analysis. Each family also carries its immutable publication link. The hourly
+build writes crawler-readable HTML and a 1200-by-630 social image under
+`publications/prime-gpu-market/`; opening the publication hands the reader to
+the standalone interactive Share/Work card.
 
 `prime-h100-offer-reference.json` is an older compatibility projection of the H100
 product from the same build. New consumers should use the family-specific card files.
@@ -169,9 +172,9 @@ seven-provider VM offer cohort; its retained fixed-membership median/p25-p75
 history; the current VM/sandbox cohort comparison; 33 dated managed-sandbox
 hourly-price observations; 10 actual rate-change events; the current 11-service
 cross-section with explicit metering semantics; the fixed eight-service
-median/p25-p75 series; 44 historical provider-batch means; 72 complete latest
+median/p25-p75 series; 56 historical provider-batch means; 72 complete latest
 jobs reconstructed from 720 retained task phases; six workload summaries;
-eight source-run summaries with four complete fixed six-service cohorts;
+ten source-run summaries with six complete fixed six-service cohorts;
 retained H100 coverage history; and the
 coverage-gated H100/sandbox common-start series.
 
@@ -182,7 +185,7 @@ sandbox/rates.json
   managed-sandbox fixed-cohort history and current source-linked cross-section
 
 sandbox/workload.json
-  latest complete-job distribution, six service summaries, and eight source runs
+  latest complete-job distribution, six service summaries, and ten source runs
 
 sandbox/relative.json
   coverage-qualified H100, seven-vendor VM, and fixed sandbox rates

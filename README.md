@@ -240,14 +240,14 @@ exact VM catalog APIs + reviewed sandbox prices + StarSling benchmark runs
 ```
 
 The current record has 33 dated price observations for 11 services. Workload
-evidence retains 44 provider-run means from eight compatible source runs over
-six calendar days. The two replicate-indexed runs retain 141 complete jobs and
-1,410 aligned phase samples in total. The latest run is complete across all 72
-provider-and-replicate slots and contributes 720 phase samples; the earlier
-replicate-indexed run retains its 69-of-72 completion accounting rather than
-imputing three missing jobs. Repeated intraday runs remain distinct. Earlier
-two-processor runs are captured but rejected because the publication shape is
-four processors, 8 GiB memory, and 40 GB disk.
+evidence retains 56 provider-run means from ten compatible source runs over
+eight calendar days. The four replicate-indexed runs retain 281 complete jobs
+and 2,810 aligned phase samples in total. The latest run is complete across all
+72 provider-and-replicate slots and contributes 720 phase samples; earlier
+runs retain their observed completion accounting rather than imputing missing
+jobs. Repeated intraday runs remain distinct. Earlier two-processor runs are
+captured but rejected because the publication shape is four processors, 8 GiB
+memory, and 40 GB disk.
 
 The underlying capacity view checks a fixed seven-vendor cohort of exact
 four-vCPU, 8 GiB public VM offers each hour: Akamai Linode, Vultr, Scaleway,

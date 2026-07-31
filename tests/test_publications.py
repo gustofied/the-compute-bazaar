@@ -12,8 +12,10 @@ from the_compute_bazaar.prices.publications import (
     PUBLICATION_RENDER_PROFILE,
     PUBLICATION_SCHEMA_VERSION,
     publish_gpu_benchmark_publications,
+    publish_prime_offer_shelf_publications,
     publish_sandbox_market_publications,
     render_gpu_benchmark_publication,
+    render_prime_offer_shelf_publication,
 )
 from the_compute_bazaar.publication_contract import (
     PUBLICATION_ROUTE_SCHEMA_VERSION,
@@ -250,6 +252,75 @@ class GpuPublicationTests(unittest.TestCase):
         )
 
 
+class PrimeOfferPublicationTests(unittest.TestCase):
+    def test_prime_publication_is_immutable_and_crawler_readable(self) -> None:
+        cards = _prime_cards()
+
+        with TemporaryDirectory() as temporary_directory:
+            result = publish_prime_offer_shelf_publications(
+                output_root=temporary_directory,
+                cards=cards,
+                public_base_url="https://data.example.test",
+                article_url="https://example.test/compute.html",
+            )
+            repeated = publish_prime_offer_shelf_publications(
+                output_root=temporary_directory,
+                cards=cards,
+                public_base_url="https://data.example.test",
+                article_url="https://example.test/compute.html",
+            )
+            h100 = cards["H100"]["publication"]["states"]["H100"]
+            page = (
+                Path(temporary_directory)
+                / h100["url"].split("https://data.example.test/", 1)[1]
+            ).with_suffix(".html")
+            image = page.with_suffix(".png")
+
+            self.assertEqual(result["publication_count"], 2)
+            self.assertEqual(repeated["revision"], result["revision"])
+            self.assertFalse(h100["url"].endswith(".html"))
+            self.assertIn(
+                "/publications/prime-gpu-market/h100/offer-shelf/",
+                h100["url"],
+            )
+            self.assertIn(
+                "card=prime-offer-shelf&view=share&present=card&primeGpu=H100",
+                h100["live_url"],
+            )
+            self.assertEqual(h100["subject"]["label"], "Prime H100 GPU market")
+            self.assertEqual(h100["value"], "$2.30")
+            self.assertEqual(h100["change_label"], "Up 15.0% since tracking began")
+            self.assertEqual(
+                cards["H100"]["publication"]["schema_version"],
+                PUBLICATION_SCHEMA_VERSION,
+            )
+            self.assertTrue(page.is_file())
+            self.assertTrue(image.is_file())
+            html = page.read_text(encoding="utf-8")
+            self.assertIn('<meta property="og:image"', html)
+            self.assertIn(
+                '<meta name="twitter:card" content="summary_large_image">',
+                html,
+            )
+            self.assertIn("A disappearance is not a confirmed rental.", html)
+            self.assertIn("window.location.replace(", html)
+
+            png = image.read_bytes()
+            width, height = struct.unpack(">II", png[16:24])
+            self.assertEqual((width, height), (IMAGE_WIDTH, IMAGE_HEIGHT))
+            self.assertEqual(png[25], 2)
+
+    def test_prime_renderer_keeps_price_and_offer_measures_separate(self) -> None:
+        from PIL import Image
+
+        image_bytes = render_prime_offer_shelf_publication(
+            card=_prime_cards()["H100"],
+        )
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            self.assertEqual(image.size, (IMAGE_WIDTH, IMAGE_HEIGHT))
+            self.assertEqual(image.mode, "RGB")
+
+
 class SandboxPublicationTests(unittest.TestCase):
     def test_publish_creates_preview_wrappers_for_every_live_card_state(
         self,
@@ -357,6 +428,30 @@ def _cards() -> dict[str, dict[str, object]]:
                 "provider_count": 7,
                 "offer_count": 20,
             },
+        }
+    return cards
+
+
+def _prime_cards() -> dict[str, dict[str, object]]:
+    start = datetime(2026, 7, 25, tzinfo=timezone.utc)
+    cards: dict[str, dict[str, object]] = {}
+    for family, base in (("H100", 2.0), ("H200", 4.0)):
+        rows = [
+            {
+                "observed_at": (start + timedelta(hours=index)).isoformat(),
+                "value": base + index * 0.1,
+                "configuration_count": 5 - (index % 3),
+                "provider_count": 3,
+            }
+            for index in range(4)
+        ]
+        cards[family] = {
+            "schema_version": "compute_bazaar_card_v1",
+            "card_type": "prime_frontier_offer_market",
+            "card_id": f"prime-frontier:{family.lower()}",
+            "as_of": rows[-1]["observed_at"],
+            "series": rows,
+            "data": {"family_id": family},
         }
     return cards
 

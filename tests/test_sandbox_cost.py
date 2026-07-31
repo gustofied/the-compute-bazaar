@@ -83,14 +83,14 @@ class SandboxCostEvidenceTests(unittest.TestCase):
 
         self.assertEqual(summary["price_observation_count"], 33)
         self.assertEqual(summary["price_service_count"], 11)
-        self.assertEqual(summary["benchmark_batch_count"], 44)
-        self.assertEqual(summary["benchmark_replicate_count"], 141)
-        self.assertEqual(summary["benchmark_phase_count"], 1410)
+        self.assertEqual(summary["benchmark_batch_count"], 56)
+        self.assertEqual(summary["benchmark_replicate_count"], 281)
+        self.assertEqual(summary["benchmark_phase_count"], 2810)
         self.assertEqual(summary["benchmark_service_count"], 6)
-        self.assertEqual(summary["benchmark_run_count"], 8)
-        self.assertEqual(summary["benchmark_calendar_day_count"], 6)
-        self.assertEqual(summary["benchmark_methodology_count"], 7)
-        self.assertEqual(summary["latest_replicate_run_id"], "30322186937")
+        self.assertEqual(summary["benchmark_run_count"], 10)
+        self.assertEqual(summary["benchmark_calendar_day_count"], 8)
+        self.assertEqual(summary["benchmark_methodology_count"], 9)
+        self.assertEqual(summary["latest_replicate_run_id"], "30589436441")
         self.assertEqual(len(summary["fixed_members"]), 8)
         self.assertEqual(summary["utilization_metric_count"], 8)
         self.assertEqual(summary["utilization_public_stage_count"], 5)
@@ -188,9 +188,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
             changed = copy.deepcopy(benchmarks["batch_rows"])
             changed[0]["runtime_seconds"] += 1
             changed[0]["estimated_cost_usd"] = round(
-                changed[0]["runtime_seconds"]
-                * changed[0]["hourly_price_usd"]
-                / 3600,
+                changed[0]["runtime_seconds"] * changed[0]["hourly_price_usd"] / 3600,
                 9,
             )
 
@@ -205,9 +203,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
                     checked_at="2026-07-27T06:30:00+00:00",
                     refresh_id="workload-refresh-20260727T063000000000Z",
                     source_manifest=source_manifest,
-                    source_manifest_ref=str(
-                        Path(tmpdir) / "raw" / "second.json"
-                    ),
+                    source_manifest_ref=str(Path(tmpdir) / "raw" / "second.json"),
                     prices=prices,
                     batch_rows=changed,
                     replicate_rows=benchmarks["replicate_rows"],
@@ -290,9 +286,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
         )
 
     def test_build_is_deterministic_and_public_payload_retains_all_runs(self) -> None:
-        expected_manifest_date = _read_local_json(SOURCE_MANIFEST)[
-            "retrieved_at"
-        ][:10]
+        expected_manifest_date = _read_local_json(SOURCE_MANIFEST)["retrieved_at"][:10]
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             gpu_history = root / "benchmark-history.json"
@@ -355,8 +349,8 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertEqual(first.row_counts["sandbox_price_events"], 10)
         self.assertEqual(first.row_counts["sandbox_current_rates"], 11)
         self.assertEqual(first.row_counts["sandbox_fixed_rate"], 4)
-        self.assertEqual(first.row_counts["sandbox_workload_batch_history"], 44)
-        self.assertEqual(first.row_counts["sandbox_workload_run_history"], 8)
+        self.assertEqual(first.row_counts["sandbox_workload_batch_history"], 56)
+        self.assertEqual(first.row_counts["sandbox_workload_run_history"], 10)
         self.assertEqual(
             first.row_counts["sandbox_workload_latest_replicates"],
             72,
@@ -395,11 +389,11 @@ class SandboxCostPipelineTests(unittest.TestCase):
             workload_card["coverage"]["latest_replicate_count"],
             72,
         )
-        self.assertEqual(public["workload"]["source_batch_count"], 8)
-        self.assertEqual(public["workload"]["calendar_day_count"], 6)
-        self.assertEqual(public["workload"]["methodology_generation_count"], 7)
+        self.assertEqual(public["workload"]["source_batch_count"], 10)
+        self.assertEqual(public["workload"]["calendar_day_count"], 8)
+        self.assertEqual(public["workload"]["methodology_generation_count"], 9)
         self.assertEqual(public["workload"]["fixed_service_count"], 6)
-        self.assertEqual(public["workload"]["complete_run_count"], 4)
+        self.assertEqual(public["workload"]["complete_run_count"], 6)
         self.assertEqual(public["workload"]["latest_replicate_count"], 72)
         self.assertEqual(
             public["workload"]["latest_source_replicate_slot_count"],
@@ -425,7 +419,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
         )
         self.assertEqual(len(public["workload"]["service_summary"]), 6)
         self.assertEqual(len(public["workload"]["phase_summary"]), 60)
-        self.assertEqual(len(public["workload"]["run_history"]), 8)
+        self.assertEqual(len(public["workload"]["run_history"]), 10)
         complete_runs = [
             row
             for row in public["workload"]["run_history"]
@@ -438,19 +432,19 @@ class SandboxCostPipelineTests(unittest.TestCase):
                 "29982453127",
                 "30019301067",
                 "30322186937",
+                "30510718771",
+                "30589436441",
             ],
         )
         latest_run_rows = [
             row
             for row in public["workload"]["batch_history"]
-            if row["benchmark_run_id"] == "30322186937"
+            if row["benchmark_run_id"] == "30589436441"
         ]
         latest_run = public["workload"]["run_history"][-1]
         self.assertAlmostEqual(
             latest_run["median_estimated_cost_usd"],
-            statistics.median(
-                row["estimated_cost_usd"] for row in latest_run_rows
-            ),
+            statistics.median(row["estimated_cost_usd"] for row in latest_run_rows),
         )
         self.assertAlmostEqual(
             latest_run["median_runtime_seconds"],
@@ -577,7 +571,9 @@ class SandboxCostPipelineTests(unittest.TestCase):
         )
         rented = public["utilization"]["rows"][1]
         self.assertEqual(rented["recommended_field_name"], "rented_capacity_ratio")
-        self.assertIn("does not show whether kernels", rented["what_it_does_not_support"])
+        self.assertIn(
+            "does not show whether kernels", rented["what_it_does_not_support"]
+        )
 
     def test_build_id_tracks_public_gpu_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -670,11 +666,9 @@ class SandboxCostPipelineTests(unittest.TestCase):
             )
 
         self.assertEqual(result["engine"], "datafusion")
-        self.assertEqual(len(result["rows"]), 8)
+        self.assertEqual(len(result["rows"]), 10)
         july_22 = [
-            row
-            for row in result["rows"]
-            if row["observed_date"] == "2026-07-22"
+            row for row in result["rows"] if row["observed_date"] == "2026-07-22"
         ]
         self.assertEqual(len(july_22), 2)
         self.assertFalse(july_22[0]["fixed_cohort_complete"])

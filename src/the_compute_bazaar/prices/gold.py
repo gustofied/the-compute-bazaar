@@ -35,7 +35,10 @@ from .public_views import (
     market_state_view,
     prime_frontier_view,
 )
-from .publications import publish_gpu_benchmark_publications
+from .publications import (
+    publish_gpu_benchmark_publications,
+    publish_prime_offer_shelf_publications,
+)
 from .schemas import to_jsonable, utc_now
 from .storage import (
     list_refs,
@@ -1194,9 +1197,7 @@ def export_gold_dashboard_snapshot(
         "prime_h100_offer_reference": "/".join(
             [output_root.rstrip("/"), "prime-h100-offer-reference.json"]
         ),
-        "market_overview": "/".join(
-            [output_root.rstrip("/"), "market-overview.json"]
-        ),
+        "market_overview": "/".join([output_root.rstrip("/"), "market-overview.json"]),
         "capacity_market_state": "/".join(
             [output_root.rstrip("/"), "capacity", "market-state.json"]
         ),
@@ -1304,6 +1305,26 @@ def export_gold_dashboard_snapshot(
             execution_data=prime_frontier_public["execution_data"],
         )
         for product in prime_frontier_products
+    }
+    prime_publications = publish_prime_offer_shelf_publications(
+        output_root=output_root,
+        cards=prime_cards,
+    )
+    output_refs["prime_publications"] = prime_publications["manifest_ref"]
+    for product in prime_frontier_products:
+        family = str(product.get("family_id") or "")
+        publication = (prime_cards.get(family) or {}).get("publication")
+        if publication:
+            product["publication"] = publication
+    for product in prime_frontier_shelf_public["products"]:
+        family = str(product.get("family_id") or "")
+        publication = (prime_cards.get(family) or {}).get("publication")
+        if publication:
+            product["publication"] = publication
+    prime_frontier_shelf_public["publications"] = {
+        "manifest_ref": prime_publications["manifest_ref"],
+        "revision": prime_publications["revision"],
+        "publication_count": prime_publications["publication_count"],
     }
     for family in GPU_FAMILIES:
         output_refs[f"prime_frontier_{family.lower()}"] = "/".join(

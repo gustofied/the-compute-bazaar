@@ -2285,6 +2285,14 @@ class GoldQueryTests(unittest.TestCase):
         ]
         self.assertTrue(all(event["event_id"] for event in shelf_events))
         self.assertTrue(all(event["listing_id"] for event in shelf_events))
+        self.assertEqual(shelf["publications"]["publication_count"], 2)
+        self.assertTrue(
+            all(
+                product["publication"]["states"][product["family_id"]]["url"]
+                .startswith("https://bazaar.adamsioud.com/publications/")
+                for product in shelf["products"]
+            )
+        )
         self.assertNotIn("benchmark_history", json.dumps(shelf))
         self.assertNotIn("s3://", json.dumps(shelf))
         self.assertEqual(
@@ -2304,6 +2312,7 @@ class GoldQueryTests(unittest.TestCase):
             "prime_frontier_offer_shelf",
             export["output_refs"],
         )
+        self.assertIn("prime_publications", export["output_refs"])
         self.assertEqual(reference_query["query"]["engine"], "datafusion")
         self.assertEqual(
             {row["gpu_family_id"] for row in reference_query["rows"]},
@@ -3389,7 +3398,7 @@ class GoldQueryTests(unittest.TestCase):
             sandbox_public["manifest"]["row_counts"]["sandbox_hourly_price_series"],
             33,
         )
-        self.assertEqual(sandbox_public["workload"]["source_batch_count"], 8)
+        self.assertEqual(sandbox_public["workload"]["source_batch_count"], 10)
 
 
 def _offer(

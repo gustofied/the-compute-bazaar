@@ -2,107 +2,119 @@
   "files": [
     {
       "path": "data/dataset/index.json",
-      "sha256": "249a0ca805e5e7fc9695e660d8a859567adc47aad63ce4336ab0a7f97660aeb3",
-      "size_bytes": 2017,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/index.json"
+      "sha256": "bef0499174f6414216d5a89d52bbede3da92c24d99b3dddb373c90569e6c83ae",
+      "size_bytes": 2277,
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/index.json"
     },
     {
       "path": "data/dataset/runs/29061549181.json",
       "sha256": "9915a5650192b056a6eea24f3acd9cde0cb2c888f1845a317d375d65c381b4e8",
       "size_bytes": 7675,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29061549181.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29061549181.json"
     },
     {
       "path": "data/dataset/runs/29130741476.json",
       "sha256": "7b8031d2f35039f969c274673b68f2fb3dceb670ce1ad6be1bfcbd7354d7625e",
       "size_bytes": 20377,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29130741476.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29130741476.json"
     },
     {
       "path": "data/dataset/runs/29346212440.json",
       "sha256": "75650256fc2c25512e124177bac98218ff53ab0b3a27fbca86f64da3415c8c97",
       "size_bytes": 73071,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29346212440.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29346212440.json"
     },
     {
       "path": "data/dataset/runs/29365910084.json",
       "sha256": "6100d45bdc2d44e6ff0f90563c28194f556ce80300ca2bddb378913be60f9d36",
       "size_bytes": 83870,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29365910084.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29365910084.json"
     },
     {
       "path": "data/dataset/runs/29472826358.json",
       "sha256": "9749ace796de0c72396fff95b8badcba0f6dffd20a35c5ea17bf9d62fe076999",
       "size_bytes": 79540,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29472826358.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29472826358.json"
     },
     {
       "path": "data/dataset/runs/29546060837.json",
       "sha256": "3d1992b558b579f22fa629722e5de0b65b1007f5c67abccf491aa4c734763d59",
       "size_bytes": 382712,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29546060837.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29546060837.json"
     },
     {
       "path": "data/dataset/runs/29692210375.json",
       "sha256": "780798c5c6f7d6bac289c5e2ac0e337fda69206aa300114ac41f2870c9551758",
       "size_bytes": 332420,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29692210375.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29692210375.json"
     },
     {
       "path": "data/dataset/runs/29743570333.json",
       "sha256": "af1a78d18d2d17a246fba4e4ed0742f4aaaec552227fed6a373219949936f74c",
       "size_bytes": 325269,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29743570333.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29743570333.json"
     },
     {
       "path": "data/dataset/runs/29799034615.json",
       "sha256": "33c6e2dccd2bf85fa833d87c8bc69d67ca34768d6f1a6c37fb982e730c7db57f",
       "size_bytes": 335004,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29799034615.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29799034615.json"
     },
     {
       "path": "data/dataset/runs/29926138677.json",
       "sha256": "1e04c350e441ad5945e6ad6ec0a128a9a559e4b14d0f271a6c3fb7aab5021363",
       "size_bytes": 392678,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29926138677.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29926138677.json"
     },
     {
       "path": "data/dataset/runs/29937467891.json",
       "sha256": "e7066d7db45662fedf04ccd33da13fbb4bbf217e5101ed8b7143463c6eac48e1",
       "size_bytes": 459083,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29937467891.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29937467891.json"
     },
     {
       "path": "data/dataset/runs/29982453127.json",
       "sha256": "da49c1d36ad8c612c2eec644b67ad4f29adda196a00a411e7642c985eaa2940d",
       "size_bytes": 544743,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/29982453127.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/29982453127.json"
     },
     {
       "path": "data/dataset/runs/30019301067.json",
       "sha256": "afe3c150c2193fb7198c0b36e292a1adad4a23d85cdd92f7b6e160b3b6ac3356",
       "size_bytes": 1785760,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/30019301067.json"
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/30019301067.json"
     },
     {
       "path": "data/dataset/runs/30322186937.json",
-      "sha256": "47c792d7e1dd2e28fbd12171832279aa64f20a71aaef58329beabb5dcd53da5e",
-      "size_bytes": 2152385,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/data/dataset/runs/30322186937.json"
+      "sha256": "d7707155dc0c542c9de0c83d3d4a01ba0d3d7396891e535df401d8e063ae03a2",
+      "size_bytes": 1238170,
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/30322186937.json"
+    },
+    {
+      "path": "data/dataset/runs/30510718771.json",
+      "sha256": "1ab7a079b5bc6cbc6fa6fde5ba634279cdd84ef3288b0f63323b56527f63bf64",
+      "size_bytes": 1244057,
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/30510718771.json"
+    },
+    {
+      "path": "data/dataset/runs/30589436441.json",
+      "sha256": "23f658b55d79871fb500260e8e694ff22b4656ace62b365ff126849f556d00f1",
+      "size_bytes": 1393342,
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/data/dataset/runs/30589436441.json"
     },
     {
       "path": "docs/methodology.md",
-      "sha256": "e030ff0a1c8ca090b4bb4e65865ce1da843ffaa0f205f37cd1ee599490ce4a64",
-      "size_bytes": 9323,
-      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/70a62b0154043eafb15d828f497cbd6d445fa591/docs/methodology.md"
+      "sha256": "1f3ee7290bdaaf29a684d152fca9e74a0cccb800b2e73a9a49464dbea1536051",
+      "size_bytes": 11934,
+      "source_url": "https://github.com/starslingdev/hpc-sandbox-benchmarks/blob/530243df34f12dc8c2e49528b40b17c2dbd523b9/docs/methodology.md"
     }
   ],
   "notes": [
     "Raw public files are captured under the commit-pinned bronze prefix.",
     "Unlike machine shapes are retained in bronze and rejected before silver."
   ],
-  "retrieved_at": "2026-07-29T07:26:47.486799+00:00",
+  "retrieved_at": "2026-07-31T10:57:25.436420+00:00",
   "schema_version": "sandbox_source_manifest_v1",
-  "source_commit": "70a62b0154043eafb15d828f497cbd6d445fa591",
+  "source_commit": "530243df34f12dc8c2e49528b40b17c2dbd523b9",
   "source_repository": "starslingdev/hpc-sandbox-benchmarks"
 }

@@ -358,9 +358,9 @@ measured_phase_seconds(job) =
 The extractor rejects missing, duplicate, or misaligned task indices. The
 latest run exposes 12 source replicate slots per service, or 72 total, and all
 72 have a complete ten-phase result. These rows power the primary runtime
-distribution and the service median/p25/p75 summaries. The preceding
-replicate-indexed run remains in retained history with 69 complete jobs from 72
-slots; its three missing jobs are not imputed.
+distribution and the service median/p25/p75 summaries. The three earlier
+replicate-indexed runs remain in retained history with 68, 72, and 69 complete
+jobs from 72 slots, respectively. Missing jobs are not imputed.
 
 The ten windows do not all measure the same resource. Clone and cold install
 include network and registry wait. Build, lint, and type-check are mostly local
@@ -370,15 +370,15 @@ CPU benchmark.
 
 ### Provider-batch mean
 
-The public source currently retains eight compatible runs over six calendar
-days: 19-23 and 28 July 2026. They contain 44 provider-run means:
+The public source currently retains ten compatible runs over eight calendar
+days: 19-23, 28, 30, and 31 July 2026. They contain 56 provider-run means:
 
 ```text
 batch_active_seconds =
   sum(ten published task means)
 ```
 
-Repeated intraday runs remain distinct. The eight runs use seven upstream
+Repeated intraday runs remain distinct. The ten runs use nine upstream
 harness commits. The Better Auth app and task signature stayed pinned, but a
 harness change is still a methodology boundary. The article therefore draws no
 continuous trend line across different methodology IDs. Earlier two-processor
@@ -430,7 +430,7 @@ tables.
 The young seven-vendor hourly VM series is not repeated as a standalone chart.
 Instead, every unchanged hourly point appears in the absolute rate view and
 the VM median appears in the relative-price view. The historical provider-run
-chart remains outside the main narrative because its 44 rows cross seven
+chart remains outside the main narrative because its 56 rows cross nine
 harness methodologies. Those rows remain queryable and auditable;
 they have not been collapsed, averaged by day, or deleted.
 

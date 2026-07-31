@@ -27,6 +27,7 @@ DEFAULT_ARTICLE_URL = (
     "https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html"
 )
 GPU_FAMILIES = ("H100", "H200", "B200", "B300")
+PRIME_OFFER_FAMILIES = ("H100", "H200")
 GPU_RANGES: dict[str, timedelta | None] = {
     "1d": timedelta(days=1),
     "7d": timedelta(days=7),
@@ -184,6 +185,91 @@ def publish_gpu_benchmark_publications(
         "schema_version": PUBLICATION_SCHEMA_VERSION,
         "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
         "publication_type": "gpu_benchmark",
+        "revision": revision,
+        "publication_count": len(publication_rows),
+        "rows": publication_rows,
+    }
+    write_json(manifest_ref, manifest)
+    return {
+        "manifest_ref": manifest_ref,
+        "revision": revision,
+        "publication_count": len(publication_rows),
+        "rows": publication_rows,
+    }
+
+
+def publish_prime_offer_shelf_publications(
+    *,
+    output_root: str,
+    cards: Mapping[str, dict[str, Any]],
+    public_base_url: str | None = None,
+    article_url: str | None = None,
+) -> dict[str, Any]:
+    """Publish immutable Prime price-and-visible-availability snapshots."""
+    public_base = (
+        public_base_url
+        or os.getenv("COMPUTE_BAZAAR_PUBLIC_BASE_URL")
+        or DEFAULT_PUBLIC_DATA_BASE_URL
+    ).rstrip("/")
+    live_article = (
+        article_url or os.getenv("COMPUTE_BAZAAR_ARTICLE_URL") or DEFAULT_ARTICLE_URL
+    )
+    normalized_cards = {
+        family: cards[family] for family in PRIME_OFFER_FAMILIES if family in cards
+    }
+    content_digest = _publication_digest(
+        normalized_cards,
+        public_base_url=public_base,
+        article_url=live_article,
+    )
+    publication_rows: list[dict[str, Any]] = []
+
+    for family, card in normalized_cards.items():
+        observed_at = _latest_card_observed_at({family: card})
+        live_url = _live_prime_offer_url(
+            article_url=live_article,
+            family=family,
+        )
+        link = _publish_market_card_state(
+            output_root=output_root,
+            public_base_url=public_base,
+            card_id="prime-gpu-market",
+            subject_id=family,
+            view_id="offer-shelf",
+            observed_at=observed_at,
+            content_digest=content_digest,
+            live_url=live_url,
+            data_url=f"{public_base}/prime-frontier-offer-shelf.json",
+            image=render_prime_offer_shelf_publication(card=card),
+            metadata=_prime_offer_publication_metadata(
+                card=card,
+                family=family,
+                observed_at=observed_at,
+            ),
+        )
+        card["publication"] = _card_publication_contract(
+            card_id="prime-offer-shelf",
+            default_state=family,
+            states={family: link},
+        )
+        publication_rows.append({"family_id": family, **link})
+
+    latest_observed_at = _latest_card_observed_at(normalized_cards)
+    revision = PublicationRoute.create(
+        card_id="prime-gpu-market",
+        subject_id="market",
+        view_id="offer-shelf",
+        observed_at=latest_observed_at,
+        content_digest=content_digest,
+    ).revision
+    manifest_ref = _join(
+        output_root,
+        "publications/prime-gpu-market/manifest.json",
+    )
+    manifest = {
+        "schema_version": PUBLICATION_SCHEMA_VERSION,
+        "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
+        "publication_type": "prime_visible_offer_market",
         "revision": revision,
         "publication_count": len(publication_rows),
         "rows": publication_rows,
@@ -394,7 +480,11 @@ def render_gpu_benchmark_publication(
 ) -> bytes:
     """Render a legible social preview for one selected GPU benchmark."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
-    from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
+    from matplotlib.dates import (
+        AutoDateLocator,
+        ConciseDateFormatter,
+        HourLocator,
+    )
     from matplotlib.figure import Figure
     from matplotlib.patches import Rectangle
     from matplotlib.ticker import MaxNLocator
@@ -555,7 +645,12 @@ def render_gpu_benchmark_publication(
             zorder=4,
             parse_math=False,
         )
-        locator = AutoDateLocator(minticks=4, maxticks=6)
+        span_hours = max((dates[-1] - dates[0]).total_seconds() / 3600, 1)
+        locator = (
+            HourLocator(interval=max(1, math.ceil(span_hours / 5)))
+            if span_hours <= 48
+            else AutoDateLocator(minticks=4, maxticks=6)
+        )
         axes.xaxis.set_major_locator(locator)
         axes.xaxis.set_major_formatter(ConciseDateFormatter(locator))
         axes.xaxis.get_offset_text().set_visible(False)
@@ -635,6 +730,249 @@ def render_gpu_benchmark_publication(
             optimize=True,
         )
     return rgb_buffer.getvalue()
+
+
+def render_prime_offer_shelf_publication(
+    *,
+    card: Mapping[str, Any],
+) -> bytes:
+    """Render Prime price and visible-offer history on separate measures."""
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.dates import (
+        AutoDateLocator,
+        ConciseDateFormatter,
+        HourLocator,
+    )
+    from matplotlib.figure import Figure
+    from matplotlib.patches import Rectangle
+    from matplotlib.ticker import MaxNLocator
+
+    rows = _prime_publication_series(card)
+    family = str((card.get("data") or {}).get("family_id") or "GPU").upper()
+    paper = "#f8f5eb"
+    ink = "#142027"
+    muted = "#5f6f76"
+    price_color = "#315f82"
+    offer_color = "#91aecb"
+    offer_line = "#587383"
+    coral = "#a96552"
+    rule = "#a7b1b3"
+
+    figure = Figure(
+        figsize=(IMAGE_WIDTH / 100, IMAGE_HEIGHT / 100),
+        dpi=100,
+        facecolor=paper,
+    )
+    canvas = FigureCanvasAgg(figure)
+    figure.patches.append(
+        Rectangle(
+            (0.024, 0.04),
+            0.952,
+            0.92,
+            transform=figure.transFigure,
+            fill=False,
+            edgecolor=rule,
+            linewidth=1.2,
+        )
+    )
+    latest = rows[-1] if rows else None
+    observed_at = latest["date"] if latest else _parse_datetime(card.get("as_of"))
+    change = _series_change(rows)
+    figure.text(
+        0.052,
+        0.91,
+        "PRIME GPU MARKET",
+        color=muted,
+        fontsize=12,
+        fontweight=700,
+        family="sans-serif",
+    )
+    figure.text(
+        0.948,
+        0.91,
+        _format_observed(observed_at).upper(),
+        color=muted,
+        fontsize=10,
+        family="sans-serif",
+        horizontalalignment="right",
+    )
+    figure.text(
+        0.052,
+        0.825,
+        family,
+        color=price_color,
+        fontsize=12,
+        fontweight=700,
+        family="sans-serif",
+    )
+    figure.text(
+        0.052,
+        0.72,
+        _format_usd(latest["price"]) if latest else "PENDING",
+        color=ink,
+        fontsize=48,
+        family="serif",
+        parse_math=False,
+    )
+    figure.text(
+        0.225,
+        0.73,
+        "USD / GPU-HOUR",
+        color=muted,
+        fontsize=9,
+        family="sans-serif",
+    )
+    figure.text(
+        0.948,
+        0.765,
+        str(change["label"]).upper(),
+        color=coral,
+        fontsize=10,
+        fontweight=700,
+        family="sans-serif",
+        horizontalalignment="right",
+    )
+    figure.text(
+        0.948,
+        0.72,
+        (
+            f"{latest['offers']} VISIBLE "
+            f"{'OFFER' if latest and latest['offers'] == 1 else 'OFFERS'}"
+            if latest
+            else "VISIBLE OFFERS PENDING"
+        ),
+        color=muted,
+        fontsize=9,
+        family="sans-serif",
+        horizontalalignment="right",
+    )
+
+    price_axes = figure.add_axes((0.052, 0.34, 0.896, 0.28), facecolor=paper)
+    offer_axes = figure.add_axes((0.052, 0.16, 0.896, 0.105), facecolor=paper)
+    for axes in (price_axes, offer_axes):
+        axes.grid(axis="y", color=rule, alpha=0.25, linewidth=0.8)
+        axes.set_axisbelow(True)
+        axes.yaxis.tick_right()
+        axes.tick_params(
+            axis="both",
+            colors=muted,
+            labelsize=8,
+            length=0,
+            pad=7,
+        )
+        for spine in axes.spines.values():
+            spine.set_visible(False)
+
+    if rows:
+        dates = [row["date"] for row in rows]
+        prices = [row["price"] for row in rows]
+        offers = [row["offers"] for row in rows]
+        minimum, maximum = min(prices), max(prices)
+        spread = max(maximum - minimum, abs(prices[-1]) * 0.12, 0.2)
+        price_axes.set_ylim(max(0, minimum - spread * 0.14), maximum + spread * 0.14)
+        price_axes.plot(
+            dates,
+            prices,
+            color=price_color,
+            linewidth=3.4,
+            solid_capstyle="round",
+            solid_joinstyle="round",
+        )
+        price_axes.annotate(
+            _format_usd(prices[-1]),
+            xy=(dates[-1], prices[-1]),
+            xytext=(-8, 9),
+            textcoords="offset points",
+            color=price_color,
+            fontsize=9,
+            fontweight=700,
+            family="sans-serif",
+            horizontalalignment="right",
+            verticalalignment="bottom",
+            parse_math=False,
+        )
+        offer_axes.fill_between(
+            dates,
+            offers,
+            step="post",
+            color=offer_color,
+            alpha=0.38,
+            linewidth=0,
+        )
+        offer_axes.step(
+            dates,
+            offers,
+            where="post",
+            color=offer_line,
+            linewidth=1.8,
+        )
+        offer_axes.set_ylim(0, max(max(offers) * 1.18, 1))
+        offer_axes.yaxis.set_major_locator(MaxNLocator(nbins=3, integer=True))
+        span_hours = max((dates[-1] - dates[0]).total_seconds() / 3600, 1)
+        locator = (
+            HourLocator(interval=max(1, math.ceil(span_hours / 5)))
+            if span_hours <= 48
+            else AutoDateLocator(minticks=4, maxticks=6)
+        )
+        offer_axes.xaxis.set_major_locator(locator)
+        offer_axes.xaxis.set_major_formatter(ConciseDateFormatter(locator))
+        offer_axes.xaxis.get_offset_text().set_visible(False)
+        price_axes.set_xlim(dates[0], dates[-1])
+        offer_axes.set_xlim(dates[0], dates[-1])
+        price_axes.set_xticks([])
+        price_axes.yaxis.set_major_locator(MaxNLocator(nbins=4))
+        price_axes.yaxis.set_major_formatter(
+            lambda value, _position: _format_axis_usd(value)
+        )
+    else:
+        price_axes.text(
+            0.5,
+            0.5,
+            "HISTORY IS STILL BEING COLLECTED",
+            transform=price_axes.transAxes,
+            color=muted,
+            fontsize=14,
+            horizontalalignment="center",
+            verticalalignment="center",
+        )
+        price_axes.set_xticks([])
+        offer_axes.set_xticks([])
+
+    figure.text(
+        0.052,
+        0.285,
+        "MARKET PRICE",
+        color=muted,
+        fontsize=8,
+        family="sans-serif",
+    )
+    figure.text(
+        0.052,
+        0.115,
+        "VISIBLE OFFERS",
+        color=muted,
+        fontsize=8,
+        family="sans-serif",
+    )
+    figure.text(
+        0.5,
+        0.09,
+        "OBSERVED PUBLIC PRICE AND AVAILABILITY",
+        color=muted,
+        fontsize=9,
+        family="sans-serif",
+        horizontalalignment="center",
+    )
+    figure.text(
+        0.948,
+        0.09,
+        f"{len(rows)} HOURLY OBSERVATIONS",
+        color=muted,
+        fontsize=9,
+        family="sans-serif",
+        horizontalalignment="right",
+    )
+    return _publication_png(canvas)
 
 
 def render_sandbox_rate_publication(card: Mapping[str, Any]) -> bytes:
@@ -1288,6 +1626,52 @@ def _gpu_publication_metadata(
     }
 
 
+def _prime_offer_publication_metadata(
+    *,
+    card: Mapping[str, Any],
+    family: str,
+    observed_at: datetime | None,
+) -> dict[str, Any]:
+    rows = _prime_publication_series(card)
+    latest = rows[-1] if rows else None
+    value = _format_usd(latest["price"]) if latest else "pending"
+    offers = int(latest["offers"]) if latest else 0
+    change = _series_change(rows)
+    observed_label = _format_observed_date(observed_at)
+    display_line = (
+        f"{family} / {value} per GPU-hour / {offers} visible "
+        f"{'offer' if offers == 1 else 'offers'} / observed "
+        f"{observed_label.replace(' at ', ', ')}"
+    )
+    return {
+        "title": (
+            f"Prime {family} GPU market | {value}/GPU-hour | "
+            f"{offers} visible {'offer' if offers == 1 else 'offers'}"
+        ),
+        "description": (
+            f"Prime {family} observed public market price at {value} per "
+            f"GPU-hour with {offers} visible "
+            f"{'offer' if offers == 1 else 'offers'}. "
+            f"{change['label']}. Observed {observed_label}. "
+            "A disappearance is not a confirmed rental."
+        ),
+        "image_alt": (
+            f"Prime {family} market price at {value} per GPU-hour with "
+            f"{offers} visible {'offer' if offers == 1 else 'offers'}"
+        ),
+        "subject_label": f"Prime {family} GPU market",
+        "view_label": "Price and visible availability",
+        "value": value,
+        "observed_at": observed_at.isoformat() if observed_at else "",
+        "observed_label": _format_observed(observed_at),
+        "footer_label": display_line,
+        "display_line": display_line,
+        "change_pct": change["value"],
+        "change_label": change["label"],
+        "change_direction": change["direction"],
+    }
+
+
 def _publish_market_card_state(
     *,
     output_root: str,
@@ -1652,6 +2036,59 @@ def _visible_gpu_series(
     }
 
 
+def _prime_publication_series(card: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in card.get("series") or []:
+        if not isinstance(row, Mapping):
+            continue
+        observed_at = _parse_datetime(row.get("observed_at"))
+        price = _finite_number(row.get("value"))
+        if observed_at is None or price is None:
+            continue
+        rows.append(
+            {
+                "date": observed_at,
+                "price": price,
+                "offers": max(
+                    0,
+                    int(row.get("configuration_count") or row.get("offer_count") or 0),
+                ),
+            }
+        )
+    rows.sort(key=lambda row: row["date"])
+    return rows
+
+
+def _series_change(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
+    if len(rows) < 2:
+        return {
+            "value": None,
+            "label": "Tracking has just begun",
+            "direction": "unknown",
+        }
+    first = _finite_number(rows[0].get("price"))
+    latest = _finite_number(rows[-1].get("price"))
+    if first in {None, 0} or latest is None:
+        return {
+            "value": None,
+            "label": "Change unavailable",
+            "direction": "unknown",
+        }
+    value = ((latest - first) / first) * 100
+    if abs(value) < 0.05:
+        return {
+            "value": 0.0,
+            "label": "Unchanged since tracking began",
+            "direction": "flat",
+        }
+    direction = "up" if value > 0 else "down"
+    return {
+        "value": round(value, 6),
+        "label": f"{direction.title()} {abs(value):.1f}% since tracking began",
+        "direction": direction,
+    }
+
+
 def _sandbox_rate_rows(card: Mapping[str, Any]) -> list[dict[str, Any]]:
     series = card.get("series") or {}
     raw_rows = series.get("sandbox") if isinstance(series, Mapping) else []
@@ -1900,6 +2337,18 @@ def _live_gpu_url(*, article_url: str, family: str, range_id: str) -> str:
         }
     )
     return f"{article_url.split('?', 1)[0]}?{query}#gpu-benchmark-card"
+
+
+def _live_prime_offer_url(*, article_url: str, family: str) -> str:
+    query = urlencode(
+        {
+            "card": "prime-offer-shelf",
+            "view": "share",
+            "present": "card",
+            "primeGpu": family,
+        }
+    )
+    return f"{article_url.split('?', 1)[0]}?{query}#prime-offer-shelf-card"
 
 
 def _latest_observed_at(rows: list[Mapping[str, Any]]) -> datetime | None:

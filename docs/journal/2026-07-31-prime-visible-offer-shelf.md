@@ -101,16 +101,33 @@ slim object is deployed.
 ## Reproducibility And Release Audit
 
 Canonical sandbox evidence validation reports 33 managed-sandbox price
-observations across 11 services and 8 compatible StarSling source runs. Those
-runs yield 44 provider-run means, 141 complete jobs, and 1,410 aligned phase
-samples. The source manifest remains pinned to the reviewed upstream commit and
-retains checksums and source URLs.
+observations across 11 services and 10 compatible StarSling source runs. Those
+runs yield 56 provider-run means, 281 complete jobs, and 2,810 aligned phase
+samples. The source manifest is pinned to reviewed upstream commit
+`530243df34f12dc8c2e49528b40b17c2dbd523b9` and retains checksums and source
+URLs. The source audit admitted the new 30 and 31 July runs because both match
+the fixed 4-vCPU, 8-GiB, 40-GB shape; the five earlier 2-vCPU runs remain
+rejected.
+
+### Prime share contract follow-up
+
+Browser QA exposed one remaining contract mismatch: the Prime Work card could
+turn into the Share panel, but Share copied only the live article query string.
+The GPU card already copied an immutable publication URL with Open Graph and
+Twitter preview metadata. Prime now uses the same crawler-preview/live-handoff
+pattern. Every hourly build emits one H100 and one H200 publication page plus a
+1200-by-630 price-and-visible-offer image. The extensionless publication URL
+redirects a human reader to the standalone interactive card, while social
+crawlers receive the frozen title, description, and image. The copied link is
+read from the Gold-derived public contract; the browser does not construct a
+publication identity.
 
 Two clean local builds from that evidence produced the same build ID,
-`sandbox-cost-d7359443cfd4881b`, the same 50-file layout, and byte-identical
+`sandbox-cost-8db5fb3b77815a0a`, the same 50-file layout, and byte-identical
 evidence and table artifacts. The four root-bearing lease and manifest wrappers
 differ only because the test builds intentionally used different output-root
-paths.
+paths. The two public payloads also differ only in their root-bearing
+publication-manifest reference.
 
 The full project suite reports:
 
