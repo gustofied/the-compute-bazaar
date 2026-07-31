@@ -261,3 +261,44 @@ uv run gpu-prices stage1-check \
   --windmill-base-url http://127.0.0.1:18081
 overall: ok
 ```
+
+## What The Retained Shelf Says
+
+The card pair supports the market-microstructure thesis, but only in a
+qualified form. The broad GPU Price Index is a multi-provider observed market
+reference. The Prime card is a narrower view of one aggregator's visible
+seller floors and offer churn. Their difference is useful information rather
+than an error.
+
+The cleaned publication run
+`gold-market-prime-copy-release-20260731T1233Z` retains 147 H100 and 146 H200
+hourly observations from 25 through 31 July 2026. H100 moved from $3.72 with
+four visible offers to $2.82 with three, while the contemporaneous broader
+Compute Bazaar H100 benchmark was $2.50. H200 remained at $4.50 while visible
+offers moved from one to two; its broader benchmark was $3.62.
+
+Simple visible-offer count is not a complete price model. Its Pearson
+correlation with the Prime reference is only -0.108 for H100, but -0.643 for
+H200. The hourly transition directions are more revealing:
+
+- H100: an offer-count decline coincided with a price rise 27 times and a
+  price decline 16 times. An offer-count increase coincided with a price
+  decline 23 times and a price rise 11 times.
+- H200: all 10 price-changing observations after an offer-count decline moved
+  upward; all 10 price-changing observations after an offer-count increase
+  moved downward. Most H200 hours remained flat.
+
+This is consistent with visible scarcity and seller-floor composition shaping
+an advertised marketplace reference. It does not establish causality or reveal
+which disappearances were executed rentals. In particular, the H100 result
+rejects the stronger claim that price follows total visible count mechanically.
+Which providers, machine shapes, cluster sizes, regions, and price levels remain
+on the shelf matters.
+
+Visually, the cards expose the ingredients but the placeholder article prose
+does not yet articulate the conclusion. Detail aligns price and visible offers;
+Work exposes arrivals and departures at observed price levels; the main GPU
+card supplies the broader reference. The eventual article needs one short
+bridge between those objects: the benchmark describes the advertised market,
+while the Prime shelf shows how visible supply composition can move around and
+away from that reference.
