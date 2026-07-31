@@ -1652,8 +1652,7 @@ def _prime_offer_publication_metadata(
             f"Prime {family} observed public market price at {value} per "
             f"GPU-hour with {offers} visible "
             f"{'offer' if offers == 1 else 'offers'}. "
-            f"{change['label']}. Observed {observed_label}. "
-            "A disappearance is not a confirmed rental."
+            f"{change['label']}. Observed {observed_label}."
         ),
         "image_alt": (
             f"Prime {family} market price at {value} per GPU-hour with "

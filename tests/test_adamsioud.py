@@ -330,7 +330,7 @@ class AdamSioudServerTests(unittest.TestCase):
         self.assertIn("createCardWork", prime_source)
         self.assertIn("cardPermalink", prime_source)
         self.assertIn("localSvgPointer", prime_source)
-        self.assertIn("it is not a confirmed rental.", article)
+        self.assertNotIn("it is not a confirmed rental.", article)
         self.assertIn("Price against visible availability", article)
         self.assertNotIn("Visible configurations", article)
         self.assertNotIn("Advertised reference", article)

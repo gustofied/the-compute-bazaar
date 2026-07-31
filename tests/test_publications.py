@@ -302,7 +302,7 @@ class PrimeOfferPublicationTests(unittest.TestCase):
                 '<meta name="twitter:card" content="summary_large_image">',
                 html,
             )
-            self.assertIn("A disappearance is not a confirmed rental.", html)
+            self.assertNotIn("A disappearance is not a confirmed rental.", html)
             self.assertIn("window.location.replace(", html)
 
             png = image.read_bytes()
