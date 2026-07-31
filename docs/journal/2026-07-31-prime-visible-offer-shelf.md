@@ -123,3 +123,49 @@ The public freshness workflow now checks the first-party
 `https://bazaar.adamsioud.com/sandbox-cost.json` contract instead of the
 underlying CloudFront distribution hostname. Historical journal URLs are kept
 unchanged as contemporaneous evidence.
+
+## Production Release
+
+The AdamSioud article was published from commit `df8ed0d`. The Compute Bazaar
+pipeline and pinned article revision were published from commit `7453ca5`.
+
+The worker was built from a `git archive` of that exact pipeline commit, not
+from the dirty local checkout:
+
+```text
+worker image: compute-bazaar-windmill-worker:2026-07-31-prime-shelf-v1
+worker image ID: sha256:586eb0049b5790b4c76ceebd54686b5793f1cc978334fc23f158af379c38ba26
+```
+
+Only `windmill_worker` was recreated. Windmill Postgres, the server, Caddy,
+AutoMQ, and their volumes remained running.
+
+The named release observation completed successfully:
+
+```text
+market run: market-prime-shelf-release-20260731T1043Z
+gold run: gold-market-prime-shelf-release-20260731T1043Z
+dashboard export: dashboard-market-prime-shelf-release-20260731T1043Z
+providers: 18
+listings: 1,846
+index values: 218
+compute-market observations: 862
+status: success
+```
+
+Every provider, Gold, sandbox-cost, VM-capacity, and dashboard-export check
+reported `ok`. The Stage 1 operational check also reported `overall: ok`, one
+healthy worker, and the enabled hourly schedule `0 0 * * * *`.
+
+The public shelf contract is:
+
+```text
+https://bazaar.adamsioud.com/prime-frontier-offer-shelf.json
+```
+
+It is S3-versioned, encrypted at rest, served through CloudFront, contains no
+private S3 references, and currently retains 143 H100 and 142 H200 hourly
+observations. Production browser QA covered Detail, Work, Share, H100/H200
+switching, semantic chart descriptions, and desktop overflow. It reported no
+console errors. The same compiled CSS and JavaScript passed the earlier 390 px
+mobile QA before publication.
