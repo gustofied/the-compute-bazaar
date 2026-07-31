@@ -42,6 +42,10 @@ class DashboardSnapshotTests(unittest.TestCase):
             "prime-frontier-offer-market",
         )
         self.assertEqual(
+            _snapshot_name_for_filename("prime-frontier-offer-shelf.json"),
+            "prime-frontier-offer-shelf",
+        )
+        self.assertEqual(
             _snapshot_name_for_filename("prime-h100-offer-reference.json"),
             "prime-h100-offer-reference",
         )

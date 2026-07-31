@@ -119,6 +119,7 @@ featured-index.json
 featured-benchmarks.json
 benchmark-history.json
 prime-frontier-offer-market.json
+prime-frontier-offer-shelf.json
 prime-h100-offer-reference.json
 sandbox-cost.json
 index-history.json
@@ -151,6 +152,13 @@ histories, current benchmark-centered price levels, named upstream sources,
 eligible configuration details, and observable lifecycle events. It removes
 private S3 references and credentials. Counts are visible configurations and
 distinct upstream providers, not physical GPU inventory or traded volume.
+
+`prime-frontier-offer-shelf.json` is the smaller article contract for the H100
+and H200 visible-offer card. It retains the full reference and event histories,
+current configurations, stable listing and event identifiers, and public source
+URLs. The card groups simultaneous entries and exits for display, while the
+payload preserves the provider-level events used by tooltips and later
+analysis.
 
 `prime-h100-offer-reference.json` is an older compatibility projection of the H100
 product from the same build. New consumers should use the family-specific card files.

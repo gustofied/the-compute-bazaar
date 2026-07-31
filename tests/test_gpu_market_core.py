@@ -2196,6 +2196,7 @@ class GoldQueryTests(unittest.TestCase):
                 output_root=dashboard_root,
             )
             public = read_json(export["output_refs"]["prime_frontier_offer_market"])
+            shelf = read_json(export["output_refs"]["prime_frontier_offer_shelf"])
             h100_benchmark_card = read_json(
                 export["output_refs"]["gpu_benchmark_h100"]
             )
@@ -2269,6 +2270,24 @@ class GoldQueryTests(unittest.TestCase):
         self.assertNotIn("raw_ref", json.dumps(public))
         self.assertNotIn("s3://", json.dumps(public))
         self.assertEqual(
+            shelf["schema_version"],
+            "prime_frontier_offer_shelf_public_v1",
+        )
+        self.assertEqual(
+            {product["family_id"] for product in shelf["products"]},
+            {"H100", "H200"},
+        )
+        self.assertTrue(shelf["products"][0]["event_history"])
+        shelf_events = [
+            event
+            for product in shelf["products"]
+            for event in product["event_history"]
+        ]
+        self.assertTrue(all(event["event_id"] for event in shelf_events))
+        self.assertTrue(all(event["listing_id"] for event in shelf_events))
+        self.assertNotIn("benchmark_history", json.dumps(shelf))
+        self.assertNotIn("s3://", json.dumps(shelf))
+        self.assertEqual(
             h100_benchmark_card["schema_version"],
             "compute_bazaar_card_v1",
         )
@@ -2279,6 +2298,10 @@ class GoldQueryTests(unittest.TestCase):
         self.assertNotIn("s3://", json.dumps(h100_prime_card))
         self.assertIn(
             "prime_frontier_offer_market",
+            export["output_refs"],
+        )
+        self.assertIn(
+            "prime_frontier_offer_shelf",
             export["output_refs"],
         )
         self.assertEqual(reference_query["query"]["engine"], "datafusion")

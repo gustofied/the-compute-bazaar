@@ -1188,6 +1188,9 @@ def export_gold_dashboard_snapshot(
         "prime_frontier_offer_market": "/".join(
             [output_root.rstrip("/"), "prime-frontier-offer-market.json"]
         ),
+        "prime_frontier_offer_shelf": "/".join(
+            [output_root.rstrip("/"), "prime-frontier-offer-shelf.json"]
+        ),
         "prime_h100_offer_reference": "/".join(
             [output_root.rstrip("/"), "prime-h100-offer-reference.json"]
         ),
@@ -1240,6 +1243,32 @@ def export_gold_dashboard_snapshot(
             ],
         },
         "products": prime_frontier_products,
+    }
+    prime_frontier_shelf_public = {
+        "schema_version": "prime_frontier_offer_shelf_public_v1",
+        "manifest": public_manifest,
+        "methodology_version": PRIME_FRONTIER_METHOD_VERSION,
+        "reference_scope": PRIME_FRONTIER_SCOPE,
+        "source": prime_frontier_public["source"],
+        "measurement_notes": prime_frontier_public["measurement_notes"],
+        "products": [
+            {
+                key: product.get(key)
+                for key in [
+                    "family_id",
+                    "label",
+                    "market_url",
+                    "current",
+                    "last_seen",
+                    "history",
+                    "event_history",
+                    "offers",
+                    "sources",
+                ]
+            }
+            for product in prime_frontier_products
+            if product.get("family_id") in {"H100", "H200"}
+        ],
     }
     benchmark_by_family = {
         str(row.get("benchmark_family_id") or ""): row
@@ -1389,6 +1418,10 @@ def export_gold_dashboard_snapshot(
     write_json(
         output_refs["prime_frontier_offer_market"],
         prime_frontier_public,
+    )
+    write_json(
+        output_refs["prime_frontier_offer_shelf"],
+        prime_frontier_shelf_public,
     )
     h100_product = next(
         (
@@ -2450,6 +2483,8 @@ def _public_prime_frontier_event(row: dict[str, Any]) -> dict[str, Any]:
     return {
         key: row.get(key)
         for key in [
+            "event_id",
+            "listing_id",
             "event_type",
             "event_label",
             "provider",

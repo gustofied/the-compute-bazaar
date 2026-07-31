@@ -44,6 +44,7 @@ SNAPSHOT_FILES = {
     "listings-sample": "listings-sample.json",
     "market-state": "market-state.json",
     "prime-frontier-offer-market": "prime-frontier-offer-market.json",
+    "prime-frontier-offer-shelf": "prime-frontier-offer-shelf.json",
     "prime-h100-offer-reference": "prime-h100-offer-reference.json",
     "market-overview": "market-overview.json",
     "gpu-benchmark-h100": "gpu-benchmark/h100.json",

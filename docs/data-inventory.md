@@ -113,6 +113,7 @@ The maintained public files are:
 dashboard/compute-bazaar/featured-benchmarks.json
 dashboard/compute-bazaar/benchmark-history.json
 dashboard/compute-bazaar/prime-frontier-offer-market.json
+dashboard/compute-bazaar/prime-frontier-offer-shelf.json
 dashboard/compute-bazaar/prime-h100-offer-reference.json
 dashboard/compute-bazaar/sandbox-cost.json
 dashboard/compute-bazaar/sandbox/rates.json
