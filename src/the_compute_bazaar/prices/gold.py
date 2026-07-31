@@ -1322,7 +1322,7 @@ def export_gold_dashboard_snapshot(
         if publication:
             product["publication"] = publication
     prime_frontier_shelf_public["publications"] = {
-        "manifest_ref": prime_publications["manifest_ref"],
+        "manifest_path": "publications/prime-gpu-market/manifest.json",
         "revision": prime_publications["revision"],
         "publication_count": prime_publications["publication_count"],
     }

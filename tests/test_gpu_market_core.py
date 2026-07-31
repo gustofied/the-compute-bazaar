@@ -2286,6 +2286,11 @@ class GoldQueryTests(unittest.TestCase):
         self.assertTrue(all(event["event_id"] for event in shelf_events))
         self.assertTrue(all(event["listing_id"] for event in shelf_events))
         self.assertEqual(shelf["publications"]["publication_count"], 2)
+        self.assertEqual(
+            shelf["publications"]["manifest_path"],
+            "publications/prime-gpu-market/manifest.json",
+        )
+        self.assertNotIn("manifest_ref", shelf["publications"])
         self.assertTrue(
             all(
                 product["publication"]["states"][product["family_id"]]["url"]
