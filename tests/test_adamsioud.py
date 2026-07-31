@@ -184,6 +184,24 @@ class AdamSioudServerTests(unittest.TestCase):
         )
         self.assertIn("data-workload-history-summary", article)
         self.assertIn("data-workload-history-note", article)
+        self.assertIn("compute-ledger compute-ledger--scroll", article)
+        self.assertIn("data-sandbox-rate-count", article)
+        self.assertIn(
+            'aria-label="Current public sandbox rates. Scroll to review every '
+            'source and billing basis."',
+            article,
+        )
+        self.assertIn(
+            "`${rows.length} ${plural(rows.length, \"source\")} · scroll`",
+            sandbox_source,
+        )
+        self.assertIn(".compute-ledger--scroll ol", style_source)
+        self.assertIn("max-height: 126px;", style_source)
+        self.assertIn("overscroll-behavior: contain;", style_source)
+        self.assertIn("scrollbar-gutter: stable;", style_source)
+        self.assertIn("function configureRateLedger()", sandbox_source)
+        self.assertIn('event.key === "Home" || event.key === "End"', sandbox_source)
+        self.assertIn("nodes.rateTable.scrollBy", sandbox_source)
         self.assertNotIn("Seven matching source runs over five calendar days", article)
         self.assertIn("Every complete aligned job", article)
         self.assertNotIn("Provider-floor median", article)
