@@ -132,7 +132,7 @@ publication-manifest reference.
 The full project suite reports:
 
 ```text
-Ran 108 tests
+Ran 110 tests
 OK
 ```
 
@@ -186,3 +186,78 @@ observations. Production browser QA covered Detail, Work, Share, H100/H200
 switching, semantic chart descriptions, and desktop overflow. It reported no
 console errors. The same compiled CSS and JavaScript passed the earlier 390 px
 mobile QA before publication.
+
+## Publication And Shared-Surface Follow-up
+
+The first standalone Prime Work screenshot exposed a frontend contract bug
+rather than a data or publication failure. The shared Work and Share
+components consume the GPU reference card's `--index-*` design tokens. The
+Prime card defined only its own `--prime-*` palette, so several shared
+background declarations became invalid and allowed the low-opacity Munch page
+backdrop to show through the card.
+
+The Prime component now maps its palette onto the shared reference-card token
+contract and participates in the shared Work typography selectors. The
+generated stylesheet cache key moved from `v=26` to `v=27`; the corresponding
+article contract test was updated. AdamSioud commit `b1df916` contains the
+source CSS, compiled CSS, and article cache key.
+
+Desktop browser QA confirms that the standalone Work surface has an opaque
+linen-and-paper body, a readable D3 signal, and the short observable-change
+reel. Flipping to Share yields the clean 16:9 publication chart instead of a
+translucent Work card. At a 390-by-844 viewport the card has no horizontal
+overflow (`scrollWidth == clientWidth == 390`), all labels fit, and the loaded
+chart and activity rows remain readable. The browser console reports no
+warnings or errors.
+
+The publication-enabled worker was built from exact Compute Bazaar commit
+`9579f9a`:
+
+```text
+worker image: compute-bazaar-windmill-worker:2026-07-31-prime-publications-v2
+worker image ID: sha256:fef500b8c4f7d492a27585f9a856e2421fc8d6c3c09a4a573d2a8b1ec24e08e7
+```
+
+Only `windmill_worker` was recreated. The database remained healthy and the
+Windmill server, Caddy, and AutoMQ containers remained running.
+
+The regular 12:00 UTC hourly observation completed after deployment:
+
+```text
+market run: market-20260731T120000-c6d7195b
+gold run: gold-market-20260731T120000-c6d7195b
+dashboard export: dashboard-market-20260731T120000-c6d7195b
+providers: 18
+listings: 1,816
+price index values: 225
+compute-market observations: 859
+status: success
+```
+
+Every provider and the Gold, sandbox-cost, VM-capacity, discovery, and
+dashboard-export checks report `ok`. The Stage 1 check reports `overall: ok`,
+one healthy worker, and the enabled hourly schedule `0 0 * * * *`. A manual
+shell inside the long-running worker container does not receive Windmill
+resource variables, because Windmill injects those credentials into individual
+jobs. The successful provider manifests record `publish_mode: kafka`; that is
+the relevant publication proof for the scheduled path.
+
+The public Prime shelf contains no `s3://` references. It points to the
+relative public manifest path
+`publications/prime-gpu-market/manifest.json`. The current manifest contains
+two immutable rows, H100 and H200. Each extensionless publication page exposes
+Open Graph and Twitter large-image metadata, hands a human reader to the
+standalone live card, and uses a 1200-by-630 PNG preview.
+
+Final verification:
+
+```text
+npm run build:compute
+python -m unittest discover -s tests
+Ran 110 tests
+OK
+
+uv run gpu-prices stage1-check \
+  --windmill-base-url http://127.0.0.1:18081
+overall: ok
+```
