@@ -262,6 +262,15 @@ therefore copies one URL that has both a rich social preview and the polished
 interactive landing state. The public card JSON stores the publication URL,
 image URL, live URL, and compact display line for every supported state.
 
+GPU publication images are family-specific. The selected benchmark and its
+observed p25-p75 provider range determine the image scale; higher-priced GPU
+families do not flatten the selected line. The interactive Share card can still
+show all four families as comparison context. This is a presentation
+distinction only: both surfaces read the same Gold series, and the publication
+renderer does not change benchmark membership or formulas. The renderer profile
+is included in the immutable publication digest, so a material composition
+change creates a new revision instead of changing an existing URL in place.
+
 The Terraform stack can output the bucket policy statement without applying it. Keep
 `manage_bucket_policy = false` when the bucket policy is already managed by hand, then merge the
 `bucket_policy_json` output manually. Set it to `true` only when Terraform should own the whole

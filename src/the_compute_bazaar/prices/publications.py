@@ -20,8 +20,8 @@ from ..publication_contract import (
 from .storage import write_bytes, write_json
 
 
-PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v5"
-PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630"
+PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v6"
+PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_selected_series_v2"
 DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
 DEFAULT_ARTICLE_URL = (
     "https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html"
@@ -392,11 +392,12 @@ def render_gpu_benchmark_publication(
     selected_family: str,
     range_id: str,
 ) -> bytes:
-    """Render the selected benchmark with the other families as context."""
+    """Render a legible social preview for one selected GPU benchmark."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
     from matplotlib.figure import Figure
     from matplotlib.patches import Rectangle
+    from matplotlib.ticker import MaxNLocator
 
     if selected_family not in cards:
         raise ValueError(f"Unknown GPU publication family: {selected_family}")
@@ -412,12 +413,6 @@ def render_gpu_benchmark_publication(
     band_color = "#91aecb"
     coral = "#a96552"
     rule = "#a7b1b3"
-    family_colors = {
-        "H100": "#587383",
-        "H200": "#708690",
-        "B200": "#899ba2",
-        "B300": "#a0afb4",
-    }
 
     figure = Figure(
         figsize=(IMAGE_WIDTH / 100, IMAGE_HEIGHT / 100),
@@ -427,31 +422,32 @@ def render_gpu_benchmark_publication(
     canvas = FigureCanvasAgg(figure)
     figure.patches.append(
         Rectangle(
-            (0.02, 0.035),
-            0.96,
-            0.93,
+            (0.024, 0.04),
+            0.952,
+            0.92,
             transform=figure.transFigure,
             fill=False,
             edgecolor=rule,
-            linewidth=1.5,
+            linewidth=1.2,
         )
     )
     figure.text(
         0.052,
-        0.915,
+        0.91,
         "GPU PRICE INDEX",
         color=muted,
-        fontsize=13,
+        fontsize=12,
         fontweight=700,
         family="sans-serif",
+        linespacing=1,
     )
     observed_at = _latest_observed_at(selected_rows)
     figure.text(
         0.948,
-        0.915,
+        0.91,
         _format_observed(observed_at).upper(),
         color=muted,
-        fontsize=11,
+        fontsize=10,
         family="sans-serif",
         horizontalalignment="right",
     )
@@ -463,77 +459,108 @@ def render_gpu_benchmark_publication(
         0.825,
         selected_family,
         color=selected_color,
-        fontsize=11,
+        fontsize=12,
         fontweight=700,
         family="sans-serif",
     )
     figure.text(
         0.052,
-        0.748,
+        0.715,
         _format_usd(selected_latest["value"]) if selected_latest else "PENDING",
         color=ink,
-        fontsize=36,
+        fontsize=50,
         family="serif",
+        parse_math=False,
     )
     figure.text(
-        0.178,
-        0.755,
+        0.225,
+        0.725,
         "USD / GPU-HOUR",
         color=muted,
-        fontsize=8,
+        fontsize=9,
         family="sans-serif",
     )
     figure.text(
         0.948,
-        0.755,
+        0.765,
         str(change["label"]).upper(),
         color=coral,
-        fontsize=9,
+        fontsize=10,
         fontweight=700,
         family="sans-serif",
         horizontalalignment="right",
     )
+    if selected_latest:
+        figure.text(
+            0.948,
+            0.72,
+            (
+                f"QUOTED RANGE {_format_usd(selected_latest['lower'])}"
+                f"–{_format_usd(selected_latest['upper'])}"
+            ),
+            color=muted,
+            fontsize=9,
+            family="sans-serif",
+            horizontalalignment="right",
+            parse_math=False,
+        )
 
-    axes = figure.add_axes((0.052, 0.19, 0.896, 0.47), facecolor=paper)
+    axes = figure.add_axes((0.052, 0.165, 0.896, 0.44), facecolor=paper)
     axes.grid(axis="y", color=rule, alpha=0.28, linewidth=0.8)
     axes.set_axisbelow(True)
-    all_rows = [row for rows in series.values() for row in rows]
-    if all_rows:
-        maximum = max(max(row["value"], row["upper"]) for row in all_rows)
-        axes.set_ylim(0, max(maximum * 1.08, 1))
-        for family in GPU_FAMILIES:
-            rows = series.get(family, [])
-            if not rows:
-                continue
-            dates = [row["date"] for row in rows]
-            values = [row["value"] for row in rows]
-            if family == selected_family:
-                axes.fill_between(
-                    dates,
-                    [row["lower"] for row in rows],
-                    [row["upper"] for row in rows],
-                    color=band_color,
-                    alpha=0.2,
-                    linewidth=0,
-                )
-            axes.plot(
-                dates,
-                values,
-                color=(
-                    selected_color
-                    if family == selected_family
-                    else family_colors[family]
-                ),
-                linewidth=3.2 if family == selected_family else 1.7,
-                alpha=1 if family == selected_family else 0.48,
-                solid_capstyle="round",
-                solid_joinstyle="round",
-                zorder=4 if family == selected_family else 2,
-            )
+    if selected_rows:
+        dates = [row["date"] for row in selected_rows]
+        values = [row["value"] for row in selected_rows]
+        lower_values = [row["lower"] for row in selected_rows]
+        upper_values = [row["upper"] for row in selected_rows]
+        minimum = min([*values, *lower_values])
+        maximum = max([*values, *upper_values])
+        center = selected_latest["value"] if selected_latest else maximum
+        minimum_span = max(abs(center) * 0.12, 0.2)
+        spread = max(maximum - minimum, minimum_span)
+        axes.set_ylim(
+            max(0, minimum - spread * 0.12),
+            maximum + spread * 0.12,
+        )
+        axes.fill_between(
+            dates,
+            lower_values,
+            upper_values,
+            color=band_color,
+            alpha=0.24,
+            linewidth=0,
+            zorder=1,
+        )
+        axes.plot(
+            dates,
+            values,
+            color=selected_color,
+            linewidth=3.6,
+            alpha=1,
+            solid_capstyle="round",
+            solid_joinstyle="round",
+            zorder=3,
+        )
+        axes.annotate(
+            _format_usd(values[-1]),
+            xy=(dates[-1], values[-1]),
+            xytext=(-8, 10),
+            textcoords="offset points",
+            color=selected_color,
+            fontsize=9,
+            fontweight=700,
+            family="sans-serif",
+            horizontalalignment="right",
+            verticalalignment="bottom",
+            zorder=4,
+            parse_math=False,
+        )
         locator = AutoDateLocator(minticks=4, maxticks=6)
         axes.xaxis.set_major_locator(locator)
         axes.xaxis.set_major_formatter(ConciseDateFormatter(locator))
         axes.xaxis.get_offset_text().set_visible(False)
+        axes.yaxis.set_major_locator(MaxNLocator(nbins=4))
+        axes.margins(x=0)
     else:
         axes.text(
             0.5,
@@ -562,28 +589,34 @@ def render_gpu_benchmark_publication(
 
     figure.text(
         0.052,
-        0.105,
-        selected_family,
+        0.09,
+        f"{selected_family} · {GPU_RANGE_PRESENTATION[range_id]['label']}".upper(),
         color=selected_color,
-        fontsize=11,
+        fontsize=10,
         fontweight=700,
         family="sans-serif",
     )
     figure.text(
         0.5,
-        0.105,
-        "OBSERVED PUBLIC MARKET PRICES",
+        0.09,
+        "OBSERVED ADVERTISED PRICES",
         color=muted,
-        fontsize=10,
+        fontsize=9,
         family="sans-serif",
         horizontalalignment="center",
     )
+    coverage = cards[selected_family].get("coverage") or {}
+    provider_count = int(coverage.get("provider_count") or 0)
     figure.text(
         0.948,
-        0.105,
-        f"{GPU_RANGE_PRESENTATION[range_id]['short_label']} VIEW / HOURLY",
+        0.09,
+        (
+            f"{provider_count} PROVIDERS · HOURLY"
+            if provider_count
+            else "HOURLY OBSERVATIONS"
+        ),
         color=muted,
-        fontsize=11,
+        fontsize=9,
         family="sans-serif",
         horizontalalignment="right",
     )

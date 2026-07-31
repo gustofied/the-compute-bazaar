@@ -1,3 +1,4 @@
+import io
 import json
 import struct
 import unittest
@@ -8,6 +9,7 @@ from tempfile import TemporaryDirectory
 from the_compute_bazaar.prices.publications import (
     IMAGE_HEIGHT,
     IMAGE_WIDTH,
+    PUBLICATION_RENDER_PROFILE,
     PUBLICATION_SCHEMA_VERSION,
     publish_gpu_benchmark_publications,
     publish_sandbox_market_publications,
@@ -20,6 +22,37 @@ from the_compute_bazaar.publication_contract import (
 
 
 class GpuPublicationTests(unittest.TestCase):
+    def test_selected_series_render_profile_keeps_the_chart_legible(self) -> None:
+        from PIL import Image
+
+        cards = _cards()
+        for row in cards["B300"]["series"]:
+            row["value"] = 100.0
+            row["lower"] = 90.0
+            row["upper"] = 110.0
+
+        image_bytes = render_gpu_benchmark_publication(
+            cards=cards,
+            selected_family="H100",
+            range_id="all",
+        )
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            plot = image.crop((62, 249, 1138, 526)).convert("RGB")
+            selected_pixels = [
+                (x, y)
+                for y in range(plot.height)
+                for x in range(plot.width)
+                if _is_selected_line_pixel(plot.getpixel((x, y)))
+            ]
+
+        self.assertEqual(
+            PUBLICATION_RENDER_PROFILE,
+            "social_png_rgb_1200x630_selected_series_v2",
+        )
+        self.assertGreater(len(selected_pixels), 100)
+        selected_y = [pixel[1] for pixel in selected_pixels]
+        self.assertGreater(max(selected_y) - min(selected_y), 20)
+
     def test_publish_creates_immutable_pages_and_social_images(self) -> None:
         cards = _cards()
 
@@ -326,6 +359,11 @@ def _cards() -> dict[str, dict[str, object]]:
             },
         }
     return cards
+
+
+def _is_selected_line_pixel(pixel: tuple[int, int, int]) -> bool:
+    red, green, blue = pixel
+    return red < 90 and 70 < green < 135 and 100 < blue < 165
 
 
 def _sandbox_cards() -> tuple[
