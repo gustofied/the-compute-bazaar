@@ -80,13 +80,13 @@ Use this order when two copies disagree:
   four-processor comparison.
 - The latest batch contains 72 complete replicate-aligned jobs and 720 task
   phase rows. Missing replicate slots are never imputed.
-- Historical evidence contains 56 provider-batch summaries from ten source
-  batches over eight days and nine harness methodologies.
-- `sandbox_workload_run_history` preserves those ten source runs separately,
-  including repeated intraday runs. Six runs contain the complete fixed
+- Historical evidence contains 62 provider-batch summaries from eleven source
+  runs over eight days and ten harness methodologies.
+- `sandbox_workload_run_history` preserves those eleven source runs separately,
+  including repeated intraday runs. Seven runs contain the complete fixed
   six-service cohort and are eligible for the article headline history; four
   incomplete runs remain in gold and the public audit payload.
-- Those 56 rows are durable audit history, not one homogeneous performance
+- Those 62 rows are durable audit history, not one homogeneous performance
   time series. A frontend may inspect or group them by methodology, but must
   not draw one smooth line across harness revisions.
 - Workload execution belongs to the upstream StarSling project. Compute Bazaar

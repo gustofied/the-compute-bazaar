@@ -239,8 +239,8 @@ indices. Its cost field is
 processor-and-memory component. It is a marginal rate-card estimate, not a
 provider bill.
 
-The historical workload table retains 56 provider-batch means from ten source
-batches. Those batches cross nine harness revisions, so history is stratified by
+The historical workload table retains 62 provider-batch means from eleven source
+runs. Those batches cross ten harness revisions, so history is stratified by
 methodology rather than rendered as one homogeneous performance series.
 Lifecycle latency, queueing, reliability, and concurrency remain separate
 future measurements.
@@ -249,8 +249,8 @@ DataFusion also groups the retained provider-batch rows by source run into
 `sandbox_workload_run_history`. Each row carries service count, fixed-cohort
 completeness, median/p25/p75 runtime, median/p25/p75 estimated
 processor-and-memory cost, source run ID, source commit, and methodology ID.
-All ten source runs remain present, including repeated intraday runs. The
-article's headline history uses only the six runs containing all six fixed
+All eleven source runs remain present, including repeated intraday runs. The
+article's headline history uses only the seven runs containing all six fixed
 services; it does not rewrite incomplete runs or average them by day.
 
 The combined GPU/sandbox series uses hourly H100 benchmark prints only when at

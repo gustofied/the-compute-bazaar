@@ -83,14 +83,14 @@ class SandboxCostEvidenceTests(unittest.TestCase):
 
         self.assertEqual(summary["price_observation_count"], 33)
         self.assertEqual(summary["price_service_count"], 11)
-        self.assertEqual(summary["benchmark_batch_count"], 56)
-        self.assertEqual(summary["benchmark_replicate_count"], 281)
-        self.assertEqual(summary["benchmark_phase_count"], 2810)
+        self.assertEqual(summary["benchmark_batch_count"], 62)
+        self.assertEqual(summary["benchmark_replicate_count"], 353)
+        self.assertEqual(summary["benchmark_phase_count"], 3530)
         self.assertEqual(summary["benchmark_service_count"], 6)
-        self.assertEqual(summary["benchmark_run_count"], 10)
+        self.assertEqual(summary["benchmark_run_count"], 11)
         self.assertEqual(summary["benchmark_calendar_day_count"], 8)
-        self.assertEqual(summary["benchmark_methodology_count"], 9)
-        self.assertEqual(summary["latest_replicate_run_id"], "30589436441")
+        self.assertEqual(summary["benchmark_methodology_count"], 10)
+        self.assertEqual(summary["latest_replicate_run_id"], "30655876610")
         self.assertEqual(len(summary["fixed_members"]), 8)
         self.assertEqual(summary["utilization_metric_count"], 8)
         self.assertEqual(summary["utilization_public_stage_count"], 5)
@@ -349,8 +349,8 @@ class SandboxCostPipelineTests(unittest.TestCase):
         self.assertEqual(first.row_counts["sandbox_price_events"], 10)
         self.assertEqual(first.row_counts["sandbox_current_rates"], 11)
         self.assertEqual(first.row_counts["sandbox_fixed_rate"], 4)
-        self.assertEqual(first.row_counts["sandbox_workload_batch_history"], 56)
-        self.assertEqual(first.row_counts["sandbox_workload_run_history"], 10)
+        self.assertEqual(first.row_counts["sandbox_workload_batch_history"], 62)
+        self.assertEqual(first.row_counts["sandbox_workload_run_history"], 11)
         self.assertEqual(
             first.row_counts["sandbox_workload_latest_replicates"],
             72,
@@ -389,11 +389,11 @@ class SandboxCostPipelineTests(unittest.TestCase):
             workload_card["coverage"]["latest_replicate_count"],
             72,
         )
-        self.assertEqual(public["workload"]["source_batch_count"], 10)
+        self.assertEqual(public["workload"]["source_batch_count"], 11)
         self.assertEqual(public["workload"]["calendar_day_count"], 8)
-        self.assertEqual(public["workload"]["methodology_generation_count"], 9)
+        self.assertEqual(public["workload"]["methodology_generation_count"], 10)
         self.assertEqual(public["workload"]["fixed_service_count"], 6)
-        self.assertEqual(public["workload"]["complete_run_count"], 6)
+        self.assertEqual(public["workload"]["complete_run_count"], 7)
         self.assertEqual(public["workload"]["latest_replicate_count"], 72)
         self.assertEqual(
             public["workload"]["latest_source_replicate_slot_count"],
@@ -419,7 +419,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
         )
         self.assertEqual(len(public["workload"]["service_summary"]), 6)
         self.assertEqual(len(public["workload"]["phase_summary"]), 60)
-        self.assertEqual(len(public["workload"]["run_history"]), 10)
+        self.assertEqual(len(public["workload"]["run_history"]), 11)
         complete_runs = [
             row
             for row in public["workload"]["run_history"]
@@ -434,12 +434,13 @@ class SandboxCostPipelineTests(unittest.TestCase):
                 "30322186937",
                 "30510718771",
                 "30589436441",
+                "30655876610",
             ],
         )
         latest_run_rows = [
             row
             for row in public["workload"]["batch_history"]
-            if row["benchmark_run_id"] == "30589436441"
+            if row["benchmark_run_id"] == "30655876610"
         ]
         latest_run = public["workload"]["run_history"][-1]
         self.assertAlmostEqual(
@@ -666,7 +667,7 @@ class SandboxCostPipelineTests(unittest.TestCase):
             )
 
         self.assertEqual(result["engine"], "datafusion")
-        self.assertEqual(len(result["rows"]), 10)
+        self.assertEqual(len(result["rows"]), 11)
         july_22 = [
             row for row in result["rows"] if row["observed_date"] == "2026-07-22"
         ]

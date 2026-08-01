@@ -3403,7 +3403,7 @@ class GoldQueryTests(unittest.TestCase):
             sandbox_public["manifest"]["row_counts"]["sandbox_hourly_price_series"],
             33,
         )
-        self.assertEqual(sandbox_public["workload"]["source_batch_count"], 10)
+        self.assertEqual(sandbox_public["workload"]["source_batch_count"], 11)
 
 
 def _offer(

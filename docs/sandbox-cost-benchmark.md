@@ -370,15 +370,15 @@ CPU benchmark.
 
 ### Provider-batch mean
 
-The public source currently retains ten compatible runs over eight calendar
-days: 19-23, 28, 30, and 31 July 2026. They contain 56 provider-run means:
+The public source currently retains eleven compatible runs over eight calendar
+days: 19-23, 28, 30, and 31 July 2026. They contain 62 provider-run means:
 
 ```text
 batch_active_seconds =
   sum(ten published task means)
 ```
 
-Repeated intraday runs remain distinct. The ten runs use nine upstream
+Repeated intraday runs remain distinct. The eleven runs use ten upstream
 harness commits. The Better Auth app and task signature stayed pinned, but a
 harness change is still a methodology boundary. The article therefore draws no
 continuous trend line across different methodology IDs. Earlier two-processor
@@ -430,7 +430,7 @@ tables.
 The young seven-vendor hourly VM series is not repeated as a standalone chart.
 Instead, every unchanged hourly point appears in the absolute rate view and
 the VM median appears in the relative-price view. The historical provider-run
-chart remains outside the main narrative because its 56 rows cross nine
+chart remains outside the main narrative because its 62 rows cross ten
 harness methodologies. Those rows remain queryable and auditable;
 they have not been collapsed, averaged by day, or deleted.
 
@@ -956,14 +956,17 @@ from `gold/gpu_vm_sandbox_common_start.parquet` by the allowlisted
 `relative-common-start` DataFusion query. The browser does not join or rebase
 the component series.
 
-The AdamSioud article prefers CloudFront in production and keeps a checked-in
-fallback for local and failure-safe rendering:
+The public AdamSioud article reads the split card contracts from the first-party
+CloudFront hostname and renders the maintained D3 cards here:
 
 ```text
-external/AdamSioud/exemplars/compute-bazaar/index.html
-external/AdamSioud/exemplars/compute-bazaar/sandbox-cost.js
-external/AdamSioud/exemplars/compute-bazaar/sandbox-cost.json
+external/AdamSioud/exemplars/compute/feeling_the_compute.html
+external/AdamSioud/exemplars/compute/sandbox-market-card.source.js
 ```
+
+`external/AdamSioud/exemplars/compute-bazaar/` remains an operator workhouse
+for broader project inspection. It is not the canonical public article or a
+second benchmark implementation.
 
 The browser does not derive benchmark values from provider rows. DataFusion
 builds the gold median, mean, percentiles, and complete-hour history before the
@@ -1007,5 +1010,5 @@ console/network errors.
 Public page:
 
 ```text
-https://www.adamsioud.com/exemplars/compute-bazaar/
+https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html
 ```
