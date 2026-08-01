@@ -302,3 +302,73 @@ card supplies the broader reference. The eventual article needs one short
 bridge between those objects: the benchmark describes the advertised market,
 while the Prime shelf shows how visible supply composition can move around and
 away from that reference.
+
+## 2026-08-01: Price-level shelf view
+
+The first revision exposed every current price level in a full-width ladder and
+every retained configuration as a separate horizontal trace. It was accurate,
+but it spent too much space on labels and made the main price path harder to
+read. That version was discarded.
+
+The final card follows the compact two-pane convention used by market charts:
+
+- the upper pane keeps the Prime price dominant, with the broader Compute
+  Bazaar market price as a quiet dashed comparison;
+- the lower pane restores the hourly offer shape, now stacked into lower,
+  middle, and upper asking-price bands;
+- the three bands divide the retained asking-price range into equal thirds and
+  count configurations in each band at every observation;
+- the four headline values are simply Price, Change, Offers, and Providers;
+- the Cover and Share SVG use the same price-plus-offers hierarchy.
+
+This is deliberately an information reduction. Exact providers, machine
+shapes, listing identities, and observed prices remain in the Gold contract
+and Work view. The article chart answers the faster question: did the price
+move, did the number of offers move, and did the offer mix shift toward lower
+or higher asking-price bands?
+
+The browser still calculates no benchmark. The Prime reference, broad market
+reference, offer history, current offers, stable listing identities, and
+machine shapes all come from the public Gold contract. The browser only groups
+retained rows into three display bands and renders the supplied evidence.
+
+Verification covered the article-width Detail state and a 390-pixel mobile
+breakpoint. The mobile layout has no horizontal overflow, the D3 chart remains
+readable, and hourly observations remain keyboard inspectable through the chart
+slider. The chart title, description, and slider provide the bounded
+screen-reader interface.
+
+## 2026-08-01: Card hierarchy pass
+
+Removed the observation-count/provider tagline beneath the Prime title. The
+Detail masthead now states only the latest observation time; Price, Change,
+Offers, and Providers sit in one shallow data ribbon with inset separators.
+
+Share artifacts now use one hierarchy across GPU Index, Prime GPU Market,
+Sandbox Cost, and Rate Movement: title and observation time in the masthead, a
+rule, the selected measure and value, then the chart. Prime and GPU Index show
+change as a separate right-aligned value instead of a sentence. Repetitive
+footer counts were removed. Sandbox workload shares name the actual measure,
+Estimated Job Cost or Measured Runtime, instead of repeating Sandbox Cost.
+
+The first compact Prime metric passes still looked like a four-cell table, then
+became too sparse when the dividers were removed. The final readout has two
+intentional parts: one dominant price and unit on the left, and a grouped
+telemetry rail for Change, Offers, and Providers on the right. A shared baseline
+and two horizontal rules anchor the measurement without recreating table cells.
+On narrow screens the telemetry rail moves below the price without horizontal
+overflow.
+
+The remaining filled segmented controls were visually heavier than the data.
+GPU-family quote selectors now show a quiet instrument label over a tabular
+price, with a two-pixel accent underline marking the active family. The same
+underline interaction is used for chart ranges, sandbox views, cost/runtime,
+and relative-rate controls. This removes the generic filled-pill treatment
+while preserving keyboard tab and pressed states.
+
+An optical-alignment pass then removed two inherited article styles from the
+card interiors. The Prime summary no longer receives the site-wide `header`
+inset, so its title, readout, and plot share one left edge. The GPU plot title
+no longer receives the article-wide heading margin, removing the accidental
+blank strip above the chart. Summary spacing is now consistent across the two
+market cards.
