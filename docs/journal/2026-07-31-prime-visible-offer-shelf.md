@@ -405,3 +405,37 @@ publication generation. The full suite reports:
 Ran 111 tests
 OK
 ```
+
+The renderer was released from exact Compute Bazaar commit `6126cbe`:
+
+```text
+worker image: compute-bazaar-windmill-worker:2026-08-01-prime-preview-v8
+worker image ID: sha256:373db4e03c56eb4d356bb81141b599f3365e62a287d76ed3d5e5ee833ca18d54
+market run: market-prime-preview-v8-20260801T1014Z
+gold run: gold-market-prime-preview-v8-20260801T1014Z
+dashboard export: dashboard-market-prime-preview-v8-20260801T1014Z
+providers: 18
+listings: 1,958
+index values: 226
+compute-market observations: 903
+status: success
+```
+
+Only `windmill_worker` was recreated. Windmill Postgres, the server, Caddy,
+AutoMQ, and all volumes remained running. Every provider and the Gold,
+sandbox-cost, VM-capacity, discovery, and dashboard-export checks reported
+`ok`. The Stage 1 check reported `overall: ok`, one healthy worker, and the
+enabled hourly schedule `0 0 * * * *`.
+
+The production H100 wrapper and image were downloaded and checked directly:
+
+```text
+https://bazaar.adamsioud.com/publications/prime-gpu-market/h100/offer-shelf/2026-08-01-1014-utc-623e230556
+https://bazaar.adamsioud.com/publications/prime-gpu-market/h100/offer-shelf/2026-08-01-1014-utc-623e230556.png
+```
+
+The PNG is an opaque 1200-by-630 RGB image containing the broad benchmark and
+three price-level offer bands. The wrapper has literal Open Graph and X
+large-image metadata and hands human readers to the matching standalone live
+card. The superseded 09:00 UTC publication remains unchanged as an immutable
+historical object.
