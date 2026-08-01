@@ -11,6 +11,8 @@ from the_compute_bazaar.prices.publications import (
     IMAGE_WIDTH,
     PUBLICATION_RENDER_PROFILE,
     PUBLICATION_SCHEMA_VERSION,
+    _prime_offer_band_series,
+    _prime_publication_series,
     publish_gpu_benchmark_publications,
     publish_prime_offer_shelf_publications,
     publish_sandbox_market_publications,
@@ -49,7 +51,7 @@ class GpuPublicationTests(unittest.TestCase):
 
         self.assertEqual(
             PUBLICATION_RENDER_PROFILE,
-            "social_png_rgb_1200x630_selected_series_v2",
+            "social_png_rgb_1200x630_market_cards_v3",
         )
         self.assertGreater(len(selected_pixels), 100)
         selected_y = [pixel[1] for pixel in selected_pixels]
@@ -319,6 +321,50 @@ class PrimeOfferPublicationTests(unittest.TestCase):
         with Image.open(io.BytesIO(image_bytes)) as image:
             self.assertEqual(image.size, (IMAGE_WIDTH, IMAGE_HEIGHT))
             self.assertEqual(image.mode, "RGB")
+
+    def test_prime_offer_bands_retain_price_level_mix(self) -> None:
+        start = datetime(2026, 7, 25, tzinfo=timezone.utc)
+        card = {
+            "series": [
+                {
+                    "observed_at": (start + timedelta(hours=index)).isoformat(),
+                    "value": 3.0,
+                    "configuration_count": 3 if index == 0 else 2,
+                }
+                for index in range(3)
+            ],
+            "data": {
+                "event_history": [
+                    {
+                        "event_type": "entered",
+                        "listing_id": listing_id,
+                        "observed_at": start.isoformat(),
+                        "price_after_usd_gpu_hr": price,
+                    }
+                    for listing_id, price in (("low", 2.0), ("mid", 3.0), ("high", 4.0))
+                ]
+                + [
+                    {
+                        "event_type": "left_availability",
+                        "listing_id": "high",
+                        "observed_at": (start + timedelta(hours=1)).isoformat(),
+                        "previous_observed_at": start.isoformat(),
+                        "price_before_usd_gpu_hr": 4.0,
+                    }
+                ]
+            },
+        }
+        rows = _prime_publication_series(card)
+
+        bands = _prime_offer_band_series(card, rows)
+
+        self.assertEqual(
+            [
+                (row["lower"], row["middle"], row["upper"], row["total"])
+                for row in bands
+            ],
+            [(1, 1, 1, 3), (1, 1, 0, 2), (1, 1, 0, 2)],
+        )
 
 
 class SandboxPublicationTests(unittest.TestCase):

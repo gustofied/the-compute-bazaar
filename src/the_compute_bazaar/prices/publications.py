@@ -20,8 +20,8 @@ from ..publication_contract import (
 from .storage import write_bytes, write_json
 
 
-PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v6"
-PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_selected_series_v2"
+PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v7"
+PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_market_cards_v3"
 DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
 DEFAULT_ARTICLE_URL = (
     "https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html"
@@ -269,7 +269,7 @@ def publish_prime_offer_shelf_publications(
     manifest = {
         "schema_version": PUBLICATION_SCHEMA_VERSION,
         "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
-        "publication_type": "prime_visible_offer_market",
+        "publication_type": "prime_offer_market",
         "revision": revision,
         "publication_count": len(publication_rows),
         "rows": publication_rows,
@@ -756,6 +756,7 @@ def render_prime_offer_shelf_publication(
     offer_color = "#91aecb"
     offer_line = "#587383"
     coral = "#a96552"
+    green = "#526c28"
     rule = "#a7b1b3"
 
     figure = Figure(
@@ -836,10 +837,10 @@ def render_prime_offer_shelf_publication(
         0.948,
         0.72,
         (
-            f"{latest['offers']} VISIBLE "
+            f"{latest['offers']} "
             f"{'OFFER' if latest and latest['offers'] == 1 else 'OFFERS'}"
             if latest
-            else "VISIBLE OFFERS PENDING"
+            else "OFFERS PENDING"
         ),
         color=muted,
         fontsize=9,
@@ -847,7 +848,7 @@ def render_prime_offer_shelf_publication(
         horizontalalignment="right",
     )
 
-    price_axes = figure.add_axes((0.052, 0.34, 0.896, 0.28), facecolor=paper)
+    price_axes = figure.add_axes((0.052, 0.345, 0.896, 0.275), facecolor=paper)
     offer_axes = figure.add_axes((0.052, 0.16, 0.896, 0.105), facecolor=paper)
     for axes in (price_axes, offer_axes):
         axes.grid(axis="y", color=rule, alpha=0.25, linewidth=0.8)
@@ -866,10 +867,29 @@ def render_prime_offer_shelf_publication(
     if rows:
         dates = [row["date"] for row in rows]
         prices = [row["price"] for row in rows]
-        offers = [row["offers"] for row in rows]
-        minimum, maximum = min(prices), max(prices)
+        benchmarks = [
+            row["benchmark"]
+            for row in rows
+            if row.get("benchmark") is not None
+        ]
+        price_domain = [*prices, *benchmarks]
+        minimum, maximum = min(price_domain), max(price_domain)
         spread = max(maximum - minimum, abs(prices[-1]) * 0.12, 0.2)
         price_axes.set_ylim(max(0, minimum - spread * 0.14), maximum + spread * 0.14)
+        benchmark_dates = [
+            row["date"] for row in rows if row.get("benchmark") is not None
+        ]
+        if benchmark_dates:
+            price_axes.plot(
+                benchmark_dates,
+                benchmarks,
+                color=green,
+                linewidth=1.6,
+                linestyle=(0, (3, 4)),
+                alpha=0.72,
+                solid_capstyle="round",
+                solid_joinstyle="round",
+            )
         price_axes.plot(
             dates,
             prices,
@@ -891,22 +911,46 @@ def render_prime_offer_shelf_publication(
             verticalalignment="bottom",
             parse_math=False,
         )
+        offer_bands = _prime_offer_band_series(card, rows)
+        lower = [row["lower"] for row in offer_bands]
+        lower_middle = [row["lower"] + row["middle"] for row in offer_bands]
+        totals = [row["total"] for row in offer_bands]
         offer_axes.fill_between(
             dates,
-            offers,
+            0,
+            lower,
+            step="post",
+            color=green,
+            alpha=0.58,
+            linewidth=0,
+        )
+        offer_axes.fill_between(
+            dates,
+            lower,
+            lower_middle,
             step="post",
             color=offer_color,
-            alpha=0.38,
+            alpha=0.58,
+            linewidth=0,
+        )
+        offer_axes.fill_between(
+            dates,
+            lower_middle,
+            totals,
+            step="post",
+            color=coral,
+            alpha=0.58,
             linewidth=0,
         )
         offer_axes.step(
             dates,
-            offers,
+            totals,
             where="post",
             color=offer_line,
-            linewidth=1.8,
+            linewidth=1.2,
+            alpha=0.78,
         )
-        offer_axes.set_ylim(0, max(max(offers) * 1.18, 1))
+        offer_axes.set_ylim(0, max(max(totals) * 1.18, 1))
         offer_axes.yaxis.set_major_locator(MaxNLocator(nbins=3, integer=True))
         span_hours = max((dates[-1] - dates[0]).total_seconds() / 3600, 1)
         locator = (
@@ -941,7 +985,7 @@ def render_prime_offer_shelf_publication(
     figure.text(
         0.052,
         0.285,
-        "MARKET PRICE",
+        "PRICE",
         color=muted,
         fontsize=8,
         family="sans-serif",
@@ -949,7 +993,7 @@ def render_prime_offer_shelf_publication(
     figure.text(
         0.052,
         0.115,
-        "VISIBLE OFFERS",
+        "OFFERS",
         color=muted,
         fontsize=8,
         family="sans-serif",
@@ -957,7 +1001,7 @@ def render_prime_offer_shelf_publication(
     figure.text(
         0.5,
         0.09,
-        "OBSERVED PUBLIC PRICE AND AVAILABILITY",
+        "PRICE AND OFFERS",
         color=muted,
         fontsize=9,
         family="sans-serif",
@@ -966,7 +1010,7 @@ def render_prime_offer_shelf_publication(
     figure.text(
         0.948,
         0.09,
-        f"{len(rows)} HOURLY OBSERVATIONS",
+        "HOURLY",
         color=muted,
         fontsize=9,
         family="sans-serif",
@@ -1639,27 +1683,27 @@ def _prime_offer_publication_metadata(
     change = _series_change(rows)
     observed_label = _format_observed_date(observed_at)
     display_line = (
-        f"{family} / {value} per GPU-hour / {offers} visible "
+        f"{family} / {value} per GPU-hour / {offers} "
         f"{'offer' if offers == 1 else 'offers'} / observed "
         f"{observed_label.replace(' at ', ', ')}"
     )
     return {
         "title": (
             f"Prime {family} GPU market | {value}/GPU-hour | "
-            f"{offers} visible {'offer' if offers == 1 else 'offers'}"
+            f"{offers} {'offer' if offers == 1 else 'offers'}"
         ),
         "description": (
             f"Prime {family} observed public market price at {value} per "
-            f"GPU-hour with {offers} visible "
+            f"GPU-hour with {offers} "
             f"{'offer' if offers == 1 else 'offers'}. "
             f"{change['label']}. Observed {observed_label}."
         ),
         "image_alt": (
             f"Prime {family} market price at {value} per GPU-hour with "
-            f"{offers} visible {'offer' if offers == 1 else 'offers'}"
+            f"{offers} {'offer' if offers == 1 else 'offers'}"
         ),
         "subject_label": f"Prime {family} GPU market",
-        "view_label": "Price and visible availability",
+        "view_label": "Price and offers",
         "value": value,
         "observed_at": observed_at.isoformat() if observed_at else "",
         "observed_label": _format_observed(observed_at),
@@ -2052,10 +2096,145 @@ def _prime_publication_series(card: Mapping[str, Any]) -> list[dict[str, Any]]:
                     0,
                     int(row.get("configuration_count") or row.get("offer_count") or 0),
                 ),
+                "providers": max(0, int(row.get("provider_count") or 0)),
+                "benchmark": _finite_number(
+                    row.get("market_benchmark_usd_gpu_hr")
+                ),
             }
         )
     rows.sort(key=lambda row: row["date"])
     return rows
+
+
+def _prime_offer_band_series(
+    card: Mapping[str, Any],
+    rows: list[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Reconstruct lower, middle, and upper asking-price shelf counts."""
+    if not rows:
+        return []
+    data = card.get("data")
+    events = data.get("event_history") if isinstance(data, Mapping) else []
+    normalized_events: list[dict[str, Any]] = []
+    for event in events or []:
+        if not isinstance(event, Mapping):
+            continue
+        event_type = str(event.get("event_type") or "")
+        observed_at = _parse_datetime(event.get("observed_at"))
+        listing_id = str(event.get("listing_id") or "")
+        price = _finite_number(
+            event.get("price_before_usd_gpu_hr")
+            if event_type == "left_availability"
+            else event.get("price_after_usd_gpu_hr")
+        )
+        if not listing_id or observed_at is None or price is None:
+            continue
+        normalized_events.append(
+            {
+                "type": event_type,
+                "date": observed_at,
+                "listing_id": listing_id,
+                "price": price,
+                "previous_date": _parse_datetime(event.get("previous_observed_at")),
+            }
+        )
+    normalized_events.sort(key=lambda event: event["date"])
+
+    final_date = rows[-1]["date"]
+    active: dict[str, dict[str, Any]] = {}
+    intervals: list[dict[str, Any]] = []
+    for event in normalized_events:
+        listing_id = event["listing_id"]
+        if event["type"] == "entered":
+            previous = active.get(listing_id)
+            if previous:
+                previous["end"] = event["date"]
+                intervals.append(previous)
+            active[listing_id] = {
+                **event,
+                "start": event["date"],
+                "end": None,
+            }
+        elif event["type"] == "left_availability":
+            previous = active.pop(listing_id, None)
+            if previous:
+                previous["end"] = event["date"]
+                intervals.append(previous)
+            elif event["previous_date"] is not None:
+                intervals.append(
+                    {
+                        **event,
+                        "start": event["previous_date"],
+                        "end": event["date"],
+                    }
+                )
+    for interval in active.values():
+        interval["end"] = final_date
+        interval["is_open"] = True
+        intervals.append(interval)
+    intervals = [
+        interval
+        for interval in intervals
+        if interval["end"] > interval["start"]
+    ]
+
+    prices = sorted(interval["price"] for interval in intervals)
+    if not prices:
+        return [
+            {
+                "date": row["date"],
+                "lower": 0,
+                "middle": int(row.get("offers") or 0),
+                "upper": 0,
+                "total": int(row.get("offers") or 0),
+            }
+            for row in rows
+        ]
+    minimum, maximum = prices[0], prices[-1]
+    step = max(0.01, (maximum - minimum) / 3)
+    lower_limit = minimum + step
+    upper_limit = minimum + step * 2
+
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        row_date = row["date"]
+        current: dict[str, dict[str, Any]] = {}
+        for interval in intervals:
+            within = interval["start"] <= row_date and (
+                row_date < interval["end"]
+                or (interval.get("is_open") and row_date == interval["end"])
+            )
+            if not within:
+                continue
+            previous = current.get(interval["listing_id"])
+            if previous is None or previous["start"] < interval["start"]:
+                current[interval["listing_id"]] = interval
+        counts = {"lower": 0, "middle": 0, "upper": 0}
+        for interval in current.values():
+            if interval["price"] < lower_limit:
+                counts["lower"] += 1
+            elif interval["price"] < upper_limit:
+                counts["middle"] += 1
+            else:
+                counts["upper"] += 1
+        expected_total = int(row.get("offers") or 0)
+        total = sum(counts.values())
+        if total < expected_total:
+            counts["middle"] += expected_total - total
+        elif total > expected_total:
+            excess = total - expected_total
+            for key in ("upper", "middle", "lower"):
+                removed = min(excess, counts[key])
+                counts[key] -= removed
+                excess -= removed
+        result.append(
+            {
+                "date": row_date,
+                **counts,
+                "total": expected_total,
+            }
+        )
+    return result
 
 
 def _series_change(rows: list[Mapping[str, Any]]) -> dict[str, Any]:

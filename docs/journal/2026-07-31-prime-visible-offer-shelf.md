@@ -372,3 +372,36 @@ inset, so its title, readout, and plot share one left edge. The GPU plot title
 no longer receives the article-wide heading margin, removing the accidental
 blank strip above the chart. Summary spacing is now consistent across the two
 market cards.
+
+## 2026-08-01: Publication renderer parity
+
+The first-party publication URL was fresh, but its Open Graph image still used
+the initial Prime renderer: one price line over a single total-offer area. The
+article Share state had already moved to a stronger two-pane contract with a
+quiet broad-market comparison and lower, middle, and upper asking-price shelf
+bands. Checking only the publication timestamp missed that visual mismatch.
+
+Publication schema v7 and render profile `market_cards_v3` now make that
+contract explicit. The backend renderer reconstructs listing intervals from
+retained Prime entry and departure events, divides the retained asking-price
+range into three equal bands, and reconciles each hourly stack to the Gold
+configuration count. If event history is absent, it fails softly to one middle
+band without changing the recorded total. The price pane reads the supplied
+Prime reference and broader Compute Bazaar benchmark; it calculates neither in
+the image renderer.
+
+The social image now uses the same hierarchy as the live card: selected family
+and price, change since collection began, price plus quiet benchmark, then the
+three asking-price bands. UI copy says `offers`, while exact listing identity,
+provider, machine shape, and event provenance remain in the public Gold object.
+The schema/render-profile change produces a new immutable publication revision;
+older links and images remain frozen.
+
+Focused coverage verifies interval matching, departure handling, band counts,
+total-count reconciliation, 1200-by-630 RGB output, and deterministic immutable
+publication generation. The full suite reports:
+
+```text
+Ran 111 tests
+OK
+```
