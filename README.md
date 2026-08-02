@@ -631,6 +631,29 @@ From the VPC worker, add the private Kafka check:
 gpu-prices stage1-check --check-automq --require-ingest-env
 ```
 
+## Local Recovery Archive
+
+Keep a checksummed local copy of the complete current S3 data estate:
+
+```sh
+uv run gpu-prices archive-cloud --output-root data/cloud-archive
+uv run gpu-prices verify-cloud-archive --archive-root data/cloud-archive
+```
+
+The archive is resumable and content-addressed. It preserves the original S3
+bucket/key tree so existing manifests, DataFusion queries, the dashboard, and
+CLI commands can run without AWS access:
+
+```sh
+source data/cloud-archive/offline.env
+uv run gpu-prices latest-market-run
+uv run gpu-prices operator-query benchmark_values
+```
+
+See [docs/data-inventory.md](docs/data-inventory.md#local-cloud-archive) for
+the storage contract, verification behavior, and current S3-versioning and
+AutoMQ recovery boundaries.
+
 ## Current Limitations
 
 - `market_hourly` is the main loop. Immutable generation manifests and an

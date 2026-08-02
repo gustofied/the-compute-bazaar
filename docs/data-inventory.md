@@ -210,3 +210,60 @@ When a chart or API needs to be rebuilt:
 5. Follow raw references into bronze for evidence or parser debugging.
 6. Export a new public-safe JSON projection.
 7. Verify freshness, row counts, units, source links, and responsive rendering.
+
+## Local Cloud Archive
+
+The complete current S3 data estate can be retained under the ignored local
+`data/cloud-archive/` tree. The archive stores each payload once by SHA-256,
+materializes the original bucket/key hierarchy with hard links, and writes a
+snapshot manifest containing the source ETag, size, last-modified time, and
+local checksum for every object.
+
+```sh
+uv run gpu-prices archive-cloud --output-root data/cloud-archive
+uv run gpu-prices verify-cloud-archive --archive-root data/cloud-archive
+```
+
+The default source is the full bucket inferred from the configured raw, lake,
+and dashboard roots. Re-running the command reuses unchanged content-addressed
+blobs and downloads only new or changed current objects. Snapshot manifests
+remain under `snapshots/`; old blobs are retained when a mutable S3 key changes.
+
+To operate without AWS access:
+
+```sh
+source data/cloud-archive/offline.env
+uv run gpu-prices latest-market-run
+uv run gpu-prices operator-query benchmark_values
+uv run compute-bazaar-dashboard --snapshot-source s3
+```
+
+`COMPUTE_BAZAAR_S3_MIRROR_ROOT` resolves the unchanged `s3://` references in
+historical manifests to local files. DataFusion therefore runs the same named
+queries over the archived Parquet objects; manifests and evidence are not
+rewritten to pretend that local paths were their original source.
+
+The archive contains current S3 objects, including the immutable bronze,
+silver, gold, market-run, dashboard, and publication histories already
+retained as separate keys. Bucket versioning is enabled, but the current IAM
+user does not have `s3:ListBucketVersions`; overwritten historical object
+versions and delete markers are therefore outside this archive until that
+read-only permission is granted.
+
+S3 keys whose individual path components exceed the local filesystem limit
+are stored under deterministic `.s3-long-keys/` paths. Their original keys
+remain in the archive manifest, and the mirror resolver handles them normally;
+do not treat the materialized directory layout alone as the object index.
+
+This folder protects against losing cloud access, but a copy on the same
+laptop is not an independent hardware backup. Periodically rerun
+`archive-cloud`, then copy the complete `data/cloud-archive/` directory to an
+external disk or another account-controlled storage location. If it is moved,
+update `COMPUTE_BAZAAR_S3_MIRROR_ROOT` in `offline.env` to the new absolute
+`objects/` path.
+
+AutoMQ remains a transient event tape rather than the durable market record.
+Provider snapshots, normalized offers, and market-state observations are
+reconstructible from S3 bronze and silver. A Kafka topic export can be kept as
+an additional operational artifact, but loss of AutoMQ does not remove the
+evidence or query history represented by this archive.

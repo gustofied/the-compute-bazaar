@@ -7,6 +7,8 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 from urllib.parse import urlparse
 
+from .storage import resolve_read_uri
+
 
 DEFAULT_BENCHMARK_SQL = """
 select
@@ -74,6 +76,7 @@ def query_parquet(
         raise RuntimeError("DataFusion queries require the 'platform' extra: uv sync --extra platform") from exc
 
     ctx = SessionContext()
+    parquet_uri = resolve_read_uri(parquet_uri)
     _register_object_stores(ctx, [parquet_uri])
     ctx.register_parquet(table_name, parquet_uri)
     batches = ctx.sql(sql).collect()
@@ -97,8 +100,9 @@ def query_tables(*, tables: Mapping[str, str], sql: str) -> list[dict[str, Any]]
         raise RuntimeError("DataFusion queries require the 'platform' extra: uv sync --extra platform") from exc
 
     ctx = SessionContext()
-    _register_object_stores(ctx, tables.values())
-    for table_name, parquet_uri in tables.items():
+    resolved_tables = {name: resolve_read_uri(uri) for name, uri in tables.items()}
+    _register_object_stores(ctx, resolved_tables.values())
+    for table_name, parquet_uri in resolved_tables.items():
         ctx.register_parquet(table_name, parquet_uri)
     batches = ctx.sql(sql).collect()
     if not batches:

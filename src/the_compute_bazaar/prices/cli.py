@@ -12,6 +12,7 @@ from .automq import (
     kafka_bootstrap_servers_from_env,
     kafka_config_from_env,
 )
+from .archive import create_s3_archive, default_s3_archive_roots, verify_s3_archive
 from .checks import run_stage1_checks
 from .coverage import query_frontier_coverage
 from .datafusion import DEFAULT_BENCHMARK_SQL, query_parquet, query_price_index
@@ -645,6 +646,25 @@ def main() -> None:
     automq_check.add_argument(
         "--bootstrap-servers", default=kafka_bootstrap_servers_from_env()
     )
+
+    archive_cloud = subparsers.add_parser(
+        "archive-cloud",
+        help="Download current S3 data into a checksummed local replay archive",
+    )
+    archive_cloud.add_argument(
+        "--source-root",
+        action="append",
+        help="S3 root to archive; repeat for multiple roots (default: configured bucket)",
+    )
+    archive_cloud.add_argument("--output-root", default="data/cloud-archive")
+    archive_cloud.add_argument("--workers", type=int, default=12)
+
+    verify_cloud_archive = subparsers.add_parser(
+        "verify-cloud-archive",
+        help="Verify every local archive object against its SHA-256 checksum",
+    )
+    verify_cloud_archive.add_argument("--archive-root", default="data/cloud-archive")
+    verify_cloud_archive.add_argument("--workers", type=int, default=8)
 
     stage1_check = subparsers.add_parser(
         "stage1-check", help="Verify Stage 1 ingestion/query/orchestration health"
@@ -1342,6 +1362,25 @@ def main() -> None:
             config=kafka_config_from_env(),
         )
         _print_json({"connected": True, "topics": topics})
+        return
+
+    if args.command == "archive-cloud":
+        _print_json(
+            create_s3_archive(
+                source_roots=args.source_root or default_s3_archive_roots(),
+                archive_root=args.output_root,
+                workers=args.workers,
+            )
+        )
+        return
+
+    if args.command == "verify-cloud-archive":
+        _print_json(
+            verify_s3_archive(
+                archive_root=args.archive_root,
+                workers=args.workers,
+            )
+        )
         return
 
     if args.command == "benchmark":

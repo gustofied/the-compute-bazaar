@@ -20,6 +20,32 @@ class LeaseBusyError(RuntimeError):
     """Raised when another process owns a mutable dataset's publication lease."""
 
 
+def s3_mirror_path(uri: str, *, require_exists: bool = True) -> Path | None:
+    """Resolve an S3 URI through an optional read-only local mirror."""
+    mirror_root = os.getenv("COMPUTE_BAZAAR_S3_MIRROR_ROOT")
+    if not mirror_root or not uri.startswith("s3://"):
+        return None
+    parsed = urlparse(uri)
+    key = parsed.path.lstrip("/")
+    if key:
+        from .archive import archive_object_path
+
+        path = archive_object_path(Path(mirror_root).resolve().parent, parsed.netloc, key)
+    else:
+        path = Path(mirror_root).resolve() / parsed.netloc
+    if not require_exists or path.exists():
+        return path
+    if os.getenv("COMPUTE_BAZAAR_S3_MIRROR_STRICT", "").lower() in {"1", "true", "yes"}:
+        raise FileNotFoundError(f"S3 object is absent from the local mirror: {uri}")
+    return None
+
+
+def resolve_read_uri(uri: str) -> str:
+    """Return a local mirror path when configured, otherwise the original URI."""
+    mirrored = s3_mirror_path(uri)
+    return str(mirrored) if mirrored else uri
+
+
 @contextmanager
 def exclusive_lease(uri: str, *, ttl_seconds: int = 1800) -> Iterator[None]:
     """Serialize a short read/merge/publish transaction locally or in S3."""
@@ -84,6 +110,36 @@ def read_optional_json(uri: str) -> dict[str, Any]:
 def list_refs(uri_prefix: str, *, suffix: str = "") -> list[str]:
     """List local or S3 refs under a prefix."""
     if uri_prefix.startswith("s3://"):
+        mirrored_prefix = s3_mirror_path(uri_prefix.rstrip("/"), require_exists=False)
+        if mirrored_prefix:
+            parsed = urlparse(uri_prefix.rstrip("/") + "/")
+            manifest_path = (
+                Path(os.environ["COMPUTE_BAZAAR_S3_MIRROR_ROOT"]).resolve().parent
+                / "latest-manifest.json"
+            )
+            if manifest_path.is_file():
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                prefix = parsed.path.lstrip("/")
+                return sorted(
+                    f"s3://{parsed.netloc}/{row['key']}"
+                    for row in manifest.get("objects", [])
+                    if row.get("bucket") == parsed.netloc
+                    and str(row.get("key") or "").startswith(prefix)
+                    and (not suffix or str(row.get("key") or "").endswith(suffix))
+                )
+        if mirrored_prefix and mirrored_prefix.exists():
+            refs = []
+            for path in mirrored_prefix.rglob(f"*{suffix}" if suffix else "*"):
+                if not path.is_file():
+                    continue
+                relative = path.relative_to(
+                    Path(os.environ["COMPUTE_BAZAAR_S3_MIRROR_ROOT"]).resolve()
+                    / parsed.netloc
+                )
+                refs.append(f"s3://{parsed.netloc}/{relative.as_posix()}")
+            return sorted(refs)
+        if mirrored_prefix and os.getenv("COMPUTE_BAZAAR_S3_MIRROR_STRICT", "").lower() in {"1", "true", "yes"}:
+            return []
         parsed = urlparse(uri_prefix.rstrip("/") + "/")
         client = _s3_client()
         prefix = parsed.path.lstrip("/")
@@ -149,6 +205,7 @@ def write_bytes(
 
 
 def read_bytes(uri: str) -> bytes:
+    uri = resolve_read_uri(uri)
     if uri.startswith("s3://"):
         parsed = urlparse(uri)
         response = _s3_client().get_object(
@@ -354,6 +411,7 @@ def read_parquet_rows(uri: str) -> list[dict[str, Any]]:
             "Reading Parquet requires the 'platform' extra: uv sync --extra platform"
         ) from exc
 
+    uri = resolve_read_uri(uri)
     if uri.startswith("s3://"):
         try:
             import pyarrow.fs as pafs
