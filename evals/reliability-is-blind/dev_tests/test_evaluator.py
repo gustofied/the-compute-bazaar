@@ -17,7 +17,7 @@ sys.path.insert(0, str(EVALUATOR_ROOT))
 
 import analysis as rib_analysis  # noqa: E402
 import protocol as rib_protocol  # noqa: E402
-from view import create_app  # noqa: E402
+from view import _share_html, create_app  # noqa: E402
 
 
 ENGINE_SHA256 = hashlib.sha256(
@@ -475,6 +475,29 @@ class ReliabilityIsBlindAnalysisTests(unittest.TestCase):
             app = create_app(analysis)
 
         self.assertEqual(app.title, "Reliability Is Blind Evaluator View")
+
+    def test_share_view_uses_protocol_summary_values(self) -> None:
+        html = _share_html(
+            {
+                "observed_trials": 59,
+                "planned_seed_cells": 20,
+                "models": [
+                    {
+                        "model": "mistral/mistral-medium-3-5",
+                        "observed_trials": 20,
+                        "completed_rollouts": 17,
+                        "reliability_targets_met": 10,
+                        "mean_completed_failure_rate": 0.057,
+                    }
+                ],
+            }
+        )
+
+        self.assertIn("Mistral Medium 3.5", html)
+        self.assertIn("17/20", html)
+        self.assertIn("10/20", html)
+        self.assertIn("5.7%", html)
+        self.assertIn("59 trials", html)
 
 
 if __name__ == "__main__":

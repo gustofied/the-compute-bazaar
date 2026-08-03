@@ -30,5 +30,7 @@ uv run python evals/reliability-is-blind/evaluator/view.py \
   --port 8084
 ```
 
+Open `http://127.0.0.1:8084/share` for the screenshot-ready protocol summary.
+
 The generated analysis contains private seed strata and hidden supplier
 diagnostics. Bind the viewer only to localhost and do not publish those files.

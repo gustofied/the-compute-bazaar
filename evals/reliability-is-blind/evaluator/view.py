@@ -39,6 +39,7 @@ body {
 a { color: inherit; text-decoration: none; }
 .shell { width: min(1480px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 56px; }
 header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
+.header-actions { display: flex; align-items: center; gap: 10px; }
 h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.15; letter-spacing: 0; }
 h2 { margin: 0; font-size: 15px; letter-spacing: 0; }
 .eyebrow, .muted { color: var(--muted); }
@@ -46,6 +47,8 @@ h2 { margin: 0; font-size: 15px; letter-spacing: 0; }
 .status { border: 1px solid var(--line-strong); padding: 7px 9px; border-radius: 4px; white-space: nowrap; }
 .status.good { color: var(--green); border-color: #316d45; }
 .status.warn { color: var(--amber); border-color: #745a2b; }
+.button { border: 1px solid var(--line-strong); padding: 7px 9px; border-radius: 4px; white-space: nowrap; }
+.button:hover { border-color: var(--text); }
 .notice { border: 1px solid #624e27; color: var(--amber); padding: 10px 12px; margin: 0 0 20px; }
 .metrics { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); border: 1px solid var(--line); margin-bottom: 24px; }
 .metric { min-height: 92px; padding: 14px; border-right: 1px solid var(--line); }
@@ -81,6 +84,18 @@ tbody tr:hover { background: #151515; }
 .detail-key { color: var(--muted); font-size: 11px; text-transform: uppercase; margin-bottom: 7px; }
 pre { overflow: auto; background: #0d0d0d; border: 1px solid var(--line); padding: 14px; line-height: 1.45; }
 .back { display: inline-block; margin-bottom: 20px; color: var(--muted); }
+.share-shell { width: min(1200px, 100%); min-height: 675px; margin: 0 auto; padding: 46px 54px 38px; display: flex; flex-direction: column; }
+.share-brand { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; padding-bottom: 20px; border-bottom: 1px solid var(--line-strong); }
+.share-title { margin: 0; font-size: 42px; line-height: 1; }
+.share-mark { color: var(--green); font-size: 12px; text-transform: uppercase; white-space: nowrap; }
+.share-question { max-width: 970px; margin: 24px 0 30px; font-size: 19px; line-height: 1.45; color: #d8d8d8; }
+.share-results { min-width: 0; border: 1px solid var(--line-strong); }
+.share-results th { padding: 13px 18px; }
+.share-results td { padding: 20px 18px; font-size: 18px; }
+.share-results .model-name { font-weight: 700; }
+.share-results .result-value { font-size: 24px; font-weight: 700; }
+.share-footer { display: flex; justify-content: space-between; gap: 30px; margin-top: auto; padding-top: 26px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+.share-footer span:last-child { text-align: right; }
 @media (max-width: 980px) {
   .metrics { grid-template-columns: repeat(3, 1fr); }
   .metric:nth-child(3) { border-right: 0; }
@@ -89,12 +104,16 @@ pre { overflow: auto; background: #0d0d0d; border: 1px solid var(--line); paddin
 @media (max-width: 640px) {
   .shell { width: min(100% - 20px, 1480px); padding-top: 18px; }
   header, .section-head { flex-direction: column; }
+  .header-actions { align-items: flex-start; flex-wrap: wrap; }
   .metrics { grid-template-columns: repeat(2, 1fr); }
   .metric:nth-child(3) { border-right: 1px solid var(--line); }
   .metric:nth-child(2n) { border-right: 0; }
   .metric:nth-child(-n+4) { border-bottom: 1px solid var(--line); }
   .detail-grid { grid-template-columns: 1fr; }
   .detail { border-right: 0; }
+  .share-shell { padding: 28px 22px; min-height: 100vh; }
+  .share-brand, .share-footer { flex-direction: column; }
+  .share-footer span:last-child { text-align: left; }
 }
 """
 
@@ -126,10 +145,39 @@ def _class_for_outcome(value: str) -> str:
     return "warn"
 
 
+def _display_model(model: str) -> str:
+    names = {
+        "mistral/mistral-medium-3-5": "Mistral Medium 3.5",
+        "mistral/mistral-small-2603": "Mistral Small 2603",
+        "mistral/mistral-large-2512": "Mistral Large 2512",
+    }
+    return names.get(model, model.split("/")[-1])
+
+
 def _layout(title: str, body: str) -> str:
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)}</title><style>{STYLE}</style></head><body><main class="shell">{body}</main></body></html>"""
+
+
+def _share_html(protocol: dict[str, Any]) -> str:
+    model_rows = "".join(
+        f"""<tr>
+<td class="model-name">{escape(_display_model(model["model"]))}</td>
+<td class="num result-value">{model["completed_rollouts"]}/{model["observed_trials"]}</td>
+<td class="num result-value">{model["reliability_targets_met"]}/{model["observed_trials"]}</td>
+<td class="num result-value">{_pct(model["mean_completed_failure_rate"])}</td>
+</tr>"""
+        for model in protocol.get("models", [])
+    )
+    body = f"""
+<div class="share-brand"><div><div class="eyebrow">Compute Bazaar Bench</div><h1 class="share-title">Reliability Is Blind</h1></div><div class="share-mark">Harbor evaluation</div></div>
+<p class="share-question">Can an agent acting as a compute broker decide which supply to place into a deal when it knows what delivered in the past, but not what caused each failure?</p>
+<table class="share-results"><thead><tr><th>Model</th><th class="num">Books completed</th><th class="num">Reliability target met</th><th class="num">Failure rate in completed books</th></tr></thead><tbody>{model_rows}</tbody></table>
+<div class="share-footer"><span>{protocol.get("observed_trials", 0)} trials · {protocol.get("planned_seed_cells", 0)} predeclared market seeds · OpenCode + Mistral</span><span>Failure rate covers completed books only.<br>Harbor · Modal</span></div>"""
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reliability Is Blind · Results</title><style>{STYLE}</style></head><body><main class="share-shell">{body}</main></body></html>"""
 
 
 def _index_html(protocol: dict[str, Any]) -> str:
@@ -169,7 +217,7 @@ def _index_html(protocol: dict[str, Any]) -> str:
         )
     body = f"""
 <header><div><div class="eyebrow">Compute Bazaar / evaluator view</div><h1>Reliability Is Blind</h1><div class="muted">{escape(protocol.get("protocol_id", ""))}</div></div>
-<div class="status {status_class}">{escape(protocol.get("label", ""))}</div></header>
+<div class="header-actions"><a class="button" href="/share">Share summary</a><div class="status {status_class}">{escape(protocol.get("label", ""))}</div></div></header>
 <div class="notice">Private evaluator view. Hidden seed strata and supplier diagnostics are not agent-visible.</div>{issues}
 <section class="metrics">
 <div class="metric"><div class="metric-label">Observed trials</div><div class="metric-value">{protocol.get("observed_trials", 0)}/{protocol.get("planned_trials", 0)}</div></div>
@@ -244,6 +292,10 @@ def create_app(analysis_dir: Path) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
         return _index_html(protocol())
+
+    @app.get("/share", response_class=HTMLResponse)
+    def share() -> str:
+        return _share_html(protocol())
 
     @app.get("/trials/{trial_name}", response_class=HTMLResponse)
     def trial_detail(trial_name: str) -> str:
