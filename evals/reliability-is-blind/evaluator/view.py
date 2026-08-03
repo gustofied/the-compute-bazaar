@@ -196,7 +196,7 @@ def _trial_html(trial: dict[str, Any]) -> str:
         "Capability layer": trial["capability"].get("highest_layer_reached"),
         "Completed deals": trial["control"].get("completed_deals"),
         "Failed deals": trial["result"].get("failed_deals"),
-        "Reward": trial["result"].get("reward"),
+        "Reward": _fmt(trial["result"].get("reward"), 4),
         "Attribution activated": trial["capability"].get(
             "attribution_challenge_activated"
         ),

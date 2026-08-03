@@ -15,7 +15,7 @@ import subprocess
 import sys
 from typing import Any, Sequence
 
-from the_compute_bazaar.rib_analysis import (
+from analysis import (
     AnalysisError,
     DEFAULT_TASK_ROOT,
     _bundle_risk,
@@ -110,7 +110,7 @@ def prepare_protocol(
 ) -> tuple[Path, Path]:
     if private_manifest.exists() or commitment_path.exists():
         raise AnalysisError("protocol manifest or commitment already exists")
-    engine_path = task_root / "reliability_is_blind" / "engine.py"
+    engine_path = task_root / "environment" / "market-sidecar" / "market_engine.py"
     engine_sha256 = hashlib.sha256(engine_path.read_bytes()).hexdigest()
     module = _load_engine_module(task_root, engine_sha256)
     secret = _load_or_create_secret(secret_path)
@@ -230,9 +230,7 @@ def _harbor_command(
         "harbor",
         "run",
         "-p",
-        "evals",
-        "-i",
-        "reliability-is-blind",
+        "evals/reliability-is-blind/task",
         "-a",
         str(manifest["agent"]),
     ]
@@ -280,7 +278,7 @@ async def _run_cell(
         environment["MARKET_SEED"] = str(cell["seed"])
         process = await asyncio.create_subprocess_exec(
             *command,
-            cwd=Path(__file__).resolve().parents[2],
+            cwd=Path(__file__).resolve().parents[3],
             env=environment,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,

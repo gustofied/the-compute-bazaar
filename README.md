@@ -41,7 +41,7 @@ A couple of artefacts while tinkering with compute markets.
         <strong>compute-bazaar-bench</strong> is a benchmark track for agents making opaque compute-market work legible.
       </small></p>
       <p><small>
-        <strong>taskgroup: <a href="deal-room/README.md">deal-room</a></strong> covers messy OTC deal rooms: comms, docs, diligence, and next actions.
+        <strong>family: <a href="deal-room/README.md">deal-room</a></strong> covers messy OTC deal rooms: comms, docs, diligence, and next actions.
       </small></p>
     </td>
   </tr>

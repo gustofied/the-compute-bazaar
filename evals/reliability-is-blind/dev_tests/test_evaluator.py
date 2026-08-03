@@ -5,19 +5,23 @@ from enum import Enum
 import hashlib
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from typing import Any, Sequence
 
-from the_compute_bazaar import rib_analysis
-from the_compute_bazaar import rib_protocol
-from the_compute_bazaar.rib_view import create_app
+EVAL_ROOT = Path(__file__).resolve().parents[1]
+EVALUATOR_ROOT = EVAL_ROOT / "evaluator"
+TASK_ROOT = EVAL_ROOT / "task"
+sys.path.insert(0, str(EVALUATOR_ROOT))
+
+import analysis as rib_analysis  # noqa: E402
+import protocol as rib_protocol  # noqa: E402
+from view import create_app  # noqa: E402
 
 
-ROOT = Path(__file__).resolve().parents[1]
-TASK_ROOT = ROOT / "evals" / "reliability-is-blind"
 ENGINE_SHA256 = hashlib.sha256(
-    (TASK_ROOT / "reliability_is_blind" / "engine.py").read_bytes()
+    (TASK_ROOT / "environment" / "market-sidecar" / "market_engine.py").read_bytes()
 ).hexdigest()
 
 

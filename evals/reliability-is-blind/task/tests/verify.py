@@ -378,6 +378,7 @@ def verify_artifact(
     }
     evidence = {
         "verifier_schema_version": "reliability-is-blind.verifier.v1",
+        "verifier_integrity": 1,
         "artifact_sha256": artifact_sha256,
         "replayed_attempts": attempt_count,
         "replayed_deals": final_result["completed_deals"],
@@ -435,7 +436,7 @@ def run_verification(
     artifact, artifact_sha256 = load_artifact(artifact_path)
     metrics, evidence = verify_artifact(artifact, artifact_sha256=artifact_sha256)
     _atomic_json(evidence_path, evidence)
-    _atomic_json(reward_path, metrics)
+    _atomic_json(reward_path, {"reward": metrics["reward"]})
     return metrics, evidence
 
 

@@ -5,7 +5,8 @@ import tomllib
 import unittest
 
 
-TASK_ROOT = Path(__file__).resolve().parents[1]
+EVAL_ROOT = Path(__file__).resolve().parents[1]
+TASK_ROOT = EVAL_ROOT / "task"
 
 
 class HarborTaskPackageTests(unittest.TestCase):
@@ -24,14 +25,16 @@ class HarborTaskPackageTests(unittest.TestCase):
         self.assertEqual(task["verifier"]["environment"]["network_mode"], "no-network")
 
     def test_sidecar_and_verifier_use_exact_frozen_engine_copies(self) -> None:
-        canonical = (TASK_ROOT / "reliability_is_blind" / "engine.py").read_bytes()
+        canonical = (
+            EVAL_ROOT / "evaluator" / "reliability_is_blind" / "engine.py"
+        ).read_bytes()
         sidecar = (
             TASK_ROOT / "environment" / "market-sidecar" / "market_engine.py"
         ).read_bytes()
         verifier = (TASK_ROOT / "tests" / "market_engine.py").read_bytes()
 
         self.assertEqual(sidecar, canonical)
-        self.assertEqual(verifier, canonical)
+        self.assertEqual(verifier, sidecar)
 
     def test_compose_keeps_the_market_out_of_the_agent_filesystem(self) -> None:
         compose = (TASK_ROOT / "environment" / "docker-compose.yaml").read_text()

@@ -2,6 +2,22 @@
 
 **Question: Can an agent acting as a compute broker decide which supply to place into a deal when it knows what delivered in the past, but not what caused each failure?**
 
+[Run or inspect the task on Harbor.](https://hub.harborframework.com/tasks/gustofied/reliability-is-blind/latest)
+
+## Initial results
+
+An initial evaluation job ran Mistral Medium 3.5, Mistral Small 2603, and Mistral Large 2512 across 20 market seeds, producing 59 trials.
+
+| Model              | Books completed | Reliability target met | Failure rate in completed books |
+| ------------------ | --------------: | ---------------------: | ------------------------------: |
+| Mistral Medium 3.5 |           17/20 |                  10/20 |                            5.7% |
+| Mistral Small 2603 |           11/20 |                   2/20 |                           19.5% |
+| Mistral Large 2512 |            6/19 |                   4/19 |                            5.5% |
+
+Mistral Medium completed the most books and met the reliability target most often. Large's 5.5% failure rate only covers the six books it completed and should be read alongside its low completion rate.
+
+The trajectories reveal different failure modes. Mistral Medium often committed to an early successful supplier group and repeated it in large batches, which worked on easy openings but broke down when the opening supply was only moderately reliable. Small explored broadly but struggled to convert collective outcomes into a stable trust map. Large frequently delegated the workflow and often failed to place or complete deals, making market control its main bottleneck.
+
 Based on [_Reliability Is Blind_](https://arxiv.org/abs/2503.19055) and its [reference implementation](https://github.com/RedChainLab/Reliability-Is-Blind-Collective-Incentives).
 
 A rolling brokerage game for private and OTC compute deal flow. One rollout represents a broker’s book of compute deals, and each step represents one arranged deal. The broker chooses four compute suppliers from the supply available at its desk. The environment reports whether the complete placement delivered or failed, but not which supplier caused the failure. Each outcome updates the public stake and eligibility of the selected suppliers, changing the supply available for the next deal. The broker’s target is to keep failed deliveries at or below 5% across the book.

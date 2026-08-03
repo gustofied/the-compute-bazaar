@@ -20,9 +20,7 @@ from typing import Any, Iterable, Sequence
 
 ANALYSIS_SCHEMA_VERSION = "reliability-is-blind.analysis.v1"
 DEFAULT_MINIMUM_MATCHED_SEEDS = 20
-DEFAULT_TASK_ROOT = (
-    Path(__file__).resolve().parents[2] / "evals" / "reliability-is-blind"
-)
+DEFAULT_TASK_ROOT = Path(__file__).resolve().parents[1] / "task"
 MARKET_COMMAND = re.compile(r"(?:^|[;&|]\s*)market(?:\s|$)")
 MARKET_RESET = re.compile(r"(?:^|[;&|]\s*)market\s+reset(?:\s|$)")
 
@@ -260,7 +258,7 @@ def _capability_metrics(
 
 
 def _load_engine_module(task_root: Path, expected_sha256: str) -> Any:
-    engine_path = task_root / "reliability_is_blind" / "engine.py"
+    engine_path = task_root / "environment" / "market-sidecar" / "market_engine.py"
     actual_sha256 = _sha256(engine_path)
     if actual_sha256 != expected_sha256:
         raise AnalysisError(
@@ -499,7 +497,9 @@ def analyze_trial(
 
     artifact_hash = _sha256(artifact_path)
     artifact_hash_matches = artifact_hash == evidence.get("artifact_sha256")
-    verifier_integrity = reward.get("verifier_integrity") == 1
+    verifier_integrity = (
+        evidence.get("verifier_integrity") == 1 or reward.get("verifier_integrity") == 1
+    )
     deals = _valid_deals(artifact)
     attempts = artifact.get("attempts")
     if not isinstance(attempts, list):
@@ -604,11 +604,11 @@ def analyze_trial(
         "capability": {**capability, "highest_layer_reached": layer},
         "result": {
             "reward": reward.get("reward"),
-            "delivered_deals": reward.get("delivered_deals"),
-            "failed_deals": reward.get("failed_deals"),
-            "delivery_rate": reward.get("delivery_rate"),
-            "failure_rate": reward.get("failure_rate"),
-            "reliability_target_met": reward.get("reliability_target_met"),
+            "delivered_deals": final_result.get("delivered_deals"),
+            "failed_deals": final_result.get("failed_deals"),
+            "delivery_rate": final_result.get("delivery_rate"),
+            "failure_rate": final_result.get("failure_rate"),
+            "reliability_target_met": int(bool(final_result.get("target_met"))),
         },
     }
     try:

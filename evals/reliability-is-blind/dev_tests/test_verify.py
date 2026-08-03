@@ -5,12 +5,17 @@ from dataclasses import asdict, is_dataclass
 from enum import Enum
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from typing import Any, Callable
 
-from tests import verify
-from tests.market_engine import MarketEngine
+EVAL_ROOT = Path(__file__).resolve().parents[1]
+TASK_ROOT = EVAL_ROOT / "task"
+sys.path.insert(0, str(TASK_ROOT))
+
+from tests import verify  # noqa: E402
+from tests.market_engine import MarketEngine  # noqa: E402
 
 
 SelectionPolicy = Callable[[MarketEngine], list[int]]
@@ -109,14 +114,11 @@ def _build_artifact(
 
 class VerifierContractTests(unittest.TestCase):
     def test_frozen_engine_is_an_exact_source_copy(self) -> None:
-        task_root = Path(__file__).resolve().parents[1]
-        verifier_engine = Path(__file__).with_name("market_engine.py").read_bytes()
-        core_engine = (task_root / "reliability_is_blind" / "engine.py").read_bytes()
+        verifier_engine = (TASK_ROOT / "tests" / "market_engine.py").read_bytes()
         sidecar_engine = (
-            task_root / "environment" / "market-sidecar" / "market_engine.py"
+            TASK_ROOT / "environment" / "market-sidecar" / "market_engine.py"
         ).read_bytes()
 
-        self.assertEqual(verifier_engine, core_engine)
         self.assertEqual(verifier_engine, sidecar_engine)
 
     def test_valid_positive_complete_book(self) -> None:
@@ -238,6 +240,7 @@ class VerifierContractTests(unittest.TestCase):
 
             serialized = reward_path.read_text()
             parsed = json.loads(serialized)
+            self.assertEqual(set(parsed), {"reward"})
             self.assertIs(type(parsed["reward"]), float)
             self.assertLess(parsed["reward"], 0)
             self.assertIn('"reward": -', serialized)

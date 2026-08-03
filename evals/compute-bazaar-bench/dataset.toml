@@ -1,0 +1,15 @@
+[dataset]
+name = "gustofied/compute-bazaar-bench"
+description = "Task-based evaluations for agents working in compute markets."
+keywords = [ "compute-market", "agents", "procurement", "diligence",]
+[[dataset.authors]]
+name = "Adam Sioud"
+
+
+[[tasks]]
+name = "gustofied/deal-room-assess-commercial-fit"
+digest = "sha256:380684d7a246df408603495a41450aee25ab36df6704838da90b5ee245fcead0"
+
+[[tasks]]
+name = "gustofied/reliability-is-blind"
+digest = "sha256:fabc10c3808327c70595ab5b1849a396879bc18e7ea0cacb0473863a31ffb141"

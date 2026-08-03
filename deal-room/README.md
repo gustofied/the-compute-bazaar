@@ -1,12 +1,18 @@
 # deal-room
 
-`deal-room` is an early `compute-bazaar-bench` taskset for Prime-style evals and training
+`deal-room` is the first family in `compute-bazaar-bench`: static agent tasks
 around messy private compute deals.
 
-The basic task: give an agent a deal room, then score whether it can turn the evidence into useful
-deal work.
+The basic task is to give an agent a closed deal room and score whether it can
+turn the evidence into useful, reviewable deal work.
 
-Initial outputs to evaluate:
+The first Harbor task is
+[`assess-commercial-fit`](../evals/compute-bazaar-bench/deal-room-assess-commercial-fit/README.md).
+It asks an agent to reconcile a buyer mandate with a private GPU offer, identify
+the controlling gaps, and recommend whether to proceed, negotiate, pause, or
+reject.
+
+Outputs to evaluate:
 
 - deal memo
 - structured deal record
@@ -24,10 +30,12 @@ Initial skills to score:
 
 Build order:
 
-1. Synthetic taskset with hidden ground truth.
-2. Deterministic verifier and rubric.
-3. Prime eval runs.
-4. Prime training runs once the reward is stable.
+1. One synthetic Harbor task with hidden ground truth.
+2. Oracle and real-agent trace audit.
+3. A small set of distinct Deal Room tasks over the same opportunity.
+4. A versioned Harbor dataset and model/harness comparisons.
+5. Verifiers/Prime environments and training only after the reward contract is
+   stable.
 
-Future implementation can live under this folder, for example as `env/`, once the Prime package
-shape is clear.
+Harbor source lives under
+[`evals/compute-bazaar-bench`](../evals/compute-bazaar-bench/README.md).

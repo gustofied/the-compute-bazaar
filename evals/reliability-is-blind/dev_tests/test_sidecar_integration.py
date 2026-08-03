@@ -13,10 +13,13 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from tests import verify
+EVAL_ROOT = Path(__file__).resolve().parents[1]
+TASK_ROOT = EVAL_ROOT / "task"
+sys.path.insert(0, str(TASK_ROOT))
+
+from tests import verify  # noqa: E402
 
 
-TASK_ROOT = Path(__file__).resolve().parents[1]
 SIDECAR_DIR = TASK_ROOT / "environment" / "market-sidecar"
 CLI_PATH = TASK_ROOT / "environment" / "market_cli.py"
 SNAPSHOT_PATH = SIDECAR_DIR / "snapshot.py"

@@ -10,7 +10,6 @@ authors = [{ name = "Adam Sioud" }]
 keywords = ["compute-brokerage", "collective-incentives", "hidden-reliability", "sequential-decision-making", "sidecar"]
 
 [metadata]
-implementation_version = "0.1.0"
 difficulty = "hard"
 category = "reasoning"
 tags = ["compute-market", "brokerage", "reliability", "game", "deterministic-verifier"]

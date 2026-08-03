@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.vscode/
+/worktrees/
 build/
 dist/
 *.egg-info/
@@ -26,6 +28,7 @@ tfplan
 *.png
 *.csv
 *.xlsx
+!evals/compute-bazaar-bench/**/environment/matter/*.csv
 
 # Lab generated artifacts
 /AGENTS.md
