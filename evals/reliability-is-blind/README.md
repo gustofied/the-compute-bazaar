@@ -1,5 +1,3 @@
-> Continuing work. I am very much interested in extending this environment with more features, knobs and attributes, whatever, to better explore compute deals as environments where agents can play and learn them.
-
 # Reliability Is Blind
 
 **Question: Can an agent acting as a compute broker decide which supply to place into a deal when it knows what delivered in the past, but not what caused each failure?**
@@ -99,11 +97,10 @@ How I am converting _Reliability Is Blind_ into a Harbor environment for compute
 - The paper assumes only two trustworthy facts: who was involved and whether the task worked. In this environment, that becomes the minimum deal ledger. Everything the broker believes about reliability must be inferred from repeated collective outcomes.
 - The broker environment keeps the bounded collective stake updates and ruin/removal rules used by Coll-SR, while the broker replaces its automatic stake-weighted selector.
 - The original is a batch Python simulation; ours needs `reset`, `observe`, and `step`.
-- We add a reliability-calibrated broker reward, which the original does not have.
+- We expose the paper's calibrated task reward and penalty as the broker's rollout reward.
 - We translate paper “tasks” into broker-facing “deals.”
-- Free, Coll-Stake, Coll-Rep, and Coll-SR remain as paper-parity market-regime baselines. Within the broker environment, uniform-random and stake-weighted selection are direct baselines under the same market rules.
-- The broker evaluation uses 20 compute suppliers and 100 deals so every step remains a real broker decision. Separate 10,000-task simulations retain the paper’s horizon for parity checks; they are not substituted for agent decisions.
-- The environment follows the paper’s non-adversarial individual-failure setting. The broker evaluation fixes the supply pool at 20 suppliers; separate parity checks can retain the paper’s other pool sizes. Combination failures are a planned extension.
+- The broker evaluation uses 20 compute suppliers and 100 deals so every step remains a real broker decision. The paper’s default simulation runs for 10,000 tasks, with a reported large-pool configuration running for 30,000; those batch runs are not substituted for agent decisions.
+- The environment follows the paper’s non-adversarial individual-failure setting. The broker evaluation starts each rollout with 20 suppliers; separate parity checks can retain the paper’s other pool sizes. Combination failures are a planned extension.
 
 ## thinking:points
 

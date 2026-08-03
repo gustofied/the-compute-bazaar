@@ -1,0 +1,23 @@
+services:
+  main:
+    depends_on:
+      market:
+        condition: service_healthy
+
+  market:
+    build:
+      context: ./market-sidecar
+    environment:
+      MARKET_SEED: "${MARKET_SEED:-}"
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"
+      interval: 1s
+      timeout: 3s
+      retries: 20
+      start_period: 2s

@@ -26,6 +26,7 @@ tfplan
 *.png
 *.csv
 *.xlsx
+
 # Lab generated artifacts
 /AGENTS.md
 /CLAUDE.md
@@ -38,10 +39,14 @@ tfplan
 /.opencode/skills/
 /.pi/skills/
 /outputs/
+/jobs/
+/evals/legal
+/jobs-scratch/
+/evals/jobs/
+/evals/compute-bazaar-bench/jobs/
 /prime-rl/
 /environments/AGENTS.md
 /environments/*/outputs/
 /environments/*/dist/
 /environments/*/*.egg-info/
 /environments/*/__pycache__/
-

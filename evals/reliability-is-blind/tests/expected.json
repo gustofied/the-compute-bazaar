@@ -1,0 +1,26 @@
+{
+  "artifact_kind": "authoritative_market_ledger",
+  "artifact_schema_version": "reliability-is-blind.market-ledger.v1",
+  "engine_version": "0.1.0",
+  "engine_sha256": "f928aea25e1ddf7ad6df4d53e0127d764626e3d312ffd06821aefac157fb8792",
+  "upstream_revision": "98adffaa7931c74cdd749cde230b7e87c9d45d86",
+  "snapshot_authentication": "sidecar-file-token-v1",
+  "config": {
+    "initial_supplier_count": 20,
+    "supplier_cap": 20,
+    "deal_size": 4,
+    "horizon": 100,
+    "initial_stake": 10.0,
+    "slash_amount": 1.0,
+    "target_failure_rate": 0.05,
+    "failure_distribution_alpha": 0.1,
+    "scheduled_arrival_interval": 500,
+    "invalid_action_limit": 10,
+    "randomness_version": "rib-keyed-v1",
+    "reward_amount": 0.052631578947368425,
+    "minimum_stake": 0.01,
+    "maximum_stake": 10.0,
+    "ruin_threshold": 1.0,
+    "incomplete_reward": -1.0
+  }
+}

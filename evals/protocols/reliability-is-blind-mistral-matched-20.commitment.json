@@ -1,0 +1,23 @@
+{
+  "canary_seed_count": 3,
+  "engine_sha256": "f928aea25e1ddf7ad6df4d53e0127d764626e3d312ffd06821aefac157fb8792",
+  "engine_version": "0.1.0",
+  "models": [
+    "mistral/mistral-medium-3-5",
+    "mistral/mistral-small-2603",
+    "mistral/mistral-large-2512"
+  ],
+  "planned_trials": 60,
+  "private_manifest_sha256": "2268725ff917e77a26003b2b4710aaf4fc4b1f8916218064b384af06af141448",
+  "protocol_id": "reliability-is-blind-mistral-matched-20",
+  "raw_seeds_public": false,
+  "schema_version": "reliability-is-blind.protocol.v1",
+  "seed_count": 20,
+  "selection_algorithm": "hmac-candidate-first-five-per-opening-risk-stratum",
+  "stratum_counts": {
+    "easy-opening": 5,
+    "high-risk-opening": 5,
+    "near-target-opening": 5,
+    "uncertain-opening": 5
+  }
+}

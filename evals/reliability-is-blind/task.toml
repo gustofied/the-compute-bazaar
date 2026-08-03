@@ -1,0 +1,60 @@
+schema_version = "1.3"
+artifacts = [
+    { source = "/market-artifacts/state.json", service = "market" },
+]
+
+[task]
+name = "gustofied/reliability-is-blind"
+description = "Place recurring compute supply into deals when only collective delivery outcomes are observable."
+authors = [{ name = "Adam Sioud" }]
+keywords = ["compute-brokerage", "collective-incentives", "hidden-reliability", "sequential-decision-making", "sidecar"]
+
+[metadata]
+implementation_version = "0.1.0"
+difficulty = "hard"
+category = "reasoning"
+tags = ["compute-market", "brokerage", "reliability", "game", "deterministic-verifier"]
+difficulty_explanation = "The broker must learn from overlapping group outcomes: failures identify the four selected suppliers but never the individual source of failure."
+solution_explanation = "The reference solution is a scripted plumbing check only; evaluated Harbor agents independently choose all 100 placements through the public market CLI."
+verification_explanation = "A protected market sidecar records the authoritative deal ledger. A collect hook finalizes it, and a separate no-network verifier replays the seeded market before calculating the exact signed reward."
+
+[verifier]
+timeout_sec = 60.0
+user = "root"
+environment_mode = "separate"
+
+[[verifier.collect]]
+service = "market"
+command = "python3 /opt/market/snapshot.py"
+timeout_sec = 30.0
+
+[verifier.environment]
+network_mode = "no-network"
+build_timeout_sec = 600.0
+os = "linux"
+cpus = 1
+memory_mb = 512
+storage_mb = 1024
+workdir = "/"
+
+[agent]
+timeout_sec = 1800.0
+user = "agent"
+
+[environment]
+network_mode = "public"
+build_timeout_sec = 600.0
+os = "linux"
+cpus = 1
+memory_mb = 1024
+storage_mb = 2048
+mcp_servers = []
+workdir = "/workspace"
+
+[environment.healthcheck]
+command = "market ping"
+interval_sec = 1.0
+timeout_sec = 2.0
+start_period_sec = 2.0
+start_interval_sec = 0.5
+retries = 10
