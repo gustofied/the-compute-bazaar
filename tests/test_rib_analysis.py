@@ -367,12 +367,13 @@ class ReliabilityIsBlindAnalysisTests(unittest.TestCase):
                 (job / "result.json").write_text(
                     json.dumps(
                         {
+                            "finished_at": "2026-08-03T00:00:00Z",
                             "stats": {
                                 "n_completed_trials": 2,
                                 "n_errored_trials": 0,
                                 "n_pending_trials": 0,
                                 "n_retries": 0,
-                            }
+                            },
                         }
                     )
                 )
@@ -397,6 +398,50 @@ class ReliabilityIsBlindAnalysisTests(unittest.TestCase):
         self.assertEqual(comparison["observed_trials"], 6)
         self.assertEqual(comparison["matched_seed_cells"], 3)
 
+    def test_unfinished_job_is_never_a_clean_protocol(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            jobs = root / "jobs"
+            job = jobs / "job"
+            write_trial(job, name="trial", model="model", requests=[], seed=7)
+            (job / "result.json").write_text(
+                json.dumps(
+                    {
+                        "finished_at": None,
+                        "stats": {
+                            "n_completed_trials": 1,
+                            "n_errored_trials": 0,
+                            "n_retries": 0,
+                        },
+                    }
+                )
+            )
+            manifest = root / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "protocol_id": "protocol",
+                        "models": ["model"],
+                        "canary_cell_ids": ["rib-001"],
+                        "cells": [
+                            {
+                                "cell_id": "rib-001",
+                                "job_name": "job",
+                                "seed": "7",
+                            }
+                        ],
+                    }
+                )
+            )
+
+            _, comparison = rib_analysis.analyze_protocol(
+                manifest, jobs, phase="canary", task_root=TASK_ROOT
+            )
+
+        self.assertFalse(comparison["canary_gate_passed"])
+        self.assertEqual(comparison["job_unfinished_count"], 1)
+        self.assertIn("rib-001: job did not finalize", comparison["issues"])
+
     def test_view_is_local_analysis_not_a_second_verifier(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             analysis = Path(directory)
@@ -416,6 +461,7 @@ class ReliabilityIsBlindAnalysisTests(unittest.TestCase):
                         "reliability_targets_met": 0,
                         "attribution_challenges_activated": 0,
                         "job_error_count": 0,
+                        "job_unfinished_count": 0,
                         "job_retry_count": 0,
                     }
                 )

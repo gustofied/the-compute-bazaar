@@ -772,6 +772,7 @@ def analyze_protocol(
     issues: list[str] = []
     job_retry_count = 0
     job_error_count = 0
+    job_unfinished_count = 0
     job_statuses: list[dict[str, Any]] = []
     observed_pairs: set[tuple[str, str]] = set()
     for cell in cells:
@@ -797,11 +798,15 @@ def analyze_protocol(
             continue
         job_result = _load_json(job_result_path)
         stats = job_result.get("stats") or {}
+        finalized = job_result.get("finished_at") is not None
         retries = int(stats.get("n_retries") or 0)
         errors = int(stats.get("n_errored_trials") or 0)
         completed = int(stats.get("n_completed_trials") or 0)
         job_retry_count += retries
         job_error_count += errors
+        if not finalized:
+            job_unfinished_count += 1
+            issues.append(f"{cell_id}: job did not finalize")
         if retries:
             issues.append(f"{cell_id}: job used {retries} retry/retries")
         if errors:
@@ -810,9 +815,15 @@ def analyze_protocol(
             {
                 "cell_id": cell_id,
                 "job_name": job_name,
-                "status": "completed"
-                if completed == len(models) and not errors
-                else "invalid",
+                "status": (
+                    "unfinished"
+                    if not finalized
+                    else (
+                        "completed"
+                        if completed == len(models) and not errors
+                        else "invalid"
+                    )
+                ),
                 "completed_trials": completed,
                 "errors": errors,
                 "retries": retries,
@@ -827,7 +838,8 @@ def analyze_protocol(
             try:
                 trial = analyze_trial(trial_dir, task_root=task_root)
             except AnalysisError as exc:
-                issues.append(f"{cell_id}/{trial_dir.name}: {exc}")
+                detail = str(exc).replace(f"{trial_dir.resolve()}/", "")
+                issues.append(f"{cell_id}/{trial_dir.name}: {detail}")
                 continue
             model = trial["trial"]["model"]
             pair = (cell_id, model)
@@ -891,6 +903,7 @@ def analyze_protocol(
         and len(trials) == len(cells) * len(models)
         and job_retry_count == 0
         and job_error_count == 0
+        and job_unfinished_count == 0
     )
     ranking_allowed = phase == "full" and not issues and matched_cells == len(cells)
     if phase == "canary":
@@ -960,6 +973,7 @@ def analyze_protocol(
         "extra_trials": [list(pair) for pair in extra_pairs],
         "job_retry_count": job_retry_count,
         "job_error_count": job_error_count,
+        "job_unfinished_count": job_unfinished_count,
         "job_statuses": job_statuses,
         "task_digests_match": len(task_digests) <= 1,
         "engine_digests_match": len(engine_digests) <= 1,
@@ -1076,6 +1090,7 @@ def _protocol_markdown_report(comparison: dict[str, Any]) -> str:
         f"Observed: {comparison['observed_trials']} trials  ",
         f"Matched seeds: {comparison['matched_seed_cells']}  ",
         f"Infrastructure errors: {comparison['job_error_count']}  ",
+        f"Unfinished jobs: {comparison['job_unfinished_count']}  ",
         f"Retries: {comparison['job_retry_count']}  ",
         f"Ranking allowed: {'yes' if comparison['ranking_allowed'] else 'no'}",
     ]

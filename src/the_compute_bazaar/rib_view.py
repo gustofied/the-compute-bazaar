@@ -177,7 +177,7 @@ def _index_html(protocol: dict[str, Any]) -> str:
 <div class="metric"><div class="metric-label">Completed books</div><div class="metric-value">{protocol.get("completed_rollouts", 0)}</div></div>
 <div class="metric"><div class="metric-label">Target met</div><div class="metric-value">{protocol.get("reliability_targets_met", 0)}</div></div>
 <div class="metric"><div class="metric-label">Attribution activated</div><div class="metric-value">{protocol.get("attribution_challenges_activated", 0)}</div></div>
-<div class="metric"><div class="metric-label">Infra / retries</div><div class="metric-value">{protocol.get("job_error_count", 0)} / {protocol.get("job_retry_count", 0)}</div></div>
+<div class="metric"><div class="metric-label">Errors / open / retries</div><div class="metric-value">{protocol.get("job_error_count", 0)} / {protocol.get("job_unfinished_count", 0)} / {protocol.get("job_retry_count", 0)}</div></div>
 </section>
 <section class="section"><div class="section-head"><h2>Models</h2><span class="muted">Reward is exact; activation is diagnostic.</span></div>
 <div class="table-wrap"><table><thead><tr><th>Model</th><th class="num">Observed</th><th class="num">Complete</th><th class="num">Target</th><th class="num">Activated</th><th class="num">Mean reward</th><th class="num">Failure rate</th><th class="num">Invalid</th><th class="num">Reported cost</th></tr></thead><tbody>{model_rows}</tbody></table></div></section>
