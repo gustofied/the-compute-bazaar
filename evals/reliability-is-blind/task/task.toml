@@ -7,7 +7,7 @@ artifacts = [
 name = "gustofied/reliability-is-blind"
 description = "Place recurring compute supply into deals when only collective delivery outcomes are observable."
 authors = [{ name = "Adam Sioud" }]
-keywords = ["compute-brokerage", "collective-incentives", "hidden-reliability", "sequential-decision-making", "sidecar"]
+keywords = ["compute-markets", "compute-brokerage", "collective-incentives", "hidden-reliability", "sequential-decision-making"]
 
 [metadata]
 difficulty = "hard"
