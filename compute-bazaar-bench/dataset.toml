@@ -1,0 +1,10 @@
+[dataset]
+name = "gustofied/compute-bazaar-bench"
+description = "Professional-work and agent evaluations for compute markets."
+keywords = [ "compute-market", "agents", "transactions", "diligence", "contracting",]
+[[dataset.authors]]
+name = "Adam Sioud"
+
+[[tasks]]
+name = "gustofied/reliability-is-blind"
+digest = "sha256:f8a279f04b4db8dc419e1df3dc58137b24520ea162fe0fde48077868bd4d89a2"

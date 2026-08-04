@@ -28,7 +28,7 @@ tfplan
 *.png
 *.csv
 *.xlsx
-!evals/compute-bazaar-bench/**/environment/matter/*.csv
+!compute-bazaar-bench/evals/**/environment/matter/*.csv
 
 # Lab generated artifacts
 /AGENTS.md
@@ -43,10 +43,9 @@ tfplan
 /.pi/skills/
 /outputs/
 /jobs/
-/evals/legal
-/jobs-scratch/
-/evals/jobs/
-/evals/compute-bazaar-bench/jobs/
+/exploritorial/
+/compute-bazaar-bench/jobs/raw/
+/compute-bazaar-bench/jobs/reports/
 /prime-rl/
 /environments/AGENTS.md
 /environments/*/outputs/

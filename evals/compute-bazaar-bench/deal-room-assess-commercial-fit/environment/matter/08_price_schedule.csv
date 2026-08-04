@@ -1,6 +1,0 @@
-charge,unit,rate_usd,mandatory,notes
-Base compute,GPU-hour,2.43,yes,Applies to every active GPU
-InfiniBand fabric,GPU-hour,0.12,yes,Current 2:1 core design
-Premium support,GPU-hour,0.07,yes,Required for the stated SLA
-Cluster commissioning,one-time,180000.00,yes,Due at acceptance
-Remote hands,technician-hour,175.00,no,Usage based

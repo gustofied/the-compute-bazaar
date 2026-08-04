@@ -1,3 +1,0 @@
-group,node_count,gpus_per_node,gpu_model,total_gpus,cpu,host_memory,site_hall
-Northlink-A,48,8,NVIDIA B200,384,2x Intel Xeon 6980P,2 TiB,Helsinki Hall A
-Northlink-B,16,8,NVIDIA B200,128,2x Intel Xeon 6980P,2 TiB,Helsinki Hall D

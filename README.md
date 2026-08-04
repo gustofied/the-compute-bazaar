@@ -32,16 +32,16 @@ A couple of artefacts while tinkering with compute markets.
 <table width="100%" cellpadding="0" cellspacing="0">
   <tr>
     <td width="48%" valign="top" style="padding:0;">
-      <a href="deal-room/README.md">
-        <img src="docs/assets/deal-room.jpg" alt="Deal room artwork" width="100%" style="display:block; margin:0; border:0;">
+      <a href="compute-bazaar-bench/README.md">
+        <img src="docs/assets/deal-room.jpg" alt="Compute Bazaar Bench artwork" width="100%" style="display:block; margin:0; border:0;">
       </a>
     </td>
     <td width="52%" valign="middle" style="padding:14px 22px;">
       <p><small>
-        <strong>compute-bazaar-bench</strong> is a benchmark track for agents making opaque compute-market work legible.
+        <strong><a href="compute-bazaar-bench/README.md">compute-bazaar-bench</a></strong> evaluates agents working in compute markets.
       </small></p>
       <p><small>
-        <strong>family: <a href="deal-room/README.md">deal-room</a></strong> covers messy OTC deal rooms: comms, docs, diligence, and next actions.
+        Its first domain, <strong><a href="compute-bazaar-bench/evals/transactions/README.md">transactions</a></strong>, follows professional work from messy intent through diligence to executable paper.
       </small></p>
     </td>
   </tr>
