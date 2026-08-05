@@ -2,7 +2,6 @@
 Ireland data centre electricity share — trend + country comparison.
 Sources: EirGrid annual reports, IEA, Eurostat.
 """
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.patches as mpatches

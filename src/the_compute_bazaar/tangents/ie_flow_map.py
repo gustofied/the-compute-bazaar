@@ -8,9 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as pe
-from matplotlib.path import Path
 from matplotlib.lines import Line2D
-from scipy.stats import gaussian_kde
 
 
 # ── Ireland coastline ───────────────────────────────────────────────

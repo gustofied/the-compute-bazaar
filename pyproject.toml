@@ -38,3 +38,10 @@ sandbox-cost = "the_compute_bazaar.sandbox_cost.cli:main"
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.ruff]
+extend-exclude = [
+    "compute-bazaar-bench/evals/reliability-is-blind/dev_tests/fixtures",
+    "external",
+    "worktrees",
+]

@@ -2,12 +2,10 @@
 Ireland grid dashboard — load balancing patterns, spikes, and renewable dynamics.
 Uses EirGrid quarter-hourly Excel data.
 """
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.gridspec as gridspec
-from matplotlib.colors import TwoSlopeNorm
 
 
 def load(filepath: str) -> pd.DataFrame:

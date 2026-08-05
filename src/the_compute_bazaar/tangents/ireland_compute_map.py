@@ -4,7 +4,6 @@ MW-weighted KDE from known data centre locations.
 """
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 from matplotlib.path import Path
 from scipy.stats import gaussian_kde
 

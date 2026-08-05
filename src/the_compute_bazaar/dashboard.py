@@ -236,6 +236,22 @@ def create_app(
 def main() -> None:
     _load_local_env(PROJECT_ROOT / ".env")
 
+    parser = _dashboard_parser()
+    args = parser.parse_args()
+
+    import uvicorn
+
+    uvicorn.run(
+        create_app(
+            snapshot_source=args.snapshot_source,
+            snapshot_s3_prefix=args.snapshot_s3_prefix,
+        ),
+        host=args.host,
+        port=args.port,
+    )
+
+
+def _dashboard_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="compute-bazaar-dashboard")
     parser.add_argument("--host", default=os.getenv("COMPUTE_BAZAAR_DASHBOARD_HOST", "127.0.0.1"))
     parser.add_argument(
@@ -243,11 +259,18 @@ def main() -> None:
         type=int,
         default=int(os.getenv("COMPUTE_BAZAAR_DASHBOARD_PORT", "8765")),
     )
-    args = parser.parse_args()
-
-    import uvicorn
-
-    uvicorn.run(create_app(), host=args.host, port=args.port)
+    parser.add_argument(
+        "--snapshot-source",
+        choices=("auto", "local", "s3"),
+        default=None,
+        help="Read dashboard snapshots from local files, S3, or automatic discovery.",
+    )
+    parser.add_argument(
+        "--snapshot-s3-prefix",
+        default=None,
+        help="S3 snapshot prefix, for example s3://bucket/dashboard/compute-bazaar.",
+    )
+    return parser
 
 
 def _file_response(path: Path) -> FileResponse:

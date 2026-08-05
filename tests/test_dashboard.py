@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from the_compute_bazaar.dashboard import (
     _available_snapshots,
+    _dashboard_parser,
     _infer_dashboard_s3_prefix_from_lake,
     _read_snapshot,
     _resolve_snapshot_source,
@@ -18,6 +19,19 @@ from the_compute_bazaar.dashboard import (
 
 
 class DashboardSnapshotTests(unittest.TestCase):
+    def test_dashboard_cli_accepts_explicit_snapshot_source(self) -> None:
+        args = _dashboard_parser().parse_args(
+            [
+                "--snapshot-source",
+                "s3",
+                "--snapshot-s3-prefix",
+                "s3://bucket/dashboard/compute-bazaar",
+            ]
+        )
+
+        self.assertEqual(args.snapshot_source, "s3")
+        self.assertEqual(args.snapshot_s3_prefix, "s3://bucket/dashboard/compute-bazaar")
+
     def test_local_snapshot_read_is_allowlisted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 def read_demand_csv(filepath: str) -> pd.DataFrame:
     df = pd.read_csv(filepath, index_col="DateTime_UTC", parse_dates=True)
     if not {"IE_MW", "NI_MW"}.issubset(df.columns):
-        raise ValueError(f"CSV missing IE_MW or NI_MW columns")
+        raise ValueError("CSV missing IE_MW or NI_MW columns")
     return df[["IE_MW", "NI_MW"]]
 
 
