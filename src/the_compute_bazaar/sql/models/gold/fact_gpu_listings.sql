@@ -33,7 +33,6 @@ select
   minimum_executable_price_usd_hr,
   required_resource_price_usd_hr,
   price_basis,
-  'fresh' as freshness_status,
   observed_at,
   raw_ref,
   raw_ref is not null as has_raw_evidence,

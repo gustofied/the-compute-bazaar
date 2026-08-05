@@ -20,7 +20,7 @@ with usable_offers as (
 )
 select
   gpu_model,
-  min(unit_price_usd_hr) as executable_floor_usd_gpu_hr,
+  min(unit_price_usd_hr) as observed_floor_usd_gpu_hr,
   avg(unit_price_usd_hr) as simple_mean_usd_gpu_hr,
   min(price_usd_hr) as cheapest_offer_usd_hr,
   count(*) as offer_count,
@@ -31,4 +31,4 @@ select
   max(observed_at) as latest_observed_at
 from usable_offers
 group by gpu_model
-order by executable_floor_usd_gpu_hr asc, offer_count desc
+order by observed_floor_usd_gpu_hr asc, offer_count desc

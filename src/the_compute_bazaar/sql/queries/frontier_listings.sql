@@ -10,7 +10,6 @@ select
   is_spot,
   is_secure,
   availability_status,
-  freshness_status,
   has_raw_evidence,
   source_offer_id,
   source_run_id,

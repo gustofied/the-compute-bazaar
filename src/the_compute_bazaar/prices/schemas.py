@@ -129,22 +129,3 @@ class ComputeMarketState:
 
     def to_dict(self) -> dict[str, Any]:
         return to_jsonable(self)
-
-
-@dataclass(frozen=True)
-class GpuIndexPrice:
-    index_symbol: str
-    window_start: datetime
-    window_end: datetime
-    methodology_version: str
-    price_usd_hr: float
-    executable_floor: float
-    median_price: float | None
-    trimmed_mean_price: float | None
-    offer_count: int
-    provider_count: int
-    freshness_seconds: float | None
-    calculation_hash: str
-
-    def to_dict(self) -> dict[str, Any]:
-        return to_jsonable(self)

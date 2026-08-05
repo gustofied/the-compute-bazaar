@@ -10,8 +10,8 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from .automq import check_cluster, kafka_bootstrap_servers_from_env, kafka_config_from_env
-from .datafusion import query_price_index
-from .gold import query_gold_price_index, read_latest_gold_manifest
+from .datafusion import query_market_summary
+from .gold import query_gold_benchmark_values, read_latest_gold_manifest
 from .manifest import read_latest_manifest
 from .market_run import read_latest_market_run
 
@@ -96,13 +96,13 @@ def _check_latest_manifest_and_index(*, lake_root: str, provider: str) -> CheckR
                 status="fail",
                 detail={"reason": "latest manifest has no normalized_ref", "manifest": _public_manifest(manifest)},
             )
-        rows = query_price_index(parquet_uri=str(normalized_ref), limit=10)
+        rows = query_market_summary(parquet_uri=str(normalized_ref), limit=10)
         return CheckResult(
             name="latest_manifest_and_index",
             status="ok" if rows else "fail",
             detail={
                 "manifest": _public_manifest(manifest),
-                "index_rows": len(rows),
+                "market_rows": len(rows),
                 "top": rows[:5],
             },
         )
@@ -113,13 +113,13 @@ def _check_latest_manifest_and_index(*, lake_root: str, provider: str) -> CheckR
 def _check_latest_gold(*, lake_root: str) -> CheckResult:
     try:
         manifest = read_latest_gold_manifest(lake_root)
-        rows = query_gold_price_index(lake_root=lake_root, limit=10)["rows"]
+        rows = query_gold_benchmark_values(lake_root=lake_root, limit=10)["rows"]
         return CheckResult(
             name="latest_gold",
             status="ok" if rows else "fail",
             detail={
                 "manifest": _public_gold_manifest(manifest),
-                "index_rows": len(rows),
+                "benchmark_rows": len(rows),
                 "top": rows[:5],
             },
         )

@@ -244,7 +244,7 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
     complete_runs = [
         row
         for row in run_history
-        if isinstance(row, Mapping) and row.get("fixed_cohort_complete") is True
+        if isinstance(row, Mapping) and row.get("service_set_complete") is True
     ]
     latest_complete_run = (
         complete_runs[-1]
@@ -276,10 +276,6 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
             ),
             "median_runtime_seconds": _number(
                 latest_complete_run.get("median_runtime_seconds")
-            ),
-            # Compatibility alias for the first card contract.
-            "median_service_cost": _number(
-                latest_complete_run.get("median_estimated_cost_usd")
             ),
             "service_count": len(summaries),
             "complete_job_count": int(

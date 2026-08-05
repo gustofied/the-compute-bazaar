@@ -1,5 +1,5 @@
 {
-  "schema_version": "sandbox_workload_cost_input_v1",
+  "schema_version": "sandbox_workload_cost_input_v2",
   "retrieved_at": "2026-07-24T18:11:31Z",
   "target_shape": {
     "memory_gib": 8,
@@ -12,8 +12,6 @@
       "color": "#275d87",
       "date_role": "observed",
       "evidence_class": "archived_rate_card",
-      "index_cohort": "workload-cost-input",
-      "index_eligible": true,
       "memory_gib": 8.0,
       "memory_rate_usd_per_gib_hour": 0.0162,
       "note": "Archived price input used by retained StarSling runs; the fixed plan fee is excluded.",
@@ -28,15 +26,15 @@
       "series_order": 1,
       "source_label": "E2B pricing archive",
       "source_role": "historical_cost_input",
-      "source_url": "https://web.archive.org/web/20241109015309id_/https://e2b.dev/pricing"
+      "source_url": "https://web.archive.org/web/20241109015309id_/https://e2b.dev/pricing",
+      "workload_cost_cohort": "workload-cost-input",
+      "workload_cost_eligible": true
     },
     {
       "change_precision": "first_observation",
       "color": "#2f6b4f",
       "date_role": "observed",
       "evidence_class": "archived_rate_card",
-      "index_cohort": "workload-cost-input",
-      "index_eligible": true,
       "memory_gib": 8.0,
       "memory_rate_usd_per_gib_hour": 0.0162,
       "note": "Archived price input used by retained StarSling runs; storage is excluded.",
@@ -51,15 +49,15 @@
       "series_order": 2,
       "source_label": "Daytona pricing archive",
       "source_role": "historical_cost_input",
-      "source_url": "https://web.archive.org/web/20250520030526id_/https://www.daytona.io/pricing"
+      "source_url": "https://web.archive.org/web/20250520030526id_/https://www.daytona.io/pricing",
+      "workload_cost_cohort": "workload-cost-input",
+      "workload_cost_eligible": true
     },
     {
       "change_precision": "exact",
       "color": "#ad5c16",
       "date_role": "effective",
       "evidence_class": "promotion_expiry",
-      "index_cohort": "workload-cost-input",
-      "index_eligible": true,
       "memory_gib": 8.0,
       "memory_rate_usd_per_gib_hour": 0.01152,
       "note": "Historical list-price input used by retained StarSling runs after the public promotion ended.",
@@ -74,15 +72,15 @@
       "series_order": 4,
       "source_label": "Novita Build Month expiry",
       "source_role": "historical_cost_input",
-      "source_url": "https://blogs.novita.ai/novita-build-month-up-to-20-off/"
+      "source_url": "https://blogs.novita.ai/novita-build-month-up-to-20-off/",
+      "workload_cost_cohort": "workload-cost-input",
+      "workload_cost_eligible": true
     },
     {
       "change_precision": "between_observations",
       "color": "#76558f",
       "date_role": "observed",
       "evidence_class": "archived_rate_card",
-      "index_cohort": "workload-cost-input",
-      "index_eligible": true,
       "memory_gib": 8.0,
       "memory_rate_usd_per_gib_hour": 0.024012,
       "note": "Archived price input used by retained StarSling runs. Four requested CPU units expose four schedulable processors in the benchmark.",
@@ -97,15 +95,15 @@
       "series_order": 5,
       "source_label": "Modal pricing archive",
       "source_role": "historical_cost_input",
-      "source_url": "https://web.archive.org/web/20260713221506id_/https://modal.com/pricing"
+      "source_url": "https://web.archive.org/web/20260713221506id_/https://modal.com/pricing",
+      "workload_cost_cohort": "workload-cost-input",
+      "workload_cost_eligible": true
     },
     {
       "change_precision": "first_observation",
       "color": "#44617a",
       "date_role": "observed",
       "evidence_class": "archived_rate_card",
-      "index_cohort": "workload-cost-input",
-      "index_eligible": true,
       "memory_gib": 8.0,
       "memory_rate_usd_per_gib_hour": 0.0414,
       "note": "Archived price input used by retained StarSling runs; allocated memory includes the corresponding processor capacity.",
@@ -120,15 +118,15 @@
       "series_order": 7,
       "source_label": "Blaxel pricing archive",
       "source_role": "historical_cost_input",
-      "source_url": "https://web.archive.org/web/20250814121919id_/https://blaxel.ai/pricing"
+      "source_url": "https://web.archive.org/web/20250814121919id_/https://blaxel.ai/pricing",
+      "workload_cost_cohort": "workload-cost-input",
+      "workload_cost_eligible": true
     },
     {
       "change_precision": "same_quote",
       "color": "#275d87",
       "date_role": "observed",
       "evidence_class": "current_rate_card",
-      "index_cohort": "workload-cost-input",
-      "index_eligible": true,
       "memory_gib": 8.0,
       "memory_rate_usd_per_gib_hour": 0.0162,
       "note": "Current public processor and memory rates match the November 2024 archive.",
@@ -143,15 +141,15 @@
       "series_order": 1,
       "source_label": "E2B pricing",
       "source_role": "current",
-      "source_url": "https://e2b.dev/pricing"
+      "source_url": "https://e2b.dev/pricing",
+      "workload_cost_cohort": "workload-cost-input",
+      "workload_cost_eligible": true
     },
     {
       "change_precision": "same_quote",
       "color": "#2f6b4f",
       "date_role": "observed",
       "evidence_class": "current_rate_card",
-      "index_cohort": "workload-cost-input",
-      "index_eligible": true,
       "memory_gib": 8.0,
       "memory_rate_usd_per_gib_hour": 0.0162,
       "note": "Current public processor and memory rates match the May 2025 archive.",
@@ -166,15 +164,15 @@
       "series_order": 2,
       "source_label": "Daytona pricing",
       "source_role": "current",
-      "source_url": "https://www.daytona.io/pricing"
+      "source_url": "https://www.daytona.io/pricing",
+      "workload_cost_cohort": "workload-cost-input",
+      "workload_cost_eligible": true
     },
     {
       "change_precision": "same_quote",
       "color": "#ad5c16",
       "date_role": "observed",
       "evidence_class": "current_rate_card",
-      "index_cohort": "workload-cost-input",
-      "index_eligible": true,
       "memory_gib": 8.0,
       "memory_rate_usd_per_gib_hour": 0.01152,
       "note": "Current public processor and memory rates match the October 2025 archive.",
@@ -189,15 +187,15 @@
       "series_order": 4,
       "source_label": "Novita Sandbox pricing",
       "source_role": "current",
-      "source_url": "https://novita.ai/docs/guides/sandbox-pricing"
+      "source_url": "https://novita.ai/docs/guides/sandbox-pricing",
+      "workload_cost_cohort": "workload-cost-input",
+      "workload_cost_eligible": true
     },
     {
       "change_precision": "same_quote",
       "color": "#76558f",
       "date_role": "observed",
       "evidence_class": "current_rate_card",
-      "index_cohort": "workload-cost-input",
-      "index_eligible": true,
       "memory_gib": 8.0,
       "memory_rate_usd_per_gib_hour": 0.024012,
       "note": "Current public processor and memory rates. Four requested CPU units are priced because that is the allocation used to expose four schedulable processors in the audited benchmark.",
@@ -212,15 +210,15 @@
       "series_order": 5,
       "source_label": "Modal Sandbox pricing",
       "source_role": "current",
-      "source_url": "https://modal.com/products/sandboxes"
+      "source_url": "https://modal.com/products/sandboxes",
+      "workload_cost_cohort": "workload-cost-input",
+      "workload_cost_eligible": true
     },
     {
       "change_precision": "same_quote",
       "color": "#44617a",
       "date_role": "observed",
       "evidence_class": "current_rate_card",
-      "index_cohort": "workload-cost-input",
-      "index_eligible": true,
       "memory_gib": 8.0,
       "memory_rate_usd_per_gib_hour": 0.0414,
       "note": "The current rate is 0.0000115 dollars per GB-second; eight GB for one hour costs 0.3312 dollars.",
@@ -235,7 +233,9 @@
       "series_order": 7,
       "source_label": "Blaxel pricing",
       "source_role": "current",
-      "source_url": "https://blaxel.ai/pricing"
+      "source_url": "https://blaxel.ai/pricing",
+      "workload_cost_cohort": "workload-cost-input",
+      "workload_cost_eligible": true
     }
   ]
 }

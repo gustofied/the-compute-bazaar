@@ -27,7 +27,7 @@ tfplan
 *.png
 *.csv
 *.xlsx
-!docs/assets/compute-bazaar-wordmark.png
+!assets/compute-bazaar-wordmark.png
 !compute-bazaar-bench/evals/**/environment/matter/*.csv
 
 

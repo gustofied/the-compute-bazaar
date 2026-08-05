@@ -15,7 +15,11 @@ SQL_QUERIES_ROOT = SQL_ROOT / "queries"
 
 
 def read_sql(relative_path: str) -> str:
-    path = _sql_path(relative_path)
+    return read_sql_from(SQL_ROOT, relative_path)
+
+
+def read_sql_from(root: Path, relative_path: str) -> str:
+    path = _sql_path(root, relative_path)
     return path.read_text(encoding="utf-8").strip().rstrip(";")
 
 
@@ -25,7 +29,22 @@ def render_sql(
     *,
     fragments: dict[str, str] | None = None,
 ) -> str:
-    template = Template(read_sql(relative_path))
+    return render_sql_from(
+        SQL_ROOT,
+        relative_path,
+        context,
+        fragments=fragments,
+    )
+
+
+def render_sql_from(
+    root: Path,
+    relative_path: str,
+    context: dict[str, Any] | None = None,
+    *,
+    fragments: dict[str, str] | None = None,
+) -> str:
+    template = Template(read_sql_from(root, relative_path))
     rendered_context = {
         name: _sql_literal(str(value)) for name, value in (context or {}).items()
     }
@@ -44,16 +63,26 @@ def render_sql(
 
 
 def sql_metadata(relative_path: str) -> dict[str, str]:
-    sql = read_sql(relative_path)
+    return sql_metadata_from(SQL_ROOT, relative_path, path_prefix="sql")
+
+
+def sql_metadata_from(
+    root: Path,
+    relative_path: str,
+    *,
+    path_prefix: str,
+) -> dict[str, str]:
+    sql = read_sql_from(root, relative_path)
     return {
-        "path": f"sql/{relative_path}",
+        "path": f"{path_prefix.rstrip('/')}/{relative_path}",
         "sha256": hashlib.sha256(sql.encode("utf-8")).hexdigest(),
     }
 
 
-def _sql_path(relative_path: str) -> Path:
-    path = (SQL_ROOT / relative_path).resolve()
-    if SQL_ROOT.resolve() != path and SQL_ROOT.resolve() not in path.parents:
+def _sql_path(root: Path, relative_path: str) -> Path:
+    resolved_root = root.resolve()
+    path = (resolved_root / relative_path).resolve()
+    if resolved_root != path and resolved_root not in path.parents:
         raise ValueError(f"SQL path escapes the packaged SQL root: {relative_path}")
     if not path.is_file():
         raise FileNotFoundError(f"SQL asset does not exist: {relative_path}")

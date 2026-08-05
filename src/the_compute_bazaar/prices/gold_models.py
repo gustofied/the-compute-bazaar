@@ -38,18 +38,6 @@ GOLD_MODELS = {
         "gold_providers_v1",
         "models/gold/dim_providers.sql",
     ),
-    "dim_regions": GoldModel(
-        "gold_regions_v1",
-        "models/gold/dim_regions.sql",
-    ),
-    "fact_price_index_values": GoldModel(
-        "gold_gpu_floor_values_v1",
-        "models/gold/fact_price_index_values.sql",
-    ),
-    "fact_index_constituents": GoldModel(
-        "gold_gpu_floor_constituents_v1",
-        "models/gold/fact_index_constituents.sql",
-    ),
     "fact_benchmark_values": GoldModel(
         "benchmark_frontier_gpu_families_v2",
         "models/gold/benchmark_values.sql",
@@ -71,30 +59,6 @@ GOLD_MODELS = {
     "fact_prime_frontier_offer_ladder": GoldModel(
         "gold_prime_offer_ladder_v1",
         "models/gold/prime_offer_ladder.sql",
-    ),
-    "sandbox_workload_batch_history": GoldModel(
-        "sandbox_workload_batch_history_v2",
-        "models/gold/sandbox_workload_batch_history.sql",
-    ),
-    "sandbox_workload_run_history": GoldModel(
-        "sandbox_workload_run_summary_v1",
-        "models/gold/sandbox_workload_run_history.sql",
-    ),
-    "sandbox_workload_latest_replicates": GoldModel(
-        "sandbox_workload_latest_replicates_v2",
-        "models/gold/sandbox_workload_latest_replicates.sql",
-    ),
-    "sandbox_workload_latest_phases": GoldModel(
-        "sandbox_workload_latest_phases_v1",
-        "models/gold/sandbox_workload_latest_phases.sql",
-    ),
-    "sandbox_workload_phase_summary": GoldModel(
-        "sandbox_workload_phase_summary_v1",
-        "models/gold/sandbox_workload_phase_summary.sql",
-    ),
-    "sandbox_workload_service_summary": GoldModel(
-        "sandbox_workload_service_summary_v2",
-        "models/gold/sandbox_workload_service_summary.sql",
     ),
 }
 

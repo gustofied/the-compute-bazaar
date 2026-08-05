@@ -74,7 +74,6 @@ PRIME_FRONTIER_HISTORY_COLUMNS = (
     "is_spot",
     "is_secure",
     "availability_status",
-    "freshness_status",
     "gpu_socket",
     "stock_status",
     "price_is_variable",

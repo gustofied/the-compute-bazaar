@@ -9,13 +9,15 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from infra.windmill import market_hourly as windmill_market_hourly
-from the_compute_bazaar.snapshots import _snapshot_name_for_filename
 from the_compute_bazaar.prices.gold import (
     build_gold_market_tables,
     query_gold_listings,
 )
 from the_compute_bazaar.prices.datafusion import query_tables
-from the_compute_bazaar.prices.market_run import _public_market_run_manifest
+from the_compute_bazaar.prices.market_run import (
+    _public_market_run_manifest,
+    default_market_providers,
+)
 from the_compute_bazaar.prices.providers.lium import normalize_executor
 from the_compute_bazaar.prices.providers.vast import normalize_offer
 from the_compute_bazaar.prices.schemas import GpuOffer
@@ -33,6 +35,7 @@ OBSERVED_AT = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
 
 class CoreTests(unittest.TestCase):
     def test_windmill_calls_market_service_directly(self) -> None:
+        self.assertNotIn("published_rate_cards", default_market_providers())
         result = Mock()
         result.to_dict.return_value = {"market_run_id": "market-direct"}
         previous_vast_key = os.getenv("VAST_API_KEY")
@@ -105,7 +108,10 @@ class CoreTests(unittest.TestCase):
             _write_provider_snapshot(
                 root,
                 "vast",
-                _offer(provider="vast", offer_id="vast-1", price=2.0),
+                [
+                    _offer(provider="vast", offer_id="vast-1", price=2.0),
+                    _offer(provider="vast", offer_id="vast-2", price=4.0),
+                ],
             )
             _write_provider_snapshot(
                 root,
@@ -116,7 +122,7 @@ class CoreTests(unittest.TestCase):
             build = build_gold_market_tables(
                 lake_root=str(lake_root),
                 providers=["vast", "lium"],
-                run_id="gold-smoke",
+                run_id="gold-test",
             )
             rows = query_gold_listings(
                 lake_root=str(lake_root),
@@ -134,12 +140,48 @@ from fact_benchmark_values
 where benchmark_family_id = 'H100'
 """,
             )
+            constituent_rows = query_tables(
+                tables={
+                    "fact_benchmark_constituents": build.table_refs[
+                        "fact_benchmark_constituents"
+                    ]
+                },
+                sql="""
+select provider, price_usd_gpu_hr, eligible_for_benchmark, included
+from fact_benchmark_constituents
+where benchmark_family_id = 'H100'
+order by provider, price_usd_gpu_hr
+""",
+            )
             manifest = read_json(build.manifest_ref)
 
         self.assertEqual(build.provider_scope, ["vast", "lium"])
-        self.assertEqual([row["provider"] for row in rows], ["vast", "lium"])
-        self.assertEqual([row["price_usd_gpu_hr"] for row in rows], [2.0, 2.5])
+        self.assertEqual([row["provider"] for row in rows], ["vast", "lium", "vast"])
+        self.assertEqual([row["price_usd_gpu_hr"] for row in rows], [2.0, 2.5, 4.0])
         self.assertEqual(benchmark_rows[0]["benchmark_usd_gpu_hr"], 2.25)
+        self.assertEqual(
+            constituent_rows,
+            [
+                {
+                    "provider": "lium",
+                    "price_usd_gpu_hr": 2.5,
+                    "eligible_for_benchmark": True,
+                    "included": True,
+                },
+                {
+                    "provider": "vast",
+                    "price_usd_gpu_hr": 2.0,
+                    "eligible_for_benchmark": True,
+                    "included": True,
+                },
+                {
+                    "provider": "vast",
+                    "price_usd_gpu_hr": 4.0,
+                    "eligible_for_benchmark": True,
+                    "included": False,
+                },
+            ],
+        )
         self.assertEqual(
             manifest["sql_models"]["fact_benchmark_values"]["path"],
             "sql/models/gold/benchmark_values.sql",
@@ -154,9 +196,6 @@ where benchmark_family_id = 'H100'
                 "fact_gpu_listings",
                 "dim_gpu_products",
                 "dim_providers",
-                "dim_regions",
-                "fact_price_index_values",
-                "fact_index_constituents",
                 "fact_compute_market_state",
                 "fact_benchmark_values",
                 "fact_benchmark_constituents",
@@ -169,16 +208,16 @@ where benchmark_family_id = 'H100'
                 for model in manifest["sql_models"].values()
             )
         )
-        self.assertEqual(len(load_query_catalog()), 8)
+        self.assertEqual(len(load_query_catalog()), 7)
 
     def test_public_market_payload_does_not_expose_private_storage(self) -> None:
         payload = _public_market_run_manifest(
             {
-                "market_run_id": "market-smoke",
+                "market_run_id": "market-test",
                 "status": "success",
                 "data_quality": {
                     "sandbox_cost": {
-                        "build_id": "sandbox-smoke",
+                        "build_id": "sandbox-test",
                         "manifest_ref": "s3://private/lake/manifest.json",
                     }
                 },
@@ -188,7 +227,7 @@ where benchmark_family_id = 'H100'
         self.assertNotIn("s3://", json.dumps(payload))
         self.assertEqual(
             payload["data_quality"]["sandbox_cost"],
-            {"build_id": "sandbox-smoke"},
+            {"build_id": "sandbox-test"},
         )
 
     def test_publication_routes_are_stable_and_extensionless(self) -> None:
@@ -205,7 +244,6 @@ where benchmark_family_id = 'H100'
             "publications/gpu-index/h100/1-day/2026-08-01-1200-utc-abcdef1234",
         )
         self.assertEqual(route.page_path, f"{route.public_path}.html")
-        self.assertEqual(_snapshot_name_for_filename("gpu-benchmark/h100.json"), "gpu-benchmark-h100")
 
 
 def _offer(*, provider: str, offer_id: str, price: float) -> GpuOffer:
@@ -228,7 +266,12 @@ def _offer(*, provider: str, offer_id: str, price: float) -> GpuOffer:
     )
 
 
-def _write_provider_snapshot(root: Path, provider: str, offer: GpuOffer) -> None:
+def _write_provider_snapshot(
+    root: Path,
+    provider: str,
+    offers: GpuOffer | list[GpuOffer],
+) -> None:
+    offer_rows = [offers] if isinstance(offers, GpuOffer) else offers
     lake_root = root / "lake"
     raw_ref = root / "raw" / f"{provider}.json"
     normalized_ref = lake_root / "silver" / provider / "offers.parquet"
@@ -238,12 +281,12 @@ def _write_provider_snapshot(root: Path, provider: str, offer: GpuOffer) -> None
         "manifest_version": "v1",
         "table": "gpu_offers",
         "provider": provider,
-        "run_id": f"{provider}-smoke",
+        "run_id": f"{provider}-test",
         "observed_at": OBSERVED_AT.isoformat(),
         "raw_ref": str(raw_ref),
         "normalized_ref": str(normalized_ref),
-        "raw_offer_count": 1,
-        "normalized_offer_count": 1,
+        "raw_offer_count": len(offer_rows),
+        "normalized_offer_count": len(offer_rows),
         "published_events": 0,
         "publish_mode": "test",
         "unknown_gpu_names": [],
@@ -251,8 +294,8 @@ def _write_provider_snapshot(root: Path, provider: str, offer: GpuOffer) -> None
         "market_state_observation_count": 0,
         "manifest_ref": str(manifest_ref),
     }
-    write_json(str(raw_ref), [offer.to_dict()])
-    write_offers_parquet(str(normalized_ref), [offer])
+    write_json(str(raw_ref), [offer.to_dict() for offer in offer_rows])
+    write_offers_parquet(str(normalized_ref), offer_rows)
     write_json(str(manifest_ref), manifest)
     write_json(str(latest_ref), manifest)
 

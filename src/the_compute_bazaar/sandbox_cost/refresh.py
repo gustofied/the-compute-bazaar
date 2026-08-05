@@ -283,22 +283,6 @@ def refresh_benchmark_sources(
     }
 
 
-def extract_benchmark_rows(
-    *,
-    runs: list[dict[str, Any]],
-    prices: list[dict[str, Any]],
-    source_commit: str = "main",
-    source_repository: str = REPOSITORY,
-) -> list[dict[str, Any]]:
-    """Extract provider-batch summaries for compatibility with existing callers."""
-    return extract_benchmark_evidence(
-        runs=runs,
-        prices=prices,
-        source_commit=source_commit,
-        source_repository=source_repository,
-    )["batch_rows"]
-
-
 def extract_benchmark_evidence(
     *,
     runs: list[dict[str, Any]],

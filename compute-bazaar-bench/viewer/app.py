@@ -11,7 +11,7 @@ import sys
 from typing import Any, Sequence
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
@@ -660,55 +660,23 @@ def create_app(results_source: Path) -> FastAPI:
             raise HTTPException(status_code=404, detail="trial not found")
         return _trial_html(match, job)
 
-    @app.get("/evals/{eval_slug}/runs/{run_id}", response_class=RedirectResponse)
-    def legacy_run_detail(eval_slug: str, run_id: str) -> RedirectResponse:
-        run_path(eval_slug, run_id)
-        return RedirectResponse(
-            url=f"/evals/{eval_slug}/jobs/{run_id}", status_code=307
-        )
-
-    @app.get(
-        "/evals/{eval_slug}/runs/{run_id}/trials/{trial_name}",
-        response_class=RedirectResponse,
-    )
-    def legacy_run_trial_detail(
-        eval_slug: str, run_id: str, trial_name: str
-    ) -> RedirectResponse:
-        return RedirectResponse(
-            url=f"/evals/{eval_slug}/jobs/{run_id}/trials/{trial_name}",
-            status_code=307,
-        )
-
-    @app.get("/trials/{trial_name}", response_class=RedirectResponse)
-    def legacy_trial_detail(trial_name: str) -> RedirectResponse:
-        eval_slug = next(iter(run_paths))
-        run_id = latest_run_id(eval_slug)
-        return RedirectResponse(
-            url=f"/evals/{eval_slug}/jobs/{run_id}/trials/{trial_name}",
-            status_code=307,
-        )
-
     @app.get("/api/evals")
     def evals_api() -> list[dict[str, Any]]:
         return evaluation_summaries()
 
     @app.get("/api/evals/{eval_slug}/jobs")
-    @app.get("/api/evals/{eval_slug}/runs", include_in_schema=False)
     def runs_api(eval_slug: str) -> list[dict[str, Any]]:
         return run_summaries(eval_slug)
 
     @app.get("/api/evals/{eval_slug}/jobs/{run_id}")
-    @app.get("/api/evals/{eval_slug}/runs/{run_id}", include_in_schema=False)
     def run_api(eval_slug: str, run_id: str) -> dict[str, Any]:
         return presentation(eval_slug, run_id).model_dump()
 
     @app.post("/api/evals/{eval_slug}/jobs/{run_id}/note")
-    @app.post("/api/evals/{eval_slug}/runs/{run_id}/note", include_in_schema=False)
     def save_job_note(eval_slug: str, run_id: str, note: JobNote) -> dict[str, str]:
         return _write_note(run_path(eval_slug, run_id), note.text)
 
     @app.get("/api/evals/{eval_slug}/jobs/{run_id}/trials")
-    @app.get("/api/evals/{eval_slug}/runs/{run_id}/trials", include_in_schema=False)
     def run_trials_api(eval_slug: str, run_id: str) -> list[dict[str, Any]]:
         return [
             trial.model_dump()

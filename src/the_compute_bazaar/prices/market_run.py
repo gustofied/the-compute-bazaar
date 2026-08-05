@@ -30,7 +30,6 @@ from .pipeline import (
     ingest_oracle_cloud,
     ingest_ovhcloud,
     ingest_prime_intellect,
-    ingest_rate_card,
     ingest_runpod,
     ingest_scaleway,
     ingest_sesterce,
@@ -42,7 +41,6 @@ from .pipeline import (
     ingest_vast,
     ingest_vultr,
 )
-from .providers.rate_cards import DEFAULT_RATE_CARD_PROVIDER, rate_card_providers
 from .public_views import GPU_FAMILIES, market_overview_view
 from .schemas import to_jsonable, utc_now
 from .storage import list_refs, read_json, write_json
@@ -111,7 +109,6 @@ def default_market_providers() -> list[str]:
         "azure",
         "runpod",
         "verda",
-        DEFAULT_RATE_CARD_PROVIDER,
     ]
     providers.extend(
         provider
@@ -270,8 +267,10 @@ def run_market_hourly(
     row_counts = {
         "listings": gold_result.row_counts.get("fact_gpu_listings", 0),
         "gpu_products": gold_result.row_counts.get("dim_gpu_products", 0),
-        "index_values": gold_result.row_counts.get("fact_price_index_values", 0),
-        "index_constituents": gold_result.row_counts.get("fact_index_constituents", 0),
+        "benchmark_values": gold_result.row_counts.get("fact_benchmark_values", 0),
+        "benchmark_constituents": gold_result.row_counts.get(
+            "fact_benchmark_constituents", 0
+        ),
         "compute_market_state": gold_result.row_counts.get(
             "fact_compute_market_state", 0
         ),
@@ -429,10 +428,6 @@ def _ingest_market_provider(
             paginate=lium_paginate,
             max_pages=lium_max_pages,
         )
-    if provider == DEFAULT_RATE_CARD_PROVIDER:
-        return ingest_rate_card(provider=DEFAULT_RATE_CARD_PROVIDER, **common_kwargs)
-    if provider in rate_card_providers():
-        return ingest_rate_card(provider=provider, **common_kwargs)
     try:
         ingester = MARKET_PROVIDER_INGESTERS[provider]
     except KeyError as exc:

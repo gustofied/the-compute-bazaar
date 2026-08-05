@@ -66,9 +66,6 @@ GOLD_TABLES = {
     "fact_gpu_listings": "listings.parquet",
     "dim_gpu_products": "gpu_products.parquet",
     "dim_providers": "providers.parquet",
-    "dim_regions": "regions.parquet",
-    "fact_price_index_values": "price_index_values.parquet",
-    "fact_index_constituents": "index_constituents.parquet",
     "fact_benchmark_values": "benchmark_values.parquet",
     "fact_benchmark_constituents": "benchmark_constituents.parquet",
     "fact_compute_market_state": "compute_market_state.parquet",
@@ -78,9 +75,6 @@ CORE_GOLD_SQL_TABLES = (
     "fact_gpu_listings",
     "dim_gpu_products",
     "dim_providers",
-    "dim_regions",
-    "fact_price_index_values",
-    "fact_index_constituents",
     "fact_compute_market_state",
 )
 PRIME_FRONTIER_GOLD_TABLES = {
@@ -91,14 +85,6 @@ PRIME_FRONTIER_GOLD_TABLES = {
     ),
     "fact_prime_frontier_offer_ladder": "prime_frontier_offer_ladder.parquet",
 }
-
-FEATURED_INDEX_PRODUCTS = [
-    {"gpu_model": "H100_80GB", "label": "H100"},
-    {"gpu_model": "H200_141GB", "label": "H200"},
-    {"gpu_model": "B200_180GB", "label": "B200"},
-    {"gpu_model": "B300_288GB", "label": "B300"},
-]
-
 
 @dataclass(frozen=True)
 class GoldBuildResult:
@@ -227,30 +213,6 @@ def build_gold_market_tables(
                 fragments={"silver_source_cte": silver_source_cte},
             ),
         ),
-        "dim_regions": query_tables(
-            tables=tables,
-            sql=gold_model_sql(
-                "dim_regions",
-                query_context,
-                fragments={"silver_source_cte": silver_source_cte},
-            ),
-        ),
-        "fact_price_index_values": query_tables(
-            tables=tables,
-            sql=gold_model_sql(
-                "fact_price_index_values",
-                query_context,
-                fragments={"silver_source_cte": silver_source_cte},
-            ),
-        ),
-        "fact_index_constituents": query_tables(
-            tables=tables,
-            sql=gold_model_sql(
-                "fact_index_constituents",
-                query_context,
-                fragments={"silver_source_cte": silver_source_cte},
-            ),
-        ),
     }
     market_state_tables = {
         f"silver_compute_market_state_{index}": source_market_state_refs[
@@ -285,16 +247,23 @@ def build_gold_market_tables(
     for table_name, rows in rows_by_table.items():
         write_parquet_rows(table_refs[table_name], rows)
 
-    benchmark_values, benchmark_constituents = _benchmark_rows_from_listing_ref(
-        table_refs["fact_gpu_listings"],
-        context=query_context,
+    benchmark_constituents = query_parquet(
+        parquet_uri=table_refs["fact_gpu_listings"],
+        table_name="fact_gpu_listings",
+        sql=gold_model_sql("fact_benchmark_constituents", query_context),
+    )
+    rows_by_table["fact_benchmark_constituents"] = benchmark_constituents
+    write_parquet_rows(
+        table_refs["fact_benchmark_constituents"],
+        benchmark_constituents,
+    )
+    benchmark_values = query_parquet(
+        parquet_uri=table_refs["fact_benchmark_constituents"],
+        table_name="fact_benchmark_constituents",
+        sql=gold_model_sql("fact_benchmark_values", query_context),
     )
     rows_by_table["fact_benchmark_values"] = benchmark_values
-    rows_by_table["fact_benchmark_constituents"] = benchmark_constituents
-
-    for table_name in ["fact_benchmark_values", "fact_benchmark_constituents"]:
-        rows = rows_by_table[table_name]
-        write_parquet_rows(table_refs[table_name], rows)
+    write_parquet_rows(table_refs["fact_benchmark_values"], benchmark_values)
 
     prime_frontier_rows, prime_frontier_refs = _build_prime_frontier_gold_products(
         lake_root=lake_root,
@@ -436,7 +405,7 @@ def list_gold_manifests(lake_root: str, *, limit: int = 48) -> list[dict[str, An
             manifest = dict(read_json(ref))
         except Exception:  # noqa: BLE001 - one bad manifest should not hide the usable history.
             continue
-        if manifest.get("table_refs", {}).get("fact_price_index_values"):
+        if manifest.get("table_refs", {}).get("fact_benchmark_values"):
             manifests.append(manifest)
         if len(manifests) >= requested_limit:
             break
@@ -449,221 +418,13 @@ def gold_manifest_prefix(lake_root: str) -> str:
     return "/".join([lake_root.rstrip("/"), "_manifests", GOLD_MANIFEST_TABLE])
 
 
-def query_gold_price_index(
-    *, lake_root: str, limit: int | None = None
-) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
-    table_ref = manifest["table_refs"]["fact_price_index_values"]
-    sql = """
-select *
-from fact_price_index_values
-order by floor_usd_gpu_hr asc, offer_count desc
-"""
-    rows = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_price_index_values",
-        sql=_with_limit(sql, limit),
-    )
-    return {"manifest": manifest, "rows": rows}
-
-
-def query_gold_index_history(
-    *,
-    lake_root: str,
-    history_limit: int = 48,
-    gpu_models: list[str] | None = None,
-) -> dict[str, Any]:
-    manifests = list_gold_manifests(lake_root, limit=history_limit)
-    filters = ""
-    if gpu_models:
-        values = ", ".join(_sql_literal(model) for model in gpu_models)
-        filters = f"where gpu_model in ({values})"
-
-    rows: list[dict[str, Any]] = []
-    for manifest in reversed(manifests):
-        table_ref = manifest["table_refs"]["fact_price_index_values"]
-        sql = f"""
-select
-  index_symbol,
-  gpu_product_id,
-  gpu_model,
-  methodology_version,
-  floor_usd_gpu_hr,
-  simple_mean_usd_gpu_hr,
-  cheapest_offer_usd_hr,
-  offer_count,
-  provider_count,
-  country_count,
-  latest_observed_at,
-  calculated_at
-from fact_price_index_values
-{filters}
-order by gpu_model, floor_usd_gpu_hr asc
-"""
-        for row in query_parquet(
-            parquet_uri=table_ref,
-            table_name="fact_price_index_values",
-            sql=sql,
-        ):
-            rows.append(
-                {
-                    **row,
-                    "gold_run_id": manifest.get("run_id"),
-                    "gold_observed_at": manifest.get("observed_at"),
-                    "gold_observed_date": manifest.get("observed_date"),
-                    "provider_scope": manifest.get("provider_scope"),
-                    "source_run_ids": manifest.get("source_run_ids"),
-                }
-            )
-
-    rows.sort(
-        key=lambda row: (
-            str(row.get("gold_observed_at") or ""),
-            str(row.get("gpu_model") or ""),
-        )
-    )
-    return {
-        "manifest": read_latest_gold_manifest(lake_root),
-        "history_manifest_count": len(manifests),
-        "rows": rows,
-    }
-
-
-def query_gold_featured_index(
-    *,
-    lake_root: str,
-    products: list[dict[str, str]] | None = None,
-    history_limit: int = 48,
-) -> dict[str, Any]:
-    """Return a stable frontier GPU floor strip for product/story surfaces."""
-    manifest = read_latest_gold_manifest(lake_root)
-    featured_products = products or FEATURED_INDEX_PRODUCTS
-    gpu_models = [product["gpu_model"] for product in featured_products]
-    values = ", ".join(_sql_literal(model) for model in gpu_models)
-    table_ref = manifest["table_refs"]["fact_price_index_values"]
-    latest_rows = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_price_index_values",
-        sql=f"""
-select
-  index_symbol,
-  gpu_product_id,
-  gpu_model,
-  methodology_version,
-  floor_usd_gpu_hr,
-  simple_mean_usd_gpu_hr,
-  cheapest_offer_usd_hr,
-  offer_count,
-  provider_count,
-  country_count,
-  latest_observed_at,
-  calculated_at
-from fact_price_index_values
-where gpu_model in ({values})
-order by gpu_model
-""",
-    )
-    latest_by_model = {str(row.get("gpu_model")): row for row in latest_rows}
-
-    warnings: list[str] = []
-    try:
-        history = query_gold_index_history(
-            lake_root=lake_root,
-            history_limit=history_limit,
-            gpu_models=gpu_models,
-        )
-        history_rows = history["rows"]
-        history_manifest_count = history["history_manifest_count"]
-    except Exception as exc:  # noqa: BLE001 - featured values should still publish without history.
-        history_rows = []
-        history_manifest_count = 0
-        warnings.append(f"featured index history skipped: {exc}")
-
-    last_seen_by_model: dict[str, dict[str, Any]] = {}
-    for row in history_rows:
-        gpu_model = str(row.get("gpu_model") or "")
-        if gpu_model:
-            last_seen_by_model[gpu_model] = row
-
-    rows = []
-    for product in featured_products:
-        gpu_model = product["gpu_model"]
-        label = product.get("label") or gpu_model
-        latest = latest_by_model.get(gpu_model)
-        last_seen = last_seen_by_model.get(gpu_model)
-        if latest:
-            rows.append(
-                {
-                    **latest,
-                    "label": label,
-                    "status": "observed_latest",
-                    "is_latest": True,
-                    "gold_run_id": manifest.get("run_id"),
-                    "gold_observed_at": manifest.get("observed_at"),
-                    "gold_observed_date": manifest.get("observed_date"),
-                    "provider_scope": manifest.get("provider_scope"),
-                    "source_run_ids": manifest.get("source_run_ids"),
-                    "last_seen_floor_usd_gpu_hr": latest.get("floor_usd_gpu_hr"),
-                    "last_seen_at": manifest.get("observed_at"),
-                    "last_seen_gold_run_id": manifest.get("run_id"),
-                }
-            )
-            continue
-
-        if last_seen:
-            rows.append(
-                {
-                    **last_seen,
-                    "label": label,
-                    "status": "not_present_latest",
-                    "is_latest": False,
-                    "floor_usd_gpu_hr": None,
-                    "current_gold_run_id": manifest.get("run_id"),
-                    "current_gold_observed_at": manifest.get("observed_at"),
-                    "gold_observed_date": manifest.get("observed_date"),
-                    "last_seen_floor_usd_gpu_hr": last_seen.get("floor_usd_gpu_hr"),
-                    "last_seen_at": last_seen.get("gold_observed_at")
-                    or last_seen.get("latest_observed_at"),
-                    "last_seen_gold_run_id": last_seen.get("gold_run_id"),
-                }
-            )
-            continue
-
-        rows.append(
-            {
-                "label": label,
-                "gpu_model": gpu_model,
-                "gpu_product_id": gpu_model,
-                "status": "not_seen",
-                "is_latest": False,
-                "floor_usd_gpu_hr": None,
-                "last_seen_floor_usd_gpu_hr": None,
-                "last_seen_at": None,
-                "gold_run_id": manifest.get("run_id"),
-                "gold_observed_at": manifest.get("observed_at"),
-                "gold_observed_date": manifest.get("observed_date"),
-                "provider_scope": manifest.get("provider_scope"),
-                "source_run_ids": manifest.get("source_run_ids"),
-            }
-        )
-
-    return {
-        "manifest": manifest,
-        "history_manifest_count": history_manifest_count,
-        "products": featured_products,
-        "rows": rows,
-        "warnings": warnings,
-    }
-
-
 def query_gold_benchmark_values(
     *, lake_root: str, limit: int | None = None
 ) -> dict[str, Any]:
     manifest = read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"].get("fact_benchmark_values")
     if not table_ref:
-        values, _ = _benchmark_rows_from_latest_listings(manifest)
-        return {"manifest": manifest, "rows": values[:limit] if limit else values}
+        return {"manifest": manifest, "rows": []}
 
     sql = """
 select *
@@ -684,7 +445,7 @@ def query_gold_benchmark_history(
     history_limit: int = 24,
     canonical_market_runs_only: bool = False,
 ) -> dict[str, Any]:
-    """Recompute recent frontier benchmarks from each retained gold snapshot."""
+    """Read the benchmark values stored with each retained Gold snapshot."""
     manifests = list_gold_manifests(lake_root, limit=history_limit)
     rows: list[dict[str, Any]] = []
     included_manifest_count = 0
@@ -694,9 +455,16 @@ def query_gold_benchmark_history(
             manifest.get("run_id")
         ):
             continue
+        table_ref = manifest.get("table_refs", {}).get("fact_benchmark_values")
+        if not table_ref:
+            continue
         try:
-            benchmark_rows = _benchmark_values_from_latest_listings(manifest)
-        except Exception:  # noqa: BLE001 - one legacy run should not hide comparable history.
+            benchmark_rows = query_parquet(
+                parquet_uri=str(table_ref),
+                table_name="fact_benchmark_values",
+                sql="select * from fact_benchmark_values order by benchmark_family_id",
+            )
+        except Exception:  # noqa: BLE001 - one bad run should not hide usable history.
             continue
 
         benchmark_rows = [
@@ -740,14 +508,7 @@ def query_gold_benchmark_constituents(
     manifest = read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"].get("fact_benchmark_constituents")
     if not table_ref:
-        _, constituents = _benchmark_rows_from_latest_listings(manifest)
-        rows = [
-            row
-            for row in constituents
-            if benchmark_family_id is None
-            or row.get("benchmark_family_id") == benchmark_family_id
-        ]
-        return {"manifest": manifest, "rows": rows[:limit] if limit else rows}
+        return {"manifest": manifest, "rows": []}
 
     filters = ""
     if benchmark_family_id:
@@ -831,7 +592,6 @@ select
   is_spot,
   is_secure,
   availability_status,
-  freshness_status,
   has_raw_evidence,
   source_offer_id,
   source_run_id,
@@ -843,68 +603,6 @@ order by price_usd_gpu_hr asc, price_usd_hr asc
     rows = query_parquet(
         parquet_uri=table_ref,
         table_name="fact_gpu_listings",
-        sql=_with_limit(sql, limit),
-    )
-    return {"manifest": manifest, "rows": rows}
-
-
-def query_gold_index_constituents(
-    *,
-    lake_root: str,
-    gpu_model: str | None = None,
-    limit: int | None = None,
-) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
-    table_ref = manifest["table_refs"]["fact_index_constituents"]
-    filters = []
-    if gpu_model:
-        filters.append(f"gpu_model = {_sql_literal(gpu_model)}")
-    where = f"where {' and '.join(filters)}" if filters else ""
-    sql = f"""
-select
-  index_symbol,
-  gpu_model,
-  listing_id,
-  provider,
-  price_usd_gpu_hr,
-  included,
-  exclusion_reason,
-  constituent_rank,
-  is_floor_constituent,
-  observed_at
-from fact_index_constituents
-{where}
-order by gpu_model, included desc, constituent_rank asc, price_usd_gpu_hr asc
-"""
-    rows = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_index_constituents",
-        sql=_with_limit(sql, limit),
-    )
-    return {"manifest": manifest, "rows": rows}
-
-
-def query_gold_index_quality(
-    *, lake_root: str, limit: int | None = None
-) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
-    table_ref = manifest["table_refs"]["fact_index_constituents"]
-    sql = """
-select
-  gpu_model,
-  count(*) as candidate_count,
-  sum(case when included then 1 else 0 end) as included_count,
-  sum(case when not included then 1 else 0 end) as excluded_count,
-  count(distinct provider) as provider_count,
-  min(case when included then price_usd_gpu_hr else null end) as floor_usd_gpu_hr,
-  max(observed_at) as latest_observed_at
-from fact_index_constituents
-group by gpu_model
-order by included_count desc, candidate_count desc, gpu_model
-"""
-    rows = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_index_constituents",
         sql=_with_limit(sql, limit),
     )
     return {"manifest": manifest, "rows": rows}
@@ -1088,35 +786,6 @@ order by gpu_family_id, price_usd_gpu_hr asc, provider, gpu_count
     }
 
 
-def query_gold_prime_h100_offer_reference(
-    *,
-    lake_root: str,
-) -> dict[str, Any]:
-    """Compatibility projection for callers that still request H100 only."""
-    payload = query_gold_prime_frontier_offer_market(lake_root=lake_root)
-    return {
-        "manifest": payload["manifest"],
-        "current": payload["current"].get("H100"),
-        "history": [
-            row for row in payload["history"] if row.get("gpu_family_id") == "H100"
-        ],
-        "ladder": [
-            row for row in payload["ladder"] if row.get("gpu_family_id") == "H100"
-        ],
-        "events": [
-            row for row in payload["events"] if row.get("gpu_family_id") == "H100"
-        ],
-        "event_history": [
-            row
-            for row in payload["event_history"]
-            if row.get("gpu_family_id") == "H100"
-        ],
-        "offers": [
-            row for row in payload["offers"] if row.get("gpu_family_id") == "H100"
-        ],
-    }
-
-
 def export_gold_dashboard_snapshot(
     *,
     lake_root: str,
@@ -1131,12 +800,6 @@ def export_gold_dashboard_snapshot(
         dashboard_exported_at=utc_now().isoformat(),
     )
     warnings = []
-    index = query_gold_price_index(lake_root=lake_root, limit=limit)["rows"]
-    featured_index_payload = query_gold_featured_index(
-        lake_root=lake_root, history_limit=12
-    )
-    warnings.extend(featured_index_payload.get("warnings", []))
-    featured_index = featured_index_payload["rows"]
     benchmark_values_payload = query_gold_benchmark_values(lake_root=lake_root)
     benchmark_values = benchmark_values_payload["rows"]
     # Benchmark evidence is a complete audit surface, not a sampled dashboard table.
@@ -1169,14 +832,6 @@ def export_gold_dashboard_snapshot(
         existing_benchmark_history,
         public_benchmark_history,
     )
-    try:
-        index_history_payload = query_gold_index_history(
-            lake_root=lake_root, history_limit=24
-        )
-    except Exception as exc:  # noqa: BLE001 - latest dashboard snapshots are more important than history.
-        index_history_payload = {"history_manifest_count": 0, "rows": []}
-        warnings.append(f"index history export skipped: {exc}")
-    index_history = index_history_payload["rows"]
     provider_comparison = query_gold_provider_comparison(
         lake_root=lake_root, limit=limit
     )["rows"]
@@ -1220,31 +875,12 @@ def export_gold_dashboard_snapshot(
             "offers": [],
         }
         warnings.append(f"Prime frontier offer-market export skipped: {exc}")
-    try:
-        constituents = query_gold_index_constituents(lake_root=lake_root, limit=limit)[
-            "rows"
-        ]
-        index_quality = query_gold_index_quality(lake_root=lake_root, limit=limit)[
-            "rows"
-        ]
-    except Exception as exc:  # noqa: BLE001 - old gold tables may not have the quality columns yet.
-        constituents = []
-        index_quality = []
-        warnings.append(f"index constituent export skipped: {exc}")
-
     output_refs = {
         "manifest": "/".join([output_root.rstrip("/"), "manifest.json"]),
-        "latest_index": "/".join([output_root.rstrip("/"), "latest-index.json"]),
-        "featured_index": "/".join([output_root.rstrip("/"), "featured-index.json"]),
         "featured_benchmarks": "/".join(
             [output_root.rstrip("/"), "featured-benchmarks.json"]
         ),
         "benchmark_history": benchmark_history_ref,
-        "index_constituents": "/".join(
-            [output_root.rstrip("/"), "index-constituents.json"]
-        ),
-        "index_quality": "/".join([output_root.rstrip("/"), "index-quality.json"]),
-        "index_history": "/".join([output_root.rstrip("/"), "index-history.json"]),
         "benchmark_constituents": "/".join(
             [output_root.rstrip("/"), "benchmark-constituents.json"]
         ),
@@ -1258,9 +894,6 @@ def export_gold_dashboard_snapshot(
         ),
         "prime_frontier_offer_shelf": "/".join(
             [output_root.rstrip("/"), "prime-frontier-offer-shelf.json"]
-        ),
-        "prime_h100_offer_reference": "/".join(
-            [output_root.rstrip("/"), "prime-h100-offer-reference.json"]
         ),
         "market_overview": "/".join([output_root.rstrip("/"), "market-overview.json"]),
         "capacity_market_state": "/".join(
@@ -1427,18 +1060,6 @@ def export_gold_dashboard_snapshot(
     )
     write_json(output_refs["manifest"], public_manifest)
     write_json(
-        output_refs["latest_index"], {"manifest": public_manifest, "rows": index}
-    )
-    write_json(
-        output_refs["featured_index"],
-        {
-            "manifest": public_manifest,
-            "history_manifest_count": featured_index_payload["history_manifest_count"],
-            "products": featured_index_payload["products"],
-            "rows": featured_index,
-        },
-    )
-    write_json(
         output_refs["featured_benchmarks"],
         {
             "manifest": public_manifest,
@@ -1461,23 +1082,6 @@ def export_gold_dashboard_snapshot(
             ),
             "row_count": len(public_benchmark_history),
             "rows": public_benchmark_history,
-        },
-    )
-    write_json(
-        output_refs["index_constituents"],
-        {"manifest": public_manifest, "rows": constituents},
-    )
-    write_json(
-        output_refs["index_quality"],
-        {"manifest": public_manifest, "rows": index_quality},
-    )
-    write_json(
-        output_refs["index_history"],
-        {
-            "manifest": public_manifest,
-            "history_manifest_count": index_history_payload["history_manifest_count"],
-            "row_count": len(index_history),
-            "rows": index_history,
         },
     )
     write_json(
@@ -1509,31 +1113,6 @@ def export_gold_dashboard_snapshot(
         output_refs["prime_frontier_offer_shelf"],
         prime_frontier_shelf_public,
     )
-    h100_product = next(
-        (
-            product
-            for product in prime_frontier_products
-            if product.get("family_id") == "H100"
-        ),
-        None,
-    )
-    write_json(
-        output_refs["prime_h100_offer_reference"],
-        {
-            "schema_version": "prime_h100_offer_reference_public_v2",
-            "manifest": public_manifest,
-            "methodology_version": PRIME_FRONTIER_METHOD_VERSION,
-            "reference_scope": PRIME_FRONTIER_SCOPE,
-            "source": prime_frontier_public["source"],
-            "measurement_notes": prime_frontier_public["measurement_notes"],
-            "current": (h100_product or {}).get("current"),
-            "history": (h100_product or {}).get("history", []),
-            "ladder": (h100_product or {}).get("ladder", []),
-            "events": (h100_product or {}).get("events", []),
-            "event_history": (h100_product or {}).get("event_history", []),
-            "offers": (h100_product or {}).get("offers", []),
-        },
-    )
     for family, card in benchmark_cards.items():
         write_json(output_refs[f"gpu_benchmark_{family.lower()}"], card)
     for family, card in prime_cards.items():
@@ -1544,13 +1123,8 @@ def export_gold_dashboard_snapshot(
     return {
         "output_refs": output_refs,
         "row_counts": {
-            "latest_index": len(index),
-            "featured_index": len(featured_index),
             "featured_benchmarks": len(benchmark_values),
             "benchmark_history": len(public_benchmark_history),
-            "index_constituents": len(constituents),
-            "index_quality": len(index_quality),
-            "index_history": len(index_history),
             "benchmark_constituents": len(benchmark_constituents),
             "provider_comparison": len(provider_comparison),
             "listings_sample": len(listings),
@@ -1572,47 +1146,6 @@ def export_gold_dashboard_snapshot(
     }
 
 
-def _benchmark_rows_from_latest_listings(
-    manifest: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    table_ref = manifest["table_refs"]["fact_gpu_listings"]
-    return _benchmark_rows_from_listing_ref(
-        table_ref,
-        context=_benchmark_context(manifest),
-    )
-
-
-def _benchmark_values_from_latest_listings(
-    manifest: dict[str, Any],
-) -> list[dict[str, Any]]:
-    return query_parquet(
-        parquet_uri=manifest["table_refs"]["fact_gpu_listings"],
-        table_name="fact_gpu_listings",
-        sql=gold_model_sql(
-            "fact_benchmark_values",
-            _benchmark_context(manifest),
-        ),
-    )
-
-
-def _benchmark_context(manifest: dict[str, Any]) -> dict[str, str]:
-    return {
-        "source_run_id": ",".join(
-            f"{name}:{run_id}"
-            for name, run_id in dict(manifest.get("source_run_ids") or {}).items()
-        ),
-        "source_manifest_ref": ",".join(
-            str(value)
-            for value in dict(manifest.get("source_manifest_refs") or {}).values()
-        ),
-        "source_normalized_ref": ",".join(
-            str(value)
-            for value in dict(manifest.get("source_normalized_refs") or {}).values()
-        ),
-        "calculated_at": str(manifest.get("observed_at") or utc_now().isoformat()),
-    }
-
-
 def _is_canonical_market_run_id(run_id: Any) -> bool:
     return bool(
         re.fullmatch(
@@ -1620,24 +1153,6 @@ def _is_canonical_market_run_id(run_id: Any) -> bool:
             str(run_id or ""),
         )
     )
-
-
-def _benchmark_rows_from_listing_ref(
-    table_ref: str,
-    *,
-    context: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    values = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_gpu_listings",
-        sql=gold_model_sql("fact_benchmark_values", context),
-    )
-    constituents = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_gpu_listings",
-        sql=gold_model_sql("fact_benchmark_constituents", context),
-    )
-    return values, constituents
 
 
 def _observed_date(manifest: dict[str, Any]) -> str:
@@ -1675,53 +1190,6 @@ def _build_prime_frontier_gold_products(
             table_name="fact_prime_frontier_offer_history",
             sql="select * from fact_prime_frontier_offer_history",
         )
-    else:
-        legacy_h100_ref = previous_gold_manifest.get("table_refs", {}).get(
-            "fact_prime_h100_offer_history"
-        )
-        if legacy_h100_ref:
-            historical_rows.extend(
-                query_parquet(
-                    parquet_uri=str(legacy_h100_ref),
-                    table_name="fact_prime_h100_offer_history",
-                    sql="select * from fact_prime_h100_offer_history",
-                )
-            )
-        for manifest in reversed(list_gold_manifests(lake_root, limit=1000)):
-            if not _is_canonical_market_run_id(manifest.get("run_id")):
-                continue
-            if "prime_intellect" not in set(manifest.get("provider_scope") or []):
-                continue
-            listing_ref = manifest.get("table_refs", {}).get("fact_gpu_listings")
-            if not listing_ref:
-                continue
-            manifest_rows = query_parquet(
-                parquet_uri=str(listing_ref),
-                table_name="fact_gpu_listings",
-                sql="""
-select *
-from fact_gpu_listings
-where source_connector = 'prime_intellect'
-  and (
-    gpu_model = 'H100_80GB' or gpu_model like 'H100_80GB_x%'
-    or gpu_model = 'H200_141GB' or gpu_model like 'H200_141GB_x%'
-    or gpu_model = 'B200_180GB' or gpu_model like 'B200_180GB_x%'
-    or gpu_model = 'B300_288GB' or gpu_model like 'B300_288GB_x%'
-  )
-""",
-            )
-            historical_rows.extend(
-                {
-                    **row,
-                    "gold_run_id": row.get("gold_run_id") or manifest.get("run_id"),
-                    "gold_observed_at": row.get("gold_observed_at")
-                    or manifest.get("observed_at"),
-                    "gold_observed_date": row.get("gold_observed_date")
-                    or manifest.get("observed_date"),
-                }
-                for row in manifest_rows
-            )
-
     offer_history = normalize_prime_frontier_history(
         [
             *historical_rows,

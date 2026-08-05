@@ -9,7 +9,7 @@ output "cloudfront_domain_name" {
 }
 
 output "dashboard_data_base_url" {
-  description = "Base URL for manifest.json, latest-index.json, and related dashboard snapshots."
+  description = "Base URL for the public benchmark and market snapshots."
   value = (
     local.custom_domain_enabled
     ? "https://${local.custom_domain}"

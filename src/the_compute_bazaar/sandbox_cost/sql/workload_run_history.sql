@@ -15,7 +15,7 @@ select
   min(disk_gb) as disk_gb,
   min(job_parts) as job_parts,
   count(distinct series_id) as service_count,
-  count(distinct series_id) = ${fixed_service_count} as fixed_cohort_complete,
+  count(distinct series_id) = ${expected_service_count} as service_set_complete,
   median(runtime_seconds) as median_runtime_seconds,
   avg(runtime_seconds) as average_runtime_seconds,
   percentile_cont(0.25) within group (

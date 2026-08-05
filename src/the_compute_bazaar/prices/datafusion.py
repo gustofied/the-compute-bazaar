@@ -11,8 +11,7 @@ from .sql_models import read_sql
 from .storage import resolve_read_uri
 
 
-DEFAULT_BENCHMARK_SQL = read_sql("queries/silver_offer_summary.sql")
-DEFAULT_PRICE_INDEX_SQL = read_sql("queries/silver_price_index.sql")
+DEFAULT_MARKET_SUMMARY_SQL = read_sql("queries/silver_market_summary.sql")
 
 
 def query_parquet(
@@ -37,8 +36,10 @@ def query_parquet(
     return pa.Table.from_batches(batches).to_pylist()
 
 
-def query_price_index(*, parquet_uri: str, limit: int | None = None) -> list[dict[str, Any]]:
-    sql = DEFAULT_PRICE_INDEX_SQL
+def query_market_summary(
+    *, parquet_uri: str, limit: int | None = None
+) -> list[dict[str, Any]]:
+    sql = DEFAULT_MARKET_SUMMARY_SQL
     if limit is not None:
         sql = f"{sql.rstrip()}\nlimit {int(limit)}"
     return query_parquet(parquet_uri=parquet_uri, table_name="gpu_offers", sql=sql)

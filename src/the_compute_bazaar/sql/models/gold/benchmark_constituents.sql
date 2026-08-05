@@ -42,6 +42,7 @@ eligible_ranked as (
   )
 )
 select
+  frontier.sort_order,
   concat(
     'CBZ-',
     frontier.benchmark_family_id,
@@ -73,6 +74,7 @@ select
   frontier.is_spot,
   frontier.is_secure,
   frontier.availability_status,
+  eligible.listing_id is not null as eligible_for_benchmark,
   coalesce(eligible.provider_rank = 1, false) as included,
   case
     when eligible.provider_rank = 1 then 'provider_floor'

@@ -22,7 +22,6 @@ from client import (
 
 
 DEFAULT_PUBLIC_BASE_URL = "https://bazaar.adamsioud.com"
-LEGACY_PROVIDER_JOBS = ("vast_hourly", "lium_hourly")
 OPTIONAL_PROVIDER_VARIABLES = (
     ("CLORE_API_KEY", "clore_api_key", "Clore marketplace read API key"),
     (
@@ -140,10 +139,6 @@ def main() -> None:
         description="Runs the full provider-to-dashboard market refresh.",
         args=run_args,
     )
-    for legacy_job in LEGACY_PROVIDER_JOBS:
-        client.delete_schedule(f"f/{folder}/{legacy_job}_hourly")
-        client.delete_script(f"f/{folder}/{legacy_job}")
-
     job_id = None
     job_result = None
     if args.run_now:

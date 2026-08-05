@@ -65,12 +65,6 @@ from .providers.ovhcloud import (
     normalize_gpu_plans as normalize_ovhcloud_gpu_plans,
 )
 from .providers.prime_intellect import PrimeIntellectClient, normalize_availability
-from .providers.rate_cards import (
-    DEFAULT_RATE_CARD_PROVIDER,
-    normalize_rate_card_entries,
-    rate_card_entries,
-    rate_card_raw_payload,
-)
 from .providers.runpod import RunpodClient, normalize_gpu_types
 from .providers.scaleway import ScalewayClient, normalize_gpu_products
 from .providers.sesterce import (
@@ -259,58 +253,6 @@ def ingest_lium(
             **(query or {}),
             "paginate": paginate,
             "max_pages": max_pages if paginate else None,
-        },
-        automq_bootstrap_servers=automq_bootstrap_servers,
-        automq_config=automq_config,
-        topic_prefix=topic_prefix,
-        dry_run=dry_run,
-    )
-
-
-def ingest_rate_card(
-    *,
-    provider: str = DEFAULT_RATE_CARD_PROVIDER,
-    raw_root: str = "data/raw",
-    lake_root: str = "data/lake",
-    automq_bootstrap_servers: str | None = None,
-    automq_config: dict[str, str] | None = None,
-    topic_prefix: str = "gpu",
-    dry_run: bool = False,
-    run_id: str | None = None,
-    trace_id: str | None = None,
-) -> IngestResult:
-    """Ingest official published provider rate cards as benchmark observations."""
-    provider_name = provider
-    run_id = run_id or new_run_id(provider_name)
-    trace_id = trace_id or uuid.uuid4().hex
-    observed_at = utc_now()
-    observed_date = observed_at.date().isoformat()
-    payload = rate_card_raw_payload(provider_name)
-    entries = rate_card_entries(provider_name)
-    raw_ref = date_partition(
-        raw_root,
-        provider=provider_name,
-        observed_date=observed_date,
-        run_id=run_id,
-        filename="rate-card.json",
-    )
-    normalized, unknown_gpu_names = normalize_rate_card_entries(
-        entries, observed_at=observed_at, raw_ref=raw_ref
-    )
-    return _persist_publish_snapshot(
-        provider=provider_name,
-        run_id=run_id,
-        trace_id=trace_id,
-        observed_at=observed_at,
-        lake_root=lake_root,
-        raw_ref=raw_ref,
-        raw_payload=payload,
-        raw_offer_count=len(entries),
-        normalized=normalized,
-        unknown_gpu_names=unknown_gpu_names,
-        snapshot_query={
-            "source_type": "published_rate_card",
-            "provider": provider_name,
         },
         automq_bootstrap_servers=automq_bootstrap_servers,
         automq_config=automq_config,

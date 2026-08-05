@@ -8,8 +8,6 @@ job history.
 - `protocol.py`: prepares and runs a precommitted matched-seed model matrix.
 - `analysis.py`: reads Harbor configs, ATIF, protected ledgers, artifacts, and
   verifier outputs into deterministic trial and protocol reports.
-- `view.py`: compatibility launcher for the shared FastAPI viewer in
-  `compute-bazaar-bench/viewer/`.
 - `reliability_is_blind/engine.py`: canonical development copy of the frozen
   market engine, byte-matched to the task sidecar and verifier copies.
 
@@ -25,14 +23,6 @@ uv run python compute-bazaar-bench/evals/reliability-is-blind/evaluator/protocol
 ```
 
 ## View
-
-```bash
-uv run python compute-bazaar-bench/evals/reliability-is-blind/evaluator/view.py \
-  compute-bazaar-bench/jobs/reports \
-  --port 8084
-```
-
-The preferred shared launcher is:
 
 ```bash
 uv run python compute-bazaar-bench/viewer/app.py \

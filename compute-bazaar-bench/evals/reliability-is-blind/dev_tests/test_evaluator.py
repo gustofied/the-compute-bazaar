@@ -19,7 +19,7 @@ sys.path.insert(0, str(EVALUATOR_ROOT))
 
 import analysis as rib_analysis  # noqa: E402
 import protocol as rib_protocol  # noqa: E402
-from view import (  # noqa: E402
+from viewer.app import (  # noqa: E402
     ASSET_ROOT,
     _discover_run_paths,
     _evaluation_summary,

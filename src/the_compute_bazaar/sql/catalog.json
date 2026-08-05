@@ -64,15 +64,6 @@
       "tables": ["fact_prime_frontier_offer_ladder"],
       "sql_path": "queries/prime_offer_levels.sql",
       "default_limit": 200
-    },
-    {
-      "query_id": "benchmark_job_costs",
-      "version": "v1",
-      "title": "Benchmark Job Cost",
-      "description": "Estimated cost of the latest measured StarSling benchmark job by service.",
-      "tables": ["sandbox_workload_service_summary"],
-      "sql_path": "queries/benchmark_job_costs.sql",
-      "default_limit": 50
     }
   ]
 }

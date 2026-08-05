@@ -1703,7 +1703,6 @@ def _sandbox_workload_publication_metadata(
     headline = card.get("headline") or {}
     raw_value = _finite_number(
         headline.get("median_estimated_cost_usd")
-        or headline.get("median_service_cost")
     )
     value = _format_cents(raw_value)
     subject_label = "Measured workload cost"

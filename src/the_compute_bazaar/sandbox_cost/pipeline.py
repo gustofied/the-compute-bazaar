@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from the_compute_bazaar.prices.datafusion import query_tables
-from the_compute_bazaar.prices.gold_models import gold_model_sql, gold_sql_models
 from the_compute_bazaar.prices.public_views import (
     sandbox_workload_view,
 )
@@ -29,20 +28,24 @@ from the_compute_bazaar.prices.storage import (
     write_json,
     write_parquet_rows,
 )
+from the_compute_bazaar.sandbox_cost.sql_models import (
+    sandbox_model_sql,
+    sandbox_sql_models,
+)
 
 EVIDENCE_ROOT = Path(__file__).with_name("evidence")
 WORKLOAD_COST_INPUTS = EVIDENCE_ROOT / "workload-cost-inputs.json"
 BENCHMARK_EVIDENCE = EVIDENCE_ROOT / "benchmark-observations.json"
 SOURCE_MANIFEST = EVIDENCE_ROOT / "source-manifest.json"
 TARGET_SHAPE = {"vcpus": 4, "memory_gib": 8, "disk_gb": 40}
-FIXED_COHORT = "workload-cost-input"
+WORKLOAD_COST_COHORT = "workload-cost-input"
 WORKLOAD_BATCH_QUERY_ID = "sandbox_workload_batch_history_v2"
 WORKLOAD_REPLICATE_QUERY_ID = "sandbox_workload_latest_replicates_v2"
 WORKLOAD_PHASE_QUERY_ID = "sandbox_workload_latest_phases_v1"
 WORKLOAD_PHASE_SUMMARY_QUERY_ID = "sandbox_workload_phase_summary_v1"
 WORKLOAD_SUMMARY_QUERY_ID = "sandbox_workload_service_summary_v2"
 WORKLOAD_RUN_SUMMARY_QUERY_ID = "sandbox_workload_run_summary_v1"
-WORKLOAD_FIXED_SERVICE_COUNT = 6
+WORKLOAD_SERVICE_COUNT = 6
 NUMERIC_DECIMAL_PLACES = 12
 
 RUNTIME_PRICE_SERIES = {
@@ -127,8 +130,8 @@ PRICE_FIELDS = {
     "date_role",
     "change_precision",
     "source_role",
-    "index_eligible",
-    "index_cohort",
+    "workload_cost_eligible",
+    "workload_cost_cohort",
     "evidence_class",
     "source_label",
     "source_url",
@@ -258,19 +261,21 @@ RUN_METADATA_FIELDS = {
     "benchmark_source_url",
 }
 
-WORKLOAD_BATCH_SQL = gold_model_sql("sandbox_workload_batch_history")
+WORKLOAD_BATCH_SQL = sandbox_model_sql("sandbox_workload_batch_history")
 
-WORKLOAD_LATEST_REPLICATES_SQL = gold_model_sql("sandbox_workload_latest_replicates")
+WORKLOAD_LATEST_REPLICATES_SQL = sandbox_model_sql(
+    "sandbox_workload_latest_replicates"
+)
 
-WORKLOAD_LATEST_PHASES_SQL = gold_model_sql("sandbox_workload_latest_phases")
+WORKLOAD_LATEST_PHASES_SQL = sandbox_model_sql("sandbox_workload_latest_phases")
 
-WORKLOAD_PHASE_SUMMARY_SQL = gold_model_sql("sandbox_workload_phase_summary")
+WORKLOAD_PHASE_SUMMARY_SQL = sandbox_model_sql("sandbox_workload_phase_summary")
 
-WORKLOAD_SUMMARY_SQL = gold_model_sql("sandbox_workload_service_summary")
+WORKLOAD_SUMMARY_SQL = sandbox_model_sql("sandbox_workload_service_summary")
 
-WORKLOAD_RUN_SUMMARY_SQL = gold_model_sql(
+WORKLOAD_RUN_SUMMARY_SQL = sandbox_model_sql(
     "sandbox_workload_run_history",
-    fragments={"fixed_service_count": str(WORKLOAD_FIXED_SERVICE_COUNT)},
+    fragments={"expected_service_count": str(WORKLOAD_SERVICE_COUNT)},
 )
 
 @dataclass(frozen=True)
@@ -295,7 +300,7 @@ def validate_evidence(
     source_manifest = _read_local_json(source_manifest_path)
     _require_schema(
         prices_payload,
-        "sandbox_workload_cost_input_v1",
+        "sandbox_workload_cost_input_v2",
         price_path,
     )
     _require_schema(
@@ -363,7 +368,11 @@ def _evidence_summary(
             key=lambda row: row["generated_at"],
         )["benchmark_run_id"],
         "priced_services": sorted(
-            {row["series_id"] for row in prices if row["index_cohort"] == FIXED_COHORT}
+            {
+                row["series_id"]
+                for row in prices
+                if row["workload_cost_cohort"] == WORKLOAD_COST_COHORT
+            }
         ),
         "source_file_count": len(source_manifest["files"]),
     }
@@ -608,7 +617,7 @@ def _build_workload_cost_unlocked(
         "sandbox_workload_phase_summary": len(phase_summary),
         "sandbox_workload_service_summary": len(workload_summary),
     }
-    sql_models = gold_sql_models(table_refs)
+    sql_models = sandbox_sql_models(table_refs)
     manifest_ref = _join(
         output_root,
         f"_manifests/sandbox_cost/date={built_at[:10]}/build_id={build_id}.json",
@@ -1205,9 +1214,9 @@ def _public_payload(
             "methodology_generation_count": len(
                 {row["methodology_id"] for row in run_metadata}
             ),
-            "fixed_service_count": WORKLOAD_FIXED_SERVICE_COUNT,
+            "expected_service_count": WORKLOAD_SERVICE_COUNT,
             "complete_run_count": len(
-                [row for row in workload_run_history if row["fixed_cohort_complete"]]
+                [row for row in workload_run_history if row["service_set_complete"]]
             ),
             "latest_run": latest_run,
             "latest_replicate_count": len(latest_replicates),
