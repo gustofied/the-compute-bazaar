@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
 
+from the_compute_bazaar.prices.provider_registry import (
+    provider_credentials as registered_provider_credentials,
+)
+
 from client import (
     DEFAULT_BASE_URL,
     DEFAULT_CRON,
@@ -22,33 +26,6 @@ from client import (
 
 
 DEFAULT_PUBLIC_BASE_URL = "https://bazaar.adamsioud.com"
-OPTIONAL_PROVIDER_VARIABLES = (
-    ("CLORE_API_KEY", "clore_api_key", "Clore marketplace read API key"),
-    (
-        "PRIME_INTELLECT_API_KEY",
-        "prime_intellect_api_key",
-        "Prime Intellect availability API key",
-    ),
-    ("SHADEFORM_API_KEY", "shadeform_api_key", "Shadeform inventory API key"),
-    ("SESTERCE_API_KEY", "sesterce_api_key", "Sesterce offers API key"),
-    ("TENSORDOCK_API_KEY", "tensordock_api_key", "TensorDock read API key"),
-    ("HYPERSTACK_API_KEY", "hyperstack_api_key", "Hyperstack read API key"),
-    ("LAMBDA_CLOUD_API_KEY", "lambda_cloud_api_key", "Lambda Cloud read API key"),
-    (
-        "DIGITALOCEAN_API_TOKEN",
-        "digitalocean_api_token",
-        "DigitalOcean sizes read token",
-    ),
-    ("GPUS_IO_API_KEY", "gpus_io_api_key", "GPUs.io read API key"),
-    (
-        "GETDEPLOYING_API_KEY",
-        "getdeploying_api_key",
-        "GetDeploying read API key",
-    ),
-    ("JL_API_KEY", "jarvislabs_api_key", "JarvisLabs availability API key"),
-    ("VERDA_CLIENT_ID", "verda_client_id", "Verda OAuth client ID"),
-    ("VERDA_CLIENT_SECRET", "verda_client_secret", "Verda OAuth client secret"),
-)
 
 
 def main() -> None:
@@ -88,9 +65,6 @@ def main() -> None:
         help="Wait for the one-off run and include its result",
     )
     parser.add_argument("--dashboard-limit", type=int, default=100)
-    parser.add_argument("--lium-size", type=int, default=200)
-    parser.add_argument("--lium-max-pages", type=int, default=10)
-    parser.add_argument("--no-lium-pagination", action="store_true")
     args = parser.parse_args()
 
     if not args.token:
@@ -125,9 +99,6 @@ def main() -> None:
     run_args = schedule_args(
         folder,
         dashboard_limit=args.dashboard_limit,
-        lium_size=args.lium_size,
-        lium_max_pages=args.lium_max_pages,
-        lium_paginate=not args.no_lium_pagination,
     )
     client.upsert_schedule(
         path=schedule_path,
@@ -169,8 +140,6 @@ def main() -> None:
 
 def required_variables(folder: str) -> list[dict[str, Any]]:
     env_to_variable = [
-        ("VAST_API_KEY", "vast_api_key", True, "Vast API key"),
-        ("LIUM_API_KEY", "lium_api_key", True, "Lium API key"),
         ("COMPUTE_BAZAAR_RAW_ROOT", "raw_root", False, "Raw S3 root"),
         ("COMPUTE_BAZAAR_LAKE_ROOT", "lake_root", False, "Lake S3 root"),
         (
@@ -212,17 +181,29 @@ def required_variables(folder: str) -> list[dict[str, Any]]:
             f"Missing required environment variables: {', '.join(missing)}"
         )
 
-    for env_name, variable_name, description in OPTIONAL_PROVIDER_VARIABLES:
-        value = os.getenv(env_name)
-        if value:
-            variables.append(
-                {
-                    "path": f"f/{folder}/{variable_name}",
-                    "value": value,
-                    "is_secret": True,
-                    "description": description,
-                }
-            )
+    credentials = registered_provider_credentials()
+    missing_credentials = [
+        credential.env_name
+        for credential in credentials
+        if credential.required_for_schedule and not os.getenv(credential.env_name)
+    ]
+    if missing_credentials:
+        raise SystemExit(
+            "Missing required provider credentials: " + ", ".join(missing_credentials)
+        )
+    credential_values = {
+        credential.env_name: value
+        for credential in credentials
+        if (value := os.getenv(credential.env_name))
+    }
+    variables.append(
+        {
+            "path": f"f/{folder}/provider_credentials_json",
+            "value": json.dumps(credential_values, sort_keys=True),
+            "is_secret": True,
+            "description": "Provider credentials keyed by environment variable",
+        }
+    )
 
     variables.append(
         {
@@ -250,13 +231,9 @@ def schedule_args(
     folder: str,
     *,
     dashboard_limit: int,
-    lium_size: int,
-    lium_max_pages: int,
-    lium_paginate: bool,
 ) -> dict[str, Any]:
     args: dict[str, Any] = {
-        "vast_api_key": f"$var:f/{folder}/vast_api_key",
-        "lium_api_key": f"$var:f/{folder}/lium_api_key",
+        "provider_credentials_json": (f"$var:f/{folder}/provider_credentials_json"),
         "raw_root": f"$var:f/{folder}/raw_root",
         "lake_root": f"$var:f/{folder}/lake_root",
         "dashboard_output_root": f"$var:f/{folder}/dashboard_output_root",
@@ -268,15 +245,9 @@ def schedule_args(
         "kafka_password": f"$var:f/{folder}/kafka_password",
         "aws_region": os.getenv("AWS_REGION", "eu-west-3"),
         "topic_prefix": "gpu",
-        "lium_size": lium_size,
-        "lium_max_pages": lium_max_pages,
-        "lium_paginate": lium_paginate,
         "dashboard_limit": dashboard_limit,
         "dry_run": False,
     }
-    for env_name, variable_name, _ in OPTIONAL_PROVIDER_VARIABLES:
-        if os.getenv(env_name):
-            args[variable_name] = f"$var:f/{folder}/{variable_name}"
     return args
 
 

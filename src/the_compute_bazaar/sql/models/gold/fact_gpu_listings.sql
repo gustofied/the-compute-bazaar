@@ -1,8 +1,13 @@
-with $silver_source_cte
+with $silver_source_cte,
+provider_catalog(provider, provider_kind, observation_kind) as (
+  $provider_catalog_values
+)
 select
   concat(provider, ':', source_offer_id) as listing_id,
   provider as provider_id,
   provider,
+  catalog.provider_kind,
+  catalog.observation_kind,
   source_offer_id,
   gpu_model as gpu_product_id,
   gpu_model,
@@ -41,4 +46,5 @@ select
   $source_normalized_ref as source_normalized_ref,
   $calculated_at as calculated_at
 from silver_gpu_offers
+left join provider_catalog catalog using (provider)
 where price_usd_hr > 0

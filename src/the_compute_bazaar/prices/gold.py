@@ -35,6 +35,7 @@ from .public_views import (
     market_state_view,
     prime_frontier_view,
 )
+from .provider_registry import provider_catalog_rows
 from .publications import (
     publish_gpu_benchmark_publications,
     publish_prime_offer_shelf_publications,
@@ -85,6 +86,7 @@ PRIME_FRONTIER_GOLD_TABLES = {
     ),
     "fact_prime_frontier_offer_ladder": "prime_frontier_offer_ladder.parquet",
 }
+
 
 @dataclass(frozen=True)
 class GoldBuildResult:
@@ -188,13 +190,17 @@ def build_gold_market_tables(
         for index, source_provider in enumerate(provider_scope)
     }
     silver_source_cte = _silver_source_cte(list(tables))
+    provider_catalog_values = _provider_catalog_values(provider_scope)
     rows_by_table = {
         "fact_gpu_listings": query_tables(
             tables=tables,
             sql=gold_model_sql(
                 "fact_gpu_listings",
                 query_context,
-                fragments={"silver_source_cte": silver_source_cte},
+                fragments={
+                    "silver_source_cte": silver_source_cte,
+                    "provider_catalog_values": provider_catalog_values,
+                },
             ),
         ),
         "dim_gpu_products": query_tables(
@@ -210,7 +216,10 @@ def build_gold_market_tables(
             sql=gold_model_sql(
                 "dim_providers",
                 query_context,
-                fragments={"silver_source_cte": silver_source_cte},
+                fragments={
+                    "silver_source_cte": silver_source_cte,
+                    "provider_catalog_values": provider_catalog_values,
+                },
             ),
         ),
     }
@@ -229,9 +238,7 @@ def build_gold_market_tables(
             fragments={
                 "silver_source_cte": silver_source_cte,
                 "state_cte": _silver_state_cte_fragment(list(market_state_tables)),
-                "state_union": _silver_state_union_fragment(
-                    bool(market_state_tables)
-                ),
+                "state_union": _silver_state_union_fragment(bool(market_state_tables)),
             },
         ),
     )
@@ -1302,6 +1309,19 @@ def _silver_source_cte(table_names: list[str]) -> str:
     """
     selects = [f"select {columns} from {table_name}" for table_name in table_names]
     return f"silver_gpu_offers as ({' union all '.join(selects)})"
+
+
+def _provider_catalog_values(provider_scope: list[str]) -> str:
+    rows = provider_catalog_rows(provider_scope)
+    return "values " + ", ".join(
+        "("
+        + ", ".join(
+            _sql_literal(str(row[column]))
+            for column in ("provider", "provider_kind", "observation_kind")
+        )
+        + ")"
+        for row in rows
+    )
 
 
 def _silver_state_cte_fragment(table_names: list[str]) -> str:

@@ -21,7 +21,11 @@ from the_compute_bazaar.prices.market_run import (
     run_market_hourly,
 )
 from the_compute_bazaar.prices.pipeline import IngestResult
-from the_compute_bazaar.prices.provider_registry import PROVIDERS
+from the_compute_bazaar.prices.provider_registry import (
+    PROVIDERS,
+    ProviderDefinition,
+    ProviderRunContext,
+)
 from the_compute_bazaar.prices.providers.lium import normalize_executor
 from the_compute_bazaar.prices.providers.vast import normalize_offer
 from the_compute_bazaar.prices.schemas import GpuOffer
@@ -43,7 +47,50 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(len(names), len(set(names)))
         self.assertTrue(all(callable(provider.ingester) for provider in PROVIDERS))
+        self.assertTrue(all(provider.provider_kind for provider in PROVIDERS))
+        self.assertTrue(all(provider.observation_kind for provider in PROVIDERS))
         self.assertNotIn("published_rate_cards", names)
+
+    def test_provider_adapter_owns_defaults_and_validates_identity(self) -> None:
+        calls: dict[str, object] = {}
+
+        def ingest_test(**kwargs: object) -> IngestResult:
+            calls.update(kwargs)
+            return IngestResult(
+                provider="test_provider",
+                run_id=str(kwargs["run_id"]),
+                raw_ref="memory://raw/test.json",
+                normalized_ref="memory://lake/test.parquet",
+                raw_offer_count=1,
+                normalized_offer_count=1,
+                unknown_gpu_names=[],
+                published_events=2,
+                publish_mode="dry_run",
+            )
+
+        adapter = ProviderDefinition(
+            "test_provider",
+            ingest_test,
+            "marketplace",
+            "live_offer",
+            default_options={"page_size": 100},
+        )
+        result = adapter.ingest(
+            ProviderRunContext(
+                market_run_id="market-test",
+                raw_root="memory://raw",
+                lake_root="memory://lake",
+                automq_bootstrap_servers=None,
+                automq_config={},
+                topic_prefix="gpu",
+                dry_run=True,
+                provider_options={"test_provider": {"page_size": 250}},
+            )
+        )
+
+        self.assertEqual(result.provider, "test_provider")
+        self.assertEqual(calls["page_size"], 250)
+        self.assertEqual(calls["run_id"], "test_provider-market-test")
 
     def test_windmill_calls_market_service_directly(self) -> None:
         self.assertNotIn("published_rate_cards", default_market_providers())
@@ -55,8 +102,9 @@ class CoreTests(unittest.TestCase):
             windmill_market_hourly, "run_market_hourly", return_value=result
         ) as run_market:
             payload = windmill_market_hourly.main(
-                vast_api_key="test-vast",
-                lium_api_key="test-lium",
+                provider_credentials_json=json.dumps(
+                    {"VAST_API_KEY": "test-vast", "LIUM_API_KEY": "test-lium"}
+                ),
                 providers="vast,lium",
                 raw_root="memory://raw",
                 lake_root="memory://lake",
@@ -77,6 +125,8 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(call["lake_root"], "memory://lake")
         self.assertEqual(call["automq_config"]["sasl.username"], "ingest")
         self.assertEqual(os.getenv("VAST_API_KEY"), previous_vast_key)
+        with self.assertRaisesRegex(ValueError, "Unknown provider credential"):
+            windmill_market_hourly._provider_credentials('{"PATH": "/tmp/bad"}')
 
     def test_provider_offers_normalize_to_gpu_hour_records(self) -> None:
         vast = normalize_offer(
@@ -173,9 +223,7 @@ class CoreTests(unittest.TestCase):
             )["rows"]
             benchmark_rows = query_tables(
                 tables={
-                    "fact_benchmark_values": build.table_refs[
-                        "fact_benchmark_values"
-                    ]
+                    "fact_benchmark_values": build.table_refs["fact_benchmark_values"]
                 },
                 sql="""
 select benchmark_family_id, benchmark_usd_gpu_hr
@@ -190,7 +238,13 @@ where benchmark_family_id = 'H100'
                     ]
                 },
                 sql="""
-select provider, price_usd_gpu_hr, eligible_for_benchmark, included
+select
+  provider,
+  provider_kind,
+  observation_kind,
+  price_usd_gpu_hr,
+  eligible_for_benchmark,
+  included
 from fact_benchmark_constituents
 where benchmark_family_id = 'H100'
 order by provider, price_usd_gpu_hr
@@ -207,18 +261,24 @@ order by provider, price_usd_gpu_hr
             [
                 {
                     "provider": "lium",
+                    "provider_kind": "marketplace",
+                    "observation_kind": "live_offer",
                     "price_usd_gpu_hr": 2.5,
                     "eligible_for_benchmark": True,
                     "included": True,
                 },
                 {
                     "provider": "vast",
+                    "provider_kind": "marketplace",
+                    "observation_kind": "live_offer",
                     "price_usd_gpu_hr": 2.0,
                     "eligible_for_benchmark": True,
                     "included": True,
                 },
                 {
                     "provider": "vast",
+                    "provider_kind": "marketplace",
+                    "observation_kind": "live_offer",
                     "price_usd_gpu_hr": 4.0,
                     "eligible_for_benchmark": True,
                     "included": False,
@@ -341,7 +401,9 @@ def _write_provider_snapshot(
     lake_root = root / "lake"
     raw_ref = root / "raw" / f"{provider}.json"
     normalized_ref = lake_root / "silver" / provider / "offers.parquet"
-    manifest_ref = lake_root / "_manifests" / "gpu_offers" / f"provider={provider}" / "run.json"
+    manifest_ref = (
+        lake_root / "_manifests" / "gpu_offers" / f"provider={provider}" / "run.json"
+    )
     latest_ref = manifest_ref.with_name("latest.json")
     manifest = {
         "manifest_version": "v1",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,7 +10,7 @@ from .coverage import query_frontier_coverage_ref
 from .events import new_run_id
 from .gold import build_gold_market_tables, export_gold_dashboard_snapshot
 from .pipeline import IngestResult
-from .provider_registry import enabled_provider_names, get_provider
+from .provider_registry import ProviderRunContext, enabled_provider_names, get_provider
 from .public_views import GPU_FAMILIES, market_overview_view
 from .schemas import to_jsonable, utc_now
 from .storage import list_refs, read_json, write_json
@@ -17,6 +18,8 @@ from .storage import list_refs, read_json, write_json
 
 MARKET_RUN_MANIFEST_VERSION = "v1"
 MARKET_RUN_TABLE = "market_runs"
+
+
 def default_market_providers() -> list[str]:
     return enabled_provider_names()
 
@@ -59,9 +62,7 @@ def run_market_hourly(
     topic_prefix: str = "gpu",
     run_id: str | None = None,
     dashboard_limit: int = 100,
-    lium_size: int = 200,
-    lium_paginate: bool = True,
-    lium_max_pages: int = 10,
+    provider_options: Mapping[str, Mapping[str, Any]] | None = None,
     dry_run: bool = False,
 ) -> MarketRunResult:
     """Run the full market heartbeat: provider ingest, gold build, dashboard export, manifest."""
@@ -69,25 +70,32 @@ def run_market_hourly(
     observed_at = utc_now()
     observed_date = observed_at.date().isoformat()
     provider_scope = list(dict.fromkeys(providers or default_market_providers()))
+    unknown_option_providers = set(provider_options or {}) - set(provider_scope)
+    if unknown_option_providers:
+        raise ValueError(
+            "Provider options supplied outside the market cohort: "
+            + ", ".join(sorted(unknown_option_providers))
+        )
 
     provider_results: dict[str, IngestResult] = {}
     checks: dict[str, str] = {}
     data_quality: dict[str, Any] = {"providers": {}}
+    provider_context = ProviderRunContext(
+        market_run_id=market_run_id,
+        raw_root=raw_root,
+        lake_root=lake_root,
+        automq_bootstrap_servers=automq_bootstrap_servers,
+        automq_config=automq_config or {},
+        topic_prefix=topic_prefix,
+        dry_run=dry_run,
+        provider_options=provider_options or {},
+    )
 
     for provider in provider_scope:
         try:
             result = _ingest_market_provider(
                 provider=provider,
-                market_run_id=market_run_id,
-                raw_root=raw_root,
-                lake_root=lake_root,
-                automq_bootstrap_servers=automq_bootstrap_servers,
-                automq_config=automq_config,
-                topic_prefix=topic_prefix,
-                lium_size=lium_size,
-                lium_paginate=lium_paginate,
-                lium_max_pages=lium_max_pages,
-                dry_run=dry_run,
+                context=provider_context,
             )
         except Exception as exc:  # noqa: BLE001 - providers are isolated at the run boundary.
             checks[provider] = "error"
@@ -284,35 +292,9 @@ def run_market_hourly(
 def _ingest_market_provider(
     *,
     provider: str,
-    market_run_id: str,
-    raw_root: str,
-    lake_root: str,
-    automq_bootstrap_servers: str | None,
-    automq_config: dict[str, str] | None,
-    topic_prefix: str,
-    lium_size: int,
-    lium_paginate: bool,
-    lium_max_pages: int,
-    dry_run: bool,
+    context: ProviderRunContext,
 ) -> IngestResult:
-    common_kwargs = {
-        "raw_root": raw_root,
-        "lake_root": lake_root,
-        "automq_bootstrap_servers": automq_bootstrap_servers,
-        "automq_config": automq_config,
-        "topic_prefix": topic_prefix,
-        "dry_run": dry_run,
-        "run_id": f"{provider}-{market_run_id}",
-        "trace_id": market_run_id,
-    }
-    if provider == "lium":
-        return get_provider(provider).ingester(
-            **common_kwargs,
-            query={"size": lium_size},
-            paginate=lium_paginate,
-            max_pages=lium_max_pages,
-        )
-    return get_provider(provider).ingester(**common_kwargs)
+    return get_provider(provider).ingest(context)
 
 
 def write_market_run_manifest(
