@@ -12,7 +12,6 @@ dist/
 *.egg-info/
 .env
 .secrets/
-notes/
 data/
 
 
@@ -44,12 +43,6 @@ tfplan
 /.pi/skills/
 /outputs/
 /jobs/
-/exploritorial/
 /compute-bazaar-bench/jobs/raw/
 /compute-bazaar-bench/jobs/reports/
 /prime-rl/
-/environments/AGENTS.md
-/environments/*/outputs/
-/environments/*/dist/
-/environments/*/*.egg-info/
-/environments/*/__pycache__/

@@ -22,7 +22,7 @@ variable "dashboard_prefix" {
 variable "name" {
   description = "Short name used for CloudFront resources."
   type        = string
-  default     = "compute-bazaar-dashboard"
+  default     = "compute-bazaar-public-feed"
 }
 
 variable "allowed_origins" {

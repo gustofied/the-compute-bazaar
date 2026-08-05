@@ -11,7 +11,7 @@ from fastapi import FastAPI, Response
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from .dashboard import (
+from .snapshots import (
     PROJECT_ROOT,
     SNAPSHOT_DIR,
     _available_snapshots,

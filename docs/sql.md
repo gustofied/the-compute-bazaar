@@ -86,12 +86,9 @@ There are three intended query modes:
 Gold is the default product surface. Silver remains available when a user or
 agent needs normalized source detail, methodology development, or debugging.
 
-The old ingestion-oriented `gpu-prices` command router has been removed. The
-current operator service calls the same embedded DataFusion catalog directly.
-A future public CLI should expose only these read-only query modes rather than
-reintroducing provider ingestion and pipeline administration as user commands.
-
-The operator also accepts one bounded, read-only `SELECT` or `WITH` statement
-over tables declared by the latest Gold manifests. Useful scratch SQL can be
-reviewed and added to `sql/queries/` and `catalog.json`. Saving a query does not
-materialize its result; a result becomes Gold only through a maintained model.
+The old ingestion-oriented `gpu-prices` command router and local operator
+service have been removed. A future public interface should expose only these
+read-only query modes rather than reintroducing provider ingestion and pipeline
+administration as user commands. Useful exploratory SQL can be reviewed and
+added to `sql/queries/` and `catalog.json`. Saving a query does not materialize
+its result; a result becomes Gold only through a maintained model.

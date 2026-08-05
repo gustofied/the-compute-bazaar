@@ -25,7 +25,6 @@ dependencies = [
 
 [project.scripts]
 compute-bazaar-adamsioud = "the_compute_bazaar.adamsioud:main"
-compute-bazaar-dashboard = "the_compute_bazaar.dashboard:main"
 sandbox-cost = "the_compute_bazaar.sandbox_cost.cli:main"
 
 [build-system]

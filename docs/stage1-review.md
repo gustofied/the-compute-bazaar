@@ -14,7 +14,7 @@ GPU and VM source APIs
   -> S3 silver observations
   -> DataFusion SQL
   -> S3 gold products
-  -> operator / CLI / public article
+  -> saved SQL / public article
 ```
 
 It is not yet a procurement, RFQ, reservation, or settlement system. Those
@@ -45,7 +45,7 @@ The current product generation contained:
 7 exact-shape public VM offers
 11 reviewed managed-sandbox rates
 69 complete latest StarSling jobs
-33 composed gold tables in the operator
+maintained Gold tables declared by component manifests
 ```
 
 Counts vary by observation. The manifest, not this review document, is the
@@ -86,31 +86,20 @@ controlled schema, provenance, and promotion rule.
 
 ## Product Surfaces
 
-### Operator
+### Query Layer
 
-`/operator/` is the full internal inspection surface. It composes the latest
-GPU and sandbox/VM gold manifests, registers all declared tables in one
-read-only DataFusion session, and exposes:
-
-- named, versioned SQL;
-- bounded scratch SQL;
-- current run health and source failures;
-- row-level bronze, silver, query, and gold trajectory;
-- safe previews for refs in the current manifest chain.
-
-The operator can inspect a current price cross-section without pretending that
-GPU dollars per GPU-hour, VM dollars per VM-hour, and sandbox dollars per
-sandbox-hour are one metric. It can also inspect measured StarSling runtime and
-estimated processor-and-memory cost directly from gold.
+DataFusion executes the maintained SQL catalog over tables declared by the
+latest Gold manifests. There is currently no public query server or operator
+workbench; the future public interface will be designed after the repository
+and publication contract are clean.
 
 ### Dashboard And Article
 
-The local dashboard is a publication and run-health reader. The AdamSioud
-article is the narrative surface. Both read sanitized JSON derived from gold;
-neither calculates benchmark values in JavaScript or reads private lake paths.
+The AdamSioud article is the narrative surface. It reads sanitized JSON derived
+from Gold; it does not calculate benchmark values in JavaScript or read private
+lake paths.
 
-The article intentionally shows fewer things than the operator. It currently
-uses:
+The article intentionally shows only selected product views. It currently uses:
 
 - H100/H200/B200/B300 observed benchmark history;
 - market capacity and availability measures with source-specific denominators;
@@ -166,10 +155,9 @@ The immediate work remains inside Stage 1:
 1. keep observing hourly cadence and distinguish source failures from quality
    warnings;
 2. reduce meaningful normalization debt without merging unlike GPU products;
-3. keep operator queries, component lineage, and public payload contracts in
-   sync as gold evolves;
-4. continue responsive and accessibility QA for the internal operator and
-   public article;
+3. keep saved queries, component lineage, and public payload contracts in sync
+   as Gold evolves;
+4. continue responsive and accessibility QA for the public article;
 5. make releases reproducible and keep the maintenance journal current.
 
 Only after this layer is consistently boring to operate should the project

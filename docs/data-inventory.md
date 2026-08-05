@@ -114,13 +114,10 @@ them. It does not calculate the H100 benchmark or StarSling cost distribution
 in the browser. The measured-workload card presents estimated cost; runtime
 remains an auditable Gold field required by the cost formula.
 
-The internal `/operator/` surface is the full read-only view. It composes the
-latest GPU and measured-workload Gold manifests, registers their Parquet tables in
-DataFusion, and exposes named catalog queries plus bounded scratch SQL. The
-catalog is the correct place to compare prices while retaining explicit units,
-inspect measured workload costs, and trace rows back through component
-manifests. The public article continues to read only sanitized publication
-JSON.
+The packaged SQL catalog contains the maintained read-only inspection queries.
+It operates over tables declared by the latest Gold manifests while preserving
+explicit units and component lineage. The public article reads only sanitized
+publication JSON.
 
 ## Refresh And Verification
 
@@ -197,7 +194,7 @@ To operate without AWS access:
 
 ```sh
 source data/cloud-archive/offline.env
-uv run compute-bazaar-dashboard --snapshot-source s3
+uv run compute-bazaar-adamsioud
 ```
 
 `COMPUTE_BAZAAR_S3_MIRROR_ROOT` resolves the unchanged `s3://` references in

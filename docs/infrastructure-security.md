@@ -92,6 +92,7 @@ Refresh the laptop's SSH rule, pruning managed stale addresses:
 ```sh
 uv run python infra/aws/refresh_runtime_access.py \
   --profile compute-bazaar \
+  --security-group-id YOUR_SECURITY_GROUP_ID \
   --prune-stale
 ```
 

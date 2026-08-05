@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from infra.windmill import market_hourly as windmill_market_hourly
-from the_compute_bazaar.dashboard import _snapshot_name_for_filename
+from the_compute_bazaar.snapshots import _snapshot_name_for_filename
 from the_compute_bazaar.prices.gold import (
     build_gold_market_tables,
     query_gold_listings,

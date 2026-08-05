@@ -15,12 +15,12 @@ The hourly Windmill `market_hourly` job generates these files after each
 successful DataFusion Gold build and writes them to the configured dashboard
 prefix.
 
-## Local Reader
+## Local AdamSioud Reader
 
-The local FastAPI dashboard serves the page and proxies the selected snapshot source:
+The optional private AdamSioud development server serves the article and proxies the selected snapshot source:
 
 ```sh
-uv run compute-bazaar-dashboard
+uv run compute-bazaar-adamsioud
 ```
 
 In `auto` mode, the server reads `COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT` when it
@@ -122,11 +122,11 @@ provider-comparison.json
 listings-sample.json
 ```
 
-These compatibility and audit files remain public-safe and are retained for lineage, operator
-inspection, and old clients. They contain product/query outputs, counts, checks, and public-facing
+These compatibility and audit files remain public-safe and are retained for lineage,
+analysis, and old clients. They contain product/query outputs, counts, checks, and public-facing
 rows. `featured-benchmarks.json` is the public strip for the current H100,
 H200, B200, and B300 benchmark families. `benchmark-constituents.json` is still public-safe, but it is
-for operator/product inspection rather than the minimal AdamSioud label. Its `complete` and
+for detailed analysis rather than the minimal AdamSioud label. Its `complete` and
 `row_count` fields confirm that the file contains the full current constituent set rather than the
 sample used by `listings-sample.json`. These files do not contain provider API keys, Kafka
 credentials, or private raw S3 refs.
@@ -204,17 +204,13 @@ The browser page should use the HTTPS URL:
 ?data=https://YOUR_PUBLIC_HOST/compute-bazaar
 ```
 
-Keep `raw/` and `lake/` private. If using CloudFront Origin Access Control, grant CloudFront access
-only to `dashboard/compute-bazaar/*`. A starter bucket policy is in:
-
-```text
-infra/aws/dashboard-cloudfront-bucket-policy.example.json
-```
+Keep `raw/` and `lake/` private. CloudFront Origin Access Control may read only
+`dashboard/compute-bazaar/*`; the Terraform stack generates that scoped policy.
 
 The repeatable Terraform setup lives in:
 
 ```text
-infra/aws/public-dashboard/
+infra/aws/public-feed/
 ```
 
 It creates a CloudFront distribution with an Origin Access Control and maps the distribution root
@@ -272,19 +268,9 @@ alias such as `data.adamsioud.com` to the distribution.
 
 ## CORS
 
-The browser needs CORS for `GET` and `HEAD` on the dashboard JSON prefix. A starter CORS document is
-in `infra/aws/dashboard-cors.example.json`.
-
-The Terraform response headers policy allows the public AdamSioud domains plus the local
-development origins used here: `http://127.0.0.1:8777` and `http://127.0.0.1:8801`.
-
-Apply it after replacing the origin with the personal-site origin:
-
-```sh
-aws s3api put-bucket-cors \
-  --bucket YOUR_BUCKET \
-  --cors-configuration file://infra/aws/dashboard-cors.example.json
-```
+The Terraform stack manages S3 and CloudFront CORS for `GET` and `HEAD`. Set
+`allowed_origins` to the published AdamSioud origins and only the local origins
+needed for development.
 
 ## Cache
 

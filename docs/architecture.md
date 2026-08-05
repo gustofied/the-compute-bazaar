@@ -143,16 +143,12 @@ The materialized benchmark tables are the hourly published memory of that query.
 manifests are the reproducible methodology. This is why benchmark rows carry both
 `methodology_version` and `methodology_query_id`.
 
-The operator workbench uses the same idea for inspection views: named SQL files
-live under `src/the_compute_bazaar/sql/queries/`, with metadata in
-`src/the_compute_bazaar/sql/catalog.json`. The
-API and CLI run those SQL files through DataFusion rather than embedding the
-view logic in Python. The workbench composes the latest GPU and measured-workload
-manifests, so one catalog can inspect all maintained gold products while
-keeping each component manifest and lineage chain explicit. Scratch SQL is
-read-only and can access only tables declared by those manifests. Useful
-queries should be promoted into the saved-query catalog before they become stable
-inspection views or methodology.
+Inspection views use the same idea: named SQL files live under
+`src/the_compute_bazaar/sql/queries/`, with metadata in
+`src/the_compute_bazaar/sql/catalog.json`. The catalog keeps view logic in SQL
+rather than Python and preserves the component manifest and lineage chain for
+each maintained Gold product. A future query interface should run these files
+through the same embedded DataFusion engine.
 
 ### Prime Frontier Offer Market
 
@@ -307,11 +303,11 @@ as normalization/data-quality debt. An hourly external check watches the public
 workload-cost projection, while the underlying StarSling observation advances
 only when the upstream project publishes another compatible run.
 
-The operator displays the latest market-run health separately from product
+The market-run manifest records operational health separately from product
 availability. A partial upstream failure therefore remains visible even when
-the pipeline successfully writes a coherent Gold generation from the other sources.
-The public article stays a smaller narrative projection; it is not the place
-to expose every table or private lake reference.
+the pipeline writes a coherent Gold generation from the other sources. The
+public article stays a smaller narrative projection; it is not the place to
+expose every table or private lake reference.
 
 The capacity-state path has two gold tables:
 

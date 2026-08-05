@@ -15,7 +15,6 @@ from botocore.exceptions import ClientError
 
 
 DEFAULT_REGION = "eu-west-3"
-DEFAULT_SECURITY_GROUP_ID = "sg-0d5bcfecb6cd7ff50"
 DEFAULT_PORTS = "22"
 MANAGED_DESCRIPTION_PREFIX = "Compute Bazaar laptop access"
 
@@ -24,7 +23,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="refresh_runtime_access.py")
     parser.add_argument(
         "--security-group-id",
-        default=os.getenv("COMPUTE_BAZAAR_RUNTIME_SECURITY_GROUP_ID", DEFAULT_SECURITY_GROUP_ID),
+        default=os.getenv("COMPUTE_BAZAAR_RUNTIME_SECURITY_GROUP_ID"),
         help="Security group that guards SSH access to the dev runtime host.",
     )
     parser.add_argument("--region", default=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or DEFAULT_REGION)
@@ -38,6 +37,11 @@ def main() -> None:
     )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    if not args.security_group_id:
+        parser.error(
+            "--security-group-id or COMPUTE_BAZAAR_RUNTIME_SECURITY_GROUP_ID is required"
+        )
 
     ports = _parse_ports(args.ports)
     current_ip = _current_public_ip(args.ip_url)
