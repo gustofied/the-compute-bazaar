@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping
 
-from .pipeline import (
+from .provider_ingestion import (
     ingest_akash,
     ingest_aws_spot,
     ingest_azure_retail,
@@ -38,7 +38,7 @@ from .pipeline import (
 )
 
 if TYPE_CHECKING:
-    from .pipeline import IngestResult
+    from .ingestion import IngestResult
 
 
 SourceKind = Literal["marketplace", "cloud", "aggregator"]

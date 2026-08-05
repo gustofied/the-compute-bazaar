@@ -9,8 +9,8 @@ API response -> raw Bronze capture -> GpuOffer Silver rows -> DataFusion Gold
 To add a source:
 
 1. Add one module here with a client and a normalizer returning `GpuOffer` rows.
-2. Add its ingestion function to `prices/pipeline.py`; persistence, manifests, and
-   Kafka publication stay in `_persist_publish_snapshot()`.
+2. Add its fetch-and-normalize adapter to `prices/provider_ingestion.py`.
+   `prices/ingestion.py` owns Bronze/Silver persistence, manifests, and Kafka.
 3. Register it once in `prices/provider_registry.py` with its source kind,
    observation kind, credentials, and any default fetch options.
 4. Add a hermetic normalization example to `tests/test_core.py`.

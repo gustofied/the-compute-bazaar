@@ -10,17 +10,17 @@ from unittest.mock import Mock, patch
 
 from infra.windmill import market_hourly as windmill_market_hourly
 from infra.aws.check_public_market import validate_public_market
+from the_compute_bazaar.prices.datafusion import query_tables
 from the_compute_bazaar.prices.gold import (
     build_gold_market_tables,
     query_gold_listings,
 )
-from the_compute_bazaar.prices.datafusion import query_tables
+from the_compute_bazaar.prices.ingestion import IngestResult, persist_provider_snapshot
 from the_compute_bazaar.prices.market_run import (
     _public_market_run_manifest,
     default_market_providers,
     run_market_hourly,
 )
-from the_compute_bazaar.prices.pipeline import IngestResult
 from the_compute_bazaar.prices.provider_registry import (
     PROVIDERS,
     ProviderDefinition,
@@ -161,6 +161,38 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual((vast.gpu_model, vast.price_usd_hr), ("H100_80GB", 2.25))
         self.assertEqual((lium.gpu_model, lium.price_usd_hr), ("H100_80GB_x2", 2.5))
+
+    def test_ingestion_persists_raw_silver_and_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            raw_ref = root / "raw" / "vast.json"
+            result = persist_provider_snapshot(
+                provider="vast",
+                run_id="vast-market-test",
+                trace_id="market-test",
+                observed_at=OBSERVED_AT,
+                lake_root=str(root / "lake"),
+                raw_ref=str(raw_ref),
+                raw_payload={"offers": [{"id": "vast-1"}]},
+                raw_offer_count=1,
+                normalized=[_offer(provider="vast", offer_id="vast-1", price=2.0)],
+                unknown_gpu_names=[],
+                snapshot_query={"source_type": "test_fixture"},
+                automq_bootstrap_servers=None,
+                automq_config=None,
+                topic_prefix="gpu",
+                dry_run=True,
+            )
+
+            manifest = read_json(str(result.manifest_ref))
+            raw_payload = read_json(str(raw_ref))
+
+        self.assertEqual(raw_payload, {"offers": [{"id": "vast-1"}]})
+        self.assertEqual(result.normalized_offer_count, 1)
+        self.assertEqual(result.published_events, 2)
+        self.assertEqual(result.publish_mode, "dry_run")
+        self.assertEqual(manifest["raw_ref"], str(raw_ref))
+        self.assertEqual(manifest["normalized_ref"], result.normalized_ref)
 
     def test_incomplete_provider_cohort_does_not_build_gold(self) -> None:
         successful = IngestResult(
