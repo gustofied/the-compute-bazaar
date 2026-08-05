@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from .pipeline import IngestResult
 
 
-ProviderKind = Literal["marketplace", "cloud", "aggregator"]
+SourceKind = Literal["marketplace", "cloud", "aggregator"]
 ObservationKind = Literal[
     "live_offer",
     "published_rate",
@@ -87,7 +87,7 @@ class ProviderRunContext:
 class ProviderDefinition:
     name: str
     ingester: ProviderIngester
-    provider_kind: ProviderKind
+    source_kind: SourceKind
     observation_kind: ObservationKind
     default_enabled: bool = True
     credentials: tuple[ProviderCredential, ...] = ()
@@ -289,11 +289,11 @@ def provider_credentials() -> tuple[ProviderCredential, ...]:
     return tuple(credentials[name] for name in sorted(credentials))
 
 
-def provider_catalog_rows(names: list[str]) -> list[dict[str, str]]:
+def source_catalog_rows(names: list[str]) -> list[dict[str, str]]:
     return [
         {
-            "provider": provider.name,
-            "provider_kind": provider.provider_kind,
+            "source_connector": provider.name,
+            "source_kind": provider.source_kind,
             "observation_kind": provider.observation_kind,
         }
         for name in names

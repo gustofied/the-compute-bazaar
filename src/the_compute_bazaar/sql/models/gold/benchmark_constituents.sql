@@ -60,7 +60,7 @@ select
   ${methodology_query_id} as methodology_query_id,
   frontier.listing_id,
   frontier.provider,
-  frontier.provider_kind,
+  frontier.source_kind,
   frontier.observation_kind,
   frontier.source_connector,
   frontier.source_offer_id,

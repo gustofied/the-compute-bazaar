@@ -47,7 +47,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(len(names), len(set(names)))
         self.assertTrue(all(callable(provider.ingester) for provider in PROVIDERS))
-        self.assertTrue(all(provider.provider_kind for provider in PROVIDERS))
+        self.assertTrue(all(provider.source_kind for provider in PROVIDERS))
         self.assertTrue(all(provider.observation_kind for provider in PROVIDERS))
         self.assertNotIn("published_rate_cards", names)
 
@@ -209,7 +209,12 @@ class CoreTests(unittest.TestCase):
             _write_provider_snapshot(
                 root,
                 "lium",
-                _offer(provider="lium", offer_id="lium-1", price=2.5),
+                _offer(
+                    provider="coreweave",
+                    source_connector="lium",
+                    offer_id="lium-1",
+                    price=2.5,
+                ),
             )
 
             build = build_gold_market_tables(
@@ -240,7 +245,8 @@ where benchmark_family_id = 'H100'
                 sql="""
 select
   provider,
-  provider_kind,
+  source_connector,
+  source_kind,
   observation_kind,
   price_usd_gpu_hr,
   eligible_for_benchmark,
@@ -250,18 +256,44 @@ where benchmark_family_id = 'H100'
 order by provider, price_usd_gpu_hr
 """,
             )
+            source_rows = query_tables(
+                tables={"dim_sources": build.table_refs["dim_sources"]},
+                sql="""
+select source_connector, source_kind, observation_kind
+from dim_sources
+order by source_connector
+""",
+            )
             manifest = read_json(build.manifest_ref)
 
         self.assertEqual(build.provider_scope, ["vast", "lium"])
-        self.assertEqual([row["provider"] for row in rows], ["vast", "lium", "vast"])
+        self.assertEqual(
+            [row["provider"] for row in rows], ["vast", "coreweave", "vast"]
+        )
         self.assertEqual([row["price_usd_gpu_hr"] for row in rows], [2.0, 2.5, 4.0])
         self.assertEqual(benchmark_rows[0]["benchmark_usd_gpu_hr"], 2.25)
+        self.assertEqual(
+            source_rows,
+            [
+                {
+                    "source_connector": "lium",
+                    "source_kind": "marketplace",
+                    "observation_kind": "live_offer",
+                },
+                {
+                    "source_connector": "vast",
+                    "source_kind": "marketplace",
+                    "observation_kind": "live_offer",
+                },
+            ],
+        )
         self.assertEqual(
             constituent_rows,
             [
                 {
-                    "provider": "lium",
-                    "provider_kind": "marketplace",
+                    "provider": "coreweave",
+                    "source_connector": "lium",
+                    "source_kind": "marketplace",
                     "observation_kind": "live_offer",
                     "price_usd_gpu_hr": 2.5,
                     "eligible_for_benchmark": True,
@@ -269,7 +301,8 @@ order by provider, price_usd_gpu_hr
                 },
                 {
                     "provider": "vast",
-                    "provider_kind": "marketplace",
+                    "source_connector": "vast",
+                    "source_kind": "marketplace",
                     "observation_kind": "live_offer",
                     "price_usd_gpu_hr": 2.0,
                     "eligible_for_benchmark": True,
@@ -277,7 +310,8 @@ order by provider, price_usd_gpu_hr
                 },
                 {
                     "provider": "vast",
-                    "provider_kind": "marketplace",
+                    "source_connector": "vast",
+                    "source_kind": "marketplace",
                     "observation_kind": "live_offer",
                     "price_usd_gpu_hr": 4.0,
                     "eligible_for_benchmark": True,
@@ -299,6 +333,7 @@ order by provider, price_usd_gpu_hr
                 "fact_gpu_listings",
                 "dim_gpu_products",
                 "dim_providers",
+                "dim_sources",
                 "fact_compute_market_state",
                 "fact_benchmark_values",
                 "fact_benchmark_constituents",
@@ -372,7 +407,13 @@ order by provider, price_usd_gpu_hr
         self.assertEqual(summary["provider_count"], 2)
 
 
-def _offer(*, provider: str, offer_id: str, price: float) -> GpuOffer:
+def _offer(
+    *,
+    provider: str,
+    offer_id: str,
+    price: float,
+    source_connector: str | None = None,
+) -> GpuOffer:
     return GpuOffer(
         provider=provider,
         source_offer_id=offer_id,
@@ -383,7 +424,7 @@ def _offer(*, provider: str, offer_id: str, price: float) -> GpuOffer:
         vram_gb=80,
         price_usd_hr=price,
         available_gpu_count=1,
-        source_connector=provider,
+        source_connector=source_connector or provider,
         currency="USD",
         country="US",
         region="test",

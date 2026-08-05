@@ -35,7 +35,7 @@ from .public_views import (
     market_state_view,
     prime_frontier_view,
 )
-from .provider_registry import provider_catalog_rows
+from .provider_registry import source_catalog_rows
 from .publications import (
     publish_gpu_benchmark_publications,
     publish_prime_offer_shelf_publications,
@@ -67,6 +67,7 @@ GOLD_TABLES = {
     "fact_gpu_listings": "listings.parquet",
     "dim_gpu_products": "gpu_products.parquet",
     "dim_providers": "providers.parquet",
+    "dim_sources": "sources.parquet",
     "fact_benchmark_values": "benchmark_values.parquet",
     "fact_benchmark_constituents": "benchmark_constituents.parquet",
     "fact_compute_market_state": "compute_market_state.parquet",
@@ -76,6 +77,7 @@ CORE_GOLD_SQL_TABLES = (
     "fact_gpu_listings",
     "dim_gpu_products",
     "dim_providers",
+    "dim_sources",
     "fact_compute_market_state",
 )
 PRIME_FRONTIER_GOLD_TABLES = {
@@ -190,7 +192,7 @@ def build_gold_market_tables(
         for index, source_provider in enumerate(provider_scope)
     }
     silver_source_cte = _silver_source_cte(list(tables))
-    provider_catalog_values = _provider_catalog_values(provider_scope)
+    source_catalog_values = _source_catalog_values(provider_scope)
     rows_by_table = {
         "fact_gpu_listings": query_tables(
             tables=tables,
@@ -199,7 +201,7 @@ def build_gold_market_tables(
                 query_context,
                 fragments={
                     "silver_source_cte": silver_source_cte,
-                    "provider_catalog_values": provider_catalog_values,
+                    "source_catalog_values": source_catalog_values,
                 },
             ),
         ),
@@ -216,9 +218,17 @@ def build_gold_market_tables(
             sql=gold_model_sql(
                 "dim_providers",
                 query_context,
+                fragments={"silver_source_cte": silver_source_cte},
+            ),
+        ),
+        "dim_sources": query_tables(
+            tables=tables,
+            sql=gold_model_sql(
+                "dim_sources",
+                query_context,
                 fragments={
                     "silver_source_cte": silver_source_cte,
-                    "provider_catalog_values": provider_catalog_values,
+                    "source_catalog_values": source_catalog_values,
                 },
             ),
         ),
@@ -1311,13 +1321,13 @@ def _silver_source_cte(table_names: list[str]) -> str:
     return f"silver_gpu_offers as ({' union all '.join(selects)})"
 
 
-def _provider_catalog_values(provider_scope: list[str]) -> str:
-    rows = provider_catalog_rows(provider_scope)
+def _source_catalog_values(provider_scope: list[str]) -> str:
+    rows = source_catalog_rows(provider_scope)
     return "values " + ", ".join(
         "("
         + ", ".join(
             _sql_literal(str(row[column]))
-            for column in ("provider", "provider_kind", "observation_kind")
+            for column in ("source_connector", "source_kind", "observation_kind")
         )
         + ")"
         for row in rows

@@ -38,6 +38,10 @@ GOLD_MODELS = {
         "gold_providers_v1",
         "models/gold/dim_providers.sql",
     ),
+    "dim_sources": GoldModel(
+        "gold_sources_v1",
+        "models/gold/dim_sources.sql",
+    ),
     "fact_benchmark_values": GoldModel(
         "benchmark_frontier_gpu_families_v2",
         "models/gold/benchmark_values.sql",
