@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="600">
+  <img src="docs/assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440">
 </p>
 
 # The Compute Bazaar
