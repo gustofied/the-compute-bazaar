@@ -1,5 +1,7 @@
 """Windmill script for daily public sandbox benchmark source ingestion."""
 
+# the_compute_bazaar is installed in the custom worker image and allowlisted locally.
+
 from __future__ import annotations
 
 import os

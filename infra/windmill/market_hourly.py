@@ -1,5 +1,7 @@
 """Windmill script for the full hourly Compute Bazaar market run."""
 
+# the_compute_bazaar is installed in the custom worker image and allowlisted locally.
+
 from __future__ import annotations
 
 import os
