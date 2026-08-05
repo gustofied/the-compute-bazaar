@@ -204,6 +204,18 @@ def write_bytes(
     return str(path)
 
 
+def delete_uri(uri: str) -> None:
+    """Delete one retired local or S3 publication if it exists."""
+    if uri.startswith("s3://"):
+        parsed = urlparse(uri)
+        _s3_client().delete_object(
+            Bucket=parsed.netloc,
+            Key=parsed.path.lstrip("/"),
+        )
+        return
+    Path(uri).unlink(missing_ok=True)
+
+
 def read_bytes(uri: str) -> bytes:
     uri = resolve_read_uri(uri)
     if uri.startswith("s3://"):

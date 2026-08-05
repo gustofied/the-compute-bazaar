@@ -26,12 +26,10 @@ Use this order when two copies disagree:
 | Dataset | Cadence | Bronze | Silver | Gold | Publication use |
 | --- | --- | --- | --- | --- | --- |
 | GPU provider offers | Hourly Windmill market run | One immutable provider response and manifest per run under `raw/provider=.../date=.../run_id=...` | Per-run normalized offers under `lake/silver/gpu_offers/...` | Listings, provider/GPU/region dimensions, index values and constituents, benchmark values and constituents | GPU cards, price history, provider comparison, future search/API |
-| Prime frontier offer market | Hourly Windmill market run when `PRIME_INTELLECT_API_KEY` is configured | Paginated H100, H200, B200, and B300 availability responses retained with each provider run | Prime configurations with upstream provider, `cloudId`, datacenter, shape, socket, stock label, base rate, and minimum separately billed resources | Cumulative four-family offer history, observable lifecycle events, provider-balanced references, and benchmark-centered $0.25 shelves | Multi-product offer card, Curia queries, and future sourcing context |
+| Prime frontier offer market | Hourly Windmill market run when `PRIME_INTELLECT_API_KEY` is configured | Paginated H100, H200, B200, and B300 availability responses retained with each provider run | Prime configurations with upstream provider, `cloudId`, datacenter, shape, socket, stock label, base rate, and minimum separately billed resources | Cumulative four-family offer history, observable lifecycle events, provider-balanced references, and benchmark-centered $0.25 shelves | Multi-product offer card, saved SQL, and future sourcing context |
 | Compute market state | Hourly where the source exposes a usable measure | Provider response retained with the provider run | `lake/silver/compute_market_state/...` | `fact_compute_market_state` and cumulative deduplicated `fact_compute_market_state_history` | Akash active/total CPU, GPU, memory, and storage capacity; Clore rental occupancy; Prime and direct-provider availability |
-| Exact-shape VM offers | Hourly Windmill market run | Official catalog responses under `raw/sandbox-cost/vm-capacity/...` and discovery prefixes, with retrieval time and checksum | Cumulative offer, discovery, marketplace, current, and expanded-cohort Parquet tables under `lake/sandbox_cost/silver/` | Current seven-vendor cross-section; hourly median/p25/p75/min/max in USD and base-100 form; legacy four-vendor history; separate marketplace indication | VM-versus-sandbox reference, relative-price comparison, and source audit |
-| Managed sandbox rate cards | Manual reviewed evidence; gold rebuilt hourly | Versioned source register, archived URLs, dates, and arithmetic in package evidence and `lake/sandbox_cost/bronze/` | `sandbox_hourly_prices.parquet` | Current rates, fixed eight-service median/p25/p75, and dated price events | Public sandbox rate comparison |
-| StarSling workload runs | Daily public source poll; upstream publication cadence | One immutable retrieval capture and checksum ledger per poll | Content-addressed run metadata, provider-batch summaries, replicate-aligned jobs, and task phases | Latest job distribution, service summaries, phase summaries, all compatible historical provider-batch summaries, and one source-run summary per retained run | Same-workload estimated processor-and-memory cost and measured-runtime history |
-| GPU/VM/sandbox relative prices | Rebuilt after each market run | Uses retained GPU, VM, and sandbox evidence above | Uses eligible GPU benchmark history, exact VM offer history, and normalized sandbox prices | `gpu_vm_sandbox_common_start`: independently rebased H100, seven-vendor VM, and fixed sandbox medians plus p25-p75 ranges | Exploratory relative advertised-rate chart only |
+| StarSling measured workload cost | Daily public source poll; upstream publication cadence | Immutable benchmark evidence, retrieval references, checksums, and reviewed processor-and-memory price inputs | Content-addressed run metadata, complete jobs, phases, machine shape, and source linkage | Latest job-cost distribution, service and phase summaries, compatible run history, and one source-run summary per retained run | Estimated processor-and-memory cost per completed StarSling benchmark job |
+| Archived VM and sandbox rate-card research | No active refresh | Historical exact-shape VM observations and 33 manually reviewed sandbox quotes remain retained for later research | Historical generated tables may exist in old immutable generations | Not referenced by the current Gold manifest | No active chart, endpoint, or publication |
 
 ## History Contracts
 
@@ -52,27 +50,13 @@ Use this order when two copies disagree:
   run and stable listing identity. A current export can therefore be rebuilt
   without making the browser the historical store.
 
-### VM capacity
+### Archived VM and sandbox prices
 
-- Each successful hourly check is an observation even when the catalog price
-  did not change.
-- Repeating the same source and observation timestamp is idempotent.
-- A conflicting value at an already retained identity fails rather than
-  replacing history.
-- The seven-vendor series begins with the first complete seven-source check.
-  The earlier four-vendor cohort remains a separate methodology and is never
-  relabeled as seven-vendor history.
-- Akash is a modeled request indication and stays outside the vendor median.
-
-### Sandbox prices
-
-- Historical rows are actual stated effective, published, observed, or bounded
-  dates. The build does not invent hourly history between source checks.
-- The fixed eight-service cohort preserves membership so discovering another
-  service cannot rewrite the historical median.
-- Marketing-page semantics require review. The hourly job rebuilds the latest
-  gold/public projection from canonical evidence; it does not claim that all
-  sandbox price pages were fetched again that hour.
+- The old exact-shape VM observations and managed-sandbox rate-card quotes are
+  retained as research evidence, not as a live market feed.
+- The 33 sandbox observations are sparse public quotes whose billing unit is
+  hourly; that does not make their observation cadence hourly.
+- Current Gold manifests and public projections do not reference these tables.
 
 ### Workload benchmark
 
@@ -80,13 +64,13 @@ Use this order when two copies disagree:
   four-processor comparison.
 - The latest batch contains 72 complete replicate-aligned jobs and 720 task
   phase rows. Missing replicate slots are never imputed.
-- Historical evidence contains 62 provider-batch summaries from eleven source
-  runs over eight days and ten harness methodologies.
-- `sandbox_workload_run_history` preserves those eleven source runs separately,
-  including repeated intraday runs. Seven runs contain the complete fixed
+- Historical evidence contains 80 provider-batch summaries from fourteen source
+  runs over eleven days and thirteen harness methodologies.
+- `sandbox_workload_run_history` preserves those fourteen source runs separately,
+  including repeated intraday runs. Ten runs contain the complete fixed
   six-service cohort and are eligible for the article headline history; four
   incomplete runs remain in gold and the public audit payload.
-- Those 62 rows are durable audit history, not one homogeneous performance
+- Those 80 rows are durable audit history, not one homogeneous performance
   time series. A frontend may inspect or group them by methodology, but must
   not draw one smooth line across harness revisions.
 - Workload execution belongs to the upstream StarSling project. Compute Bazaar
@@ -116,25 +100,22 @@ dashboard/compute-bazaar/prime-frontier-offer-market.json
 dashboard/compute-bazaar/prime-frontier-offer-shelf.json
 dashboard/compute-bazaar/prime-h100-offer-reference.json
 dashboard/compute-bazaar/sandbox-cost.json
-dashboard/compute-bazaar/sandbox/rates.json
 dashboard/compute-bazaar/sandbox/workload.json
-dashboard/compute-bazaar/sandbox/relative.json
 dashboard/compute-bazaar/market-state.json
 dashboard/compute-bazaar/manifest.json
 ```
 
-The article intentionally shows fewer views than the payload contains. Hidden
-or removed charts do not delete their underlying data. New frontends should
-compose the existing gold objects for the question they need rather than
-copying calculations into JavaScript.
+The archived sandbox rate cards are not part of this public contract. New
+frontends should compose active Gold objects for the question they need rather
+than copying calculations into JavaScript.
 
-The article's market pulse is one such composition. It filters precomputed gold
-series into 1D, 7D, 1M, and All windows and draws them. It does not calculate
-the H100 benchmark, VM median, capacity shares, StarSling medians, or
-percentiles in the browser.
+The article filters precomputed Gold series into display windows and draws
+them. It does not calculate the H100 benchmark or StarSling cost distribution
+in the browser. The measured-workload card presents estimated cost; runtime
+remains an auditable Gold field required by the cost formula.
 
 The internal `/operator/` surface is the full read-only view. It composes the
-latest GPU and sandbox/VM gold manifests, registers their Parquet tables in
+latest GPU and measured-workload Gold manifests, registers their Parquet tables in
 DataFusion, and exposes named catalog queries plus bounded scratch SQL. The
 catalog is the correct place to compare prices while retaining explicit units,
 inspect measured workload costs, and trace rows back through component
@@ -143,35 +124,20 @@ JSON.
 
 ## Refresh And Verification
 
-The hourly market heartbeat is:
+The hourly market heartbeat is the Windmill script:
 
 ```sh
-uv run gpu-prices market-hourly
+uv run python infra/windmill/bootstrap_market_schedule.py --run-now --wait
 ```
 
-The sandbox/VM layer can be rebuilt independently:
+The measured-workload layer can be rebuilt independently:
 
 ```sh
 uv run sandbox-cost validate
 
-uv run sandbox-cost refresh-vm-capacity \
-  --output-root data/lake/sandbox_cost \
-  --raw-root data/raw
-
-uv run sandbox-cost refresh-vm-discovery \
-  --output-root data/lake/sandbox_cost \
-  --raw-root data/raw
-
 uv run sandbox-cost build \
   --output-root data/lake/sandbox_cost \
-  --dashboard-output-root data/dashboard/compute-bazaar \
-  --gpu-history-ref data/lake/sandbox_cost/silver/gpu_benchmark_history.parquet \
-  --vm-capacity-history-ref data/lake/sandbox_cost/silver/vm_capacity_offer_history.parquet \
-  --vm-capacity-current-ref data/lake/sandbox_cost/silver/vm_capacity_current.parquet \
-  --vm-capacity-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_source_manifest.json \
-  --vm-discovery-history-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_history.parquet \
-  --vm-discovery-current-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_current.parquet \
-  --vm-discovery-manifest-ref data/lake/sandbox_cost/silver/vm_capacity_discovery_manifest.json
+  --dashboard-output-root data/dashboard/compute-bazaar
 
 uv run sandbox-cost refresh-benchmark \
   --output-root data/lake/sandbox_cost \
@@ -189,13 +155,12 @@ uv run sandbox-cost check-public \
 ```
 
 The daily `.github/workflows/sandbox-cost-sources.yml` job validates canonical
-evidence, detects new or changed public StarSling runs, checks the first
-exact-shape VM source schemas, and runs focused tests. A separate daily
+evidence, detects new or changed public StarSling runs, and runs focused tests. A separate daily
 Windmill source poll promotes compatible public commits into operational
 bronze and silver. It has no benchmark credentials and launches no workloads.
-Windmill remains responsible for the full hourly source set and S3 history. The hourly
-`.github/workflows/public-feed-freshness.yml` job checks that the public
-projection and latest complete VM observation have not gone stale.
+Windmill remains responsible for the market heartbeat and S3 history. The hourly
+`.github/workflows/public-feed-freshness.yml` job checks the deployed public
+projection.
 
 ## Recovery Checklist
 
@@ -219,10 +184,9 @@ materializes the original bucket/key hierarchy with hard links, and writes a
 snapshot manifest containing the source ETag, size, last-modified time, and
 local checksum for every object.
 
-```sh
-uv run gpu-prices archive-cloud --output-root data/cloud-archive
-uv run gpu-prices verify-cloud-archive --archive-root data/cloud-archive
-```
+The archive implementation remains in
+`the_compute_bazaar.prices.archive`. Its next public interface belongs in the
+small DataFusion-oriented CLI rather than the removed ingestion command router.
 
 The default source is the full bucket inferred from the configured raw, lake,
 and dashboard roots. Re-running the command reuses unchanged content-addressed
@@ -233,8 +197,6 @@ To operate without AWS access:
 
 ```sh
 source data/cloud-archive/offline.env
-uv run gpu-prices latest-market-run
-uv run gpu-prices operator-query benchmark_values
 uv run compute-bazaar-dashboard --snapshot-source s3
 ```
 
@@ -256,9 +218,9 @@ remain in the archive manifest, and the mirror resolver handles them normally;
 do not treat the materialized directory layout alone as the object index.
 
 This folder protects against losing cloud access, but a copy on the same
-laptop is not an independent hardware backup. Periodically rerun
-`archive-cloud`, then copy the complete `data/cloud-archive/` directory to an
-external disk or another account-controlled storage location. If it is moved,
+laptop is not an independent hardware backup. Periodically refresh the archive,
+then copy the complete `data/cloud-archive/` directory to an external disk or
+another account-controlled storage location. If it is moved,
 update `COMPUTE_BAZAAR_S3_MIRROR_ROOT` in `offline.env` to the new absolute
 `objects/` path.
 

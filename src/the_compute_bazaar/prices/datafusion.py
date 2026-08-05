@@ -7,60 +7,12 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 from urllib.parse import urlparse
 
+from .sql_models import read_sql
 from .storage import resolve_read_uri
 
 
-DEFAULT_BENCHMARK_SQL = """
-select
-  gpu_model,
-  min(price_usd_hr) as executable_floor,
-  avg(price_usd_hr) as simple_mean_price,
-  count(*) as offer_count,
-  count(distinct provider) as provider_count
-from gpu_offers
-where price_usd_hr > 0
-  and availability_status in ('available', 'published_rate')
-group by gpu_model
-order by gpu_model
-"""
-
-
-DEFAULT_PRICE_INDEX_SQL = """
-with usable_offers as (
-  select
-    provider,
-    gpu_model,
-    source_offer_id,
-    observed_at,
-    price_usd_hr,
-    case
-      when gpu_count is not null and gpu_count > 0 then price_usd_hr / gpu_count
-      else price_usd_hr
-    end as unit_price_usd_hr,
-    gpu_count,
-    country,
-    region,
-    is_secure,
-    is_spot
-  from gpu_offers
-  where price_usd_hr > 0
-    and availability_status in ('available', 'published_rate')
-)
-select
-  gpu_model,
-  min(unit_price_usd_hr) as executable_floor_usd_gpu_hr,
-  avg(unit_price_usd_hr) as simple_mean_usd_gpu_hr,
-  min(price_usd_hr) as cheapest_offer_usd_hr,
-  count(*) as offer_count,
-  count(distinct provider) as provider_count,
-  count(distinct country) as country_count,
-  sum(case when is_secure then 1 else 0 end) as secure_offer_count,
-  sum(case when is_spot then 1 else 0 end) as spot_offer_count,
-  max(observed_at) as latest_observed_at
-from usable_offers
-group by gpu_model
-order by executable_floor_usd_gpu_hr asc, offer_count desc
-"""
+DEFAULT_BENCHMARK_SQL = read_sql("queries/silver_offer_summary.sql")
+DEFAULT_PRICE_INDEX_SQL = read_sql("queries/silver_price_index.sql")
 
 
 def query_parquet(
@@ -73,7 +25,7 @@ def query_parquet(
         import pyarrow as pa
         from datafusion import SessionContext
     except ImportError as exc:
-        raise RuntimeError("DataFusion queries require the 'platform' extra: uv sync --extra platform") from exc
+        raise RuntimeError("DataFusion queries require the project dependencies: uv sync") from exc
 
     ctx = SessionContext()
     parquet_uri = resolve_read_uri(parquet_uri)
@@ -97,7 +49,7 @@ def query_tables(*, tables: Mapping[str, str], sql: str) -> list[dict[str, Any]]
         import pyarrow as pa
         from datafusion import SessionContext
     except ImportError as exc:
-        raise RuntimeError("DataFusion queries require the 'platform' extra: uv sync --extra platform") from exc
+        raise RuntimeError("DataFusion queries require the project dependencies: uv sync") from exc
 
     ctx = SessionContext()
     resolved_tables = {name: resolve_read_uri(uri) for name, uri in tables.items()}

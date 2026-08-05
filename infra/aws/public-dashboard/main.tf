@@ -120,6 +120,29 @@ resource "aws_cloudfront_response_headers_policy" "dashboard_cors" {
       items = ["ETag"]
     }
   }
+
+  security_headers_config {
+    content_type_options {
+      override = true
+    }
+
+    frame_options {
+      frame_option = "SAMEORIGIN"
+      override     = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      override                   = true
+      preload                    = false
+    }
+  }
 }
 
 resource "aws_cloudfront_function" "publication_request_rewrite" {

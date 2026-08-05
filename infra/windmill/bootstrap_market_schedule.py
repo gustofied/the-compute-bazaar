@@ -10,23 +10,19 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
 
-from bootstrap_provider_schedule import (
+from client import (
     DEFAULT_BASE_URL,
     DEFAULT_CRON,
     DEFAULT_FOLDER,
     DEFAULT_WORKSPACE,
     WindmillClient,
-    _load_local_env,
-    _read_token_file,
+    load_local_env,
+    read_token_file,
 )
 
 
-DEFAULT_PROVIDER_SCOPE = (
-    "vast,lium,spheron,inference_sh,gridstackhub,cloud_gpu_prices,"
-    "thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,akash,aws_spot,"
-    "azure,runpod,verda,published_rate_cards"
-)
 DEFAULT_PUBLIC_BASE_URL = "https://bazaar.adamsioud.com"
+LEGACY_PROVIDER_JOBS = ("vast_hourly", "lium_hourly")
 OPTIONAL_PROVIDER_VARIABLES = (
     ("CLORE_API_KEY", "clore_api_key", "Clore marketplace read API key"),
     (
@@ -57,7 +53,7 @@ OPTIONAL_PROVIDER_VARIABLES = (
 
 
 def main() -> None:
-    _load_local_env()
+    load_local_env()
 
     parser = argparse.ArgumentParser(
         description="Create or update the Windmill market heartbeat job"
@@ -72,7 +68,7 @@ def main() -> None:
         "--folder", default=os.getenv("WINDMILL_FOLDER", DEFAULT_FOLDER)
     )
     parser.add_argument(
-        "--token", default=os.getenv("WINDMILL_TOKEN") or _read_token_file()
+        "--token", default=os.getenv("WINDMILL_TOKEN") or read_token_file()
     )
     parser.add_argument("--timezone", default=os.getenv("WINDMILL_TIMEZONE", "UTC"))
     parser.add_argument(
@@ -123,8 +119,8 @@ def main() -> None:
         content=script_body,
         summary="Hourly Compute Bazaar market heartbeat",
         description=(
-            "Ingests live API sources, AWS Spot observations, and published rate cards, builds gold, "
-            "exports dashboard JSON, and writes a market run manifest."
+            "Ingests live compute-market sources, builds GPU and measured-workload Gold, "
+            "exports public JSON, and writes a market run manifest."
         ),
     )
     run_args = schedule_args(
@@ -144,6 +140,9 @@ def main() -> None:
         description="Runs the full provider-to-dashboard market refresh.",
         args=run_args,
     )
+    for legacy_job in LEGACY_PROVIDER_JOBS:
+        client.delete_schedule(f"f/{folder}/{legacy_job}_hourly")
+        client.delete_script(f"f/{folder}/{legacy_job}")
 
     job_id = None
     job_result = None
@@ -274,7 +273,6 @@ def schedule_args(
         "kafka_password": f"$var:f/{folder}/kafka_password",
         "aws_region": os.getenv("AWS_REGION", "eu-west-3"),
         "topic_prefix": "gpu",
-        "providers": _provider_scope(),
         "lium_size": lium_size,
         "lium_max_pages": lium_max_pages,
         "lium_paginate": lium_paginate,
@@ -285,28 +283,6 @@ def schedule_args(
         if os.getenv(env_name):
             args[variable_name] = f"$var:f/{folder}/{variable_name}"
     return args
-
-
-def _provider_scope() -> str:
-    providers = DEFAULT_PROVIDER_SCOPE.split(",")
-    providers.extend(
-        provider
-        for provider, env_name in (
-            ("clore", "CLORE_API_KEY"),
-            ("prime_intellect", "PRIME_INTELLECT_API_KEY"),
-            ("shadeform", "SHADEFORM_API_KEY"),
-            ("sesterce", "SESTERCE_API_KEY"),
-            ("tensordock", "TENSORDOCK_API_KEY"),
-            ("hyperstack", "HYPERSTACK_API_KEY"),
-            ("lambda", "LAMBDA_CLOUD_API_KEY"),
-            ("digitalocean", "DIGITALOCEAN_API_TOKEN"),
-            ("gpus_io", "GPUS_IO_API_KEY"),
-            ("getdeploying", "GETDEPLOYING_API_KEY"),
-            ("jarvislabs", "JL_API_KEY"),
-        )
-        if os.getenv(env_name)
-    )
-    return ",".join(providers)
 
 
 def _dashboard_output_root() -> str:

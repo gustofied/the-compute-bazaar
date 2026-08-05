@@ -1,6 +1,13 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
 services:
   db:
-    image: postgres:16
+    image: ${POSTGRES_IMAGE:-postgres@sha256:081f1bc7bd5e143dbb6e487b710bbc27712cdcfaced4c071b8e47349aa1b4171}
     restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -12,6 +19,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging: *default-logging
 
   windmill_server:
     image: ${WM_IMAGE}
@@ -27,6 +35,7 @@ services:
       SILENCE_HEALTH_LOGS: ${SILENCE_HEALTH_LOGS:-true}
     expose:
       - "8000"
+    logging: *default-logging
 
   windmill_worker:
     image: ${WM_WORKER_IMAGE}
@@ -49,9 +58,10 @@ services:
     volumes:
       - worker_dependency_cache:/tmp/windmill/cache
       - worker_logs:/tmp/windmill/logs
+    logging: *default-logging
 
   caddy:
-    image: ghcr.io/windmill-labs/caddy-l4:latest
+    image: ${CADDY_IMAGE:-ghcr.io/windmill-labs/caddy-l4@sha256:70d73dddd7a6cbbc47161322731783c6014416fcf2ff12eb21e65c985024556e}
     restart: unless-stopped
     depends_on:
       - windmill_server
@@ -63,6 +73,7 @@ services:
       - caddy_data:/data
     ports:
       - "127.0.0.1:8081:80"
+    logging: *default-logging
 
 volumes:
   db_data:

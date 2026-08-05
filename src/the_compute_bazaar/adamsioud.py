@@ -27,6 +27,20 @@ from .dashboard import (
 
 ADAM_SIOUD_DIR = PROJECT_ROOT / "external" / "AdamSioud"
 COMPUTE_BAZAAR_PAGE = "/exemplars/compute-bazaar/"
+ADAM_SIOUD_SETUP = "git submodule update --init --depth 1 external/AdamSioud"
+
+
+def _site_checkout_available(site_dir: Path) -> bool:
+    return (site_dir / "index.html").is_file()
+
+
+def _require_site_checkout(site_dir: Path) -> None:
+    if _site_checkout_available(site_dir):
+        return
+    raise FileNotFoundError(
+        "The optional private AdamSioud integration is not checked out. "
+        f"Users with repository access can run: {ADAM_SIOUD_SETUP}"
+    )
 
 
 def create_app(
@@ -36,6 +50,7 @@ def create_app(
     snapshot_source: str | None = None,
     snapshot_s3_prefix: str | None = None,
 ) -> FastAPI:
+    _require_site_checkout(site_dir)
     source = _resolve_snapshot_source(snapshot_source, snapshot_s3_prefix)
     s3_prefix = _snapshot_s3_prefix(snapshot_s3_prefix)
     app = FastAPI(title="AdamSioud Compute Bazaar Dev", version="0.1.0")
@@ -96,12 +111,31 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    try:
+        local_app = create_app()
+    except FileNotFoundError as exc:
+        parser.error(str(exc))
+
     import uvicorn
 
-    uvicorn.run(create_app(), host=args.host, port=args.port)
+    uvicorn.run(local_app, host=args.host, port=args.port)
 
 
-app = create_app()
+def _unavailable_app() -> FastAPI:
+    unavailable = FastAPI(title="AdamSioud integration unavailable", version="0.1.0")
+
+    @unavailable.get("/api/health", status_code=503)
+    def health() -> dict[str, str | bool]:
+        return {
+            "ok": False,
+            "reason": "optional private AdamSioud integration is not checked out",
+            "setup": ADAM_SIOUD_SETUP,
+        }
+
+    return unavailable
+
+
+app = create_app() if _site_checkout_available(ADAM_SIOUD_DIR) else _unavailable_app()
 
 
 if __name__ == "__main__":

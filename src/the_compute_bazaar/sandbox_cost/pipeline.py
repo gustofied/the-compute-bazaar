@@ -11,15 +11,15 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from the_compute_bazaar.prices.datafusion import query_tables
+from the_compute_bazaar.prices.gold_models import gold_model_sql, gold_sql_models
 from the_compute_bazaar.prices.public_views import (
-    sandbox_rate_view,
-    sandbox_relative_view,
     sandbox_workload_view,
 )
 from the_compute_bazaar.prices.publications import (
-    publish_sandbox_market_publications,
+    publish_sandbox_workload_publication,
 )
 from the_compute_bazaar.prices.storage import (
+    delete_uri,
     exclusive_lease,
     read_bytes,
     read_json,
@@ -29,36 +29,13 @@ from the_compute_bazaar.prices.storage import (
     write_json,
     write_parquet_rows,
 )
-from the_compute_bazaar.sandbox_cost.vm_capacity import (
-    VM_CAPACITY_COHORT_ID,
-    VM_CAPACITY_METHODOLOGY,
-    VM_PROVIDER_ORDER,
-    VM_TARGET_SHAPE,
-    validate_vm_capacity_history,
-)
-from the_compute_bazaar.sandbox_cost.vm_discovery import (
-    VM_DISCOVERY_METHODOLOGY,
-    VM_DISCOVERY_SOURCE_ORDER,
-    VM_DISCOVERY_UNIVERSE_ID,
-    VM_EXPANDED_COHORT_ID,
-    VM_EXPANDED_METHODOLOGY,
-    VM_EXPANDED_PROVIDER_ORDER,
-    validate_vm_capacity_discovery_history,
-)
-
 
 EVIDENCE_ROOT = Path(__file__).with_name("evidence")
-PRICE_EVIDENCE = EVIDENCE_ROOT / "hourly-price-observations.json"
+WORKLOAD_COST_INPUTS = EVIDENCE_ROOT / "workload-cost-inputs.json"
 BENCHMARK_EVIDENCE = EVIDENCE_ROOT / "benchmark-observations.json"
 SOURCE_MANIFEST = EVIDENCE_ROOT / "source-manifest.json"
-UTILIZATION_EVIDENCE = EVIDENCE_ROOT / "utilization-methodology.json"
-
 TARGET_SHAPE = {"vcpus": 4, "memory_gib": 8, "disk_gb": 40}
-FIXED_COHORT = "2026"
-SANDBOX_RATE_METHODOLOGY = "advertised_fixed_cohort_median_iqr_v2"
-FIXED_RATE_QUERY_ID = "sandbox_fixed_cohort_rate_v2"
-PRICE_EVENTS_QUERY_ID = "sandbox_rate_card_events_v1"
-CURRENT_RATES_QUERY_ID = "sandbox_current_rate_cross_section_v1"
+FIXED_COHORT = "workload-cost-input"
 WORKLOAD_BATCH_QUERY_ID = "sandbox_workload_batch_history_v2"
 WORKLOAD_REPLICATE_QUERY_ID = "sandbox_workload_latest_replicates_v2"
 WORKLOAD_PHASE_QUERY_ID = "sandbox_workload_latest_phases_v1"
@@ -66,19 +43,6 @@ WORKLOAD_PHASE_SUMMARY_QUERY_ID = "sandbox_workload_phase_summary_v1"
 WORKLOAD_SUMMARY_QUERY_ID = "sandbox_workload_service_summary_v2"
 WORKLOAD_RUN_SUMMARY_QUERY_ID = "sandbox_workload_run_summary_v1"
 WORKLOAD_FIXED_SERVICE_COUNT = 6
-GPU_COMPARISON_MIN_PROVIDERS = 10
-GPU_DAILY_QUERY_ID = "h100_daily_broad_coverage_v1"
-GPU_ELIGIBLE_QUERY_ID = "h100_broad_coverage_prints_v1"
-COMBINED_QUERY_ID = "sandbox_gpu_cpu_common_start_v3"
-RELATIVE_COMMON_START_QUERY_ID = "gpu_vm_sandbox_common_start_v1"
-VM_CURRENT_QUERY_ID = "vm_capacity_current_cross_section_v1"
-VM_FIXED_RATE_QUERY_ID = "vm_capacity_fixed_cohort_rate_v3"
-VM_EXPANDED_CURRENT_QUERY_ID = "vm_capacity_expanded_current_v1"
-VM_EXPANDED_RATE_QUERY_ID = "vm_capacity_expanded_hourly_rate_v2"
-VM_MARKETPLACE_CURRENT_QUERY_ID = "vm_capacity_marketplace_current_v1"
-VM_SANDBOX_COMPARISON_QUERY_ID = "vm_sandbox_current_rate_comparison_v2"
-VM_DISCOVERY_CURRENT_QUERY_ID = "vm_capacity_discovery_current_v1"
-UTILIZATION_LADDER_QUERY_ID = "compute_utilization_public_ladder_v1"
 NUMERIC_DECIMAL_PLACES = 12
 
 RUNTIME_PRICE_SERIES = {
@@ -146,38 +110,6 @@ RATE_METERING = {
         "memory_meter": "reserved_capacity",
         "billing_basis_label": "active CPU and provisioned memory",
     },
-}
-
-UTILIZATION_FIELDS = {
-    "definition",
-    "denominator",
-    "denominator_disclosure",
-    "domain",
-    "examples",
-    "measurement_family",
-    "measurement_window",
-    "metric_id",
-    "metric_label",
-    "numerator",
-    "publication_order",
-    "recommended_field_name",
-    "source_id",
-    "source_kind",
-    "source_label",
-    "source_url",
-    "stage_id",
-    "stage_label",
-    "what_it_does_not_support",
-    "what_it_supports",
-}
-
-UTILIZATION_FAMILIES = {
-    "availability",
-    "rental_occupancy",
-    "allocation",
-    "hardware_activity",
-    "productive_output",
-    "billing_exposure",
 }
 
 PRICE_FIELDS = {
@@ -326,987 +258,20 @@ RUN_METADATA_FIELDS = {
     "benchmark_source_url",
 }
 
-FIXED_RATE_SQL = f"""
-with ordered_prices as (
-  select
-    *,
-    lag(price_usd_per_hour) over (
-      partition by series_id
-      order by cast(observed_date as date), point_order
-    ) as previous_price_usd_per_hour
-  from sandbox_hourly_prices
-  where index_eligible = true
-    and index_cohort = '{FIXED_COHORT}'
-),
-event_dates as (
-  select cast('2026-01-01' as date) as observed_date
-  union
-  select distinct cast(observed_date as date) as observed_date
-  from ordered_prices
-  where cast(observed_date as date) >= cast('2026-01-01' as date)
-    and previous_price_usd_per_hour is not null
-    and abs(price_usd_per_hour - previous_price_usd_per_hour) > 0.000000001
-),
-members as (
-  select distinct series_id
-  from sandbox_hourly_prices
-  where index_eligible = true
-    and index_cohort = '{FIXED_COHORT}'
-),
-ranked as (
-  select
-    dates.observed_date,
-    prices.series_id,
-    prices.series_label,
-    prices.price_usd_per_hour,
-    cast(prices.observed_date as date) as source_price_date,
-    prices.source_url,
-    row_number() over (
-      partition by dates.observed_date, prices.series_id
-      order by cast(prices.observed_date as date) desc, prices.point_order desc
-    ) as recency_rank
-  from event_dates dates
-  cross join members
-  join sandbox_hourly_prices prices
-    on prices.series_id = members.series_id
-   and cast(prices.observed_date as date) <= dates.observed_date
-),
-current_members as (
-  select *
-  from ranked
-  where recency_rank = 1
+WORKLOAD_BATCH_SQL = gold_model_sql("sandbox_workload_batch_history")
+
+WORKLOAD_LATEST_REPLICATES_SQL = gold_model_sql("sandbox_workload_latest_replicates")
+
+WORKLOAD_LATEST_PHASES_SQL = gold_model_sql("sandbox_workload_latest_phases")
+
+WORKLOAD_PHASE_SUMMARY_SQL = gold_model_sql("sandbox_workload_phase_summary")
+
+WORKLOAD_SUMMARY_SQL = gold_model_sql("sandbox_workload_service_summary")
+
+WORKLOAD_RUN_SUMMARY_SQL = gold_model_sql(
+    "sandbox_workload_run_history",
+    fragments={"fixed_service_count": str(WORKLOAD_FIXED_SERVICE_COUNT)},
 )
-select
-  observed_date,
-  '{SANDBOX_RATE_METHODOLOGY}' as methodology_version,
-  '{FIXED_COHORT}' as cohort_id,
-  median(price_usd_per_hour) as median_usd_per_hour,
-  avg(price_usd_per_hour) as average_usd_per_hour,
-  percentile_cont(0.25) within group (
-    order by price_usd_per_hour
-  ) as p25_usd_per_hour,
-  percentile_cont(0.75) within group (
-    order by price_usd_per_hour
-  ) as p75_usd_per_hour,
-  count(*) as member_count,
-  min(price_usd_per_hour) as minimum_usd_per_hour,
-  max(price_usd_per_hour) as maximum_usd_per_hour
-from current_members
-group by observed_date
-having count(*) = 8
-order by observed_date
-"""
-
-PRICE_EVENTS_SQL = """
-with ordered as (
-  select
-    *,
-    lag(price_usd_per_hour) over (
-      partition by series_id
-      order by cast(observed_date as date), point_order
-    ) as previous_price_usd_per_hour
-  from sandbox_hourly_prices
-  where index_eligible = true
-)
-select
-  series_order,
-  point_order,
-  series_id,
-  series_label,
-  observed_date,
-  previous_price_usd_per_hour,
-  price_usd_per_hour,
-  price_usd_per_hour - previous_price_usd_per_hour as price_change_usd_per_hour,
-  (
-    price_usd_per_hour / previous_price_usd_per_hour - 1.0
-  ) * 100.0 as price_change_percent,
-  date_role,
-  change_precision,
-  evidence_class,
-  source_label,
-  source_url,
-  note,
-  color
-from ordered
-where previous_price_usd_per_hour is not null
-  and abs(price_usd_per_hour - previous_price_usd_per_hour) > 0.000000001
-order by cast(observed_date as date), series_order, point_order
-"""
-
-CURRENT_RATES_SQL = f"""
-with ranked as (
-  select
-    *,
-    row_number() over (
-      partition by series_id
-      order by cast(observed_date as date) desc, point_order desc
-    ) as recency_rank
-  from sandbox_hourly_prices
-  where index_eligible = true
-)
-select
-  series_order,
-  series_id,
-  series_label,
-  observed_date,
-  price_usd_per_hour,
-  processor_quantity,
-  processor_unit,
-  processor_rate_usd_per_unit_hour,
-  memory_gib,
-  memory_rate_usd_per_gib_hour,
-  processor_meter,
-  memory_meter,
-  billing_basis_label,
-  index_cohort = '{FIXED_COHORT}' as fixed_cohort_member,
-  date_role,
-  change_precision,
-  evidence_class,
-  source_label,
-  source_url,
-  note,
-  color
-from ranked
-where recency_rank = 1
-order by price_usd_per_hour, series_label
-"""
-
-WORKLOAD_BATCH_SQL = """
-select *
-from sandbox_benchmark_batches
-order by series_order, generated_at, point_order
-"""
-
-WORKLOAD_LATEST_REPLICATES_SQL = """
-with latest as (
-  select max(generated_at) as generated_at
-  from sandbox_benchmark_replicates
-)
-select replicates.*
-from sandbox_benchmark_replicates replicates
-join latest on latest.generated_at = replicates.generated_at
-order by series_order, replicate_index
-"""
-
-WORKLOAD_LATEST_PHASES_SQL = """
-with latest as (
-  select max(generated_at) as generated_at
-  from sandbox_benchmark_phases
-)
-select phases.*
-from sandbox_benchmark_phases phases
-join latest on latest.generated_at = phases.generated_at
-order by series_order, replicate_index, task_order
-"""
-
-WORKLOAD_PHASE_SUMMARY_SQL = """
-select
-  series_order,
-  series_id,
-  series_label,
-  color,
-  task_order,
-  task_id,
-  task_label,
-  count(*) as sample_count,
-  median(runtime_seconds) as median_runtime_seconds,
-  avg(runtime_seconds) as average_runtime_seconds,
-  percentile_cont(0.25) within group (
-    order by runtime_seconds
-  ) as p25_runtime_seconds,
-  percentile_cont(0.75) within group (
-    order by runtime_seconds
-  ) as p75_runtime_seconds,
-  min(runtime_seconds) as minimum_runtime_seconds,
-  max(runtime_seconds) as maximum_runtime_seconds
-from sandbox_workload_latest_phases
-group by
-  series_order,
-  series_id,
-  series_label,
-  color,
-  task_order,
-  task_id,
-  task_label
-order by series_order, task_order
-"""
-
-WORKLOAD_SUMMARY_SQL = """
-with source_slots as (
-  select count(distinct replicate_index) as source_replicate_slot_count
-  from sandbox_workload_latest_replicates
-),
-summary as (
-  select
-    series_order,
-    series_id,
-    series_label,
-    color,
-    count(*) as result_count,
-    max(source_slots.source_replicate_slot_count)
-      as source_replicate_slot_count,
-    max(source_slots.source_replicate_slot_count) - count(*)
-      as incomplete_replicate_count,
-    cast(count(*) as double)
-      / cast(max(source_slots.source_replicate_slot_count) as double)
-      as replicate_completion_ratio,
-    count(distinct benchmark_run_id) as run_count,
-    min(benchmark_run_id) as benchmark_run_id,
-    min(methodology_id) as methodology_id,
-    min(source_run_sha) as source_run_sha,
-    min(generated_at) as first_generated_at,
-    max(generated_at) as latest_generated_at,
-    median(runtime_seconds) as median_runtime_seconds,
-    avg(runtime_seconds) as average_runtime_seconds,
-    percentile_cont(0.25) within group (
-      order by runtime_seconds
-    ) as p25_runtime_seconds,
-    percentile_cont(0.75) within group (
-      order by runtime_seconds
-    ) as p75_runtime_seconds,
-    min(runtime_seconds) as minimum_runtime_seconds,
-    max(runtime_seconds) as maximum_runtime_seconds,
-    median(estimated_cost_usd) as median_estimated_cost_usd,
-    avg(estimated_cost_usd) as average_estimated_cost_usd,
-    percentile_cont(0.25) within group (
-      order by estimated_cost_usd
-    ) as p25_estimated_cost_usd,
-    percentile_cont(0.75) within group (
-      order by estimated_cost_usd
-    ) as p75_estimated_cost_usd,
-    min(estimated_cost_usd) as minimum_estimated_cost_usd,
-    max(estimated_cost_usd) as maximum_estimated_cost_usd
-  from sandbox_workload_latest_replicates
-  cross join source_slots
-  group by series_order, series_id, series_label, color
-)
-select
-  summary.series_order,
-  summary.series_id,
-  summary.series_label,
-  summary.color,
-  summary.result_count,
-  summary.source_replicate_slot_count,
-  summary.incomplete_replicate_count,
-  summary.replicate_completion_ratio,
-  summary.run_count,
-  summary.benchmark_run_id,
-  summary.methodology_id,
-  summary.source_run_sha,
-  summary.first_generated_at,
-  summary.latest_generated_at,
-  summary.median_runtime_seconds,
-  summary.average_runtime_seconds,
-  summary.p25_runtime_seconds,
-  summary.p75_runtime_seconds,
-  summary.minimum_runtime_seconds,
-  summary.maximum_runtime_seconds,
-  summary.median_estimated_cost_usd,
-  summary.average_estimated_cost_usd,
-  summary.p25_estimated_cost_usd,
-  summary.p75_estimated_cost_usd,
-  summary.minimum_estimated_cost_usd,
-  summary.maximum_estimated_cost_usd,
-  count(comparison.series_id) = 0 as on_lower_left_frontier
-from summary
-left join summary comparison
-  on comparison.series_id != summary.series_id
- and comparison.median_runtime_seconds <= summary.median_runtime_seconds
- and comparison.median_estimated_cost_usd
-   <= summary.median_estimated_cost_usd
- and (
-   comparison.median_runtime_seconds < summary.median_runtime_seconds
-   or comparison.median_estimated_cost_usd
-     < summary.median_estimated_cost_usd
- )
-group by
-  summary.series_order,
-  summary.series_id,
-  summary.series_label,
-  summary.color,
-  summary.result_count,
-  summary.source_replicate_slot_count,
-  summary.incomplete_replicate_count,
-  summary.replicate_completion_ratio,
-  summary.run_count,
-  summary.benchmark_run_id,
-  summary.methodology_id,
-  summary.source_run_sha,
-  summary.first_generated_at,
-  summary.latest_generated_at,
-  summary.median_runtime_seconds,
-  summary.average_runtime_seconds,
-  summary.p25_runtime_seconds,
-  summary.p75_runtime_seconds,
-  summary.minimum_runtime_seconds,
-  summary.maximum_runtime_seconds,
-  summary.median_estimated_cost_usd,
-  summary.average_estimated_cost_usd,
-  summary.p25_estimated_cost_usd,
-  summary.p75_estimated_cost_usd,
-  summary.minimum_estimated_cost_usd,
-  summary.maximum_estimated_cost_usd
-order by median_runtime_seconds, median_estimated_cost_usd
-"""
-
-WORKLOAD_RUN_SUMMARY_SQL = f"""
-select
-  benchmark_run_id,
-  min(generated_at) as generated_at,
-  min(observed_date) as observed_date,
-  min(benchmark_source_url) as benchmark_source_url,
-  min(methodology_id) as methodology_id,
-  min(source_run_sha) as source_run_sha,
-  min(task_signature) as task_signature,
-  min(workload_app_version) as workload_app_version,
-  min(runtime_basis) as runtime_basis,
-  min(cost_basis) as cost_basis,
-  min(price_scope) as price_scope,
-  min(vcpus) as vcpus,
-  min(memory_gib) as memory_gib,
-  min(disk_gb) as disk_gb,
-  min(job_parts) as job_parts,
-  count(distinct series_id) as service_count,
-  count(distinct series_id) = {WORKLOAD_FIXED_SERVICE_COUNT}
-    as fixed_cohort_complete,
-  median(runtime_seconds) as median_runtime_seconds,
-  avg(runtime_seconds) as average_runtime_seconds,
-  percentile_cont(0.25) within group (
-    order by runtime_seconds
-  ) as p25_runtime_seconds,
-  percentile_cont(0.75) within group (
-    order by runtime_seconds
-  ) as p75_runtime_seconds,
-  min(runtime_seconds) as minimum_runtime_seconds,
-  max(runtime_seconds) as maximum_runtime_seconds,
-  median(estimated_cost_usd) as median_estimated_cost_usd,
-  avg(estimated_cost_usd) as average_estimated_cost_usd,
-  percentile_cont(0.25) within group (
-    order by estimated_cost_usd
-  ) as p25_estimated_cost_usd,
-  percentile_cont(0.75) within group (
-    order by estimated_cost_usd
-  ) as p75_estimated_cost_usd,
-  min(estimated_cost_usd) as minimum_estimated_cost_usd,
-  max(estimated_cost_usd) as maximum_estimated_cost_usd
-from sandbox_benchmark_batches
-group by benchmark_run_id
-order by generated_at, benchmark_run_id
-"""
-
-GPU_DAILY_COVERAGE_SQL = f"""
-with compatible_gpu as (
-  select
-    gold_observed_at,
-    cast(gold_observed_at as date) as observed_date,
-    benchmark_family_id,
-    benchmark_usd_gpu_hr,
-    provider_count,
-    included_offer_count,
-    provider_floor_p25_usd_gpu_hr,
-    provider_floor_p75_usd_gpu_hr,
-    methodology_version,
-    benchmark_basis,
-    row_number() over (
-      partition by gold_observed_at, benchmark_family_id
-      order by calculated_at desc
-    ) as duplicate_rank
-  from gpu_benchmark_history
-  where benchmark_family_id = 'H100'
-    and methodology_version = 'advertised_provider_floor_median_v1'
-    and benchmark_basis = 'advertised_hourly'
-    and benchmark_usd_gpu_hr > 0
-),
-deduplicated as (
-  select
-    *
-  from compatible_gpu
-  where duplicate_rank = 1
-),
-daily_all as (
-  select
-    observed_date,
-    count(*) as research_print_count,
-    median(benchmark_usd_gpu_hr) as research_benchmark_usd_gpu_hr,
-    min(provider_count) as minimum_provider_count,
-    max(provider_count) as maximum_provider_count
-  from deduplicated
-  group by observed_date
-),
-daily_broad as (
-  select
-    observed_date,
-    count(*) as eligible_print_count,
-    median(benchmark_usd_gpu_hr) as benchmark_usd_gpu_hr,
-    median(provider_floor_p25_usd_gpu_hr)
-      as provider_floor_p25_usd_gpu_hr,
-    median(provider_floor_p75_usd_gpu_hr)
-      as provider_floor_p75_usd_gpu_hr,
-    median(provider_count) as median_provider_count,
-    min(provider_count) as eligible_minimum_provider_count,
-    max(provider_count) as eligible_maximum_provider_count,
-    median(included_offer_count) as median_included_offer_count
-  from deduplicated
-  where provider_count >= {GPU_COMPARISON_MIN_PROVIDERS}
-  group by observed_date
-)
-select
-  daily_all.observed_date,
-  daily_all.research_print_count,
-  daily_all.research_benchmark_usd_gpu_hr,
-  daily_all.minimum_provider_count,
-  daily_all.maximum_provider_count,
-  coalesce(daily_broad.eligible_print_count, 0) as eligible_print_count,
-  daily_broad.benchmark_usd_gpu_hr,
-  daily_broad.provider_floor_p25_usd_gpu_hr,
-  daily_broad.provider_floor_p75_usd_gpu_hr,
-  daily_broad.median_provider_count,
-  daily_broad.eligible_minimum_provider_count,
-  daily_broad.eligible_maximum_provider_count,
-  daily_broad.median_included_offer_count,
-  daily_broad.eligible_print_count is not null as comparison_eligible,
-  case
-    when daily_broad.eligible_print_count is not null then null
-    else 'provider_coverage_below_{GPU_COMPARISON_MIN_PROVIDERS}'
-  end as exclusion_reason
-from daily_all
-left join daily_broad
-  on daily_all.observed_date = daily_broad.observed_date
-order by daily_all.observed_date
-"""
-
-GPU_ELIGIBLE_HISTORY_SQL = f"""
-with compatible_gpu as (
-  select
-    gold_observed_at,
-    cast(gold_observed_at as date) as observed_date,
-    benchmark_family_id,
-    benchmark_usd_gpu_hr,
-    provider_count,
-    included_offer_count,
-    provider_floor_p25_usd_gpu_hr,
-    provider_floor_p75_usd_gpu_hr,
-    methodology_version,
-    benchmark_basis,
-    calculated_at,
-    row_number() over (
-      partition by gold_observed_at, benchmark_family_id
-      order by calculated_at desc
-    ) as duplicate_rank
-  from gpu_benchmark_history
-  where benchmark_family_id = 'H100'
-    and methodology_version = 'advertised_provider_floor_median_v1'
-    and benchmark_basis = 'advertised_hourly'
-    and benchmark_usd_gpu_hr > 0
-)
-select
-  gold_observed_at,
-  observed_date,
-  benchmark_family_id,
-  benchmark_usd_gpu_hr,
-  provider_count,
-  included_offer_count,
-  provider_floor_p25_usd_gpu_hr,
-  provider_floor_p75_usd_gpu_hr,
-  methodology_version,
-  benchmark_basis,
-  calculated_at
-from compatible_gpu
-where duplicate_rank = 1
-  and provider_count >= {GPU_COMPARISON_MIN_PROVIDERS}
-order by gold_observed_at
-"""
-
-COMBINED_COMMON_START_SQL = """
-with joined as (
-  select
-    gpu.gold_observed_at,
-    gpu.observed_date,
-    gpu.benchmark_usd_gpu_hr,
-    gpu.provider_count,
-    gpu.included_offer_count,
-    gpu.provider_floor_p25_usd_gpu_hr,
-    gpu.provider_floor_p75_usd_gpu_hr,
-    gpu.methodology_version as gpu_methodology_version,
-    gpu.benchmark_basis as gpu_benchmark_basis,
-    sandbox.observed_date as sandbox_price_date,
-    sandbox.median_usd_per_hour as sandbox_median_usd_per_hour,
-    sandbox.p25_usd_per_hour as sandbox_p25_usd_per_hour,
-    sandbox.p75_usd_per_hour as sandbox_p75_usd_per_hour,
-    sandbox.member_count as sandbox_member_count,
-    row_number() over (
-      partition by gpu.gold_observed_at
-      order by sandbox.observed_date desc
-    ) as sandbox_recency_rank
-  from gpu_h100_eligible_history gpu
-  join sandbox_fixed_rate sandbox
-    on cast(sandbox.observed_date as date) <= gpu.observed_date
-),
-comparable as (
-  select *
-  from joined
-  where sandbox_recency_rank = 1
-),
-baseline_ranked as (
-  select
-    *,
-    row_number() over (order by gold_observed_at) as baseline_rank
-  from comparable
-),
-baseline as (
-  select
-    benchmark_usd_gpu_hr as first_gpu_value,
-    sandbox_median_usd_per_hour as first_sandbox_value,
-    gold_observed_at as common_start_at
-  from baseline_ranked
-  where baseline_rank = 1
-)
-select
-  comparable.gold_observed_at,
-  comparable.observed_date,
-  baseline.common_start_at,
-  comparable.benchmark_usd_gpu_hr,
-  comparable.provider_count,
-  comparable.included_offer_count,
-  comparable.provider_floor_p25_usd_gpu_hr,
-  comparable.provider_floor_p75_usd_gpu_hr,
-  comparable.gpu_methodology_version,
-  comparable.gpu_benchmark_basis,
-  comparable.sandbox_price_date,
-  comparable.sandbox_median_usd_per_hour,
-  comparable.sandbox_p25_usd_per_hour,
-  comparable.sandbox_p75_usd_per_hour,
-  comparable.sandbox_member_count,
-  comparable.benchmark_usd_gpu_hr
-    / comparable.sandbox_median_usd_per_hour
-      as sandbox_hours_per_h100_gpu_hour,
-  comparable.benchmark_usd_gpu_hr
-    / baseline.first_gpu_value * 100.0 as gpu_base_100,
-  comparable.provider_floor_p25_usd_gpu_hr
-    / baseline.first_gpu_value * 100.0 as gpu_p25_base_100,
-  comparable.provider_floor_p75_usd_gpu_hr
-    / baseline.first_gpu_value * 100.0 as gpu_p75_base_100,
-  comparable.sandbox_median_usd_per_hour
-    / baseline.first_sandbox_value * 100.0 as sandbox_base_100,
-  comparable.sandbox_p25_usd_per_hour
-    / baseline.first_sandbox_value * 100.0 as sandbox_p25_base_100,
-  comparable.sandbox_p75_usd_per_hour
-    / baseline.first_sandbox_value * 100.0 as sandbox_p75_base_100
-from comparable
-cross join baseline
-order by comparable.gold_observed_at
-"""
-
-RELATIVE_COMMON_START_SQL = """
-with gpu_with_sandbox as (
-  select
-    gpu.gold_observed_at,
-    gpu.observed_date,
-    gpu.benchmark_usd_gpu_hr,
-    gpu.provider_count,
-    gpu.included_offer_count,
-    gpu.provider_floor_p25_usd_gpu_hr,
-    gpu.provider_floor_p75_usd_gpu_hr,
-    gpu.methodology_version as gpu_methodology_version,
-    gpu.benchmark_basis as gpu_benchmark_basis,
-    sandbox.observed_date as sandbox_price_date,
-    sandbox.median_usd_per_hour as sandbox_median_usd_per_hour,
-    sandbox.p25_usd_per_hour as sandbox_p25_usd_per_hour,
-    sandbox.p75_usd_per_hour as sandbox_p75_usd_per_hour,
-    sandbox.member_count as sandbox_member_count,
-    row_number() over (
-      partition by gpu.gold_observed_at
-      order by sandbox.observed_date desc
-    ) as sandbox_recency_rank
-  from gpu_h100_eligible_history gpu
-  join sandbox_fixed_rate sandbox
-    on cast(sandbox.observed_date as date) <= gpu.observed_date
-),
-gpu_with_latest_sandbox as (
-  select *
-  from gpu_with_sandbox
-  where sandbox_recency_rank = 1
-),
-all_candidates as (
-  select
-    gpu.*,
-    vm.observed_at as vm_source_observed_at,
-    vm.median_usd_per_hour as vm_median_usd_per_hour,
-    vm.p25_usd_per_hour as vm_p25_usd_per_hour,
-    vm.p75_usd_per_hour as vm_p75_usd_per_hour,
-    vm.member_count as vm_member_count,
-    vm.methodology_version as vm_methodology_version,
-    row_number() over (
-      partition by gpu.gold_observed_at
-      order by vm.observed_at desc
-    ) as vm_recency_rank
-  from gpu_with_latest_sandbox gpu
-  join vm_capacity_observed_rate vm
-    on cast(vm.observed_at as timestamp)
-      <= cast(gpu.gold_observed_at as timestamp)
-),
-comparable as (
-  select *
-  from all_candidates
-  where vm_recency_rank = 1
-),
-baseline_ranked as (
-  select
-    *,
-    row_number() over (order by gold_observed_at) as baseline_rank
-  from comparable
-),
-baseline as (
-  select
-    gold_observed_at as common_start_at,
-    benchmark_usd_gpu_hr as first_gpu_value,
-    vm_median_usd_per_hour as first_vm_value,
-    sandbox_median_usd_per_hour as first_sandbox_value
-  from baseline_ranked
-  where baseline_rank = 1
-)
-select
-  comparable.gold_observed_at as observed_at,
-  comparable.observed_date,
-  baseline.common_start_at,
-  comparable.benchmark_usd_gpu_hr,
-  comparable.provider_count,
-  comparable.included_offer_count,
-  comparable.provider_floor_p25_usd_gpu_hr,
-  comparable.provider_floor_p75_usd_gpu_hr,
-  comparable.gpu_methodology_version,
-  comparable.gpu_benchmark_basis,
-  comparable.vm_source_observed_at,
-  comparable.vm_median_usd_per_hour,
-  comparable.vm_p25_usd_per_hour,
-  comparable.vm_p75_usd_per_hour,
-  comparable.vm_member_count,
-  comparable.vm_methodology_version,
-  comparable.sandbox_price_date,
-  comparable.sandbox_median_usd_per_hour,
-  comparable.sandbox_p25_usd_per_hour,
-  comparable.sandbox_p75_usd_per_hour,
-  comparable.sandbox_member_count,
-  comparable.benchmark_usd_gpu_hr
-    / baseline.first_gpu_value * 100.0 as gpu_base_100,
-  comparable.provider_floor_p25_usd_gpu_hr
-    / baseline.first_gpu_value * 100.0 as gpu_p25_base_100,
-  comparable.provider_floor_p75_usd_gpu_hr
-    / baseline.first_gpu_value * 100.0 as gpu_p75_base_100,
-  comparable.vm_median_usd_per_hour
-    / baseline.first_vm_value * 100.0 as vm_base_100,
-  comparable.vm_p25_usd_per_hour
-    / baseline.first_vm_value * 100.0 as vm_p25_base_100,
-  comparable.vm_p75_usd_per_hour
-    / baseline.first_vm_value * 100.0 as vm_p75_base_100,
-  comparable.sandbox_median_usd_per_hour
-    / baseline.first_sandbox_value * 100.0 as sandbox_base_100,
-  comparable.sandbox_p25_usd_per_hour
-    / baseline.first_sandbox_value * 100.0 as sandbox_p25_base_100,
-  comparable.sandbox_p75_usd_per_hour
-    / baseline.first_sandbox_value * 100.0 as sandbox_p75_base_100
-from comparable
-cross join baseline
-order by comparable.gold_observed_at
-"""
-
-VM_CURRENT_SQL = """
-select *
-from vm_capacity_current
-order by price_usd_per_hour, provider_label
-"""
-
-VM_DISCOVERY_CURRENT_SQL = """
-select *
-from vm_capacity_discovery_current
-order by series_order, provider_label
-"""
-
-VM_FIXED_RATE_SQL = f"""
-with rates as (
-  select
-    cast(checked_at as timestamp) as observed_at,
-    cast(checked_at as date) as observed_date,
-    '{VM_CAPACITY_METHODOLOGY}' as methodology_version,
-    '{VM_CAPACITY_COHORT_ID}' as cohort_id,
-    median(price_usd_per_hour) as median_usd_per_hour,
-    avg(price_usd_per_hour) as average_usd_per_hour,
-    percentile_cont(0.25) within group (
-      order by price_usd_per_hour
-    ) as p25_usd_per_hour,
-    percentile_cont(0.75) within group (
-      order by price_usd_per_hour
-    ) as p75_usd_per_hour,
-    count(*) as member_count,
-    min(price_usd_per_hour) as minimum_usd_per_hour,
-    max(price_usd_per_hour) as maximum_usd_per_hour
-  from vm_capacity_offer_history
-  where cohort_id = '{VM_CAPACITY_COHORT_ID}'
-  group by checked_at
-  having count(*) = {len(VM_PROVIDER_ORDER)}
-    and count(distinct provider_id) = {len(VM_PROVIDER_ORDER)}
-),
-baseline as (
-  select
-    observed_at as base_observed_at,
-    median_usd_per_hour as base_median_usd_per_hour
-  from rates
-  order by observed_at
-  limit 1
-)
-select
-  rates.*,
-  baseline.base_observed_at,
-  baseline.base_median_usd_per_hour,
-  rates.median_usd_per_hour
-    / baseline.base_median_usd_per_hour * 100.0 as base_100,
-  rates.p25_usd_per_hour
-    / baseline.base_median_usd_per_hour * 100.0 as p25_base_100,
-  rates.p75_usd_per_hour
-    / baseline.base_median_usd_per_hour * 100.0 as p75_base_100,
-  rates.minimum_usd_per_hour
-    / baseline.base_median_usd_per_hour * 100.0 as minimum_base_100,
-  rates.maximum_usd_per_hour
-    / baseline.base_median_usd_per_hour * 100.0 as maximum_base_100
-from rates
-cross join baseline
-order by rates.observed_at
-"""
-
-VM_EXPANDED_CURRENT_SQL = f"""
-select *
-from vm_capacity_expanded_current
-where cohort_id = '{VM_EXPANDED_COHORT_ID}'
-order by price_usd_per_hour, provider_label
-"""
-
-VM_EXPANDED_RATE_SQL = f"""
-with rates as (
-  select
-    cast(checked_at as timestamp) as observed_at,
-    cast(checked_at as date) as observed_date,
-    '{VM_EXPANDED_METHODOLOGY}' as methodology_version,
-    '{VM_EXPANDED_COHORT_ID}' as cohort_id,
-    median(price_usd_per_hour) as median_usd_per_hour,
-    avg(price_usd_per_hour) as average_usd_per_hour,
-    percentile_cont(0.25) within group (
-      order by price_usd_per_hour
-    ) as p25_usd_per_hour,
-    percentile_cont(0.75) within group (
-      order by price_usd_per_hour
-    ) as p75_usd_per_hour,
-    count(*) as member_count,
-    min(price_usd_per_hour) as minimum_usd_per_hour,
-    max(price_usd_per_hour) as maximum_usd_per_hour
-  from vm_capacity_expanded_history
-  where cohort_id = '{VM_EXPANDED_COHORT_ID}'
-  group by checked_at
-  having count(*) = {len(VM_EXPANDED_PROVIDER_ORDER)}
-    and count(distinct provider_id) = {len(VM_EXPANDED_PROVIDER_ORDER)}
-),
-baseline as (
-  select
-    observed_at as base_observed_at,
-    median_usd_per_hour as base_median_usd_per_hour
-  from rates
-  order by observed_at
-  limit 1
-)
-select
-  rates.*,
-  baseline.base_observed_at,
-  baseline.base_median_usd_per_hour,
-  rates.median_usd_per_hour
-    / baseline.base_median_usd_per_hour * 100.0 as base_100,
-  rates.p25_usd_per_hour
-    / baseline.base_median_usd_per_hour * 100.0 as p25_base_100,
-  rates.p75_usd_per_hour
-    / baseline.base_median_usd_per_hour * 100.0 as p75_base_100,
-  rates.minimum_usd_per_hour
-    / baseline.base_median_usd_per_hour * 100.0 as minimum_base_100,
-  rates.maximum_usd_per_hour
-    / baseline.base_median_usd_per_hour * 100.0 as maximum_base_100
-from rates
-cross join baseline
-order by rates.observed_at
-"""
-
-VM_MARKETPLACE_CURRENT_SQL = """
-select *
-from vm_capacity_marketplace_current
-order by price_usd_per_hour, provider_label
-"""
-
-VM_SANDBOX_COMPARISON_SQL = """
-with latest_vm as (
-  select *
-  from vm_capacity_observed_rate
-  order by observed_at desc
-  limit 1
-),
-latest_sandbox as (
-  select *
-  from sandbox_fixed_rate
-  order by observed_date desc
-  limit 1
-)
-select
-  vm.observed_at as vm_observed_at,
-  sandbox.observed_date as sandbox_rate_date,
-  vm.median_usd_per_hour as vm_median_usd_per_hour,
-  vm.p25_usd_per_hour as vm_p25_usd_per_hour,
-  vm.p75_usd_per_hour as vm_p75_usd_per_hour,
-  vm.member_count as vm_member_count,
-  sandbox.median_usd_per_hour as sandbox_median_usd_per_hour,
-  sandbox.p25_usd_per_hour as sandbox_p25_usd_per_hour,
-  sandbox.p75_usd_per_hour as sandbox_p75_usd_per_hour,
-  sandbox.member_count as sandbox_member_count,
-  sandbox.median_usd_per_hour / vm.median_usd_per_hour
-    as observed_rate_ratio
-from latest_vm vm
-cross join latest_sandbox sandbox
-"""
-
-UTILIZATION_LADDER_SQL = """
-select
-  publication_order as stage_order,
-  stage_id,
-  stage_label,
-  metric_id,
-  metric_label,
-  domain,
-  measurement_family,
-  definition,
-  numerator,
-  denominator,
-  denominator_disclosure,
-  measurement_window,
-  recommended_field_name,
-  examples,
-  what_it_supports,
-  what_it_does_not_support,
-  source_id,
-  source_label,
-  source_url,
-  source_kind
-from compute_utilization_metric_definitions
-where publication_order is not null
-order by publication_order
-"""
-
-GOLD_QUERIES = {
-    "hourly-prices": """
-select *
-from sandbox_hourly_price_series
-order by series_order, observed_date, point_order
-""",
-    "price-events": """
-select *
-from sandbox_price_events
-order by observed_date, series_order, point_order
-""",
-    "current-rates": """
-select *
-from sandbox_current_rates
-order by price_usd_per_hour, series_label
-""",
-    "fixed-rate": """
-select *
-from sandbox_fixed_rate
-order by observed_date
-""",
-    "workload-batch-history": """
-select *
-from sandbox_workload_batch_history
-order by series_order, generated_at, point_order
-""",
-    "workload-latest-replicates": """
-select *
-from sandbox_workload_latest_replicates
-order by series_order, replicate_index
-""",
-    "workload-latest-phases": """
-select *
-from sandbox_workload_latest_phases
-order by series_order, replicate_index, task_order
-""",
-    "workload-phase-summary": """
-select *
-from sandbox_workload_phase_summary
-order by series_order, task_order
-""",
-    "workload-summary": """
-select *
-from sandbox_workload_service_summary
-order by median_runtime_seconds, median_estimated_cost_usd
-""",
-    "workload-run-history": """
-select *
-from sandbox_workload_run_history
-order by generated_at, benchmark_run_id
-""",
-    "gpu-daily-coverage": """
-select *
-from gpu_h100_daily_coverage
-order by observed_date
-""",
-    "gpu-eligible-history": """
-select *
-from gpu_h100_eligible_history
-order by gold_observed_at
-""",
-    "combined-common-start": """
-select *
-from sandbox_gpu_cpu_common_start
-order by gold_observed_at
-""",
-    "relative-common-start": """
-select *
-from gpu_vm_sandbox_common_start
-order by observed_at
-""",
-    "vm-current": """
-select *
-from vm_capacity_current
-order by price_usd_per_hour, provider_label
-""",
-    "vm-fixed-rate": """
-select *
-from vm_capacity_fixed_rate
-order by observed_at
-""",
-    "vm-expanded-current": """
-select *
-from vm_capacity_expanded_current
-order by price_usd_per_hour, provider_label
-""",
-    "vm-observed-rate": """
-select *
-from vm_capacity_observed_rate
-order by observed_at
-""",
-    "vm-marketplace-current": """
-select *
-from vm_capacity_marketplace_current
-order by price_usd_per_hour, provider_label
-""",
-    "vm-sandbox-current": """
-select *
-from vm_sandbox_current_comparison
-order by vm_observed_at
-""",
-    "vm-discovery": """
-select *
-from vm_capacity_discovery_current
-order by series_order, provider_label
-""",
-    "utilization-ladder": """
-select *
-from compute_utilization_public_ladder
-order by stage_order
-""",
-}
-
 
 @dataclass(frozen=True)
 class SandboxCostBuild:
@@ -1320,19 +285,17 @@ class SandboxCostBuild:
 
 def validate_evidence(
     *,
-    price_path: Path = PRICE_EVIDENCE,
+    price_path: Path = WORKLOAD_COST_INPUTS,
     benchmark_path: Path = BENCHMARK_EVIDENCE,
     source_manifest_path: Path = SOURCE_MANIFEST,
-    utilization_path: Path = UTILIZATION_EVIDENCE,
 ) -> dict[str, Any]:
     """Validate formulas, matching rules, uniqueness, shape, and source retention."""
     prices_payload = _read_local_json(price_path)
     benchmarks_payload = _read_local_json(benchmark_path)
     source_manifest = _read_local_json(source_manifest_path)
-    utilization_payload = _read_local_json(utilization_path)
     _require_schema(
         prices_payload,
-        "sandbox_hourly_price_evidence_v1",
+        "sandbox_workload_cost_input_v1",
         price_path,
     )
     _require_schema(
@@ -1345,16 +308,8 @@ def validate_evidence(
         "sandbox_source_manifest_v1",
         source_manifest_path,
     )
-    _require_schema(
-        utilization_payload,
-        "compute_utilization_methodology_v1",
-        utilization_path,
-    )
 
     prices = _validate_prices(prices_payload.get("rows"))
-    utilization_rows = _validate_utilization_metric_definitions(
-        utilization_payload.get("rows")
-    )
     batches = _validate_batches(benchmarks_payload.get("batch_rows"), prices)
     replicates = _validate_replicates(
         benchmarks_payload.get("replicate_rows"),
@@ -1379,7 +334,6 @@ def validate_evidence(
         phases=phases,
         run_metadata=run_metadata,
         source_manifest=source_manifest,
-        utilization_rows=utilization_rows,
     )
 
 
@@ -1391,11 +345,10 @@ def _evidence_summary(
     phases: list[dict[str, Any]],
     run_metadata: list[dict[str, Any]],
     source_manifest: dict[str, Any],
-    utilization_rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
-        "price_observation_count": len(prices),
-        "price_service_count": len({row["series_id"] for row in prices}),
+        "price_input_count": len(prices),
+        "priced_service_count": len({row["series_id"] for row in prices}),
         "benchmark_batch_count": len(batches),
         "benchmark_replicate_count": len(replicates),
         "benchmark_phase_count": len(phases),
@@ -1409,14 +362,10 @@ def _evidence_summary(
             run_metadata,
             key=lambda row: row["generated_at"],
         )["benchmark_run_id"],
-        "fixed_members": sorted(
+        "priced_services": sorted(
             {row["series_id"] for row in prices if row["index_cohort"] == FIXED_COHORT}
         ),
         "source_file_count": len(source_manifest["files"]),
-        "utilization_metric_count": len(utilization_rows),
-        "utilization_public_stage_count": len(
-            [row for row in utilization_rows if row["publication_order"] is not None]
-        ),
     }
 
 
@@ -1424,70 +373,43 @@ def build_sandbox_cost(
     *,
     output_root: str = "data/sandbox-cost",
     dashboard_output_root: str | None = None,
-    gpu_history_ref: str | None = None,
-    vm_capacity_history_ref: str | None = None,
-    vm_capacity_current_ref: str | None = None,
-    vm_capacity_manifest_ref: str | None = None,
-    vm_discovery_history_ref: str | None = None,
-    vm_discovery_current_ref: str | None = None,
-    vm_discovery_manifest_ref: str | None = None,
     workload_benchmark_manifest_ref: str | None = None,
-    price_path: Path = PRICE_EVIDENCE,
+    price_path: Path = WORKLOAD_COST_INPUTS,
     benchmark_path: Path = BENCHMARK_EVIDENCE,
     source_manifest_path: Path = SOURCE_MANIFEST,
-    utilization_path: Path = UTILIZATION_EVIDENCE,
 ) -> SandboxCostBuild:
     """Build deterministic bronze, silver, gold, and optional public JSON."""
     with exclusive_lease(_join(output_root, "_locks/sandbox-cost-build.json")):
-        return _build_sandbox_cost_unlocked(
+        return _build_workload_cost_unlocked(
             output_root=output_root,
             dashboard_output_root=dashboard_output_root,
-            gpu_history_ref=gpu_history_ref,
-            vm_capacity_history_ref=vm_capacity_history_ref,
-            vm_capacity_current_ref=vm_capacity_current_ref,
-            vm_capacity_manifest_ref=vm_capacity_manifest_ref,
-            vm_discovery_history_ref=vm_discovery_history_ref,
-            vm_discovery_current_ref=vm_discovery_current_ref,
-            vm_discovery_manifest_ref=vm_discovery_manifest_ref,
             workload_benchmark_manifest_ref=workload_benchmark_manifest_ref,
             price_path=price_path,
             benchmark_path=benchmark_path,
             source_manifest_path=source_manifest_path,
-            utilization_path=utilization_path,
         )
 
 
-def _build_sandbox_cost_unlocked(
+def _build_workload_cost_unlocked(
     *,
     output_root: str,
     dashboard_output_root: str | None,
-    gpu_history_ref: str | None,
-    vm_capacity_history_ref: str | None,
-    vm_capacity_current_ref: str | None,
-    vm_capacity_manifest_ref: str | None,
-    vm_discovery_history_ref: str | None,
-    vm_discovery_current_ref: str | None,
-    vm_discovery_manifest_ref: str | None,
     workload_benchmark_manifest_ref: str | None,
     price_path: Path,
     benchmark_path: Path,
     source_manifest_path: Path,
-    utilization_path: Path,
 ) -> SandboxCostBuild:
+    """Build the maintained StarSling workload-cost product."""
     summary = validate_evidence(
         price_path=price_path,
         benchmark_path=benchmark_path,
         source_manifest_path=source_manifest_path,
-        utilization_path=utilization_path,
     )
     prices_payload = _read_local_json(price_path)
     benchmarks_payload = _read_local_json(benchmark_path)
     source_manifest = _read_local_json(source_manifest_path)
-    utilization_payload = _read_local_json(utilization_path)
     price_rows = _validate_prices(prices_payload["rows"])
-    utilization_rows = _validate_utilization_metric_definitions(
-        utilization_payload["rows"]
-    )
+
     workload_manifest_ref = workload_benchmark_manifest_ref or _join(
         output_root,
         "silver/_manifests/workload_benchmark/latest.json",
@@ -1513,204 +435,48 @@ def _build_sandbox_cost_unlocked(
             phases=phase_rows,
             run_metadata=run_metadata,
             source_manifest=source_manifest,
-            utilization_rows=utilization_rows,
         )
     else:
         batch_rows = list(benchmarks_payload["batch_rows"])
         replicate_rows = list(benchmarks_payload["replicate_rows"])
         phase_rows = list(benchmarks_payload["phase_rows"])
         run_metadata = list(benchmarks_payload["run_metadata"])
-    vm_history_rows = _load_optional_parquet(vm_capacity_history_ref)
-    vm_current_rows = _load_optional_parquet(vm_capacity_current_ref)
-    vm_source_manifest = _load_optional_json(vm_capacity_manifest_ref)
-    if bool(vm_history_rows) != bool(vm_current_rows):
-        raise ValueError("VM-capacity history and current refs must both contain rows")
-    if vm_history_rows:
-        validate_vm_capacity_history(
-            history_ref=str(vm_capacity_history_ref),
-            current_ref=str(vm_capacity_current_ref),
-        )
-    vm_discovery_history_rows = _load_optional_parquet(vm_discovery_history_ref)
-    vm_discovery_current_rows = _load_optional_parquet(vm_discovery_current_ref)
-    vm_discovery_manifest = _load_optional_json(vm_discovery_manifest_ref)
-    if bool(vm_discovery_history_rows) != bool(vm_discovery_current_rows):
-        raise ValueError("VM discovery history and current refs must both contain rows")
-    if vm_discovery_history_rows:
-        validate_vm_capacity_discovery_history(
-            history_ref=str(vm_discovery_history_ref),
-            current_ref=str(vm_discovery_current_ref),
-        )
-    vm_expanded_history_rows: list[dict[str, Any]] = []
-    vm_expanded_current_rows: list[dict[str, Any]] = []
-    vm_marketplace_history_rows = [
-        dict(row)
-        for row in vm_discovery_history_rows
-        if row.get("source_class") == "marketplace_indication"
-    ]
-    vm_marketplace_current_rows = [
-        dict(row)
-        for row in vm_discovery_current_rows
-        if row.get("source_class") == "marketplace_indication"
-    ]
-    if vm_history_rows and vm_discovery_history_rows:
-        vm_expanded_history_rows = _expanded_vm_rows(
-            [*vm_history_rows, *vm_discovery_history_rows]
-        )
-        vm_expanded_current_rows = _expanded_vm_rows(
-            [*vm_current_rows, *vm_discovery_current_rows]
-        )
 
     bronze_refs = {
-        "hourly_price_evidence": _join(
-            output_root, "bronze/hourly-price-evidence.json"
+        "workload_cost_inputs": _join(
+            output_root,
+            "bronze/workload-cost-inputs.json",
         ),
         "benchmark_evidence": _join(output_root, "bronze/benchmark-evidence.json"),
         "source_manifest": _join(output_root, "bronze/source-manifest.json"),
-        "utilization_methodology": _join(
-            output_root, "bronze/utilization-methodology.json"
-        ),
     }
-    write_json(bronze_refs["hourly_price_evidence"], prices_payload)
+    write_json(bronze_refs["workload_cost_inputs"], prices_payload)
     write_json(bronze_refs["benchmark_evidence"], benchmarks_payload)
     write_json(bronze_refs["source_manifest"], source_manifest)
-    write_json(bronze_refs["utilization_methodology"], utilization_payload)
 
     silver_refs = {
-        "sandbox_hourly_prices": _join(
-            output_root, "silver/sandbox_hourly_prices.parquet"
-        ),
         "sandbox_benchmark_batches": _join(
-            output_root, "silver/sandbox_benchmark_batches.parquet"
+            output_root,
+            "silver/sandbox_benchmark_batches.parquet",
         ),
         "sandbox_benchmark_replicates": _join(
-            output_root, "silver/sandbox_benchmark_replicates.parquet"
+            output_root,
+            "silver/sandbox_benchmark_replicates.parquet",
         ),
         "sandbox_benchmark_phases": _join(
-            output_root, "silver/sandbox_benchmark_phases.parquet"
+            output_root,
+            "silver/sandbox_benchmark_phases.parquet",
         ),
         "sandbox_benchmark_run_metadata": _join(
-            output_root, "silver/sandbox_benchmark_run_metadata.parquet"
-        ),
-        "compute_utilization_metric_definitions": _join(
-            output_root, "silver/compute_utilization_metric_definitions.parquet"
+            output_root,
+            "silver/sandbox_benchmark_run_metadata.parquet",
         ),
     }
-    if vm_history_rows:
-        silver_refs["vm_capacity_offer_history"] = _join(
-            output_root,
-            "silver/vm_capacity_offer_history.parquet",
-        )
-        silver_refs["vm_capacity_current"] = _join(
-            output_root,
-            "silver/vm_capacity_current.parquet",
-        )
-    if vm_discovery_history_rows:
-        silver_refs["vm_capacity_discovery_history"] = _join(
-            output_root,
-            "silver/vm_capacity_discovery_history.parquet",
-        )
-        silver_refs["vm_capacity_discovery_current"] = _join(
-            output_root,
-            "silver/vm_capacity_discovery_current.parquet",
-        )
-        if vm_marketplace_history_rows:
-            silver_refs["vm_capacity_marketplace_history"] = _join(
-                output_root,
-                "silver/vm_capacity_marketplace_history.parquet",
-            )
-            silver_refs["vm_capacity_marketplace_current"] = _join(
-                output_root,
-                "silver/vm_capacity_marketplace_current.parquet",
-            )
-    if vm_expanded_history_rows:
-        silver_refs["vm_capacity_expanded_history"] = _join(
-            output_root,
-            "silver/vm_capacity_expanded_history.parquet",
-        )
-        silver_refs["vm_capacity_expanded_current"] = _join(
-            output_root,
-            "silver/vm_capacity_expanded_current.parquet",
-        )
-    write_parquet_rows(silver_refs["sandbox_hourly_prices"], price_rows)
     write_parquet_rows(silver_refs["sandbox_benchmark_batches"], batch_rows)
-    write_parquet_rows(
-        silver_refs["sandbox_benchmark_replicates"],
-        replicate_rows,
-    )
+    write_parquet_rows(silver_refs["sandbox_benchmark_replicates"], replicate_rows)
     write_parquet_rows(silver_refs["sandbox_benchmark_phases"], phase_rows)
-    write_parquet_rows(
-        silver_refs["sandbox_benchmark_run_metadata"],
-        run_metadata,
-    )
-    write_parquet_rows(
-        silver_refs["compute_utilization_metric_definitions"],
-        utilization_rows,
-    )
-    if vm_history_rows:
-        write_parquet_rows(
-            silver_refs["vm_capacity_offer_history"],
-            vm_history_rows,
-        )
-        write_parquet_rows(
-            silver_refs["vm_capacity_current"],
-            vm_current_rows,
-        )
-    if vm_discovery_history_rows:
-        write_parquet_rows(
-            silver_refs["vm_capacity_discovery_history"],
-            vm_discovery_history_rows,
-        )
-        write_parquet_rows(
-            silver_refs["vm_capacity_discovery_current"],
-            vm_discovery_current_rows,
-        )
-        if vm_marketplace_history_rows:
-            write_parquet_rows(
-                silver_refs["vm_capacity_marketplace_history"],
-                vm_marketplace_history_rows,
-            )
-            write_parquet_rows(
-                silver_refs["vm_capacity_marketplace_current"],
-                vm_marketplace_current_rows,
-            )
-    if vm_expanded_history_rows:
-        write_parquet_rows(
-            silver_refs["vm_capacity_expanded_history"],
-            vm_expanded_history_rows,
-        )
-        write_parquet_rows(
-            silver_refs["vm_capacity_expanded_current"],
-            vm_expanded_current_rows,
-        )
+    write_parquet_rows(silver_refs["sandbox_benchmark_run_metadata"], run_metadata)
 
-    hourly_gold = _canonicalize_numeric_rows(
-        query_tables(
-            tables={"sandbox_hourly_prices": silver_refs["sandbox_hourly_prices"]},
-            sql="""
-select *
-from sandbox_hourly_prices
-order by series_order, observed_date, point_order
-""",
-        )
-    )
-    fixed_rate = _canonicalize_numeric_rows(
-        query_tables(
-            tables={"sandbox_hourly_prices": silver_refs["sandbox_hourly_prices"]},
-            sql=FIXED_RATE_SQL,
-        )
-    )
-    price_events = _canonicalize_numeric_rows(
-        query_tables(
-            tables={"sandbox_hourly_prices": silver_refs["sandbox_hourly_prices"]},
-            sql=PRICE_EVENTS_SQL,
-        )
-    )
-    current_rates = _canonicalize_numeric_rows(
-        query_tables(
-            tables={"sandbox_hourly_prices": silver_refs["sandbox_hourly_prices"]},
-            sql=CURRENT_RATES_SQL,
-        )
-    )
     workload_batches = _canonicalize_numeric_rows(
         query_tables(
             tables={
@@ -1767,375 +533,52 @@ order by series_order, observed_date, point_order
             sql=WORKLOAD_PHASE_SUMMARY_SQL,
         )
     )
-    utilization_ladder = _canonicalize_numeric_rows(
-        query_tables(
-            tables={
-                "compute_utilization_metric_definitions": silver_refs[
-                    "compute_utilization_metric_definitions"
-                ]
-            },
-            sql=UTILIZATION_LADDER_SQL,
-        )
-    )
-
-    vm_current: list[dict[str, Any]] = []
-    vm_fixed_rate: list[dict[str, Any]] = []
-    vm_expanded_current: list[dict[str, Any]] = []
-    vm_expanded_rate: list[dict[str, Any]] = []
-    vm_marketplace_current: list[dict[str, Any]] = []
-    vm_marketplace_history: list[dict[str, Any]] = []
-    vm_sandbox_comparison: list[dict[str, Any]] = []
-    vm_observed_rate_ref: str | None = None
-    if vm_history_rows:
-        vm_current = _canonicalize_numeric_rows(
-            query_tables(
-                tables={"vm_capacity_current": silver_refs["vm_capacity_current"]},
-                sql=VM_CURRENT_SQL,
-            )
-        )
-        vm_fixed_rate = _canonicalize_numeric_rows(
-            query_tables(
-                tables={
-                    "vm_capacity_offer_history": silver_refs[
-                        "vm_capacity_offer_history"
-                    ]
-                },
-                sql=VM_FIXED_RATE_SQL,
-            )
-        )
-        vm_fixed_rate_ref = _join(
-            output_root,
-            "gold/vm_capacity_fixed_rate.parquet",
-        )
-        sandbox_fixed_rate_ref = _join(
-            output_root,
-            "gold/sandbox_fixed_rate.parquet",
-        )
-        write_parquet_rows(vm_fixed_rate_ref, vm_fixed_rate)
-        write_parquet_rows(sandbox_fixed_rate_ref, fixed_rate)
-    if vm_expanded_history_rows:
-        vm_expanded_current = _canonicalize_numeric_rows(
-            query_tables(
-                tables={
-                    "vm_capacity_expanded_current": silver_refs[
-                        "vm_capacity_expanded_current"
-                    ]
-                },
-                sql=VM_EXPANDED_CURRENT_SQL,
-            )
-        )
-        vm_expanded_rate = _canonicalize_numeric_rows(
-            query_tables(
-                tables={
-                    "vm_capacity_expanded_history": silver_refs[
-                        "vm_capacity_expanded_history"
-                    ]
-                },
-                sql=VM_EXPANDED_RATE_SQL,
-            )
-        )
-    if vm_marketplace_history_rows:
-        vm_marketplace_current = _canonicalize_numeric_rows(
-            query_tables(
-                tables={
-                    "vm_capacity_marketplace_current": silver_refs[
-                        "vm_capacity_marketplace_current"
-                    ]
-                },
-                sql=VM_MARKETPLACE_CURRENT_SQL,
-            )
-        )
-        vm_marketplace_history = _canonicalize_numeric_rows(vm_marketplace_history_rows)
-
-    vm_observed_rate = vm_expanded_rate if vm_expanded_history_rows else vm_fixed_rate
-    if vm_observed_rate:
-        vm_observed_rate_ref = _join(
-            output_root,
-            "gold/vm_capacity_observed_rate.parquet",
-        )
-        sandbox_fixed_rate_ref = _join(
-            output_root,
-            "gold/sandbox_fixed_rate.parquet",
-        )
-        write_parquet_rows(vm_observed_rate_ref, vm_observed_rate)
-        write_parquet_rows(sandbox_fixed_rate_ref, fixed_rate)
-        vm_sandbox_comparison = _canonicalize_numeric_rows(
-            query_tables(
-                tables={
-                    "vm_capacity_observed_rate": vm_observed_rate_ref,
-                    "sandbox_fixed_rate": sandbox_fixed_rate_ref,
-                },
-                sql=VM_SANDBOX_COMPARISON_SQL,
-            )
-        )
-
-    gpu_rows, gpu_manifest = _load_gpu_history(gpu_history_ref)
-    combined: list[dict[str, Any]] = []
-    relative_common_start: list[dict[str, Any]] = []
-    gpu_daily_coverage: list[dict[str, Any]] = []
-    gpu_eligible_history: list[dict[str, Any]] = []
-    gpu_silver_ref: str | None = None
-    if gpu_rows:
-        gpu_silver_ref = _join(output_root, "silver/gpu_benchmark_history.parquet")
-        write_parquet_rows(gpu_silver_ref, gpu_rows)
-        fixed_rate_ref = _join(output_root, "gold/sandbox_fixed_rate.parquet")
-        gpu_daily_ref = _join(output_root, "gold/gpu_h100_daily_coverage.parquet")
-        gpu_eligible_ref = _join(output_root, "gold/gpu_h100_eligible_history.parquet")
-        write_parquet_rows(fixed_rate_ref, fixed_rate)
-        gpu_daily_coverage = _canonicalize_numeric_rows(
-            query_tables(
-                tables={"gpu_benchmark_history": gpu_silver_ref},
-                sql=GPU_DAILY_COVERAGE_SQL,
-            )
-        )
-        write_parquet_rows(gpu_daily_ref, gpu_daily_coverage)
-        gpu_eligible_history = _canonicalize_numeric_rows(
-            query_tables(
-                tables={"gpu_benchmark_history": gpu_silver_ref},
-                sql=GPU_ELIGIBLE_HISTORY_SQL,
-            )
-        )
-        write_parquet_rows(gpu_eligible_ref, gpu_eligible_history)
-        combined = _canonicalize_numeric_rows(
-            query_tables(
-                tables={
-                    "gpu_h100_eligible_history": gpu_eligible_ref,
-                    "sandbox_fixed_rate": fixed_rate_ref,
-                },
-                sql=COMBINED_COMMON_START_SQL,
-            )
-        )
-        if vm_observed_rate_ref:
-            relative_common_start = _canonicalize_numeric_rows(
-                query_tables(
-                    tables={
-                        "gpu_h100_eligible_history": gpu_eligible_ref,
-                        "sandbox_fixed_rate": fixed_rate_ref,
-                        "vm_capacity_observed_rate": vm_observed_rate_ref,
-                    },
-                    sql=RELATIVE_COMMON_START_SQL,
-                )
-            )
 
     table_refs = {
-        "sandbox_hourly_price_series": _join(
-            output_root, "gold/sandbox_hourly_price_series.parquet"
-        ),
-        "sandbox_price_events": _join(output_root, "gold/sandbox_price_events.parquet"),
-        "sandbox_current_rates": _join(
-            output_root, "gold/sandbox_current_rates.parquet"
-        ),
-        "sandbox_fixed_rate": _join(output_root, "gold/sandbox_fixed_rate.parquet"),
         "sandbox_workload_batch_history": _join(
-            output_root, "gold/sandbox_workload_batch_history.parquet"
+            output_root,
+            "gold/sandbox_workload_batch_history.parquet",
         ),
         "sandbox_workload_run_history": _join(
-            output_root, "gold/sandbox_workload_run_history.parquet"
+            output_root,
+            "gold/sandbox_workload_run_history.parquet",
         ),
         "sandbox_workload_latest_replicates": latest_replicates_ref,
         "sandbox_workload_latest_phases": latest_phases_ref,
         "sandbox_workload_phase_summary": _join(
-            output_root, "gold/sandbox_workload_phase_summary.parquet"
+            output_root,
+            "gold/sandbox_workload_phase_summary.parquet",
         ),
         "sandbox_workload_service_summary": _join(
-            output_root, "gold/sandbox_workload_service_summary.parquet"
-        ),
-        "gpu_h100_daily_coverage": _join(
-            output_root, "gold/gpu_h100_daily_coverage.parquet"
-        ),
-        "gpu_h100_eligible_history": _join(
-            output_root, "gold/gpu_h100_eligible_history.parquet"
-        ),
-        "sandbox_gpu_cpu_common_start": _join(
-            output_root, "gold/sandbox_gpu_cpu_common_start.parquet"
-        ),
-        "gpu_vm_sandbox_common_start": _join(
-            output_root, "gold/gpu_vm_sandbox_common_start.parquet"
-        ),
-        "compute_utilization_public_ladder": _join(
-            output_root, "gold/compute_utilization_public_ladder.parquet"
+            output_root,
+            "gold/sandbox_workload_service_summary.parquet",
         ),
     }
-    if vm_history_rows:
-        table_refs.update(
-            {
-                "vm_capacity_current": _join(
-                    output_root,
-                    "gold/vm_capacity_current.parquet",
-                ),
-                "vm_capacity_fixed_rate": _join(
-                    output_root,
-                    "gold/vm_capacity_fixed_rate.parquet",
-                ),
-            }
-        )
-    if vm_observed_rate:
-        table_refs.update(
-            {
-                "vm_capacity_observed_rate": _join(
-                    output_root,
-                    "gold/vm_capacity_observed_rate.parquet",
-                ),
-                "vm_sandbox_current_comparison": _join(
-                    output_root,
-                    "gold/vm_sandbox_current_comparison.parquet",
-                ),
-            }
-        )
-    if vm_expanded_history_rows:
-        table_refs.update(
-            {
-                "vm_capacity_expanded_current": _join(
-                    output_root,
-                    "gold/vm_capacity_expanded_current.parquet",
-                ),
-                "vm_capacity_expanded_rate": _join(
-                    output_root,
-                    "gold/vm_capacity_expanded_rate.parquet",
-                ),
-            }
-        )
-    if vm_discovery_history_rows:
-        table_refs["vm_capacity_discovery_current"] = _join(
-            output_root,
-            "gold/vm_capacity_discovery_current.parquet",
-        )
-    if vm_marketplace_history_rows:
-        table_refs.update(
-            {
-                "vm_capacity_marketplace_current": _join(
-                    output_root,
-                    "gold/vm_capacity_marketplace_current.parquet",
-                ),
-                "vm_capacity_marketplace_history": _join(
-                    output_root,
-                    "gold/vm_capacity_marketplace_history.parquet",
-                ),
-            }
-        )
-    write_parquet_rows(table_refs["sandbox_hourly_price_series"], hourly_gold)
-    write_parquet_rows(table_refs["sandbox_price_events"], price_events)
-    write_parquet_rows(table_refs["sandbox_current_rates"], current_rates)
-    write_parquet_rows(table_refs["sandbox_fixed_rate"], fixed_rate)
-    write_parquet_rows(
-        table_refs["sandbox_workload_batch_history"],
-        workload_batches,
-    )
+    write_parquet_rows(table_refs["sandbox_workload_batch_history"], workload_batches)
     write_parquet_rows(
         table_refs["sandbox_workload_run_history"],
         workload_run_history,
     )
-    write_parquet_rows(
-        table_refs["sandbox_workload_phase_summary"],
-        phase_summary,
-    )
+    write_parquet_rows(table_refs["sandbox_workload_phase_summary"], phase_summary)
     write_parquet_rows(
         table_refs["sandbox_workload_service_summary"],
         workload_summary,
     )
-    write_parquet_rows(table_refs["gpu_h100_daily_coverage"], gpu_daily_coverage)
-    write_parquet_rows(table_refs["gpu_h100_eligible_history"], gpu_eligible_history)
-    write_parquet_rows(table_refs["sandbox_gpu_cpu_common_start"], combined)
-    write_parquet_rows(
-        table_refs["gpu_vm_sandbox_common_start"],
-        relative_common_start,
-    )
-    write_parquet_rows(
-        table_refs["compute_utilization_public_ladder"],
-        utilization_ladder,
-    )
-    if vm_history_rows:
-        write_parquet_rows(table_refs["vm_capacity_current"], vm_current)
-        write_parquet_rows(
-            table_refs["vm_capacity_fixed_rate"],
-            vm_fixed_rate,
-        )
-    if vm_observed_rate:
-        write_parquet_rows(
-            table_refs["vm_sandbox_current_comparison"],
-            vm_sandbox_comparison,
-        )
-        write_parquet_rows(
-            table_refs["vm_capacity_observed_rate"],
-            vm_observed_rate,
-        )
-    if vm_expanded_history_rows:
-        write_parquet_rows(
-            table_refs["vm_capacity_expanded_current"],
-            vm_expanded_current,
-        )
-        write_parquet_rows(
-            table_refs["vm_capacity_expanded_rate"],
-            vm_expanded_rate,
-        )
-    if vm_discovery_history_rows:
-        write_parquet_rows(
-            table_refs["vm_capacity_discovery_current"],
-            vm_discovery_current_rows,
-        )
-    if vm_marketplace_history_rows:
-        write_parquet_rows(
-            table_refs["vm_capacity_marketplace_current"],
-            vm_marketplace_current,
-        )
-        write_parquet_rows(
-            table_refs["vm_capacity_marketplace_history"],
-            vm_marketplace_history,
-        )
 
     query_hashes = {
-        "fixed_rate": _sha256_text(FIXED_RATE_SQL),
-        "price_events": _sha256_text(PRICE_EVENTS_SQL),
-        "current_rates": _sha256_text(CURRENT_RATES_SQL),
         "workload_batches": _sha256_text(WORKLOAD_BATCH_SQL),
         "workload_run_history": _sha256_text(WORKLOAD_RUN_SUMMARY_SQL),
         "workload_replicates": _sha256_text(WORKLOAD_LATEST_REPLICATES_SQL),
         "workload_phases": _sha256_text(WORKLOAD_LATEST_PHASES_SQL),
         "workload_phase_summary": _sha256_text(WORKLOAD_PHASE_SUMMARY_SQL),
         "workload_summary": _sha256_text(WORKLOAD_SUMMARY_SQL),
-        "gpu_daily_coverage": _sha256_text(GPU_DAILY_COVERAGE_SQL),
-        "gpu_eligible_history": _sha256_text(GPU_ELIGIBLE_HISTORY_SQL),
-        "combined": _sha256_text(COMBINED_COMMON_START_SQL),
-        "relative_common_start": _sha256_text(RELATIVE_COMMON_START_SQL),
-        "vm_current": _sha256_text(VM_CURRENT_SQL),
-        "vm_fixed_rate": _sha256_text(VM_FIXED_RATE_SQL),
-        "vm_expanded_current": _sha256_text(VM_EXPANDED_CURRENT_SQL),
-        "vm_expanded_rate": _sha256_text(VM_EXPANDED_RATE_SQL),
-        "vm_discovery_current": _sha256_text(VM_DISCOVERY_CURRENT_SQL),
-        "vm_marketplace_current": _sha256_text(VM_MARKETPLACE_CURRENT_SQL),
-        "vm_sandbox_comparison": _sha256_text(VM_SANDBOX_COMPARISON_SQL),
-        "utilization_ladder": _sha256_text(UTILIZATION_LADDER_SQL),
     }
     input_hash = _content_hash(
         {
-            "prices": prices_payload,
+            "cost_inputs": prices_payload,
             "benchmarks": benchmarks_payload,
             "source_manifest": source_manifest,
-            "utilization_methodology": utilization_payload,
-            "gpu_rows": gpu_rows,
-            "gpu_source_manifest": _public_gpu_source_manifest(gpu_manifest),
-            "vm_capacity_history": vm_history_rows,
-            "vm_capacity_current": vm_current_rows,
-            "vm_capacity_source_manifest": _public_vm_source_manifest(
-                vm_source_manifest
-            ),
-            "vm_discovery_history": vm_discovery_history_rows,
-            "vm_discovery_current": vm_discovery_current_rows,
-            "vm_discovery_manifest": _public_vm_discovery_manifest(
-                vm_discovery_manifest
-            ),
             "target_shape": TARGET_SHAPE,
-            "vm_target_shape": VM_TARGET_SHAPE,
-            "vm_capacity_cohort": VM_CAPACITY_COHORT_ID,
-            "vm_capacity_methodology": VM_CAPACITY_METHODOLOGY,
-            "vm_expanded_cohort": VM_EXPANDED_COHORT_ID,
-            "vm_expanded_methodology": VM_EXPANDED_METHODOLOGY,
-            "vm_expanded_members": VM_EXPANDED_PROVIDER_ORDER,
-            "vm_discovery_universe": VM_DISCOVERY_UNIVERSE_ID,
-            "vm_discovery_methodology": VM_DISCOVERY_METHODOLOGY,
-            "fixed_rate_cohort": FIXED_COHORT,
-            "sandbox_rate_methodology": SANDBOX_RATE_METHODOLOGY,
-            "gpu_comparison_min_providers": GPU_COMPARISON_MIN_PROVIDERS,
             "numeric_decimal_places": NUMERIC_DECIMAL_PLACES,
             "query_hashes": query_hashes,
         }
@@ -2144,11 +587,6 @@ order by series_order, observed_date, point_order
     built_at = _latest_timestamp(
         prices_payload.get("retrieved_at"),
         benchmarks_payload.get("retrieved_at"),
-        utilization_payload.get("retrieved_at"),
-        gpu_manifest.get("dashboard_exported_at"),
-        gpu_manifest.get("observed_at"),
-        vm_source_manifest.get("checked_at"),
-        vm_discovery_manifest.get("checked_at"),
     )
     silver_refs = _promote_generation_refs(
         refs=silver_refs,
@@ -2163,37 +601,20 @@ order by series_order, observed_date, point_order
         build_id=build_id,
     )
     row_counts = {
-        "sandbox_hourly_price_series": len(hourly_gold),
-        "sandbox_price_events": len(price_events),
-        "sandbox_current_rates": len(current_rates),
-        "sandbox_fixed_rate": len(fixed_rate),
         "sandbox_workload_batch_history": len(workload_batches),
         "sandbox_workload_run_history": len(workload_run_history),
         "sandbox_workload_latest_replicates": len(latest_replicates),
         "sandbox_workload_latest_phases": len(latest_phases),
         "sandbox_workload_phase_summary": len(phase_summary),
         "sandbox_workload_service_summary": len(workload_summary),
-        "gpu_h100_daily_coverage": len(gpu_daily_coverage),
-        "gpu_h100_eligible_history": len(gpu_eligible_history),
-        "sandbox_gpu_cpu_common_start": len(combined),
-        "gpu_vm_sandbox_common_start": len(relative_common_start),
-        "vm_capacity_current": len(vm_current),
-        "vm_capacity_fixed_rate": len(vm_fixed_rate),
-        "vm_capacity_expanded_current": len(vm_expanded_current),
-        "vm_capacity_expanded_rate": len(vm_expanded_rate),
-        "vm_capacity_marketplace_current": len(vm_marketplace_current),
-        "vm_capacity_marketplace_history": len(vm_marketplace_history),
-        "vm_capacity_discovery_current": len(vm_discovery_current_rows),
-        "vm_capacity_observed_rate": len(vm_observed_rate),
-        "vm_sandbox_current_comparison": len(vm_sandbox_comparison),
-        "compute_utilization_public_ladder": len(utilization_ladder),
     }
+    sql_models = gold_sql_models(table_refs)
     manifest_ref = _join(
         output_root,
-        (f"_manifests/sandbox_cost/date={built_at[:10]}/build_id={build_id}.json"),
+        f"_manifests/sandbox_cost/date={built_at[:10]}/build_id={build_id}.json",
     )
     manifest = {
-        "manifest_version": "sandbox_cost_gold_v5",
+        "manifest_version": "sandbox_workload_cost_gold_v1",
         "manifest_ref": manifest_ref,
         "build_id": build_id,
         "built_at": built_at,
@@ -2201,72 +622,56 @@ order by series_order, observed_date, point_order
         "source_repository": source_manifest["source_repository"],
         "source_commit": source_manifest["source_commit"],
         "target_shape": TARGET_SHAPE,
-        "vm_target_shape": VM_TARGET_SHAPE,
         "source_reviewed_at": prices_payload.get("retrieved_at"),
         "benchmark_retrieved_at": benchmarks_payload.get("retrieved_at"),
-        "fixed_rate_cohort": FIXED_COHORT,
-        "sandbox_rate_methodology": SANDBOX_RATE_METHODOLOGY,
-        "vm_capacity_cohort": VM_CAPACITY_COHORT_ID,
-        "vm_capacity_methodology": VM_CAPACITY_METHODOLOGY,
-        "vm_expanded_cohort": VM_EXPANDED_COHORT_ID,
-        "vm_expanded_methodology": VM_EXPANDED_METHODOLOGY,
-        "vm_expanded_members": list(VM_EXPANDED_PROVIDER_ORDER),
-        "vm_discovery_universe": VM_DISCOVERY_UNIVERSE_ID,
-        "vm_discovery_methodology": VM_DISCOVERY_METHODOLOGY,
-        "gpu_comparison_min_providers": GPU_COMPARISON_MIN_PROVIDERS,
         "numeric_decimal_places": NUMERIC_DECIMAL_PLACES,
         "query_ids": {
-            "fixed_rate": FIXED_RATE_QUERY_ID,
-            "price_events": PRICE_EVENTS_QUERY_ID,
-            "current_rates": CURRENT_RATES_QUERY_ID,
             "workload_batches": WORKLOAD_BATCH_QUERY_ID,
             "workload_run_history": WORKLOAD_RUN_SUMMARY_QUERY_ID,
             "workload_replicates": WORKLOAD_REPLICATE_QUERY_ID,
             "workload_phases": WORKLOAD_PHASE_QUERY_ID,
             "workload_phase_summary": WORKLOAD_PHASE_SUMMARY_QUERY_ID,
             "workload_summary": WORKLOAD_SUMMARY_QUERY_ID,
-            "gpu_daily_coverage": GPU_DAILY_QUERY_ID,
-            "gpu_eligible_history": GPU_ELIGIBLE_QUERY_ID,
-            "combined": COMBINED_QUERY_ID,
-            "relative_common_start": RELATIVE_COMMON_START_QUERY_ID,
-            "vm_current": VM_CURRENT_QUERY_ID,
-            "vm_fixed_rate": VM_FIXED_RATE_QUERY_ID,
-            "vm_expanded_current": VM_EXPANDED_CURRENT_QUERY_ID,
-            "vm_expanded_rate": VM_EXPANDED_RATE_QUERY_ID,
-            "vm_discovery_current": VM_DISCOVERY_CURRENT_QUERY_ID,
-            "vm_marketplace_current": VM_MARKETPLACE_CURRENT_QUERY_ID,
-            "vm_sandbox_comparison": VM_SANDBOX_COMPARISON_QUERY_ID,
-            "utilization_ladder": UTILIZATION_LADDER_QUERY_ID,
         },
         "query_hashes": query_hashes,
+        "sql_models": sql_models,
         "bronze_refs": bronze_refs,
-        "silver_refs": {
-            **silver_refs,
-            **({"gpu_benchmark_history": gpu_silver_ref} if gpu_silver_ref else {}),
-        },
+        "silver_refs": silver_refs,
         "table_refs": table_refs,
         "row_counts": row_counts,
         "evidence_summary": summary,
-        "gpu_source_manifest": gpu_manifest or None,
-        "vm_capacity_source_manifest": vm_source_manifest or None,
-        "vm_discovery_source_manifest": vm_discovery_manifest or None,
+        "benchmark_credit": {
+            "name": "StarSling HPC Sandbox Benchmark",
+            "url": "https://github.com/starslingdev/hpc-sandbox-benchmarks",
+        },
     }
     write_json(manifest_ref, manifest)
-    write_json(
-        _join(output_root, "_manifests/sandbox_cost/latest.json"),
-        manifest,
-    )
+    write_json(_join(output_root, "_manifests/sandbox_cost/latest.json"), manifest)
     write_json(_join(output_root, "gold/manifest.json"), manifest)
+
+    for retired_ref in (
+        "bronze/hourly-price-evidence.json",
+        "bronze/utilization-methodology.json",
+        "silver/sandbox_hourly_prices.parquet",
+        "silver/compute_utilization_metric_definitions.parquet",
+        "gold/sandbox_hourly_price_series.parquet",
+        "gold/sandbox_price_events.parquet",
+        "gold/sandbox_current_rates.parquet",
+        "gold/sandbox_fixed_rate.parquet",
+        "gold/sandbox_gpu_cpu_common_start.parquet",
+        "gold/gpu_vm_sandbox_common_start.parquet",
+        "gold/compute_utilization_public_ladder.parquet",
+        "gold/vm_sandbox_current_comparison.parquet",
+    ):
+        delete_uri(_join(output_root, retired_ref))
 
     public_ref = None
     if dashboard_output_root:
+        for retired_ref in ("sandbox/rates.json", "sandbox/relative.json"):
+            delete_uri(_join(dashboard_output_root, retired_ref))
         public_ref = _join(dashboard_output_root, "sandbox-cost.json")
         public_payload = _public_payload(
             manifest=manifest,
-            hourly_rows=hourly_gold,
-            fixed_rate=fixed_rate,
-            price_events=price_events,
-            current_rates=current_rates,
             workload_batches=workload_batches,
             workload_run_history=workload_run_history,
             latest_replicates=latest_replicates,
@@ -2274,45 +679,19 @@ order by series_order, observed_date, point_order
             phase_summary=phase_summary,
             workload_summary=workload_summary,
             run_metadata=run_metadata,
-            gpu_daily_coverage=gpu_daily_coverage,
-            combined=combined,
-            relative_common_start=relative_common_start,
-            vm_current=vm_current,
-            vm_fixed_rate=vm_fixed_rate,
-            vm_expanded_current=vm_expanded_current,
-            vm_expanded_rate=vm_expanded_rate,
-            vm_marketplace_current=vm_marketplace_current,
-            vm_marketplace_history=vm_marketplace_history,
-            vm_sandbox_comparison=vm_sandbox_comparison,
-            utilization_ladder=utilization_ladder,
         )
-        rates_card = sandbox_rate_view(public_payload)
-        workload_card = sandbox_workload_view(public_payload)
-        relative_card = sandbox_relative_view(public_payload)
-        sandbox_publications = publish_sandbox_market_publications(
+        sandbox_card = sandbox_workload_view(public_payload)
+        publication = publish_sandbox_workload_publication(
             output_root=dashboard_output_root,
-            rates_card=rates_card,
-            workload_card=workload_card,
-            relative_card=relative_card,
+            workload_card=sandbox_card,
         )
         public_payload["publications"] = {
-            "manifest_ref": sandbox_publications["manifest_ref"],
-            "revision": sandbox_publications["revision"],
-            "publication_count": sandbox_publications["publication_count"],
+            "manifest_ref": publication["manifest_ref"],
+            "revision": publication["revision"],
+            "publication_count": publication["publication_count"],
         }
         write_json(public_ref, public_payload)
-        write_json(
-            _join(dashboard_output_root, "sandbox/rates.json"),
-            rates_card,
-        )
-        write_json(
-            _join(dashboard_output_root, "sandbox/workload.json"),
-            workload_card,
-        )
-        write_json(
-            _join(dashboard_output_root, "sandbox/relative.json"),
-            relative_card,
-        )
+        write_json(_join(dashboard_output_root, "sandbox/workload.json"), sandbox_card)
 
     return SandboxCostBuild(
         build_id=build_id,
@@ -2322,47 +701,6 @@ order by series_order, observed_date, point_order
         table_refs=table_refs,
         row_counts=row_counts,
     )
-
-
-def query_sandbox_gold(
-    *,
-    output_root: str,
-    query_id: str,
-    limit: int | None = None,
-) -> dict[str, Any]:
-    """Run an allowlisted DataFusion query over maintained sandbox gold tables."""
-    if query_id not in GOLD_QUERIES:
-        choices = ", ".join(sorted(GOLD_QUERIES))
-        raise ValueError(
-            f"Unknown sandbox query {query_id!r}; choose one of: {choices}"
-        )
-    manifest = read_latest_sandbox_manifest(output_root)
-    required_table = {
-        "vm-current": "vm_capacity_current",
-        "vm-fixed-rate": "vm_capacity_fixed_rate",
-        "vm-expanded-current": "vm_capacity_expanded_current",
-        "vm-observed-rate": "vm_capacity_observed_rate",
-        "vm-marketplace-current": "vm_capacity_marketplace_current",
-        "vm-sandbox-current": "vm_sandbox_current_comparison",
-        "vm-discovery": "vm_capacity_discovery_current",
-    }.get(query_id)
-    if required_table and required_table not in manifest["table_refs"]:
-        raise ValueError(
-            f"Query {query_id!r} is unavailable because VM-capacity data "
-            "has not been refreshed for this build"
-        )
-    sql = GOLD_QUERIES[query_id].strip()
-    if limit is not None:
-        if limit < 1:
-            raise ValueError("limit must be positive")
-        sql = f"{sql.rstrip(';')}\nlimit {int(limit)}"
-    rows = query_tables(tables=manifest["table_refs"], sql=sql)
-    return {
-        "query_id": query_id,
-        "engine": "datafusion",
-        "build_id": manifest["build_id"],
-        "rows": rows,
-    }
 
 
 def read_latest_sandbox_manifest(output_root: str) -> dict[str, Any]:
@@ -2381,7 +719,7 @@ def check_public_payload_freshness(
     now: datetime | str | None = None,
     max_age_hours: float = 2.5,
 ) -> dict[str, Any]:
-    """Check that the public snapshot and latest complete VM print are current."""
+    """Check the public workload-cost snapshot and its measured source run."""
     if max_age_hours <= 0:
         raise ValueError("max_age_hours must be positive")
     checked_at = (
@@ -2397,47 +735,33 @@ def check_public_payload_freshness(
     if not isinstance(manifest, Mapping):
         raise ValueError("Public snapshot has no manifest object")
     built_at = _as_utc(_parse_timestamp(manifest.get("built_at"), "public built_at"))
-    vm_capacity = payload.get("vm_capacity")
-    if not isinstance(vm_capacity, Mapping):
-        raise ValueError("Public snapshot has no vm_capacity object")
-    vm_rows = vm_capacity.get("observed_market_rate") or []
-    if not isinstance(vm_rows, list) or not vm_rows:
-        raise ValueError("Public snapshot has no complete VM observations")
-    latest_vm = max(
-        _as_utc(_parse_timestamp(row.get("observed_at"), "VM observed_at"))
-        for row in vm_rows
-        if isinstance(row, Mapping)
+    workload = payload.get("workload")
+    if not isinstance(workload, Mapping):
+        raise ValueError("Public snapshot has no measured workload object")
+    latest_run = workload.get("latest_run")
+    if not isinstance(latest_run, Mapping):
+        raise ValueError("Public snapshot has no latest measured workload run")
+    measured_at = _as_utc(
+        _parse_timestamp(latest_run.get("generated_at"), "workload generated_at")
     )
 
     snapshot_age_hours = (checked_at - built_at).total_seconds() / 3600
-    vm_age_hours = (checked_at - latest_vm).total_seconds() / 3600
-    source_manifests = [
-        manifest.get("vm_capacity_source_manifest"),
-        manifest.get("vm_discovery_source_manifest"),
-    ]
-    partial_sources = [
-        str(source.get("run_id") or "unknown")
-        for source in source_manifests
-        if isinstance(source, Mapping)
-        and source.get("status")
-        and source.get("status") != "ok"
-    ]
     problems: list[str] = []
     if snapshot_age_hours > max_age_hours:
         problems.append("public_snapshot_stale")
-    if vm_age_hours > max_age_hours:
-        problems.append("vm_benchmark_stale")
-    if partial_sources:
-        problems.append("partial_vm_source_check")
+    if measured_at > checked_at:
+        problems.append("measured_run_is_in_the_future")
     return {
         "status": "fail" if problems else "ok",
         "checked_at": checked_at.isoformat(),
         "max_age_hours": max_age_hours,
         "snapshot_built_at": built_at.isoformat(),
         "snapshot_age_hours": round(snapshot_age_hours, 3),
-        "latest_complete_vm_observed_at": latest_vm.isoformat(),
-        "latest_complete_vm_age_hours": round(vm_age_hours, 3),
-        "partial_source_runs": partial_sources,
+        "latest_measured_run_at": measured_at.isoformat(),
+        "latest_measured_run_age_hours": round(
+            (checked_at - measured_at).total_seconds() / 3600,
+            3,
+        ),
         "problems": problems,
     }
 
@@ -2446,76 +770,6 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
-
-
-def _validate_utilization_metric_definitions(
-    raw_rows: Any,
-) -> list[dict[str, Any]]:
-    if not isinstance(raw_rows, list) or not raw_rows:
-        raise ValueError("Utilization methodology must contain a non-empty rows list")
-    rows: list[dict[str, Any]] = []
-    metric_ids: set[str] = set()
-    source_ids: set[str] = set()
-    publication_orders: set[int] = set()
-    publication_stages: dict[int, str] = {}
-    required_text = UTILIZATION_FIELDS - {"publication_order"}
-    for position, raw in enumerate(raw_rows):
-        row = _strict_row(
-            raw,
-            UTILIZATION_FIELDS,
-            f"utilization metric row {position}",
-        )
-        for field in required_text:
-            if not isinstance(row[field], str) or not row[field].strip():
-                raise ValueError(
-                    f"Utilization metric row {position} has no {field}"
-                )
-        metric_id = str(row["metric_id"])
-        if metric_id in metric_ids:
-            raise ValueError(f"Duplicate utilization metric ID: {metric_id}")
-        metric_ids.add(metric_id)
-        source_id = str(row["source_id"])
-        if source_id in source_ids:
-            raise ValueError(f"Duplicate utilization source ID: {source_id}")
-        source_ids.add(source_id)
-        if row["measurement_family"] not in UTILIZATION_FAMILIES:
-            raise ValueError(
-                f"Unknown utilization measurement family for {metric_id}: "
-                f"{row['measurement_family']}"
-            )
-        if not str(row["source_url"]).startswith("https://"):
-            raise ValueError(f"Utilization metric {metric_id} has no HTTPS source")
-        if row["recommended_field_name"] == "utilization":
-            raise ValueError(
-                f"Utilization metric {metric_id} uses an ambiguous field name"
-            )
-        order = row["publication_order"]
-        if order is not None:
-            if not isinstance(order, int) or isinstance(order, bool) or order < 1:
-                raise ValueError(
-                    f"Invalid utilization publication order for {metric_id}"
-                )
-            if order in publication_orders:
-                raise ValueError(
-                    f"Duplicate utilization publication order: {order}"
-                )
-            publication_orders.add(order)
-            publication_stages[order] = str(row["stage_id"])
-        rows.append(row)
-
-    expected_stages = {
-        1: "available",
-        2: "rented",
-        3: "allocated",
-        4: "active",
-        5: "productive",
-    }
-    if publication_stages != expected_stages:
-        raise ValueError(
-            "Utilization publication ladder must be exactly "
-            "available, rented, allocated, active, productive"
-        )
-    return rows
 
 
 def _validate_prices(raw_rows: Any) -> list[dict[str, Any]]:
@@ -2873,10 +1127,6 @@ def _validate_source_manifest(
 def _public_payload(
     *,
     manifest: dict[str, Any],
-    hourly_rows: list[dict[str, Any]],
-    fixed_rate: list[dict[str, Any]],
-    price_events: list[dict[str, Any]],
-    current_rates: list[dict[str, Any]],
     workload_batches: list[dict[str, Any]],
     workload_run_history: list[dict[str, Any]],
     latest_replicates: list[dict[str, Any]],
@@ -2884,80 +1134,20 @@ def _public_payload(
     phase_summary: list[dict[str, Any]],
     workload_summary: list[dict[str, Any]],
     run_metadata: list[dict[str, Any]],
-    gpu_daily_coverage: list[dict[str, Any]],
-    combined: list[dict[str, Any]],
-    relative_common_start: list[dict[str, Any]],
-    vm_current: list[dict[str, Any]],
-    vm_fixed_rate: list[dict[str, Any]],
-    vm_expanded_current: list[dict[str, Any]],
-    vm_expanded_rate: list[dict[str, Any]],
-    vm_marketplace_current: list[dict[str, Any]],
-    vm_marketplace_history: list[dict[str, Any]],
-    vm_sandbox_comparison: list[dict[str, Any]],
-    utilization_ladder: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    expanded_provider_ids = {
-        str(row.get("provider_id") or "") for row in vm_expanded_current
-    }
-    expanded_vm_available = bool(vm_expanded_rate) and expanded_provider_ids == set(
-        VM_EXPANDED_PROVIDER_ORDER
-    )
-    public_vm_current = [
-        _public_vm_row(row)
-        for row in (vm_expanded_current if expanded_vm_available else vm_current)
-    ]
-    public_vm_marketplace = [
-        _public_vm_marketplace_row(row) for row in vm_marketplace_current
-    ]
-    public_vm_marketplace_history = [
-        _public_vm_marketplace_row(row) for row in vm_marketplace_history
-    ]
-    vm_members = (
-        list(VM_EXPANDED_PROVIDER_ORDER)
-        if expanded_vm_available
-        else list(VM_PROVIDER_ORDER)
-    )
-    vm_methodology = (
-        VM_EXPANDED_METHODOLOGY if expanded_vm_available else VM_CAPACITY_METHODOLOGY
-    )
-    vm_cohort = (
-        VM_EXPANDED_COHORT_ID if expanded_vm_available else VM_CAPACITY_COHORT_ID
-    )
-    vm_observed_rate = vm_expanded_rate if expanded_vm_available else vm_fixed_rate
     source_rows: dict[str, dict[str, str]] = {}
-    for row in hourly_rows:
-        source_rows[row["source_url"]] = {
-            "label": row["source_label"],
-            "url": row["source_url"],
-        }
     for row in workload_batches:
         source_rows[row["benchmark_source_url"]] = {
             "label": f"StarSling batch {row['benchmark_run_id']}",
             "url": row["benchmark_source_url"],
         }
-    for row in public_vm_current:
-        source_rows[row["source_url"]] = {
-            "label": f"{row['provider_label']} public VM price API",
-            "url": row["source_url"],
-        }
-        source_rows[row["spec_url"]] = {
-            "label": f"{row['provider_label']} machine specification",
-            "url": row["spec_url"],
-        }
-    for row in public_vm_marketplace:
-        source_rows[row["source_url"]] = {
-            "label": f"{row['provider_label']} marketplace estimate",
-            "url": row["source_url"],
-        }
-        source_rows[row["spec_url"]] = {
-            "label": f"{row['provider_label']} request specification",
-            "url": row["spec_url"],
-        }
-    for row in utilization_ladder:
-        source_rows[row["source_url"]] = {
-            "label": row["source_label"],
-            "url": row["source_url"],
-        }
+    for row in latest_replicates:
+        price_url = str(row.get("price_source_url") or "").strip()
+        if price_url:
+            source_rows[price_url] = {
+                "label": f"{row['series_label']} cost input",
+                "url": price_url,
+            }
     latest_run = max(run_metadata, key=lambda row: row["generated_at"])
     return {
         "manifest": {
@@ -2965,101 +1155,20 @@ def _public_payload(
             "build_id": manifest["build_id"],
             "built_at": manifest["built_at"],
             "target_shape": manifest["target_shape"],
-            "vm_target_shape": manifest["vm_target_shape"],
             "source_reviewed_at": manifest["source_reviewed_at"],
             "benchmark_retrieved_at": manifest["benchmark_retrieved_at"],
-            "fixed_rate_cohort": manifest["fixed_rate_cohort"],
-            "sandbox_rate_methodology": manifest["sandbox_rate_methodology"],
-            "vm_capacity_cohort": manifest["vm_capacity_cohort"],
-            "vm_capacity_methodology": manifest["vm_capacity_methodology"],
-            "vm_expanded_cohort": manifest["vm_expanded_cohort"],
-            "vm_expanded_methodology": manifest["vm_expanded_methodology"],
-            "vm_expanded_members": manifest["vm_expanded_members"],
-            "gpu_comparison_min_providers": manifest["gpu_comparison_min_providers"],
             "numeric_decimal_places": manifest["numeric_decimal_places"],
-            "query_ids": manifest["query_ids"],
-            "row_counts": manifest["row_counts"],
-            "gpu_source_manifest": _public_gpu_source_manifest(
-                manifest["gpu_source_manifest"]
-            ),
-            "vm_capacity_source_manifest": _public_vm_source_manifest(
-                manifest["vm_capacity_source_manifest"]
-            ),
-            "vm_discovery_source_manifest": _public_vm_discovery_manifest(
-                manifest["vm_discovery_source_manifest"]
-            ),
-        },
-        "hourly_price": {
-            "title": (
-                "Public hourly cost scenario for four processors and 8 GiB of memory"
-            ),
-            "unit": "USD per hour",
-            "rate_basis": "processor and memory rate card only",
-            "comparison_scope": (
-                "One hour at the audited four-processor, 8 GiB target. "
-                "Actual-use meters assume those quantities are used for the "
-                "full hour; reserved meters price the requested allocation. "
-                "CPU model, isolation, burst policy, and delivered performance "
-                "are not normalized by the rate series."
-            ),
-            "methodology_version": SANDBOX_RATE_METHODOLOGY,
-            "rows": hourly_rows,
-            "current_cross_section": current_rates,
-            "fixed_cohort_rate": fixed_rate,
-            # Keep the old field for one publication cycle while article caches expire.
-            "fixed_membership_average": fixed_rate,
-            "price_events": price_events,
-        },
-        "vm_capacity": {
-            "title": (
-                "Observed public VM offer rates for four vCPUs and 8 GiB of memory"
-            ),
-            "unit": "USD per hour",
-            "rate_basis": "Linux on-demand public offer",
-            "comparison_scope": (
-                "One exact four-vCPU, 8-GiB public offer from each of seven "
-                "vendors. Regions, CPU models, tenancy, bundled storage, "
-                "network, and delivered performance remain vendor-specific."
-                if expanded_vm_available
-                else "One exact four-vCPU, 8-GiB public offer from each fixed "
-                "provider. Regions, CPU models, tenancy, bundled storage, "
-                "network, and delivered performance remain provider-specific."
-            ),
-            "history_scope": (
-                "One complete cross-section is retained for every successful "
-                "hourly check, including hours when prices do not change. "
-                "History begins with the first automated source check; no "
-                "earlier observations are inferred."
-            ),
-            "currency_scope": (
-                "USD offers are retained directly. Scaleway EUR is converted "
-                "with the retained ECB EUR/USD reference observation."
-            ),
-            "methodology_version": vm_methodology,
-            "cohort_id": vm_cohort,
-            "members": vm_members,
-            "fixed_members": vm_members,
-            "current_cross_section": public_vm_current,
-            "observed_market_rate": vm_observed_rate,
-            # Compatibility alias for clients that still read the old field.
-            # It always follows the active cohort declared above.
-            "fixed_cohort_rate": vm_observed_rate,
-            "legacy_fixed_cohort_rate": vm_fixed_rate,
-            "marketplace_indications": public_vm_marketplace,
-            "marketplace_history": public_vm_marketplace_history,
-            "marketplace_scope": (
-                "Marketplace indications are shown separately and are not "
-                "included in the seven-vendor median. The current Akash value "
-                "is a modeled request estimate, not a bid or executed lease."
-            ),
-            "sandbox_comparison": vm_sandbox_comparison,
+            "row_counts": {
+                key: value
+                for key, value in manifest["row_counts"].items()
+                if key.startswith("sandbox_workload_")
+            },
         },
         "workload": {
-            "title": (
-                "One CI workload: measured phase time and estimated "
-                "processor-and-memory cost"
-            ),
-            "benchmark": "StarSling HPC Sandbox Benchmark: Better Auth",
+            "title": ("Latest measured cost of one pinned software workload"),
+            "benchmark": "StarSling HPC Sandbox Benchmark",
+            "benchmark_url": ("https://github.com/starslingdev/hpc-sandbox-benchmarks"),
+            "workload": "Better Auth ten-task developer workflow",
             "unit": "USD",
             "runtime_unit": "seconds",
             "cost_scope": "processor_and_memory_only",
@@ -3098,11 +1207,7 @@ def _public_payload(
             ),
             "fixed_service_count": WORKLOAD_FIXED_SERVICE_COUNT,
             "complete_run_count": len(
-                [
-                    row
-                    for row in workload_run_history
-                    if row["fixed_cohort_complete"]
-                ]
+                [row for row in workload_run_history if row["fixed_cohort_complete"]]
             ),
             "latest_run": latest_run,
             "latest_replicate_count": len(latest_replicates),
@@ -3120,342 +1225,8 @@ def _public_payload(
             "phase_summary": phase_summary,
             "service_summary": workload_summary,
         },
-        "combined": {
-            "title": "GPU and sandbox rates from a common starting point",
-            "basis": (
-                "Hourly H100 observed benchmark prints with at least "
-                f"{GPU_COMPARISON_MIN_PROVIDERS} providers and the fixed-cohort "
-                "sandbox median each equal 100 at the first eligible GPU print"
-            ),
-            "gpu_input": (
-                "Eligible hourly H100 advertised provider-floor benchmark prints"
-            ),
-            "sandbox_input": (
-                "As-of fixed eight-service median advertised sandbox rate"
-            ),
-            "coverage_gate": {
-                "minimum_gpu_provider_count": GPU_COMPARISON_MIN_PROVIDERS,
-                "excluded_history_is_retained": True,
-            },
-            "can_show": (
-                "relative advertised-rate movement after broad H100 coverage "
-                "begins, cross-sectional price dispersion, provider coverage, "
-                "and the price ratio between one H100 GPU-hour and one "
-                "standardized sandbox hour"
-            ),
-            "cannot_show": (
-                "price-level equivalence, demand, transaction volume, or "
-                "GPU utilization, causal effects, or total customer invoices"
-            ),
-            "coverage_history": gpu_daily_coverage,
-            "rows": combined,
-        },
-        "relative_prices": {
-            "title": "GPU, VM, and sandbox rates from one common start",
-            "methodology_version": RELATIVE_COMMON_START_QUERY_ID,
-            "basis": (
-                "The eligible H100 benchmark, seven-vendor exact-shape VM "
-                "median, and fixed eight-service sandbox median each equal "
-                "100 at the first broad-coverage H100 print after a complete "
-                "seven-vendor VM observation exists."
-            ),
-            "gpu_input": (
-                "Hourly H100 observed provider-floor benchmark with at least "
-                f"{GPU_COMPARISON_MIN_PROVIDERS} contributing providers"
-            ),
-            "vm_input": (
-                "Latest complete seven-vendor four-vCPU, 8-GiB public VM "
-                "offer cross-section at each H100 observation"
-            ),
-            "sandbox_input": (
-                "Latest fixed eight-service managed-sandbox public rate-card "
-                "cross-section at each H100 observation"
-            ),
-            "can_show": (
-                "relative advertised-rate movement and cross-sectional "
-                "p25-p75 dispersion after one shared starting observation"
-            ),
-            "cannot_show": (
-                "equal delivered work, executed transactions, demand, volume, "
-                "utilization, causality, or total customer invoices"
-            ),
-            "rows": relative_common_start,
-        },
-        "utilization": {
-            "title": "From available capacity to useful work",
-            "claim_scope": "methodology_only_no_observed_values",
-            "summary": (
-                "Available, rented, allocated, active, and productive are "
-                "different measurements with different numerators and "
-                "denominators."
-            ),
-            "current_project_boundary": {
-                "gpu": (
-                    "Compute Bazaar currently observes advertised offers, "
-                    "prices, and provider coverage; it does not infer rented "
-                    "capacity or accelerator activity."
-                ),
-                "vm": (
-                    "The VM series records public offer rates and successful "
-                    "source checks; it does not expose vendor fleet occupancy "
-                    "or customer CPU activity."
-                ),
-                "sandbox": (
-                    "The workload study records selected phase wall time and "
-                    "a rate-card estimate; it does not record provider fleet "
-                    "occupancy or comparable cross-provider CPU telemetry."
-                ),
-            },
-            "rows": utilization_ladder,
-        },
         "sources": sorted(source_rows.values(), key=lambda row: row["label"]),
     }
-
-
-def _public_gpu_source_manifest(raw: Any) -> dict[str, Any] | None:
-    if not isinstance(raw, Mapping):
-        return None
-    allowed = (
-        "manifest_version",
-        "methodology_version",
-        "run_id",
-        "observed_at",
-        "observed_date",
-        "dashboard_exported_at",
-        "provider_scope",
-        "row_counts",
-    )
-    return {key: raw[key] for key in allowed if key in raw}
-
-
-def _public_vm_source_manifest(raw: Any) -> dict[str, Any] | None:
-    if not isinstance(raw, Mapping):
-        return None
-    allowed = (
-        "manifest_version",
-        "run_id",
-        "checked_at",
-        "status",
-        "cohort_id",
-        "methodology_version",
-        "target_shape",
-        "fixed_members",
-        "successful_providers",
-        "failed_providers",
-        "history_event_count",
-        "history_observation_count",
-        "current_member_count",
-        "cohort_complete",
-        "source_notes",
-    )
-    return {key: raw[key] for key in allowed if key in raw}
-
-
-def _public_vm_discovery_manifest(raw: Any) -> dict[str, Any] | None:
-    if not isinstance(raw, Mapping):
-        return None
-    allowed = (
-        "manifest_version",
-        "run_id",
-        "checked_at",
-        "status",
-        "universe_id",
-        "methodology_version",
-        "target",
-        "source_order",
-        "successful_sources",
-        "failed_sources",
-        "history_event_count",
-        "history_observation_count",
-        "current_source_count",
-        "universe_complete",
-        "source_notes",
-    )
-    return {key: raw[key] for key in allowed if key in raw}
-
-
-def _public_vm_row(row: Mapping[str, Any]) -> dict[str, Any]:
-    allowed = (
-        "provider_id",
-        "provider_label",
-        "series_order",
-        "plan_id",
-        "plan_label",
-        "price_usd_per_hour",
-        "source_price_per_hour",
-        "source_currency",
-        "fx_rate_usd_per_source_currency",
-        "fx_observed_date",
-        "vcpus",
-        "memory_gib",
-        "region_id",
-        "region_label",
-        "storage_gb",
-        "storage_type",
-        "storage_included",
-        "storage_scope",
-        "cpu_model",
-        "tenancy",
-        "billing_mode",
-        "price_effective_at",
-        "first_observed_at",
-        "last_observed_at",
-        "observation_count",
-        "checked_at",
-        "source_class",
-        "observation_kind",
-        "availability_status",
-        "capacity_confirmed",
-        "executable_offer",
-        "price_formula",
-        "source_url",
-        "spec_url",
-        "color",
-    )
-    return {key: row[key] for key in allowed if key in row}
-
-
-def _public_vm_marketplace_row(row: Mapping[str, Any]) -> dict[str, Any]:
-    allowed = (
-        "source_id",
-        "provider_id",
-        "provider_label",
-        "series_order",
-        "source_class",
-        "observation_kind",
-        "plan_id",
-        "plan_label",
-        "price_usd_per_hour",
-        "source_price",
-        "source_currency",
-        "source_price_unit",
-        "normalization_hours",
-        "processor_quantity",
-        "processor_unit",
-        "vcpus",
-        "memory_gib",
-        "storage_gb",
-        "storage_type",
-        "storage_included",
-        "storage_scope",
-        "region_id",
-        "region_label",
-        "cpu_model",
-        "tenancy",
-        "billing_mode",
-        "price_effective_at",
-        "availability_status",
-        "capacity_confirmed",
-        "executable_offer",
-        "price_formula",
-        "checked_at",
-        "first_observed_at",
-        "last_observed_at",
-        "observation_count",
-        "source_url",
-        "spec_url",
-        "color",
-    )
-    return {key: row[key] for key in allowed if key in row}
-
-
-def _expanded_vm_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Project both source collectors into one exact-shape silver contract."""
-    expanded: list[dict[str, Any]] = []
-    for raw in rows:
-        provider_id = str(raw.get("provider_id") or raw.get("source_id") or "")
-        if provider_id not in VM_EXPANDED_PROVIDER_ORDER:
-            continue
-        if raw.get("source_class") == "marketplace_indication":
-            continue
-        if int(raw.get("vcpus") or 0) != 4 or float(raw.get("memory_gib") or 0) != 8:
-            raise ValueError(
-                f"Expanded VM source {provider_id} is not exactly 4 vCPU / 8 GiB"
-            )
-        if provider_id in VM_DISCOVERY_SOURCE_ORDER and not bool(
-            raw.get("candidate_for_expanded_cohort")
-        ):
-            raise ValueError(
-                f"Discovery source {provider_id} is not eligible for cohort v2"
-            )
-        source_methodology = str(raw.get("methodology_version") or "")
-        expanded.append(
-            {
-                "provider_id": provider_id,
-                "provider_label": str(raw["provider_label"]),
-                "series_order": VM_EXPANDED_PROVIDER_ORDER.index(provider_id) + 1,
-                "cohort_id": VM_EXPANDED_COHORT_ID,
-                "methodology_version": VM_EXPANDED_METHODOLOGY,
-                "source_methodology_version": source_methodology,
-                "source_class": str(raw.get("source_class") or "direct_vendor_offer"),
-                "observation_kind": str(
-                    raw.get("observation_kind") or "published_offer"
-                ),
-                "plan_id": str(raw["plan_id"]),
-                "plan_label": str(raw["plan_label"]),
-                "price_usd_per_hour": float(raw["price_usd_per_hour"]),
-                "currency": "USD",
-                "source_price_per_hour": float(
-                    raw.get("source_price_per_hour", raw.get("source_price"))
-                ),
-                "source_currency": str(raw["source_currency"]),
-                "source_price_unit": str(
-                    raw.get("source_price_unit") or "instance hour"
-                ),
-                "normalization_hours": int(raw.get("normalization_hours") or 1),
-                "fx_rate_usd_per_source_currency": raw.get(
-                    "fx_rate_usd_per_source_currency"
-                ),
-                "fx_observed_date": raw.get("fx_observed_date"),
-                "vcpus": int(raw["vcpus"]),
-                "memory_gib": float(raw["memory_gib"]),
-                "region_id": str(raw["region_id"]),
-                "region_label": str(raw["region_label"]),
-                "storage_gb": raw.get("storage_gb"),
-                "storage_type": str(raw["storage_type"]),
-                "storage_included": bool(raw["storage_included"]),
-                "storage_scope": str(raw["storage_scope"]),
-                "cpu_model": str(raw["cpu_model"]),
-                "tenancy": str(raw["tenancy"]),
-                "billing_mode": str(raw["billing_mode"]),
-                "price_effective_at": raw.get("price_effective_at"),
-                "availability_status": str(
-                    raw.get("availability_status") or "published_rate"
-                ),
-                "capacity_confirmed": bool(raw.get("capacity_confirmed", False)),
-                "executable_offer": bool(raw.get("executable_offer", True)),
-                "price_formula": str(
-                    raw.get("price_formula") or "one published instance hour"
-                ),
-                "checked_at": str(raw["checked_at"]),
-                "first_observed_at": str(raw["first_observed_at"]),
-                "last_observed_at": str(raw["last_observed_at"]),
-                "observation_count": int(raw["observation_count"]),
-                "event_order": int(raw["event_order"]),
-                "observation_fingerprint": str(raw["observation_fingerprint"]),
-                "source_url": str(raw["source_url"]),
-                "spec_url": str(raw["spec_url"]),
-                "color": str(raw["color"]),
-                "raw_refs_json": str(raw["raw_refs_json"]),
-            }
-        )
-    expanded.sort(
-        key=lambda row: (
-            str(row["checked_at"]),
-            int(row["series_order"]),
-            int(row["event_order"]),
-        )
-    )
-    return expanded
-
-
-def _load_optional_parquet(ref: str | None) -> list[dict[str, Any]]:
-    if not ref:
-        return []
-    try:
-        return read_parquet_rows(ref)
-    except FileNotFoundError:
-        return []
 
 
 def _load_optional_json(ref: str | None) -> dict[str, Any]:
@@ -3572,74 +1343,6 @@ def _load_operational_workload_benchmark(
         phases,
         run_metadata,
     )
-
-
-def _load_gpu_history(ref: str | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    if not ref:
-        return [], {}
-    if ref.partition("?")[0].lower().endswith(".parquet"):
-        rows = query_tables(
-            tables={"gpu_benchmark_history": ref},
-            sql="""
-select *
-from gpu_benchmark_history
-order by gold_observed_at, benchmark_family_id
-""",
-        )
-        normalized = _normalize_gpu_history_rows(rows, ref)
-        observed_at = max(
-            (str(row["gold_observed_at"]) for row in normalized),
-            default=None,
-        )
-        methodologies = sorted({str(row["methodology_version"]) for row in normalized})
-        return normalized, {
-            "manifest_version": "gpu_benchmark_history_parquet_v1",
-            "methodology_version": (
-                methodologies[0] if len(methodologies) == 1 else methodologies
-            ),
-            "observed_at": observed_at,
-            "row_counts": {"benchmark_history": len(normalized)},
-        }
-    try:
-        payload = read_json(ref)
-    except FileNotFoundError:
-        return [], {}
-    rows = payload.get("rows")
-    if not isinstance(rows, list):
-        raise ValueError(f"GPU history at {ref} does not contain a rows list")
-    return _normalize_gpu_history_rows(rows, ref), dict(payload.get("manifest") or {})
-
-
-def _normalize_gpu_history_rows(
-    rows: list[Any],
-    ref: str,
-) -> list[dict[str, Any]]:
-    required = {
-        "gold_observed_at",
-        "benchmark_family_id",
-        "benchmark_usd_gpu_hr",
-        "provider_count",
-        "included_offer_count",
-        "provider_floor_p25_usd_gpu_hr",
-        "provider_floor_p75_usd_gpu_hr",
-        "methodology_version",
-        "benchmark_basis",
-        "calculated_at",
-    }
-    normalized: list[dict[str, Any]] = []
-    for position, raw in enumerate(rows):
-        if not isinstance(raw, Mapping):
-            raise ValueError(f"GPU history row {position} is not an object")
-        missing = required - set(raw)
-        if missing:
-            raise ValueError(
-                f"GPU history row {position} is missing: {', '.join(sorted(missing))}"
-            )
-        _parse_timestamp(raw["gold_observed_at"], f"GPU history row {position}")
-        if raw["benchmark_usd_gpu_hr"] is None:
-            continue
-        normalized.append(dict(raw))
-    return normalized
 
 
 def _read_local_json(path: Path) -> dict[str, Any]:

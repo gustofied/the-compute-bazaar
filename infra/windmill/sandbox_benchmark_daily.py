@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import os
-import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from the_compute_bazaar.sandbox_cost.refresh import refresh_benchmark_sources
 
 
 def main(
@@ -15,28 +17,13 @@ def main(
 ) -> dict[str, object]:
     """Ingest the latest compatible public StarSling dataset."""
     output_root = _sandbox_output_root(lake_root)
-    command = [
-        "/opt/compute-bazaar/.venv/bin/sandbox-cost",
-        "refresh-benchmark",
-        "--output-root",
-        output_root,
-        "--source-repository",
-        source_repository,
-        "--source-ref",
-        source_ref,
-        "--publish-operational",
-    ]
-    env = os.environ.copy()
-    env["AWS_REGION"] = aws_region
-    env["AWS_DEFAULT_REGION"] = aws_region
-    completed = subprocess.run(
-        command,
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    source_refresh = json.loads(completed.stdout)
+    with _temporary_aws_region(aws_region):
+        source_refresh = refresh_benchmark_sources(
+            output_root=output_root,
+            source_repository=source_repository,
+            source_ref=source_ref,
+            publish_operational=True,
+        )
 
     return {
         "output_root": output_root,
@@ -54,3 +41,19 @@ def _sandbox_output_root(lake_root: str | None) -> str:
     if lake_root:
         return f"{lake_root.rstrip('/')}/sandbox_cost"
     return "data/lake/sandbox_cost"
+
+
+@contextmanager
+def _temporary_aws_region(region: str) -> Iterator[None]:
+    keys = ("AWS_REGION", "AWS_DEFAULT_REGION")
+    previous = {key: os.environ.get(key) for key in keys}
+    try:
+        for key in keys:
+            os.environ[key] = region
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value

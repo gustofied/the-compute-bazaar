@@ -235,72 +235,6 @@ def market_state_view(payload: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
-def sandbox_rate_view(payload: Mapping[str, Any]) -> dict[str, Any]:
-    manifest = payload.get("manifest") or {}
-    hourly = payload.get("hourly_price") or {}
-    vm_capacity = payload.get("vm_capacity") or {}
-    combined = payload.get("combined") or {}
-    utilization = payload.get("utilization") or {}
-    rate_series = list(hourly.get("fixed_cohort_rate") or [])
-    latest = rate_series[-1] if rate_series else {}
-    vm_series = list(vm_capacity.get("observed_market_rate") or [])
-    timestamps = [
-        {"observed_at": row.get("observed_at") or row.get("observed_date")}
-        for row in [*rate_series, *vm_series]
-        if isinstance(row, Mapping)
-    ]
-    return _card(
-        card_type="compute_rate_market",
-        card_id="sandbox:rates",
-        as_of=manifest.get("built_at"),
-        status="live" if hourly.get("current_cross_section") else "unavailable",
-        unit="USD per hour",
-        methodology={
-            "sandbox_rate": hourly.get("methodology_version"),
-            "vm_rate": vm_capacity.get("methodology_version"),
-        },
-        headline={
-            "label": "Public compute rates",
-            "sandbox_median": _number(latest.get("median_usd_per_hour")),
-            "vm_median": _number(
-                (vm_series[-1] if vm_series else {}).get("median_usd_per_hour")
-            ),
-        },
-        series={
-            "sandbox": rate_series,
-            "vm": vm_series,
-            "combined": list(combined.get("rows") or []),
-        },
-        band={
-            "kind": "cross_section_interquartile_range",
-            "lower_field": "p25_usd_per_hour",
-            "upper_field": "p75_usd_per_hour",
-        },
-        coverage={
-            "sandbox_service_count": len(hourly.get("current_cross_section") or []),
-            "vm_provider_count": len(vm_capacity.get("current_cross_section") or []),
-        },
-        sources=list(payload.get("sources") or []),
-        drilldown_ref="sandbox-cost.json",
-        data={
-            "manifest": dict(manifest),
-            "hourly_price": _without(
-                hourly,
-                "fixed_cohort_rate",
-                "fixed_membership_average",
-            ),
-            "vm_capacity": _without(
-                vm_capacity,
-                "observed_market_rate",
-                "fixed_cohort_rate",
-            ),
-            "combined": _without(combined, "rows"),
-            "utilization": dict(utilization),
-        },
-        observation_window=_observation_window(timestamps),
-    )
-
-
 def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
     manifest = payload.get("manifest") or {}
     workload = payload.get("workload") or {}
@@ -325,18 +259,18 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(row, Mapping)
     ]
     return _card(
-        card_type="sandbox_workload",
+        card_type="sandbox_workload_cost",
         card_id="sandbox:workload",
         as_of=latest_run.get("generated_at") or manifest.get("built_at"),
         status="live" if summaries else "unavailable",
-        unit="USD estimated processor-and-memory cost",
+        unit="USD per completed benchmark job",
         methodology={
             "cost_basis": workload.get("cost_basis"),
             "runtime_definition": workload.get("runtime_definition"),
             "claim_scope": workload.get("claim_scope"),
         },
         headline={
-            "label": "Same measured software job",
+            "label": "Latest StarSling workload cost",
             "median_estimated_cost_usd": _number(
                 latest_complete_run.get("median_estimated_cost_usd")
             ),
@@ -384,77 +318,12 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
         data={
             "manifest": dict(manifest),
             "workload": _without(workload, "run_history"),
+            "credit": {
+                "name": "StarSling HPC Sandbox Benchmark",
+                "url": "https://github.com/starslingdev/hpc-sandbox-benchmarks",
+            },
         },
         observation_window=_observation_window(timestamps),
-    )
-
-
-def sandbox_relative_view(payload: Mapping[str, Any]) -> dict[str, Any]:
-    manifest = payload.get("manifest") or {}
-    relative = payload.get("relative_prices") or {}
-    rows = [
-        dict(row)
-        for row in relative.get("rows", [])
-        if isinstance(row, Mapping)
-    ]
-    rows.sort(key=lambda row: str(row.get("observed_at") or ""))
-    latest = rows[-1] if rows else {}
-    common_start_at = (
-        rows[0].get("common_start_at")
-        if rows
-        else relative.get("common_start_at")
-    )
-    return _card(
-        card_type="compute_relative_prices",
-        card_id="market:relative-prices",
-        as_of=latest.get("observed_at") or manifest.get("built_at"),
-        status="live" if rows else "unavailable",
-        unit="index points; 100 at the common start",
-        methodology={
-            "id": relative.get("methodology_version"),
-            "query_id": (manifest.get("query_ids") or {}).get(
-                "relative_common_start"
-            ),
-            "basis": relative.get("basis"),
-        },
-        headline={
-            "label": "Compute rates from one common start",
-            "common_start_at": common_start_at,
-            "gpu_base_100": _number(latest.get("gpu_base_100")),
-            "vm_base_100": _number(latest.get("vm_base_100")),
-            "sandbox_base_100": _number(latest.get("sandbox_base_100")),
-        },
-        series=rows,
-        band={
-            "kind": "cross_section_interquartile_range",
-            "gpu_lower_field": "gpu_p25_base_100",
-            "gpu_upper_field": "gpu_p75_base_100",
-            "vm_lower_field": "vm_p25_base_100",
-            "vm_upper_field": "vm_p75_base_100",
-            "sandbox_lower_field": "sandbox_p25_base_100",
-            "sandbox_upper_field": "sandbox_p75_base_100",
-        },
-        coverage={
-            "observation_count": len(rows),
-            "gpu_minimum_provider_count": min(
-                (int(row.get("provider_count") or 0) for row in rows),
-                default=0,
-            ),
-            "vm_member_count": int(latest.get("vm_member_count") or 0),
-            "sandbox_member_count": int(
-                latest.get("sandbox_member_count") or 0
-            ),
-        },
-        sources=list(payload.get("sources") or []),
-        drilldown_ref="sandbox-cost.json",
-        data={
-            "can_show": relative.get("can_show"),
-            "cannot_show": relative.get("cannot_show"),
-            "gpu_input": relative.get("gpu_input"),
-            "vm_input": relative.get("vm_input"),
-            "sandbox_input": relative.get("sandbox_input"),
-        },
-        observation_window=_observation_window(rows),
     )
 
 

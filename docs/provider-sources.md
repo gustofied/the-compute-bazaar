@@ -101,8 +101,8 @@ availability, region lists, total and per-GPU price, and cursor pagination:
 
 ## Coverage Targets
 
-`gpu-prices frontier-coverage` reports three different measures for H100,
-H200, B200, and B300:
+The Gold coverage model reports three different measures for H100, H200, B200,
+and B300:
 
 1. live offer rows
 2. conservative live GPU capacity lower bound

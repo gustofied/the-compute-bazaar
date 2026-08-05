@@ -1,0 +1,78 @@
+{
+  "catalog_version": "v1",
+  "engine": "datafusion",
+  "queries": [
+    {
+      "query_id": "benchmark_values",
+      "version": "v1",
+      "title": "Benchmark Values",
+      "description": "Latest GPU benchmark values.",
+      "tables": ["fact_benchmark_values"],
+      "sql_path": "queries/benchmark_values.sql",
+      "default_limit": 20
+    },
+    {
+      "query_id": "benchmark_constituents",
+      "version": "v1",
+      "title": "Benchmark Constituents",
+      "description": "Rows included in or excluded from each benchmark.",
+      "tables": ["fact_benchmark_constituents"],
+      "sql_path": "queries/benchmark_constituents.sql",
+      "default_limit": 100
+    },
+    {
+      "query_id": "frontier_listings",
+      "version": "v1",
+      "title": "Frontier Listings",
+      "description": "Eligible H100, H200, B200, and B300 offers.",
+      "tables": ["fact_gpu_listings"],
+      "sql_path": "queries/frontier_listings.sql",
+      "default_limit": 100
+    },
+    {
+      "query_id": "provider_comparison",
+      "version": "v1",
+      "title": "Provider Comparison",
+      "description": "GPU prices summarized by provider.",
+      "tables": ["fact_gpu_listings"],
+      "sql_path": "queries/provider_comparison.sql",
+      "default_limit": 100
+    },
+    {
+      "query_id": "compute_market_state",
+      "version": "v1",
+      "title": "Compute Market State",
+      "description": "Latest observed capacity and availability measures.",
+      "tables": ["fact_compute_market_state"],
+      "sql_path": "queries/compute_market_state.sql",
+      "default_limit": 200
+    },
+    {
+      "query_id": "prime_offer_history",
+      "version": "v1",
+      "title": "Prime Offer History",
+      "description": "Prime GPU price and availability history.",
+      "tables": ["fact_prime_frontier_offer_reference_history"],
+      "sql_path": "queries/prime_offer_history.sql",
+      "default_limit": 672
+    },
+    {
+      "query_id": "prime_offer_levels",
+      "version": "v1",
+      "title": "Prime Offer Levels",
+      "description": "Prime offers grouped by GPU and price level.",
+      "tables": ["fact_prime_frontier_offer_ladder"],
+      "sql_path": "queries/prime_offer_levels.sql",
+      "default_limit": 200
+    },
+    {
+      "query_id": "benchmark_job_costs",
+      "version": "v1",
+      "title": "Benchmark Job Cost",
+      "description": "Estimated cost of the latest measured StarSling benchmark job by service.",
+      "tables": ["sandbox_workload_service_summary"],
+      "sql_path": "queries/benchmark_job_costs.sql",
+      "default_limit": 50
+    }
+  ]
+}

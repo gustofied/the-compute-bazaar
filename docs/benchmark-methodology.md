@@ -144,8 +144,10 @@ The methodology version is:
 advertised_provider_floor_median_v1
 ```
 
-The calculation is authored as DataFusion SQL in
-`src/the_compute_bazaar/prices/benchmark_queries.py` and materialized into:
+The calculation is authored as packaged DataFusion SQL in
+`src/the_compute_bazaar/sql/models/gold/benchmark_values.sql` and
+`src/the_compute_bazaar/sql/models/gold/benchmark_constituents.sql`.
+Python renders and executes those models, then materializes:
 
 - `gold.fact_benchmark_values`
 - `gold.fact_benchmark_constituents`
@@ -249,7 +251,5 @@ DataFusion materializes:
 - `gold.fact_prime_frontier_offer_reference_history`
 - `gold.fact_prime_frontier_offer_ladder`
 
-Curia exposes the same products through
-`prime_frontier_offer_reference:v1` and
-`prime_frontier_offer_ladder:v1`. H100-only compatibility queries and JSON
-remain available during migration.
+Saved SQL exposes the same products through `prime_offer_history:v1` and
+`prime_offer_levels:v1`.

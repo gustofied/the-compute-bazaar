@@ -16,7 +16,7 @@ from botocore.exceptions import ClientError
 
 DEFAULT_REGION = "eu-west-3"
 DEFAULT_SECURITY_GROUP_ID = "sg-0d5bcfecb6cd7ff50"
-DEFAULT_PORTS = "22,8080"
+DEFAULT_PORTS = "22"
 MANAGED_DESCRIPTION_PREFIX = "Compute Bazaar laptop access"
 
 
@@ -25,7 +25,7 @@ def main() -> None:
     parser.add_argument(
         "--security-group-id",
         default=os.getenv("COMPUTE_BAZAAR_RUNTIME_SECURITY_GROUP_ID", DEFAULT_SECURITY_GROUP_ID),
-        help="Security group that guards SSH/Windmill access to the dev runtime host.",
+        help="Security group that guards SSH access to the dev runtime host.",
     )
     parser.add_argument("--region", default=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or DEFAULT_REGION)
     parser.add_argument("--profile", default=os.getenv("AWS_PROFILE"))

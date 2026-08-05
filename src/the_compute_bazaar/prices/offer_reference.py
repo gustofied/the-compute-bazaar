@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from .gold_models import gold_model_sql
+
 
 PRIME_FRONTIER_METHOD_VERSION = "prime_frontier_offer_market_v1"
 PRIME_FRONTIER_SCOPE = "prime_secure_ondemand_frontier_all_shapes"
@@ -263,290 +265,27 @@ def build_prime_frontier_offer_events(
 
 
 def prime_frontier_reference_history_sql() -> str:
-    """DataFusion SQL for provider-balanced Prime frontier references."""
-    return f"""
-with eligible as (
-  select
-    *,
-    row_number() over(
-      partition by gold_run_id, gpu_family_id, provider
-      order by price_usd_gpu_hr asc, gpu_count asc, listing_id asc
-    ) as provider_rank
-  from fact_prime_frontier_offer_history
-  where source_connector = 'prime_intellect'
-    and availability_status = 'available'
-    and price_usd_gpu_hr > 0
-    and coalesce(is_spot, false) = false
-    and coalesce(is_secure, false) = true
-),
-provider_floors as (
-  select *
-  from eligible
-  where provider_rank = 1
-),
-reference_base as (
-  select
-    gold_run_id,
-    gpu_family_id,
-    max(gpu_product_id) as gpu_product_family,
-    max(gold_observed_at) as gold_observed_at,
-    max(gold_observed_date) as gold_observed_date,
-    median(price_usd_gpu_hr) as reference_usd_gpu_hr,
-    avg(price_usd_gpu_hr) as provider_floor_mean_usd_gpu_hr,
-    percentile_cont(0.25) within group (
-      order by price_usd_gpu_hr
-    ) as provider_floor_p25_usd_gpu_hr,
-    percentile_cont(0.75) within group (
-      order by price_usd_gpu_hr
-    ) as provider_floor_p75_usd_gpu_hr,
-    min(price_usd_gpu_hr) as best_usd_gpu_hr,
-    max(price_usd_gpu_hr) as highest_provider_floor_usd_gpu_hr,
-    count(*) as provider_count,
-    count(distinct country) as country_count,
-    sum(case when coalesce(price_is_variable, false) then 1 else 0 end)
-      as variable_price_provider_count,
-    case
-      when count(minimum_executable_price_usd_hr) = count(*)
-      then median(minimum_executable_price_usd_hr / gpu_count)
-      else cast(null as double)
-    end as minimum_executable_reference_usd_gpu_hr,
-    max(observed_at) as latest_source_observed_at
-  from provider_floors
-  group by gold_run_id, gpu_family_id
-),
-configuration_counts as (
-  select
-    gold_run_id,
-    gpu_family_id,
-    count(*) as configuration_count,
-    sum(case when gpu_count = 1 then 1 else 0 end)
-      as single_gpu_configuration_count,
-    count(distinct gpu_socket) as socket_count
-  from eligible
-  group by gold_run_id, gpu_family_id
-),
-low_price_breadth as (
-  select
-    floors.gold_run_id,
-    floors.gpu_family_id,
-    count(*) as low_price_provider_count
-  from provider_floors floors
-  join reference_base reference
-    on floors.gold_run_id = reference.gold_run_id
-   and floors.gpu_family_id = reference.gpu_family_id
-  where floors.price_usd_gpu_hr <= reference.reference_usd_gpu_hr * 1.10
-  group by floors.gold_run_id, floors.gpu_family_id
-)
-select
-  concat(
-    'PRIME-', reference.gpu_family_id, '-OFFER-REFERENCE:',
-    reference.gold_run_id
-  ) as offer_reference_id,
-  concat('PRIME-', reference.gpu_family_id, '-OFFER-REFERENCE')
-    as offer_reference_symbol,
-  '{PRIME_FRONTIER_SCOPE}' as reference_scope,
-  reference.gpu_family_id,
-  reference.gpu_product_family,
-  'USD_GPU_HOUR' as unit,
-  'provider_reported_gpu_base_rate' as price_basis,
-  reference.reference_usd_gpu_hr,
-  reference.minimum_executable_reference_usd_gpu_hr,
-  reference.provider_floor_mean_usd_gpu_hr,
-  reference.provider_floor_p25_usd_gpu_hr,
-  reference.provider_floor_p75_usd_gpu_hr,
-  reference.best_usd_gpu_hr,
-  reference.highest_provider_floor_usd_gpu_hr,
-  reference.provider_count,
-  configurations.configuration_count,
-  configurations.single_gpu_configuration_count,
-  configurations.socket_count,
-  reference.country_count,
-  reference.variable_price_provider_count,
-  breadth.low_price_provider_count,
-  case when reference.provider_count >= 3 then 'observed' else 'indicative' end
-    as status,
-  reference.latest_source_observed_at,
-  reference.gold_run_id,
-  reference.gold_observed_at,
-  reference.gold_observed_date,
-  '{PRIME_FRONTIER_METHOD_VERSION}' as methodology_version
-from reference_base reference
-join configuration_counts configurations
-  on reference.gold_run_id = configurations.gold_run_id
- and reference.gpu_family_id = configurations.gpu_family_id
-join low_price_breadth breadth
-  on reference.gold_run_id = breadth.gold_run_id
- and reference.gpu_family_id = breadth.gpu_family_id
-order by
-  reference.gold_observed_at,
-  reference.gold_run_id,
-  reference.gpu_family_id
-"""
+    """Render the provider-balanced Prime reference Gold model."""
+    return gold_model_sql(
+        "fact_prime_frontier_offer_reference_history",
+        {
+            "reference_scope": PRIME_FRONTIER_SCOPE,
+            "methodology_version": PRIME_FRONTIER_METHOD_VERSION,
+        },
+    )
 
 
 def prime_frontier_ladder_sql(*, current_gold_run_id: str) -> str:
-    """DataFusion SQL for current benchmark-centered offer-level breadth."""
+    """Render the benchmark-centered Prime offer-level Gold model."""
     increment = PRIME_FRONTIER_PRICE_INCREMENT
-    run_id = _sql_literal(current_gold_run_id)
-    return f"""
-with latest_reference as (
-  select *
-  from fact_prime_frontier_offer_reference_history
-  where gold_run_id = {run_id}
-),
-benchmark_current as (
-  select
-    benchmark_family_id as gpu_family_id,
-    benchmark_usd_gpu_hr as market_benchmark_usd_gpu_hr,
-    provider_floor_p25_usd_gpu_hr as market_benchmark_p25_usd_gpu_hr,
-    provider_floor_p75_usd_gpu_hr as market_benchmark_p75_usd_gpu_hr,
-    provider_count as market_benchmark_provider_count
-  from fact_benchmark_values
-),
-reference_with_benchmark as (
-  select
-    reference.*,
-    benchmark.market_benchmark_usd_gpu_hr,
-    benchmark.market_benchmark_p25_usd_gpu_hr,
-    benchmark.market_benchmark_p75_usd_gpu_hr,
-    benchmark.market_benchmark_provider_count,
-    coalesce(
-      benchmark.market_benchmark_usd_gpu_hr,
-      reference.reference_usd_gpu_hr
-    ) as center_usd_gpu_hr
-  from latest_reference reference
-  left join benchmark_current benchmark
-    on reference.gpu_family_id = benchmark.gpu_family_id
-),
-current_offers as (
-  select
-    history.*,
-    round(history.price_usd_gpu_hr / {increment}) * {increment}
-      as price_level_usd_gpu_hr
-  from fact_prime_frontier_offer_history history
-  join reference_with_benchmark reference
-    on history.gold_run_id = reference.gold_run_id
-   and history.gpu_family_id = reference.gpu_family_id
-  where history.availability_status = 'available'
-    and history.price_usd_gpu_hr > 0
-    and coalesce(history.is_spot, false) = false
-    and coalesce(history.is_secure, false) = true
-),
-offer_levels as (
-  select
-    gpu_family_id,
-    price_level_usd_gpu_hr,
-    count(*) as configuration_count,
-    count(distinct provider) as provider_count,
-    sum(case when gpu_count = 1 then 1 else 0 end)
-      as single_gpu_configuration_count,
-    min(price_usd_gpu_hr) as minimum_offer_usd_gpu_hr,
-    max(price_usd_gpu_hr) as maximum_offer_usd_gpu_hr
-  from current_offers
-  group by gpu_family_id, price_level_usd_gpu_hr
-),
-latest_events as (
-  select events.*
-  from fact_prime_frontier_offer_events events
-  join reference_with_benchmark reference
-    on events.gold_run_id = reference.gold_run_id
-   and events.gpu_family_id = reference.gpu_family_id
-),
-event_levels as (
-  select
-    gpu_family_id,
-    price_level_usd_gpu_hr,
-    sum(case when event_type = 'entered' then 1 else 0 end) as entered_count,
-    sum(
-      case when event_type in ('repriced_up', 'repriced_down') then 1 else 0 end
-    ) as repriced_count,
-    sum(
-      case when event_type = 'left_availability' then 1 else 0 end
-    ) as left_availability_count,
-    sum(
-      case when event_type = 'stock_status_changed' then 1 else 0 end
-    ) as stock_status_changed_count,
-    sum(case when event_type = 'remained' then 1 else 0 end) as remained_count
-  from latest_events
-  where price_level_usd_gpu_hr is not null
-  group by gpu_family_id, price_level_usd_gpu_hr
-),
-reference_grid as (
-  select
-    reference.gpu_family_id,
-    round(reference.center_usd_gpu_hr / {increment}) * {increment}
-      + offsets.offset * {increment} as price_level_usd_gpu_hr
-  from reference_with_benchmark reference
-  cross join (
-    values (-6), (-5), (-4), (-3), (-2), (-1), (0),
-           (1), (2), (3), (4), (5), (6)
-  ) as offsets(offset)
-),
-all_levels as (
-  select gpu_family_id, price_level_usd_gpu_hr from reference_grid
-  union
-  select gpu_family_id, price_level_usd_gpu_hr from offer_levels
-  union
-  select gpu_family_id, price_level_usd_gpu_hr from event_levels
-),
-joined as (
-  select
-    levels.gpu_family_id,
-    levels.price_level_usd_gpu_hr,
-    coalesce(offers.configuration_count, 0) as configuration_count,
-    coalesce(offers.provider_count, 0) as provider_count,
-    coalesce(offers.single_gpu_configuration_count, 0)
-      as single_gpu_configuration_count,
-    offers.minimum_offer_usd_gpu_hr,
-    offers.maximum_offer_usd_gpu_hr,
-    coalesce(events.entered_count, 0) as entered_count,
-    coalesce(events.repriced_count, 0) as repriced_count,
-    coalesce(events.left_availability_count, 0) as left_availability_count,
-    coalesce(events.stock_status_changed_count, 0)
-      as stock_status_changed_count,
-    coalesce(events.remained_count, 0) as remained_count,
-    reference.reference_usd_gpu_hr,
-    reference.market_benchmark_usd_gpu_hr,
-    reference.market_benchmark_p25_usd_gpu_hr,
-    reference.market_benchmark_p75_usd_gpu_hr,
-    reference.market_benchmark_provider_count,
-    levels.price_level_usd_gpu_hr - reference.reference_usd_gpu_hr
-      as distance_from_prime_reference_usd_gpu_hr,
-    levels.price_level_usd_gpu_hr - reference.center_usd_gpu_hr
-      as distance_from_market_benchmark_usd_gpu_hr,
-    case
-      when reference.market_benchmark_usd_gpu_hr > 0
-      then levels.price_level_usd_gpu_hr
-        / reference.market_benchmark_usd_gpu_hr - 1
-      else cast(null as double)
-    end as premium_to_market_benchmark_fraction,
-    abs(levels.price_level_usd_gpu_hr - reference.reference_usd_gpu_hr)
-      <= {increment / 2} as is_prime_reference_level,
-    abs(levels.price_level_usd_gpu_hr - reference.center_usd_gpu_hr)
-      <= {increment / 2} as is_market_benchmark_level,
-    reference.gold_run_id,
-    reference.gold_observed_at,
-    reference.status,
-    reference.methodology_version
-  from all_levels levels
-  join reference_with_benchmark reference
-    on levels.gpu_family_id = reference.gpu_family_id
-  left join offer_levels offers
-    on levels.gpu_family_id = offers.gpu_family_id
-   and levels.price_level_usd_gpu_hr = offers.price_level_usd_gpu_hr
-  left join event_levels events
-    on levels.gpu_family_id = events.gpu_family_id
-   and levels.price_level_usd_gpu_hr = events.price_level_usd_gpu_hr
-)
-select
-  *,
-  row_number() over(
-    partition by gpu_family_id
-    order by price_level_usd_gpu_hr desc
-  ) as price_level_rank
-from joined
-order by gpu_family_id, price_level_usd_gpu_hr desc
-"""
+    return gold_model_sql(
+        "fact_prime_frontier_offer_ladder",
+        {"current_gold_run_id": current_gold_run_id},
+        fragments={
+            "price_increment": str(increment),
+            "half_price_increment": str(increment / 2),
+        },
+    )
 
 
 def _is_eligible_offer(row: Mapping[str, Any]) -> bool:
@@ -626,7 +365,3 @@ def _seconds_between(start: Any, end: Any) -> float | None:
     except ValueError:
         return None
     return (right - left).total_seconds()
-
-
-def _sql_literal(value: str) -> str:
-    return "'" + value.replace("'", "''") + "'"

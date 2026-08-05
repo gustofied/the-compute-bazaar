@@ -1,4 +1,4 @@
-"""Curia query catalog backed by versioned DataFusion SQL files."""
+"""Saved-query catalog backed by packaged DataFusion SQL files."""
 
 from __future__ import annotations
 
@@ -10,10 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from .datafusion import query_tables
+from .sql_models import PACKAGE_ROOT, SQL_ROOT
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_QUERY_CATALOG_DIR = PROJECT_ROOT / "queries" / "curia"
-DEFAULT_QUERY_CATALOG_PATH = DEFAULT_QUERY_CATALOG_DIR / "catalog.json"
+PROJECT_ROOT = PACKAGE_ROOT.parents[1]
+DEFAULT_QUERY_CATALOG_DIR = SQL_ROOT
+DEFAULT_QUERY_CATALOG_PATH = SQL_ROOT / "catalog.json"
 DEFAULT_QUERY_LIMIT = 100
 MAX_QUERY_LIMIT = 1000
 SCRATCH_QUERY_ID = "scratch_sql"
@@ -78,7 +79,7 @@ class CatalogQuery:
             "title": self.title,
             "description": self.description,
             "tables": list(self.tables),
-            "sql_path": str(self.sql_path.relative_to(PROJECT_ROOT)),
+            "sql_path": _display_sql_path(self.sql_path),
             "default_limit": self.default_limit,
             "available": not missing_tables,
             "missing_tables": missing_tables,
@@ -115,7 +116,7 @@ def get_catalog_query(query_id: str, *, version: str | None = None) -> CatalogQu
         matches = [query for query in matches if query.version == version]
     if not matches:
         suffix = f" version {version}" if version else ""
-        raise KeyError(f"Unknown Curia query: {query_id}{suffix}")
+        raise KeyError(f"Unknown saved query: {query_id}{suffix}")
     return max(matches, key=lambda query: query.version)
 
 
@@ -248,6 +249,13 @@ def validate_scratch_sql(sql: str) -> str:
 
 def bounded_query_limit(limit: int) -> int:
     return max(1, min(MAX_QUERY_LIMIT, int(limit)))
+
+
+def _display_sql_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(PACKAGE_ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _strip_sql_comments(sql: str) -> str:

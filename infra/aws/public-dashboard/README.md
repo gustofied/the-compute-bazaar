@@ -83,6 +83,12 @@ The cache policy is intentionally short while the hourly market feed is young:
 filenames such as `manifest.json` and `latest-index.json`, so short caching keeps
 the public page fresh without requiring invalidations every hour.
 
+The response policy also applies HSTS, `X-Content-Type-Options: nosniff`,
+same-origin framing, and a strict-origin referrer policy. A content security
+policy is intentionally deferred because frozen publication pages currently
+use inline scripts and external assets; add one only after those inputs have
+been inventoried and tested.
+
 ## Branded Hostname
 
 The custom hostname is activated in two phases because DNS is hosted outside

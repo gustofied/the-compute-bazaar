@@ -12,7 +12,7 @@ GPU and VM source APIs
   -> AutoMQ event tape
   -> S3 bronze evidence
   -> S3 silver observations
-  -> Curia + DataFusion
+  -> DataFusion SQL
   -> S3 gold products
   -> operator / CLI / public article
 ```
@@ -67,10 +67,9 @@ Silver is source-honest normalized observation data:
 - managed-sandbox prices and timing semantics;
 - StarSling runs, batches, replicates, and phases.
 
-Curia is the controlled authoring layer. DataFusion executes named SQL over
-registered Parquet tables; Python handles deterministic ingestion, manifests,
-and publication control. Curia records which input refs, query, methodology,
-and quality rules produced a gold object.
+DataFusion executes named SQL over registered Parquet tables; Python handles
+deterministic ingestion, execution, manifests, and publication. The Gold
+manifest records which inputs and SQL models produced a market object.
 
 Gold is the product memory:
 
@@ -93,7 +92,7 @@ controlled schema, provenance, and promotion rule.
 GPU and sandbox/VM gold manifests, registers all declared tables in one
 read-only DataFusion session, and exposes:
 
-- named, versioned Curia SQL;
+- named, versioned SQL;
 - bounded scratch SQL;
 - current run health and source failures;
 - row-level bronze, silver, query, and gold trajectory;

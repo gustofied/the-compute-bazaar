@@ -8,15 +8,11 @@ from dataclasses import asdict
 from urllib.request import Request, urlopen
 
 from .pipeline import (
-    GOLD_QUERIES,
     build_sandbox_cost,
     check_public_payload_freshness,
-    query_sandbox_gold,
     validate_evidence,
 )
 from .refresh import refresh_benchmark_sources
-from .vm_capacity import refresh_vm_capacity_sources
-from .vm_discovery import refresh_vm_capacity_discovery_sources
 
 
 def main() -> None:
@@ -29,13 +25,6 @@ def main() -> None:
     )
     build.add_argument("--output-root", default="data/sandbox-cost")
     build.add_argument("--dashboard-output-root")
-    build.add_argument("--gpu-history-ref")
-    build.add_argument("--vm-capacity-history-ref")
-    build.add_argument("--vm-capacity-current-ref")
-    build.add_argument("--vm-capacity-manifest-ref")
-    build.add_argument("--vm-discovery-history-ref")
-    build.add_argument("--vm-discovery-current-ref")
-    build.add_argument("--vm-discovery-manifest-ref")
     build.add_argument("--workload-benchmark-manifest-ref")
 
     commands.add_parser("validate", help="Validate canonical source evidence")
@@ -70,34 +59,9 @@ def main() -> None:
         ),
     )
 
-    refresh_vm = commands.add_parser(
-        "refresh-vm-capacity",
-        help="Record the first four exact public 4-vCPU, 8-GiB VM offers",
-    )
-    refresh_vm.add_argument("--output-root", default="data/sandbox-cost")
-    refresh_vm.add_argument("--raw-root", default="data/raw")
-
-    refresh_vm_discovery = commands.add_parser(
-        "refresh-vm-discovery",
-        help="Record three more exact VM offers and the Akash indication",
-    )
-    refresh_vm_discovery.add_argument(
-        "--output-root",
-        default="data/sandbox-cost",
-    )
-    refresh_vm_discovery.add_argument("--raw-root", default="data/raw")
-
-    query = commands.add_parser(
-        "query",
-        help="Run an allowlisted DataFusion query over sandbox gold",
-    )
-    query.add_argument("--output-root", default="data/sandbox-cost")
-    query.add_argument("--query", choices=sorted(GOLD_QUERIES), required=True)
-    query.add_argument("--limit", type=int)
-
     check_public = commands.add_parser(
         "check-public",
-        help="Fail when the public snapshot or complete VM benchmark is stale",
+        help="Validate the public measured-workload snapshot",
     )
     check_public.add_argument("--url", required=True)
     check_public.add_argument("--max-age-hours", type=float, default=2.5)
@@ -107,13 +71,6 @@ def main() -> None:
         result = build_sandbox_cost(
             output_root=args.output_root,
             dashboard_output_root=args.dashboard_output_root,
-            gpu_history_ref=args.gpu_history_ref,
-            vm_capacity_history_ref=args.vm_capacity_history_ref,
-            vm_capacity_current_ref=args.vm_capacity_current_ref,
-            vm_capacity_manifest_ref=args.vm_capacity_manifest_ref,
-            vm_discovery_history_ref=args.vm_discovery_history_ref,
-            vm_discovery_current_ref=args.vm_discovery_current_ref,
-            vm_discovery_manifest_ref=args.vm_discovery_manifest_ref,
             workload_benchmark_manifest_ref=args.workload_benchmark_manifest_ref,
         )
         print(json.dumps(asdict(result), indent=2, sort_keys=True))
@@ -134,34 +91,6 @@ def main() -> None:
         print(json.dumps(result, indent=2, sort_keys=True))
         if args.check and result["changed"]:
             raise SystemExit(1)
-        return
-    if args.command == "refresh-vm-capacity":
-        result = refresh_vm_capacity_sources(
-            output_root=args.output_root,
-            raw_root=args.raw_root,
-        )
-        print(json.dumps(asdict(result), indent=2, sort_keys=True))
-        return
-    if args.command == "refresh-vm-discovery":
-        result = refresh_vm_capacity_discovery_sources(
-            output_root=args.output_root,
-            raw_root=args.raw_root,
-        )
-        print(json.dumps(asdict(result), indent=2, sort_keys=True))
-        return
-    if args.command == "query":
-        print(
-            json.dumps(
-                query_sandbox_gold(
-                    output_root=args.output_root,
-                    query_id=args.query,
-                    limit=args.limit,
-                ),
-                indent=2,
-                sort_keys=True,
-                default=str,
-            )
-        )
         return
     if args.command == "check-public":
         request = Request(

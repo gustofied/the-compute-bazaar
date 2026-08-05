@@ -171,8 +171,6 @@ def ingest_vast(
         effective_query = query
         payload = client.search_bundles(query=effective_query)
         offers = extract_offers(payload)
-    raw_payload_hash = sha256_json(payload)
-
     raw_ref = date_partition(
         raw_root,
         provider=provider,
@@ -180,95 +178,29 @@ def ingest_vast(
         run_id=run_id,
         filename="bundles.json",
     )
-    write_json(raw_ref, payload)
-
     normalized, unknown_gpu_names = normalize_offers(
         offers, observed_at=observed_at, raw_ref=raw_ref
     )
-    normalized_ref: str | None = None
-    if normalized:
-        normalized_ref = table_partition(
-            lake_root,
-            table="silver/gpu_offers",
-            observed_date=observed_date,
-            provider=provider,
-            run_id=run_id,
-            filename="offers.parquet",
-        )
-        write_offers_parquet(normalized_ref, normalized)
-
-    publisher = _publisher(
-        automq_bootstrap_servers=automq_bootstrap_servers,
-        automq_config=automq_config,
-        dry_run=dry_run,
-    )
-
-    published_events = 0
-    snapshot = ProviderSnapshot(
+    return _persist_publish_snapshot(
         provider=provider,
-        fetched_at=observed_at,
-        raw_ref=raw_ref,
-        payload_hash=raw_payload_hash,
-        offer_count=len(offers),
-        query=effective_query
-        if isinstance(effective_query, dict)
-        else {"q": effective_query},
-    )
-    snapshot_event = make_event(
-        event_type="gpu.provider_snapshot.v1",
-        provider=provider,
-        payload=snapshot.to_dict(),
         run_id=run_id,
         trace_id=trace_id,
+        observed_at=observed_at,
+        lake_root=lake_root,
         raw_ref=raw_ref,
-        event_time=observed_at,
-    )
-    publisher.publish(
-        f"{topic_prefix}.provider_snapshot.v1", snapshot_event, key=provider
-    )
-    published_events += 1
-
-    for offer in normalized:
-        event = make_event(
-            event_type="gpu.normalized_offer.v1",
-            provider=provider,
-            payload=offer.to_dict(),
-            run_id=run_id,
-            trace_id=trace_id,
-            raw_ref=raw_ref,
-            event_time=offer.observed_at,
-        )
-        publisher.publish(
-            f"{topic_prefix}.normalized_offer.v1", event, key=offer.event_key()
-        )
-        published_events += 1
-
-    publisher.flush()
-    manifest = write_run_manifest(
-        lake_root,
-        provider=provider,
-        run_id=run_id,
-        observed_date=observed_date,
-        raw_ref=raw_ref,
-        normalized_ref=normalized_ref,
+        raw_payload=payload,
         raw_offer_count=len(offers),
-        normalized_offer_count=len(normalized),
-        published_events=published_events,
+        normalized=normalized,
         unknown_gpu_names=unknown_gpu_names,
-        publish_mode="dry_run" if dry_run or not automq_bootstrap_servers else "kafka",
-    )
-
-    return IngestResult(
-        provider=provider,
-        run_id=run_id,
-        raw_ref=raw_ref,
-        normalized_ref=normalized_ref,
-        raw_offer_count=len(offers),
-        normalized_offer_count=len(normalized),
-        unknown_gpu_names=unknown_gpu_names,
-        published_events=published_events,
-        publish_mode="dry_run" if dry_run or not automq_bootstrap_servers else "kafka",
-        manifest_ref=manifest.manifest_ref,
+        snapshot_query=(
+            effective_query
+            if isinstance(effective_query, dict)
+            else {"q": effective_query}
+        ),
+        automq_bootstrap_servers=automq_bootstrap_servers,
+        automq_config=automq_config,
+        topic_prefix=topic_prefix,
+        dry_run=dry_run,
     )
 
 
@@ -302,8 +234,6 @@ def ingest_lium(
         query=query, paginate=paginate, max_pages=max_pages
     )
     executors = fetched.executors
-    raw_payload_hash = sha256_json(fetched.raw_payload)
-
     raw_ref = date_partition(
         raw_root,
         provider=provider,
@@ -311,97 +241,29 @@ def ingest_lium(
         run_id=run_id,
         filename="executors.json",
     )
-    write_json(raw_ref, fetched.raw_payload)
-
     normalized, unknown_gpu_names = normalize_executors(
         executors, observed_at=observed_at, raw_ref=raw_ref
     )
-    normalized_ref: str | None = None
-    if normalized:
-        normalized_ref = table_partition(
-            lake_root,
-            table="silver/gpu_offers",
-            observed_date=observed_date,
-            provider=provider,
-            run_id=run_id,
-            filename="offers.parquet",
-        )
-        write_offers_parquet(normalized_ref, normalized)
-
-    publisher = _publisher(
-        automq_bootstrap_servers=automq_bootstrap_servers,
-        automq_config=automq_config,
-        dry_run=dry_run,
-    )
-
-    published_events = 0
-    snapshot = ProviderSnapshot(
+    return _persist_publish_snapshot(
         provider=provider,
-        fetched_at=observed_at,
+        run_id=run_id,
+        trace_id=trace_id,
+        observed_at=observed_at,
+        lake_root=lake_root,
         raw_ref=raw_ref,
-        payload_hash=raw_payload_hash,
-        offer_count=len(executors),
-        query={
+        raw_payload=fetched.raw_payload,
+        raw_offer_count=len(executors),
+        normalized=normalized,
+        unknown_gpu_names=unknown_gpu_names,
+        snapshot_query={
             **(query or {}),
             "paginate": paginate,
             "max_pages": max_pages if paginate else None,
         },
-    )
-    snapshot_event = make_event(
-        event_type="gpu.provider_snapshot.v1",
-        provider=provider,
-        payload=snapshot.to_dict(),
-        run_id=run_id,
-        trace_id=trace_id,
-        raw_ref=raw_ref,
-        event_time=observed_at,
-    )
-    publisher.publish(
-        f"{topic_prefix}.provider_snapshot.v1", snapshot_event, key=provider
-    )
-    published_events += 1
-
-    for offer in normalized:
-        event = make_event(
-            event_type="gpu.normalized_offer.v1",
-            provider=provider,
-            payload=offer.to_dict(),
-            run_id=run_id,
-            trace_id=trace_id,
-            raw_ref=raw_ref,
-            event_time=offer.observed_at,
-        )
-        publisher.publish(
-            f"{topic_prefix}.normalized_offer.v1", event, key=offer.event_key()
-        )
-        published_events += 1
-
-    publisher.flush()
-    manifest = write_run_manifest(
-        lake_root,
-        provider=provider,
-        run_id=run_id,
-        observed_date=observed_date,
-        raw_ref=raw_ref,
-        normalized_ref=normalized_ref,
-        raw_offer_count=len(executors),
-        normalized_offer_count=len(normalized),
-        published_events=published_events,
-        unknown_gpu_names=unknown_gpu_names,
-        publish_mode="dry_run" if dry_run or not automq_bootstrap_servers else "kafka",
-    )
-
-    return IngestResult(
-        provider=provider,
-        run_id=run_id,
-        raw_ref=raw_ref,
-        normalized_ref=normalized_ref,
-        raw_offer_count=len(executors),
-        normalized_offer_count=len(normalized),
-        unknown_gpu_names=unknown_gpu_names,
-        published_events=published_events,
-        publish_mode="dry_run" if dry_run or not automq_bootstrap_servers else "kafka",
-        manifest_ref=manifest.manifest_ref,
+        automq_bootstrap_servers=automq_bootstrap_servers,
+        automq_config=automq_config,
+        topic_prefix=topic_prefix,
+        dry_run=dry_run,
     )
 
 
@@ -425,8 +287,6 @@ def ingest_rate_card(
     observed_date = observed_at.date().isoformat()
     payload = rate_card_raw_payload(provider_name)
     entries = rate_card_entries(provider_name)
-    raw_payload_hash = sha256_json(payload)
-
     raw_ref = date_partition(
         raw_root,
         provider=provider_name,
@@ -434,93 +294,28 @@ def ingest_rate_card(
         run_id=run_id,
         filename="rate-card.json",
     )
-    write_json(raw_ref, payload)
-
     normalized, unknown_gpu_names = normalize_rate_card_entries(
         entries, observed_at=observed_at, raw_ref=raw_ref
     )
-    normalized_ref: str | None = None
-    if normalized:
-        normalized_ref = table_partition(
-            lake_root,
-            table="silver/gpu_offers",
-            observed_date=observed_date,
-            provider=provider_name,
-            run_id=run_id,
-            filename="offers.parquet",
-        )
-        write_offers_parquet(normalized_ref, normalized)
-
-    publisher = _publisher(
-        automq_bootstrap_servers=automq_bootstrap_servers,
-        automq_config=automq_config,
-        dry_run=dry_run,
-    )
-
-    published_events = 0
-    snapshot = ProviderSnapshot(
+    return _persist_publish_snapshot(
         provider=provider_name,
-        fetched_at=observed_at,
-        raw_ref=raw_ref,
-        payload_hash=raw_payload_hash,
-        offer_count=len(entries),
-        query={"source_type": "published_rate_card", "provider": provider_name},
-    )
-    snapshot_event = make_event(
-        event_type="gpu.provider_snapshot.v1",
-        provider=provider_name,
-        payload=snapshot.to_dict(),
         run_id=run_id,
         trace_id=trace_id,
+        observed_at=observed_at,
+        lake_root=lake_root,
         raw_ref=raw_ref,
-        event_time=observed_at,
-    )
-    publisher.publish(
-        f"{topic_prefix}.provider_snapshot.v1", snapshot_event, key=provider_name
-    )
-    published_events += 1
-
-    for offer in normalized:
-        event = make_event(
-            event_type="gpu.normalized_offer.v1",
-            provider=provider_name,
-            payload=offer.to_dict(),
-            run_id=run_id,
-            trace_id=trace_id,
-            raw_ref=raw_ref,
-            event_time=offer.observed_at,
-        )
-        publisher.publish(
-            f"{topic_prefix}.normalized_offer.v1", event, key=offer.event_key()
-        )
-        published_events += 1
-
-    publisher.flush()
-    manifest = write_run_manifest(
-        lake_root,
-        provider=provider_name,
-        run_id=run_id,
-        observed_date=observed_date,
-        raw_ref=raw_ref,
-        normalized_ref=normalized_ref,
+        raw_payload=payload,
         raw_offer_count=len(entries),
-        normalized_offer_count=len(normalized),
-        published_events=published_events,
+        normalized=normalized,
         unknown_gpu_names=unknown_gpu_names,
-        publish_mode="dry_run" if dry_run or not automq_bootstrap_servers else "kafka",
-    )
-
-    return IngestResult(
-        provider=provider_name,
-        run_id=run_id,
-        raw_ref=raw_ref,
-        normalized_ref=normalized_ref,
-        raw_offer_count=len(entries),
-        normalized_offer_count=len(normalized),
-        unknown_gpu_names=unknown_gpu_names,
-        published_events=published_events,
-        publish_mode="dry_run" if dry_run or not automq_bootstrap_servers else "kafka",
-        manifest_ref=manifest.manifest_ref,
+        snapshot_query={
+            "source_type": "published_rate_card",
+            "provider": provider_name,
+        },
+        automq_bootstrap_servers=automq_bootstrap_servers,
+        automq_config=automq_config,
+        topic_prefix=topic_prefix,
+        dry_run=dry_run,
     )
 
 

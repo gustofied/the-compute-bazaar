@@ -1,4 +1,4 @@
-"""Build Curia-authored gold market tables from normalized GPU offers."""
+"""Build gold market tables from normalized GPU offers."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from .benchmark_queries import (
+from .gold_models import (
     BENCHMARK_FAMILIES,
     BENCHMARK_METHODOLOGY_VERSION,
-    benchmark_constituents_v0_sql,
-    benchmark_values_v0_sql,
+    gold_model_sql,
+    gold_sql_models,
 )
 from .datafusion import query_parquet, query_tables
 from .manifest import read_latest_manifest
@@ -74,6 +74,15 @@ GOLD_TABLES = {
     "fact_compute_market_state": "compute_market_state.parquet",
     "fact_compute_market_state_history": "compute_market_state_history.parquet",
 }
+CORE_GOLD_SQL_TABLES = (
+    "fact_gpu_listings",
+    "dim_gpu_products",
+    "dim_providers",
+    "dim_regions",
+    "fact_price_index_values",
+    "fact_index_constituents",
+    "fact_compute_market_state",
+)
 PRIME_FRONTIER_GOLD_TABLES = {
     "fact_prime_frontier_offer_history": "prime_frontier_offer_history.parquet",
     "fact_prime_frontier_offer_events": "prime_frontier_offer_events.parquet",
@@ -185,6 +194,7 @@ def build_gold_market_tables(
         "gold_run_id": gold_run_id,
         "gold_observed_date": observed_date,
         "calculated_at": utc_now().isoformat(),
+        "market_state_methodology_version": MARKET_STATE_METHODOLOGY_VERSION,
     }
 
     tables = {
@@ -194,24 +204,52 @@ def build_gold_market_tables(
     silver_source_cte = _silver_source_cte(list(tables))
     rows_by_table = {
         "fact_gpu_listings": query_tables(
-            tables=tables, sql=_fact_gpu_listings_sql(query_context, silver_source_cte)
+            tables=tables,
+            sql=gold_model_sql(
+                "fact_gpu_listings",
+                query_context,
+                fragments={"silver_source_cte": silver_source_cte},
+            ),
         ),
         "dim_gpu_products": query_tables(
-            tables=tables, sql=_dim_gpu_products_sql(query_context, silver_source_cte)
+            tables=tables,
+            sql=gold_model_sql(
+                "dim_gpu_products",
+                query_context,
+                fragments={"silver_source_cte": silver_source_cte},
+            ),
         ),
         "dim_providers": query_tables(
-            tables=tables, sql=_dim_providers_sql(query_context, silver_source_cte)
+            tables=tables,
+            sql=gold_model_sql(
+                "dim_providers",
+                query_context,
+                fragments={"silver_source_cte": silver_source_cte},
+            ),
         ),
         "dim_regions": query_tables(
-            tables=tables, sql=_dim_regions_sql(query_context, silver_source_cte)
+            tables=tables,
+            sql=gold_model_sql(
+                "dim_regions",
+                query_context,
+                fragments={"silver_source_cte": silver_source_cte},
+            ),
         ),
         "fact_price_index_values": query_tables(
             tables=tables,
-            sql=_fact_price_index_values_sql(query_context, silver_source_cte),
+            sql=gold_model_sql(
+                "fact_price_index_values",
+                query_context,
+                fragments={"silver_source_cte": silver_source_cte},
+            ),
         ),
         "fact_index_constituents": query_tables(
             tables=tables,
-            sql=_fact_index_constituents_sql(query_context, silver_source_cte),
+            sql=gold_model_sql(
+                "fact_index_constituents",
+                query_context,
+                fragments={"silver_source_cte": silver_source_cte},
+            ),
         ),
     }
     market_state_tables = {
@@ -223,10 +261,16 @@ def build_gold_market_tables(
     }
     rows_by_table["fact_compute_market_state"] = query_tables(
         tables={**tables, **market_state_tables},
-        sql=_fact_compute_market_state_sql(
+        sql=gold_model_sql(
+            "fact_compute_market_state",
             query_context,
-            silver_source_cte,
-            _silver_state_source_cte(list(market_state_tables)),
+            fragments={
+                "silver_source_cte": silver_source_cte,
+                "state_cte": _silver_state_cte_fragment(list(market_state_tables)),
+                "state_union": _silver_state_union_fragment(
+                    bool(market_state_tables)
+                ),
+            },
         ),
     )
     rows_by_table["fact_compute_market_state_history"] = (
@@ -266,6 +310,24 @@ def build_gold_market_tables(
         rows_by_table.setdefault(table_name, [])
 
     row_counts = {table_name: len(rows) for table_name, rows in rows_by_table.items()}
+    executed_gold_models = [*CORE_GOLD_SQL_TABLES]
+    if "fact_prime_frontier_offer_reference_history" in table_refs:
+        executed_gold_models.append("fact_prime_frontier_offer_reference_history")
+    if "fact_prime_frontier_offer_ladder" in table_refs:
+        executed_gold_models.append("fact_prime_frontier_offer_ladder")
+    executed_gold_models.extend(
+        ["fact_benchmark_values", "fact_benchmark_constituents"]
+    )
+    sql_models = gold_sql_models(
+        executed_gold_models,
+        methodology_versions={
+            "fact_compute_market_state": MARKET_STATE_METHODOLOGY_VERSION,
+            "fact_prime_frontier_offer_reference_history": (
+                PRIME_FRONTIER_METHOD_VERSION
+            ),
+            "fact_prime_frontier_offer_ladder": PRIME_FRONTIER_METHOD_VERSION,
+        },
+    )
     manifest_ref = write_gold_manifest(
         lake_root=lake_root,
         provider_scope=provider_scope,
@@ -274,6 +336,7 @@ def build_gold_market_tables(
         source_manifests=source_manifests,
         table_refs=table_refs,
         row_counts=row_counts,
+        sql_models=sql_models,
     )
 
     return GoldBuildResult(
@@ -298,6 +361,7 @@ def write_gold_manifest(
     source_manifests: dict[str, dict[str, Any]],
     table_refs: dict[str, str],
     row_counts: dict[str, int],
+    sql_models: dict[str, dict[str, str]] | None = None,
 ) -> str:
     manifest_ref = gold_manifest_ref(
         lake_root, observed_date=observed_date, run_id=run_id
@@ -329,6 +393,7 @@ def write_gold_manifest(
         },
         "table_refs": table_refs,
         "row_counts": row_counts,
+        "sql_models": sql_models or {},
         "manifest_ref": manifest_ref,
     }
     write_json(manifest_ref, payload)
@@ -1507,244 +1572,6 @@ def export_gold_dashboard_snapshot(
     }
 
 
-def _fact_gpu_listings_sql(context: dict[str, str], silver_source_cte: str) -> str:
-    return f"""
-with {silver_source_cte}
-select
-  concat(provider, ':', source_offer_id) as listing_id,
-  provider as provider_id,
-  provider,
-  source_offer_id,
-  gpu_model as gpu_product_id,
-  gpu_model,
-  gpu_raw_name,
-  source_connector,
-  gpu_count,
-  available_gpu_count,
-  vram_gb,
-  price_usd_hr,
-  price_usd_hr as price_usd_instance_hr,
-  case
-    when gpu_count is not null and gpu_count > 0 then price_usd_hr / gpu_count
-    else price_usd_hr
-  end as price_usd_gpu_hr,
-  currency,
-  country,
-  region,
-  case
-    when country is null and region is null then 'unknown'
-    else concat(coalesce(country, 'unknown'), ':', coalesce(region, 'unknown'))
-  end as region_id,
-  is_spot,
-  is_secure,
-  availability_status,
-  gpu_socket,
-  stock_status,
-  price_is_variable,
-  minimum_executable_price_usd_hr,
-  required_resource_price_usd_hr,
-  price_basis,
-  'fresh' as freshness_status,
-  observed_at,
-  raw_ref,
-  raw_ref is not null as has_raw_evidence,
-  {_sql_literal(context["source_run_id"])} as source_run_id,
-  {_sql_literal(context["source_manifest_ref"])} as source_manifest_ref,
-  {_sql_literal(context["source_normalized_ref"])} as source_normalized_ref,
-  {_sql_literal(context["calculated_at"])} as calculated_at
-from silver_gpu_offers
-where price_usd_hr > 0
-"""
-
-
-def _dim_gpu_products_sql(context: dict[str, str], silver_source_cte: str) -> str:
-    return f"""
-with {silver_source_cte},
-usable_offers as (
-  select *
-  from silver_gpu_offers
-  where price_usd_hr > 0
-)
-select
-  gpu_model as gpu_product_id,
-  gpu_model,
-  max(vram_gb) as max_vram_gb,
-  min(gpu_count) as min_gpu_count,
-  max(gpu_count) as max_gpu_count,
-  count(*) as listing_count,
-  count(distinct provider) as provider_count,
-  min(price_usd_hr / case when gpu_count > 0 then gpu_count else 1 end) as floor_usd_gpu_hr,
-  max(observed_at) as latest_observed_at,
-  {_sql_literal(context["source_run_id"])} as source_run_id,
-  {_sql_literal(context["calculated_at"])} as calculated_at
-from usable_offers
-group by gpu_model
-order by floor_usd_gpu_hr asc, listing_count desc
-"""
-
-
-def _dim_providers_sql(context: dict[str, str], silver_source_cte: str) -> str:
-    return f"""
-with {silver_source_cte}
-select
-  provider as provider_id,
-  provider,
-  count(*) as listing_count,
-  count(distinct source_connector) as source_connector_count,
-  count(distinct gpu_model) as gpu_product_count,
-  count(distinct country) as country_count,
-  min(price_usd_hr / case when gpu_count > 0 then gpu_count else 1 end) as floor_usd_gpu_hr,
-  max(observed_at) as latest_observed_at,
-  {_sql_literal(context["source_run_id"])} as source_run_id,
-  {_sql_literal(context["calculated_at"])} as calculated_at
-from silver_gpu_offers
-where price_usd_hr > 0
-group by provider
-order by provider
-"""
-
-
-def _dim_regions_sql(context: dict[str, str], silver_source_cte: str) -> str:
-    return f"""
-with {silver_source_cte}
-select
-  case
-    when country is null and region is null then 'unknown'
-    else concat(coalesce(country, 'unknown'), ':', coalesce(region, 'unknown'))
-  end as region_id,
-  country,
-  region,
-  count(*) as listing_count,
-  count(distinct provider) as provider_count,
-  count(distinct gpu_model) as gpu_product_count,
-  min(price_usd_hr / case when gpu_count > 0 then gpu_count else 1 end) as floor_usd_gpu_hr,
-  max(observed_at) as latest_observed_at,
-  {_sql_literal(context["source_run_id"])} as source_run_id,
-  {_sql_literal(context["calculated_at"])} as calculated_at
-from silver_gpu_offers
-where price_usd_hr > 0
-group by country, region
-order by listing_count desc, region_id
-"""
-
-
-def _fact_price_index_values_sql(
-    context: dict[str, str], silver_source_cte: str
-) -> str:
-    return f"""
-with {silver_source_cte},
-usable_offers as (
-  select
-    provider,
-    gpu_model,
-    source_offer_id,
-    observed_at,
-    price_usd_hr,
-    case
-      when gpu_count is not null and gpu_count > 0 then price_usd_hr / gpu_count
-      else price_usd_hr
-    end as price_usd_gpu_hr,
-    country,
-    is_spot,
-    is_secure
-  from silver_gpu_offers
-  where price_usd_hr > 0
-    and availability_status in ('available', 'published_rate')
-)
-select
-  concat('CBZ-GPU-FLOOR-', gpu_model) as index_symbol,
-  gpu_model as gpu_product_id,
-  gpu_model,
-  'floor_v1' as methodology_version,
-  min(price_usd_gpu_hr) as floor_usd_gpu_hr,
-  avg(price_usd_gpu_hr) as simple_mean_usd_gpu_hr,
-  min(price_usd_hr) as cheapest_offer_usd_hr,
-  count(*) as offer_count,
-  count(distinct provider) as provider_count,
-  count(distinct country) as country_count,
-  sum(case when coalesce(is_secure, false) then 1 else 0 end) as secure_offer_count,
-  sum(case when coalesce(is_spot, false) then 1 else 0 end) as spot_offer_count,
-  max(observed_at) as latest_observed_at,
-  {_sql_literal(context["source_run_id"])} as source_run_id,
-  {_sql_literal(context["calculated_at"])} as calculated_at
-from usable_offers
-group by gpu_model
-order by floor_usd_gpu_hr asc, offer_count desc
-"""
-
-
-def _fact_index_constituents_sql(
-    context: dict[str, str], silver_source_cte: str
-) -> str:
-    return f"""
-with {silver_source_cte},
-candidate_offers as (
-  select
-    concat(provider, ':', source_offer_id) as listing_id,
-    provider,
-    source_connector,
-    source_offer_id,
-    gpu_model,
-    available_gpu_count,
-    price_usd_hr,
-    case
-      when gpu_count is not null and gpu_count > 0 then price_usd_hr / gpu_count
-      else price_usd_hr
-    end as price_usd_gpu_hr,
-    country,
-    region,
-    availability_status,
-    case
-      when price_usd_hr is null or price_usd_hr <= 0 then false
-      when availability_status not in ('available', 'published_rate') then false
-      else true
-    end as included,
-    case
-      when price_usd_hr is null or price_usd_hr <= 0 then 'non_positive_price'
-      when availability_status not in ('available', 'published_rate') then 'not_available'
-      else null
-    end as exclusion_reason,
-    observed_at
-  from silver_gpu_offers
-),
-ranked as (
-  select
-    *,
-    case
-      when included then row_number() over(partition by gpu_model, included order by price_usd_gpu_hr asc, price_usd_hr asc)
-      else null
-    end as constituent_rank
-  from candidate_offers
-)
-select
-  concat('CBZ-GPU-FLOOR-', gpu_model, ':', {_sql_literal(context["source_run_id"])}) as index_value_id,
-  concat('CBZ-GPU-FLOOR-', gpu_model) as index_symbol,
-  gpu_model as gpu_product_id,
-  gpu_model,
-  listing_id,
-  provider,
-  source_connector,
-  source_offer_id,
-  price_usd_hr,
-  price_usd_gpu_hr,
-  available_gpu_count,
-  country,
-  region,
-  availability_status,
-  included,
-  exclusion_reason,
-  observed_at,
-  constituent_rank,
-  included and constituent_rank = 1 as is_floor_constituent,
-  {_sql_literal(context["source_run_id"])} as source_run_id,
-  {_sql_literal(context["source_manifest_ref"])} as source_manifest_ref,
-  {_sql_literal(context["source_normalized_ref"])} as source_normalized_ref,
-  {_sql_literal(context["calculated_at"])} as calculated_at
-from ranked
-order by gpu_model, included desc, constituent_rank asc, price_usd_gpu_hr asc
-"""
-
-
 def _benchmark_rows_from_latest_listings(
     manifest: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -1761,7 +1588,10 @@ def _benchmark_values_from_latest_listings(
     return query_parquet(
         parquet_uri=manifest["table_refs"]["fact_gpu_listings"],
         table_name="fact_gpu_listings",
-        sql=benchmark_values_v0_sql(_benchmark_context(manifest)),
+        sql=gold_model_sql(
+            "fact_benchmark_values",
+            _benchmark_context(manifest),
+        ),
     )
 
 
@@ -1800,12 +1630,12 @@ def _benchmark_rows_from_listing_ref(
     values = query_parquet(
         parquet_uri=table_ref,
         table_name="fact_gpu_listings",
-        sql=benchmark_values_v0_sql(context),
+        sql=gold_model_sql("fact_benchmark_values", context),
     )
     constituents = query_parquet(
         parquet_uri=table_ref,
         table_name="fact_gpu_listings",
-        sql=benchmark_constituents_v0_sql(context),
+        sql=gold_model_sql("fact_benchmark_constituents", context),
     )
     return values, constituents
 
@@ -1824,190 +1654,6 @@ def _observed_date(manifest: dict[str, Any]) -> str:
         except ValueError:
             pass
     return utc_now().date().isoformat()
-
-
-def _fact_compute_market_state_sql(
-    context: dict[str, str],
-    silver_source_cte: str,
-    silver_state_source_cte: str | None,
-) -> str:
-    state_cte = f",\n{silver_state_source_cte}" if silver_state_source_cte else ""
-    state_union = (
-        """
-  union all
-  select
-    observation_id,
-    observed_at,
-    resource_market,
-    resource_type,
-    provider,
-    source_connector,
-    source_role,
-    measurement_kind,
-    measurement_scope,
-    unit,
-    total_units,
-    rented_units,
-    available_units,
-    pending_units,
-    rented_share,
-    available_share,
-    stock_status,
-    count_precision,
-    numerator_definition,
-    denominator_definition,
-    aggregation_eligible,
-    aggregation_exclusion_reason,
-    source_url,
-    raw_ref,
-    methodology_version,
-    notes,
-    source_run_id,
-    source_manifest_ref,
-    source_normalized_ref,
-    source_market_state_ref
-  from silver_compute_market_state
-"""
-        if silver_state_source_cte
-        else ""
-    )
-    return f"""
-with {silver_source_cte}{state_cte},
-listing_depth as (
-  select
-    concat(
-      'listing-depth:',
-      provider,
-      ':',
-      coalesce(source_connector, provider),
-      ':',
-      gpu_model,
-      ':',
-      {_sql_literal(context["calculated_at"])}
-    ) as observation_id,
-    max(observed_at) as observed_at,
-    'gpu' as resource_market,
-    gpu_model as resource_type,
-    provider,
-    coalesce(source_connector, provider) as source_connector,
-    case
-      when coalesce(source_connector, provider) <> provider then 'aggregator'
-      else 'direct'
-    end as source_role,
-    'listed_offer_depth' as measurement_kind,
-    'normalized_current_offers' as measurement_scope,
-    'offers' as unit,
-    cast(count(*) as double) as total_units,
-    cast(null as double) as rented_units,
-    cast(
-      sum(
-        case
-          when availability_status in (
-            'available',
-            'spot_available',
-            'available_component_rate',
-            'published_rate'
-          ) then 1
-          else 0
-        end
-      ) as double
-    ) as available_units,
-    cast(null as double) as pending_units,
-    cast(null as double) as rented_share,
-    cast(
-      sum(
-        case
-          when availability_status in (
-            'available',
-            'spot_available',
-            'available_component_rate',
-            'published_rate'
-          ) then 1
-          else 0
-        end
-      ) as double
-    ) / cast(count(*) as double) as available_share,
-    cast(null as varchar) as stock_status,
-    'normalized_offer_count' as count_precision,
-    'Normalized listings currently marked available.' as numerator_definition,
-    'All normalized current listings from the same provider connector and GPU product.' as denominator_definition,
-    true as aggregation_eligible,
-    cast(null as varchar) as aggregation_exclusion_reason,
-    cast(null as varchar) as source_url,
-    min(raw_ref) as raw_ref,
-    'compute_market_state_gold_v1' as methodology_version,
-    'Offer depth is a listing-surface measure, not physical fleet capacity or rented share.' as notes,
-    {_sql_literal(context["source_run_id"])} as source_run_id,
-    {_sql_literal(context["source_manifest_ref"])} as source_manifest_ref,
-    {_sql_literal(context["source_normalized_ref"])} as source_normalized_ref,
-    cast(null as varchar) as source_market_state_ref
-  from silver_gpu_offers
-  group by provider, coalesce(source_connector, provider), gpu_model
-),
-all_state as (
-  select * from listing_depth
-  {state_union}
-),
-direct_keys as (
-  select distinct provider, resource_type, measurement_kind
-  from all_state
-  where source_role = 'direct'
-),
-ranked_state as (
-  select
-    state.*,
-    direct_keys.provider is not null as matching_direct_source
-  from all_state state
-  left join direct_keys
-    on state.provider = direct_keys.provider
-   and state.resource_type = direct_keys.resource_type
-   and state.measurement_kind = direct_keys.measurement_kind
-)
-select
-  observation_id,
-  observed_at,
-  resource_market,
-  resource_type,
-  provider,
-  source_connector,
-  source_role,
-  measurement_kind,
-  measurement_scope,
-  unit,
-  total_units,
-  rented_units,
-  available_units,
-  pending_units,
-  rented_share,
-  available_share,
-  stock_status,
-  count_precision,
-  numerator_definition,
-  denominator_definition,
-  case
-    when source_role = 'aggregator' and matching_direct_source then false
-    else aggregation_eligible
-  end as aggregation_eligible,
-  case
-    when source_role = 'aggregator' and matching_direct_source
-      then 'matching_direct_provider_source'
-    else aggregation_exclusion_reason
-  end as aggregation_exclusion_reason,
-  source_url,
-  raw_ref,
-  methodology_version,
-  notes,
-  source_run_id,
-  source_manifest_ref,
-  source_normalized_ref,
-  source_market_state_ref,
-  {_sql_literal(context["calculated_at"])} as calculated_at,
-  {_sql_literal(context["gold_run_id"])} as gold_run_id,
-  {_sql_literal(context["calculated_at"])} as gold_observed_at,
-  {_sql_literal(context["gold_observed_date"])} as gold_observed_date
-from ranked_state
-order by measurement_kind, provider, resource_type, source_connector
-"""
 
 
 def _build_prime_frontier_gold_products(
@@ -2190,11 +1836,51 @@ def _silver_source_cte(table_names: list[str]) -> str:
     return f"silver_gpu_offers as ({' union all '.join(selects)})"
 
 
-def _silver_state_source_cte(table_names: list[str]) -> str | None:
+def _silver_state_cte_fragment(table_names: list[str]) -> str:
     if not table_names:
-        return None
+        return ""
     selects = [f"select * from {table_name}" for table_name in table_names]
-    return f"silver_compute_market_state as ({' union all '.join(selects)})"
+    return f",\nsilver_compute_market_state as ({' union all '.join(selects)})"
+
+
+def _silver_state_union_fragment(has_market_state: bool) -> str:
+    if not has_market_state:
+        return ""
+    return """
+union all
+select
+  observation_id,
+  observed_at,
+  resource_market,
+  resource_type,
+  provider,
+  source_connector,
+  source_role,
+  measurement_kind,
+  measurement_scope,
+  unit,
+  total_units,
+  rented_units,
+  available_units,
+  pending_units,
+  rented_share,
+  available_share,
+  stock_status,
+  count_precision,
+  numerator_definition,
+  denominator_definition,
+  aggregation_eligible,
+  aggregation_exclusion_reason,
+  source_url,
+  raw_ref,
+  methodology_version,
+  notes,
+  source_run_id,
+  source_manifest_ref,
+  source_normalized_ref,
+  source_market_state_ref
+from silver_compute_market_state
+"""
 
 
 def _merge_compute_market_state_history(

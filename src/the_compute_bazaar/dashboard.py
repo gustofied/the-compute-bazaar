@@ -56,9 +56,7 @@ SNAPSHOT_FILES = {
     "prime-frontier-b200": "prime-frontier/b200.json",
     "prime-frontier-b300": "prime-frontier/b300.json",
     "capacity-market-state": "capacity/market-state.json",
-    "sandbox-rates": "sandbox/rates.json",
     "sandbox-workload": "sandbox/workload.json",
-    "sandbox-relative": "sandbox/relative.json",
 }
 
 

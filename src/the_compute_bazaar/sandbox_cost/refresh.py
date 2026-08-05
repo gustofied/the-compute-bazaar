@@ -14,10 +14,10 @@ import requests
 from .pipeline import (
     BENCHMARK_EVIDENCE,
     EVIDENCE_ROOT,
-    PRICE_EVIDENCE,
     RUNTIME_PRICE_SERIES,
     SOURCE_MANIFEST,
     TARGET_SHAPE,
+    WORKLOAD_COST_INPUTS,
     _read_local_json,
     _validate_batches,
     _validate_phases,
@@ -130,7 +130,7 @@ def refresh_benchmark_sources(
             continue
         runs.append(run)
 
-    price_payload = _read_local_json(PRICE_EVIDENCE)
+    price_payload = _read_local_json(WORKLOAD_COST_INPUTS)
     prices = _validate_prices(price_payload["rows"])
     extracted = extract_benchmark_evidence(
         runs=runs,

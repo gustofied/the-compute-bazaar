@@ -1,4 +1,4 @@
-"""Operator helpers for Curia query catalog inspection and evidence previews."""
+"""Operator helpers for saved SQL queries and evidence previews."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from .query_catalog import (
     run_scratch_query,
     scratch_query_entry,
 )
+from .sql_models import PACKAGE_ROOT
 from .storage import read_bytes, read_json
 
 MAX_REF_PREVIEW_BYTES = 128 * 1024
@@ -243,8 +244,8 @@ def trace_operator_row(
                 "note": silver_note,
             },
             {
-                "layer": "curia",
-                "title": "Curia / DataFusion query",
+                "layer": "sql",
+                "title": "DataFusion SQL query",
                 "refs": [query.catalog_entry(manifest)["sql_path"], *list(gold_table_refs.values())],
                 "note": f"Query `{query.query_id}` {query.version} over {', '.join(query.tables)}.",
             },
@@ -252,7 +253,7 @@ def trace_operator_row(
                 "layer": "gold",
                 "title": "Gold market object",
                 "refs": list(gold_table_refs.values()),
-                "note": "Curia-authored product truth read by dashboards, CLI, and future agents.",
+                "note": "Gold data read by dashboards, CLI, and future agents.",
             },
         ],
         "gold": {
@@ -343,8 +344,9 @@ def _read_allowed_ref_json(ref: str) -> Any:
 
 
 def _safe_project_ref(ref: str) -> Path:
-    path = (PROJECT_ROOT / ref).resolve()
-    if PROJECT_ROOT.resolve() != path and PROJECT_ROOT.resolve() not in path.parents:
+    root = PACKAGE_ROOT if ref.startswith("sql/") else PROJECT_ROOT
+    path = (root / ref).resolve()
+    if root.resolve() != path and root.resolve() not in path.parents:
         raise PermissionError("Ref escapes the project root")
     return path
 
@@ -399,8 +401,12 @@ def _operator_manifest_summary(manifest: dict[str, Any] | None) -> dict[str, Any
 
 
 def _read_operator_manifest(lake_root: str) -> dict[str, Any]:
-    gpu_manifest = dict(read_latest_gold_manifest(lake_root))
+    gpu_manifest = _optional_gpu_manifest(lake_root)
     sandbox_manifest = _optional_sandbox_manifest(lake_root)
+    if not gpu_manifest and not sandbox_manifest:
+        raise FileNotFoundError(
+            f"No complete GPU or measured-workload Gold manifest under {lake_root}"
+        )
     market_run = _optional_market_run(lake_root)
     table_refs = dict(gpu_manifest.get("table_refs") or {})
     row_counts = dict(gpu_manifest.get("row_counts") or {})
@@ -409,15 +415,22 @@ def _read_operator_manifest(lake_root: str) -> dict[str, Any]:
         row_counts.update(dict(sandbox_manifest.get("row_counts") or {}))
 
     return {
-        **gpu_manifest,
+        **(gpu_manifest or sandbox_manifest),
         "table_refs": table_refs,
         "row_counts": row_counts,
         "market_run": market_run,
         "component_manifests": {
-            "gpu": gpu_manifest,
+            **({"gpu": gpu_manifest} if gpu_manifest else {}),
             **({"sandbox": sandbox_manifest} if sandbox_manifest else {}),
         },
     }
+
+
+def _optional_gpu_manifest(lake_root: str) -> dict[str, Any]:
+    try:
+        return dict(read_latest_gold_manifest(lake_root))
+    except Exception:  # noqa: BLE001 - GPU gold is an optional operator component.
+        return {}
 
 
 def _optional_sandbox_manifest(lake_root: str) -> dict[str, Any]:
@@ -563,9 +576,9 @@ def _allowed_refs(manifest: dict[str, Any]) -> set[str]:
         refs.update(_ref_values(component_manifest.get("silver_refs")))
         refs.update(_ref_values(component_manifest.get("table_refs")))
         refs.update(_source_manifest_refs(component_manifest))
-    refs.add(str(DEFAULT_QUERY_CATALOG_PATH.relative_to(PROJECT_ROOT)))
+    refs.add(str(DEFAULT_QUERY_CATALOG_PATH.relative_to(PACKAGE_ROOT)))
     for query in load_query_catalog():
-        refs.add(str(query.sql_path.relative_to(PROJECT_ROOT)))
+        refs.add(str(query.sql_path.relative_to(PACKAGE_ROOT)))
     return refs
 
 

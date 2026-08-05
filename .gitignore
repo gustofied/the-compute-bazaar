@@ -15,7 +15,7 @@ dist/
 notes/
 data/
 
-# Terraform local state
+
 .terraform/
 *.tfstate
 *.tfstate.*
@@ -24,14 +24,14 @@ terraform.tfvars.json
 tfplan
 *.tfplan
 
-# Generated analysis artefacts
+
 *.png
 *.csv
 *.xlsx
 !docs/assets/compute-bazaar-wordmark.png
 !compute-bazaar-bench/evals/**/environment/matter/*.csv
 
-# Lab generated artifacts
+
 /AGENTS.md
 /CLAUDE.md
 /CLAUDE.local.md

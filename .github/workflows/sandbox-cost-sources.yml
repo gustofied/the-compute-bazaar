@@ -38,13 +38,7 @@ jobs:
           --source-ref main
           --check
 
-      - name: Check exact public VM cohort schemas
-        run: >-
-          uv run --package the-compute-bazaar sandbox-cost refresh-vm-capacity
-          --output-root /tmp/sandbox-cost-vm
-          --raw-root /tmp/sandbox-cost-vm-raw
-
-      - name: Run focused benchmark tests
+      - name: Run repository tests
         run: >-
           uv run --package the-compute-bazaar python -m unittest
-          tests.test_sandbox_cost tests.test_vm_capacity
+          discover -s tests -v

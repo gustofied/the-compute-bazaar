@@ -95,7 +95,7 @@ async function runScratchSql() {
   renderQueryList();
   nodes.resultKicker.textContent = "Scratch DataFusion SQL";
   nodes.resultTitle.textContent = "Scratch SQL";
-  nodes.resultDescription.textContent = "Read-only SQL over the latest gold tables. Promote useful queries into the Curia catalog.";
+  nodes.resultDescription.textContent = "Read-only SQL over the latest Gold tables. Save useful queries in the shared catalog.";
   setStatus("Running scratch SQL...");
 
   try {
@@ -267,7 +267,7 @@ function inspectScratchRow(index, row) {
         })}
       </div>
     </div>
-    <p class="lineage-empty">Scratch SQL is exploratory. Promote useful SQL into <code>queries/curia/</code> to make it versioned, named, and lineage-aware.</p>
+    <p class="lineage-empty">Scratch SQL is exploratory. Add useful SQL to <code>sql/queries/</code> to make it versioned, named, and lineage-aware.</p>
   `;
   nodes.refPreview.innerHTML = "";
 }

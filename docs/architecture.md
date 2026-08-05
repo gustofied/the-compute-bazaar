@@ -1,7 +1,7 @@
 # Compute Bazaar Architecture
 
 The platform is a GPU market-data system: provider APIs are sampled, raw evidence is retained,
-offers are normalized, and Curia-authored market products are exposed through DataFusion-backed
+offers are normalized, and Gold market products are exposed through DataFusion-backed
 queries, dashboard snapshots, and later API/MCP tools.
 
 ```mermaid
@@ -9,8 +9,7 @@ flowchart LR
   Vast["Provider API: Vast.ai"] --> Windmill["Windmill scheduled workers"]
   Lium["Provider API: Lium"] --> Windmill
   Rates["Official published rate cards"] --> Windmill
-  VMCatalogs["Exact public VM catalog APIs"] --> Windmill
-  SandboxRates["Reviewed sandbox price evidence"] --> SandboxBronze["Sandbox bronze evidence"]
+  WorkloadPrices["Reviewed processor and memory prices"] --> SandboxBronze["Measured-workload bronze evidence"]
   StarSling["StarSling public benchmark runs"] --> SandboxBronze
 
   Windmill --> AutoMQ["AutoMQ / Kafka topics"]
@@ -18,24 +17,18 @@ flowchart LR
   Windmill --> Silver["S3 silver: normalized provider offers"]
   Windmill --> MarketRun["S3 manifest: market run heartbeat"]
 
-  Silver --> Curia["Curia Engine: methodology, quality, transforms"]
-  Curia --> DataFusion["DataFusion SQL engine"]
-  DataFusion --> Curia
-  Curia --> Gold["S3 gold: Curia-authored market objects"]
-  Bronze --> VMSilver["VM silver: exact-shape hourly observations"]
-  VMSilver --> DataFusion
-  DataFusion --> VMGold["VM gold: fixed cohort and substrate comparison"]
-  SandboxBronze --> SandboxSilver["Sandbox silver: prices, batches, jobs, phases"]
+  Silver --> DataFusion["DataFusion SQL models"]
+  DataFusion --> Gold["S3 gold: maintained market objects"]
+  SandboxBronze --> SandboxSilver["Workload silver: runs, jobs, phases, price inputs"]
   SandboxSilver --> DataFusion
-  DataFusion --> SandboxGold["Sandbox gold: rates, workload, base-100"]
+  DataFusion --> SandboxGold["Workload gold: estimated job-cost distributions"]
   Bronze --> Workspace["Evidence workspace: raw files, notes, investigations"]
-  Workspace --> Curia
+  Workspace --> Gold
 
   Gold --> CLI["CLI queries"]
   Gold --> API["Future API / MCP"]
   Gold --> Dashboard["D3 blog/dashboard"]
   SandboxGold --> Dashboard
-  VMGold --> Dashboard
   MarketRun --> Dashboard
   MarketRun --> API
   AutoMQ --> Live["Future live backend / live feed"]
@@ -50,11 +43,13 @@ Silver is normalized provider data. The first silver table is `silver/gpu_offers
 schema across providers: provider, source offer ID, GPU model, GPU count, price, location,
 availability, observation time, and raw reference.
 
-Curia is the authoring layer. Curia decides which inputs are allowed, which methodology version
-runs, which SQL or non-SQL algorithms execute, which quality rules apply, and what gets written to
-Gold. DataFusion is one compute engine Curia uses for SQL over Parquet lake tables.
+DataFusion is the structured transformation and query engine over Parquet lake
+tables. Python orchestrates ingestion, execution, storage, manifests, and
+publication; relational market calculations live in versioned SQL models under
+`src/the_compute_bazaar/sql/models/`. Each executed model is identified by path
+and SHA-256 in the Gold manifest.
 
-Gold is the product truth layer. Gold tables are Curia-authored models for comparisons, dashboards,
+Gold is the product truth layer. Gold tables are maintained models for comparisons, dashboards,
 APIs, CLI queries, agents, and index calculations:
 
 - `gold.fact_gpu_listings`
@@ -81,7 +76,7 @@ Silver should be standardized.
 Gold must be authored.
 ```
 
-See [curia-engine.md](curia-engine.md) for the Curia boundary.
+See [sql.md](sql.md) for the SQL model and saved-query boundary.
 
 ## Compute Index
 
@@ -89,7 +84,7 @@ The compute index is a first-class gold product, not just an ad hoc query result
 
 ```text
 silver/gpu_offers
-  -> Curia Engine
+  -> DataFusion SQL models
   -> gold/fact_gpu_listings
   -> named DataFusion methodology query
   -> gold/fact_price_index_values
@@ -130,16 +125,16 @@ Rows with `included = false` are not part of the published floor/index value. Th
 `exclusion_reason` records why, such as `not_available` or `non_positive_price`.
 
 That makes the index auditable. Every product output should be traceable back to the raw provider
-evidence, the gold inputs, and the Curia methodology that produced it.
+evidence, the Gold inputs, and the SQL methodology that produced it.
 
 ## Benchmark Products
 
-The H100/H200/B200/B300 benchmark strip is also a Curia-authored gold product. The current v0
+The H100/H200/B200/B300 benchmark strip is a SQL-authored Gold product. The current
 methodology is query-defined in DataFusion SQL:
 
 ```text
 gold.fact_gpu_listings
-  -> benchmark_frontier_gpu_families_v1
+  -> benchmark_frontier_gpu_families_v2
   -> gold.fact_benchmark_values
   -> gold.fact_benchmark_constituents
 ```
@@ -149,13 +144,14 @@ manifests are the reproducible methodology. This is why benchmark rows carry bot
 `methodology_version` and `methodology_query_id`.
 
 The operator workbench uses the same idea for inspection views: named SQL files
-live under `queries/curia/`, with metadata in `queries/curia/catalog.json`. The
+live under `src/the_compute_bazaar/sql/queries/`, with metadata in
+`src/the_compute_bazaar/sql/catalog.json`. The
 API and CLI run those SQL files through DataFusion rather than embedding the
-view logic in Python. The workbench composes the latest GPU and sandbox/VM
+view logic in Python. The workbench composes the latest GPU and measured-workload
 manifests, so one catalog can inspect all maintained gold products while
 keeping each component manifest and lineage chain explicit. Scratch SQL is
 read-only and can access only tables declared by those manifests. Useful
-queries should be promoted into the Curia catalog before they become stable
+queries should be promoted into the saved-query catalog before they become stable
 inspection views or methodology.
 
 ### Prime Frontier Offer Market
@@ -170,7 +166,7 @@ Prime immutable API snapshots
   -> observable lifecycle events
   -> provider-balanced reference history
   -> $0.25 shelf centered on the wider benchmark
-  -> public-safe JSON / D3 card / Curia SQL
+  -> public-safe JSON / D3 card / saved SQL
 ```
 
 Each family reference is the median of one lowest eligible base rate per
@@ -184,63 +180,37 @@ transaction evidence.
 
 ## Sandbox Cost Product
 
-The sandbox-cost benchmark applies the same layer discipline to exact-shape
-public VM offers, reviewed managed-sandbox CPU and memory rates, and the
-StarSling HPC Sandbox Benchmark:
+The measured-workload product applies the same layer discipline to the
+StarSling HPC Sandbox Benchmark and the reviewed processor-and-memory prices
+required to estimate each completed job's cost:
 
 ```text
-exact public VM APIs + reviewed sandbox price evidence
-  + commit-pinned public benchmark source
+reviewed processor-and-memory price inputs
+  + commit-pinned StarSling benchmark evidence
   -> bronze
-  -> silver/vm_capacity_offer_history
-  -> silver/vm_capacity_current
-  -> silver/sandbox_hourly_prices
   -> silver/sandbox_benchmark_batches
   -> silver/sandbox_benchmark_replicates
   -> silver/sandbox_benchmark_phases
   -> silver/sandbox_benchmark_run_metadata
   -> DataFusion methodology queries
-  -> gold/vm_capacity_current
-  -> gold/vm_capacity_fixed_rate
-  -> gold/vm_sandbox_current_comparison
-  -> gold/sandbox_hourly_price_series
-  -> gold/sandbox_price_events
-  -> gold/sandbox_current_rates
-  -> gold/sandbox_fixed_rate
   -> gold/sandbox_workload_batch_history
   -> gold/sandbox_workload_latest_replicates
   -> gold/sandbox_workload_latest_phases
   -> gold/sandbox_workload_phase_summary
   -> gold/sandbox_workload_service_summary
   -> gold/sandbox_workload_run_history
-  -> gold/gpu_h100_daily_coverage
-  -> gold/gpu_h100_eligible_history
-  -> gold/sandbox_gpu_cpu_common_start
   -> dashboard/compute-bazaar/sandbox-cost.json
+  -> dashboard/compute-bazaar/sandbox/workload.json
 ```
 
-The VM product uses a fixed seven-vendor cohort of exact four-vCPU, 8 GiB
-on-demand offers. Each hourly check retains raw API responses and checksums,
-and silver appends one normalized observation per successful source even when
-the price is unchanged. Gold publishes one median/p25-p75/min/max point for
-every complete seven-vendor timestamp, the same fields rebased to the first
-complete VM median, the current cross-section, and a descriptive
-VM-to-sandbox rate ratio. The earlier four-vendor cohort remains queryable as
-v1 audit data. Akash request estimates are retained as marketplace indications
-and excluded from the vendor median. Bundled storage and CPU semantics remain
-explicit; the ratio is not a margin or like-for-like product decomposition.
-
-The fixed hourly rate uses the same eight services at every event date and
-publishes the cohort median and p25-p75 range; the arithmetic mean remains a
-secondary descriptive field. The latest workload product reconstructs 72
-complete individual jobs from 720 phase samples with aligned upstream replicate
-indices. Its cost field is
+The active sandbox product reconstructs complete individual jobs from retained
+StarSling phase samples with aligned upstream replicate indices. Its cost field is
 `measured_phase_seconds / 3600 * hourly_price`, using only the public
 processor-and-memory component. It is a marginal rate-card estimate, not a
 provider bill.
 
-The historical workload table retains 62 provider-batch means from eleven source
-runs. Those batches cross ten harness revisions, so history is stratified by
+The historical workload table retains 80 provider-batch means from fourteen source
+runs. Those batches cross thirteen harness revisions, so history is stratified by
 methodology rather than rendered as one homogeneous performance series.
 Lifecycle latency, queueing, reliability, and concurrency remain separate
 future measurements.
@@ -249,18 +219,14 @@ DataFusion also groups the retained provider-batch rows by source run into
 `sandbox_workload_run_history`. Each row carries service count, fixed-cohort
 completeness, median/p25/p75 runtime, median/p25/p75 estimated
 processor-and-memory cost, source run ID, source commit, and methodology ID.
-All eleven source runs remain present, including repeated intraday runs. The
-article's headline history uses only the seven runs containing all six fixed
+All fourteen source runs remain present, including repeated intraday runs. The
+article's headline history uses only the ten runs containing all six fixed
 services; it does not rewrite incomplete runs or average them by day.
 
-The combined GPU/sandbox series uses hourly H100 benchmark prints only when at
-least 10 providers contribute. It rebases both compatible series to 100 at the
-first eligible H100 timestamp. The independently based VM/VPS series joins the
-frontend comparison from its first complete seven-vendor observation. All
-three metrics are built in DataFusion before publication. The full retained
-H100 history remains in the coverage table, including excluded low-coverage
-periods. This view does not combine raw dollar levels or claim demand or
-transaction volume.
+The old sparse sandbox rate-card history and common-start GPU/VM/sandbox chart
+are archived and no longer published. Runtime remains in Gold because it is
+required to reproduce each cost, while the public product focuses on estimated
+cost per completed benchmark job.
 
 The market-state product separately publishes source-reported active or rented
 capacity where numerator and denominator exist. Akash CPU, GPU, memory, and
@@ -269,26 +235,15 @@ series. The article pairs each selected share with its source numerator,
 denominator, unit, and scope; those counts are capacity observations, not
 transaction volume, and no statistical band is inferred.
 
-The article market pulse composes existing gold products without deriving
-market statistics in JavaScript. Its six panes are:
+The public measured-workload card advances only after the daily source poll
+finds another compatible StarSling generation. It presents estimated cost per
+completed job. Runtime remains in Gold solely to reproduce and audit that cost.
 
-```text
-H100 observed benchmark | Akash available GPU share
-seven-vendor VM median  | Akash available CPU share
-StarSling job-cost median | StarSling measured-runtime median
-```
-
-The first four panes advance with the hourly market run. The StarSling panes
-advance only after the daily public-source poll publishes another compatible
-content-addressed generation. A 1D view may retain the latest StarSling point
-for context, but it labels the point's actual source time and says when it lies
-outside the selected live window.
-
-The hourly Windmill heartbeat checks the exact VM APIs and rebuilds this gold
-product after GPU dashboard history is exported. A separate daily source check
-detects VM source/schema drift and new or changed StarSling evidence. Managed
-sandbox price pages are reviewed manually because their billing semantics are
-not safely interchangeable or uniformly machine-readable.
+The hourly Windmill heartbeat rebuilds the workload-cost Gold projection after
+GPU dashboard history is exported. A separate daily source check detects new
+or changed StarSling evidence. Processor-and-memory price inputs are reviewed
+manually because provider billing semantics are not safely interchangeable or
+uniformly machine-readable.
 
 See [sandbox-cost-benchmark.md](sandbox-cost-benchmark.md) for the complete
 measurement and maintenance contract.
@@ -303,7 +258,7 @@ The future agent workspace is not Gold. It is where agents and operators can do 
 - write anomaly notes
 - produce candidate labels
 
-Those artifacts can become Gold only after Curia validates and promotes them into a controlled
+Those artifacts can become Gold only after validation promotes them into a controlled
 label, signal, score, or narrative table.
 
 ## Current Stage
@@ -333,38 +288,28 @@ Stage 1 is live:
   source supplies both the rented numerator and matching total denominator.
 - AutoMQ receives provider snapshot and normalized offer events.
 - AutoMQ also receives `gpu.market_state_observation.v1` events.
-- Curia can use DataFusion to query the latest silver/gold manifests and Parquet files.
+- DataFusion queries the latest Silver and Gold Parquet tables.
 
 Stage 1.5 is operating:
 
-- `gpu-prices build-gold` builds the first gold tables from latest silver.
-- `gpu-prices gold-index` queries `gold.fact_price_index_values`.
-- `gpu-prices gold-index-quality` summarizes included/excluded candidate counts.
-- `gpu-prices gold-index-constituents` exposes index evidence rows.
-- `gpu-prices gold-provider-comparison` queries provider floors from `gold.fact_gpu_listings`.
-- `gpu-prices gold-benchmarks` queries the materialized benchmark values.
-- `gpu-prices gold-benchmark-constituents` exposes benchmark evidence rows.
-- `operator-query compute_market_state --version v1` queries current
-  occupancy, availability pressure, and offer depth through DataFusion.
-- `operator-query compute_price_cross_section --version v0` inspects current
-  GPU benchmark, exact-shape VM, and managed-sandbox prices with their
-  different units and shapes preserved.
-- `operator-query sandbox_workload_costs --version v0` inspects measured
-  runtime and estimated processor-and-memory cost from workload gold.
-- `gpu-prices export-gold-dashboard` writes public-safe JSON snapshots for static D3 sections.
-- `gpu-prices market-hourly` runs the complete provider-to-dashboard heartbeat and writes
-  `gold/_manifests/market_runs/latest.json`.
+- The hourly Python market service builds Gold tables from retained Silver.
+- DataFusion queries index values, constituents, provider comparisons,
+  benchmark values, market state, and measured-workload costs.
+- Saved SQL provides reviewed reusable questions over the latest Gold manifest.
+- The public exporter writes sanitized JSON snapshots for static D3 sections.
+- Windmill calls the market service directly and writes
+  `gold/_manifests/market_runs/latest.json` for the complete heartbeat.
 
-The Windmill schedule is active. GPU and sandbox gold manifests point to
-immutable run/build generations, and the VM collectors serialize cumulative
-history updates with conditional S3 leases. Operational status now describes
-whether ingestion and publication worked; unknown GPU aliases are retained
-separately as normalization/data-quality debt. An hourly external freshness
-check watches the public snapshot and latest complete VM observation.
+The Windmill schedule is active. GPU and measured-workload Gold manifests point
+to immutable run/build generations. Operational status describes whether
+ingestion and publication worked; unknown GPU aliases are retained separately
+as normalization/data-quality debt. An hourly external check watches the public
+workload-cost projection, while the underlying StarSling observation advances
+only when the upstream project publishes another compatible run.
 
 The operator displays the latest market-run health separately from product
 availability. A partial upstream failure therefore remains visible even when
-Curia successfully writes a coherent gold generation from the other sources.
+the pipeline successfully writes a coherent Gold generation from the other sources.
 The public article stays a smaller narrative projection; it is not the place
 to expose every table or private lake reference.
 
@@ -399,12 +344,9 @@ payload bounded without making the publication file the system of record.
 ## Direct Provider Example
 
 Lium uses the same bronze and silver contracts as Vast: raw executor
-responses are retained, available executors are normalized into `silver/gpu_offers`, and combined
-gold tables are built with:
-
-```sh
-uv run gpu-prices build-gold --providers vast,lium,spheron,inference_sh,gridstackhub,cloud_gpu_prices,thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,clore,akash,aws_spot,azure,runpod,verda,published_rate_cards
-```
+responses are retained, available executors are normalized into
+`silver/gpu_offers`, and the hourly market service includes both providers in
+the DataFusion Gold build.
 
 The Lium adapter uses `GET /api/executors` with `X-API-Key` authentication, based on the public
 OpenAPI document at `https://lium.io/api/openapi.json`.
@@ -480,7 +422,7 @@ enhancement. The browser should not connect directly to AutoMQ or hold Kafka cre
 The clean public path is:
 
 ```text
-Curia-authored gold tables -> public JSON snapshot -> D3 in the blog post
+Gold tables -> public JSON snapshot -> D3 in the blog post
 ```
 
 The first snapshot files are:
@@ -496,11 +438,8 @@ The first snapshot files are:
 
 For local development, write snapshots to `data/dashboard/compute-bazaar/` and serve the repository
 root with a local HTTP server. For a public static essay, write the same snapshots to an S3/CloudFront
-prefix and point the page at that URL:
-
-```sh
-uv run gpu-prices export-gold-dashboard --output-root s3://YOUR_BUCKET/public/compute-bazaar
-```
+prefix and point the page at that URL. The hourly market service performs this
+export after a successful Gold build.
 
 The browser should fetch the public HTTPS form of that prefix, not the private `s3://` URI. The
 bucket or CloudFront distribution must allow public reads for those JSON objects and set CORS so

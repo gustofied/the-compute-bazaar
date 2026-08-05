@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import os
-import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
 
-
-DEFAULT_PROVIDER_SCOPE = (
-    "vast,lium,spheron,inference_sh,gridstackhub,cloud_gpu_prices,"
-    "thunder_compute,vultr,scaleway,oracle_cloud,ovhcloud,akash,aws_spot,"
-    "azure,runpod,verda,published_rate_cards"
+from the_compute_bazaar.prices.market_run import (
+    default_market_providers,
+    run_market_hourly,
 )
 
 
@@ -49,120 +47,76 @@ def main(
     dry_run: bool = False,
     run_id: str | None = None,
 ) -> dict[str, object]:
-    env = os.environ.copy()
-    _set_env_if_present(env, "VAST_API_KEY", vast_api_key)
-    _set_env_if_present(env, "LIUM_API_KEY", lium_api_key)
-    _set_env_if_present(env, "CLORE_API_KEY", clore_api_key)
-    _set_env_if_present(env, "PRIME_INTELLECT_API_KEY", prime_intellect_api_key)
-    _set_env_if_present(env, "SHADEFORM_API_KEY", shadeform_api_key)
-    _set_env_if_present(env, "SESTERCE_API_KEY", sesterce_api_key)
-    _set_env_if_present(env, "TENSORDOCK_API_KEY", tensordock_api_key)
-    _set_env_if_present(env, "HYPERSTACK_API_KEY", hyperstack_api_key)
-    _set_env_if_present(env, "LAMBDA_CLOUD_API_KEY", lambda_cloud_api_key)
-    _set_env_if_present(env, "DIGITALOCEAN_API_TOKEN", digitalocean_api_token)
-    _set_env_if_present(env, "GPUS_IO_API_KEY", gpus_io_api_key)
-    _set_env_if_present(env, "GETDEPLOYING_API_KEY", getdeploying_api_key)
-    _set_env_if_present(env, "JL_API_KEY", jarvislabs_api_key)
-    _set_env_if_present(env, "VERDA_CLIENT_ID", verda_client_id)
-    _set_env_if_present(env, "VERDA_CLIENT_SECRET", verda_client_secret)
-    _set_env_if_present(env, "COMPUTE_BAZAAR_RAW_ROOT", raw_root)
-    _set_env_if_present(env, "COMPUTE_BAZAAR_LAKE_ROOT", lake_root)
-    _set_env_if_present(env, "COMPUTE_BAZAAR_PUBLIC_BASE_URL", public_base_url)
-    _set_env_if_present(
-        env, "COMPUTE_BAZAAR_KAFKA_BOOTSTRAP_SERVERS", automq_bootstrap_servers
+    environment = {
+        "VAST_API_KEY": vast_api_key,
+        "LIUM_API_KEY": lium_api_key,
+        "CLORE_API_KEY": clore_api_key,
+        "PRIME_INTELLECT_API_KEY": prime_intellect_api_key,
+        "SHADEFORM_API_KEY": shadeform_api_key,
+        "SESTERCE_API_KEY": sesterce_api_key,
+        "TENSORDOCK_API_KEY": tensordock_api_key,
+        "HYPERSTACK_API_KEY": hyperstack_api_key,
+        "LAMBDA_CLOUD_API_KEY": lambda_cloud_api_key,
+        "DIGITALOCEAN_API_TOKEN": digitalocean_api_token,
+        "GPUS_IO_API_KEY": gpus_io_api_key,
+        "GETDEPLOYING_API_KEY": getdeploying_api_key,
+        "JL_API_KEY": jarvislabs_api_key,
+        "VERDA_CLIENT_ID": verda_client_id,
+        "VERDA_CLIENT_SECRET": verda_client_secret,
+        "COMPUTE_BAZAAR_PUBLIC_BASE_URL": public_base_url,
+        "AWS_REGION": aws_region,
+        "AWS_DEFAULT_REGION": aws_region,
+    }
+    kafka_config = {
+        key: value
+        for key, value in {
+            "security.protocol": kafka_security_protocol,
+            "sasl.mechanism": kafka_sasl_mechanism,
+            "sasl.username": kafka_username,
+            "sasl.password": kafka_password,
+        }.items()
+        if value
+    }
+    effective_raw_root = raw_root or os.getenv("COMPUTE_BAZAAR_RAW_ROOT", "data/raw")
+    effective_lake_root = lake_root or os.getenv(
+        "COMPUTE_BAZAAR_LAKE_ROOT", "data/lake"
     )
-    _set_env_if_present(
-        env, "COMPUTE_BAZAAR_KAFKA_SECURITY_PROTOCOL", kafka_security_protocol
-    )
-    _set_env_if_present(
-        env, "COMPUTE_BAZAAR_KAFKA_SASL_MECHANISM", kafka_sasl_mechanism
-    )
-    _set_env_if_present(env, "COMPUTE_BAZAAR_KAFKA_USERNAME", kafka_username)
-    _set_env_if_present(env, "COMPUTE_BAZAAR_KAFKA_PASSWORD", kafka_password)
-    _set_env_if_present(env, "AWS_REGION", aws_region)
-    _set_env_if_present(env, "AWS_DEFAULT_REGION", aws_region)
-    provider_scope = providers or _default_provider_scope(
-        clore_api_key=clore_api_key,
-        prime_intellect_api_key=prime_intellect_api_key,
-        shadeform_api_key=shadeform_api_key,
-        sesterce_api_key=sesterce_api_key,
-        tensordock_api_key=tensordock_api_key,
-        hyperstack_api_key=hyperstack_api_key,
-        lambda_cloud_api_key=lambda_cloud_api_key,
-        digitalocean_api_token=digitalocean_api_token,
-        gpus_io_api_key=gpus_io_api_key,
-        getdeploying_api_key=getdeploying_api_key,
-        jarvislabs_api_key=jarvislabs_api_key,
+    provider_scope = (
+        [item.strip() for item in providers.split(",") if item.strip()]
+        if providers
+        else None
     )
 
-    command = [
-        "/opt/compute-bazaar/.venv/bin/gpu-prices",
-        "market-hourly",
-        "--providers",
-        provider_scope,
-        "--dashboard-output-root",
-        dashboard_output_root,
-        "--lium-size",
-        str(lium_size),
-        "--lium-max-pages",
-        str(lium_max_pages),
-        "--dashboard-limit",
-        str(dashboard_limit),
-        "--topic-prefix",
-        topic_prefix,
-    ]
-    if raw_root:
-        command.extend(["--raw-root", raw_root])
-    if lake_root:
-        command.extend(["--lake-root", lake_root])
-    if automq_bootstrap_servers:
-        command.extend(["--automq-bootstrap-servers", automq_bootstrap_servers])
-    if run_id:
-        command.extend(["--run-id", run_id])
-    if not lium_paginate:
-        command.append("--no-lium-pagination")
-    if dry_run:
-        command.append("--dry-run")
-
-    completed = subprocess.run(
-        command, check=True, capture_output=True, text=True, env=env
-    )
-    return json.loads(completed.stdout)
+    with _temporary_environment(environment):
+        result = run_market_hourly(
+            raw_root=effective_raw_root,
+            lake_root=effective_lake_root,
+            dashboard_output_root=dashboard_output_root,
+            providers=provider_scope or default_market_providers(),
+            automq_bootstrap_servers=automq_bootstrap_servers,
+            automq_config=kafka_config,
+            topic_prefix=topic_prefix,
+            run_id=run_id,
+            dashboard_limit=dashboard_limit,
+            lium_size=lium_size,
+            lium_paginate=lium_paginate,
+            lium_max_pages=lium_max_pages,
+            dry_run=dry_run,
+        )
+    return result.to_dict()
 
 
-def _set_env_if_present(env: dict[str, str], name: str, value: str | None) -> None:
-    if value is not None:
-        env[name] = value
-
-
-def _default_provider_scope(
-    *,
-    clore_api_key: str | None,
-    prime_intellect_api_key: str | None,
-    shadeform_api_key: str | None,
-    sesterce_api_key: str | None,
-    tensordock_api_key: str | None,
-    hyperstack_api_key: str | None,
-    lambda_cloud_api_key: str | None,
-    digitalocean_api_token: str | None,
-    gpus_io_api_key: str | None,
-    getdeploying_api_key: str | None,
-    jarvislabs_api_key: str | None,
-) -> str:
-    providers = DEFAULT_PROVIDER_SCOPE.split(",")
-    for provider, key in (
-        ("clore", clore_api_key),
-        ("prime_intellect", prime_intellect_api_key),
-        ("shadeform", shadeform_api_key),
-        ("sesterce", sesterce_api_key),
-        ("tensordock", tensordock_api_key),
-        ("hyperstack", hyperstack_api_key),
-        ("lambda", lambda_cloud_api_key),
-        ("digitalocean", digitalocean_api_token),
-        ("gpus_io", gpus_io_api_key),
-        ("getdeploying", getdeploying_api_key),
-        ("jarvislabs", jarvislabs_api_key),
-    ):
-        if key:
-            providers.append(provider)
-    return ",".join(providers)
+@contextmanager
+def _temporary_environment(values: dict[str, str | None]) -> Iterator[None]:
+    previous = {key: os.environ.get(key) for key in values}
+    try:
+        for key, value in values.items():
+            if value is not None:
+                os.environ[key] = value
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value

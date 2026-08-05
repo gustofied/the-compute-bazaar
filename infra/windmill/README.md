@@ -28,7 +28,7 @@ Build this image from the repository root:
 ```sh
 docker build \
   -f infra/windmill/self-host/Dockerfile.worker \
-  -t compute-bazaar-windmill-worker:2026-06-17 \
+  -t compute-bazaar-windmill-worker:YYYY-MM-DD-description \
   .
 ```
 
@@ -38,7 +38,7 @@ build context.
 For Windmill jobs, there are two good shapes:
 
 1. For this dev EC2 stack, use a custom Windmill worker image with this package baked in. That lets
-   `infra/windmill/vast_hourly.py` run as a normal Windmill Python script.
+   `infra/windmill/market_hourly.py` run as a normal Windmill Python script.
 2. Later, use the official `# sandbox <image>` flow once the provider image is in a registry the VPC
    worker can pull from. That keeps job execution daemonless: no Docker socket, no Docker-in-Docker
    sidecar, and no host filesystem escape route.
@@ -57,8 +57,9 @@ self-host/Dockerfile.worker
 self-host/docker-compose.yml
 ```
 
-On the EC2 host, the live files sit under `/opt/windmill`. The UI is bound to localhost on the
-host, so do not open a public security-group port for it. Tunnel from your laptop instead:
+On the EC2 host, the live files sit under `/opt/windmill`. Windmill and the AutoMQ environment
+console are management surfaces, not public application endpoints. Open only SSH from the
+laptop's current `/32`, then tunnel both localhost-bound services:
 
 ```sh
 ssh -i .secrets/compute-bazaar-automq-runtime.pem \
@@ -66,17 +67,19 @@ ssh -i .secrets/compute-bazaar-automq-runtime.pem \
   -o ServerAliveInterval=30 \
   -o ServerAliveCountMax=3 \
   -L 8081:127.0.0.1:8081 \
+  -L 8080:127.0.0.1:8080 \
   ec2-user@HOST
 ```
 
 Then open:
 
 ```text
-http://127.0.0.1:8081
+Windmill: http://127.0.0.1:8081
+AutoMQ:   http://127.0.0.1:8080
 ```
 
 If the laptop is on mobile/5G, the public IP can drift and the security group will stop allowing
-the tunnel. Refresh the current `/32` before opening the tunnel:
+SSH. Refresh the current `/32` before opening the tunnel:
 
 ```sh
 uv run python infra/aws/refresh_runtime_access.py --profile YOUR_AWS_PROFILE
@@ -84,6 +87,9 @@ uv run python infra/aws/refresh_runtime_access.py --profile YOUR_AWS_PROFILE
 
 Add `--dry-run` to preview, and add `--prune-stale` after this helper has created older managed
 rules that should be removed.
+
+Do not add ports 8080 or 8081 to the public security group. The tunnel encrypts management traffic;
+direct HTTP access would expose console credentials and sessions in transit.
 
 Complete the first login/sign-up flow in the UI, then rotate any bootstrap password immediately.
 
@@ -111,13 +117,19 @@ rsync -az --delete \
 ssh ec2-user@HOST '
   cd /home/ec2-user/compute-bazaar-worker-build &&
   sudo docker build -f infra/windmill/self-host/Dockerfile.worker \
-    -t compute-bazaar-windmill-worker:2026-06-17 . &&
+    -t compute-bazaar-windmill-worker:YYYY-MM-DD-description . &&
+  sudo sed -i \
+    "s|^WM_WORKER_IMAGE=.*|WM_WORKER_IMAGE=compute-bazaar-windmill-worker:YYYY-MM-DD-description|" \
+    /opt/windmill/.env &&
   cd /opt/windmill &&
   sudo docker compose up -d --force-recreate windmill_worker
 '
 ```
 
-The dev runtime has a 20 GiB root volume. Repeated image builds can leave
+The dev runtime has a 20 GiB root volume and a persistent 4 GiB swapfile on the encrypted data
+volume. The swapfile prevents the growing Gold history build from being killed under transient
+memory pressure; it is a mitigation, not a substitute for bounding the history build or separating
+the worker from the AutoMQ console. Repeated image builds can leave
 several gigabytes of unused BuildKit cache even when every service is healthy.
 Before a rebuild, inspect rather than guessing:
 
@@ -131,6 +143,10 @@ removes unused build layers without touching active images, containers,
 volumes, Postgres, or Windmill state. Do not prune volumes. The longer-term
 production shape is a registry-built worker image rather than building on this
 small runtime host.
+
+The compose file pins tested upstream image digests and caps Docker JSON logs. Update image digests
+intentionally, rebuild the custom worker against the same Windmill base, and run the health checks
+before replacing the live containers.
 
 ## Required Environment
 
@@ -170,22 +186,13 @@ AWS_EXECUTION_ENV,AWS_CONTAINER_CREDENTIALS_RELATIVE_URI,AWS_DEFAULT_REGION,AWS_
 The main script is `infra/windmill/market_hourly.py`. It runs the complete heartbeat:
 
 ```text
-ingest live APIs -> ingest current price observations -> ingest published rate cards -> build GPU gold -> export GPU history -> check seven exact VM vendors and one marketplace indication -> build sandbox-cost gold -> export dashboard JSON -> write market run manifest
+ingest live compute-market APIs -> build GPU Gold -> export GPU history -> build StarSling measured-workload Gold -> export public JSON -> write market run manifest
 ```
 
-In the dev worker image it shells out to the baked project CLI:
-
-```text
-/opt/compute-bazaar/.venv/bin/gpu-prices market-hourly
-```
-
-`infra/windmill/vast_hourly.py` and `infra/windmill/lium_hourly.py` remain useful for provider-only
-debugging. They shell out to:
-
-```text
-/opt/compute-bazaar/.venv/bin/gpu-prices ingest-vast
-/opt/compute-bazaar/.venv/bin/gpu-prices ingest-lium
-```
+The script imports `run_market_hourly()` from the installed project package and
+calls it directly. Windmill schedules the run, the Python market service owns
+the orchestration, and embedded DataFusion executes the maintained SQL models
+that produce Gold.
 
 `infra/windmill/sandbox_benchmark_daily.py` is a separate public-source
 boundary. It:
@@ -269,26 +276,9 @@ or schema drift needs review. After review, update canonical evidence with the
 commit-pinned `sandbox-cost refresh-benchmark --update-evidence` command in
 `docs/sandbox-cost-benchmark.md`, then rebuild and redeploy the worker image.
 
-Provider-only schedules can still be bootstrapped for debugging:
-
-```sh
-uv run python infra/windmill/bootstrap_provider_schedule.py --provider vast
-uv run python infra/windmill/bootstrap_provider_schedule.py --provider lium
-```
-
-Keep those schedules disabled while `market_hourly` is enabled; the main
-heartbeat already ingests both providers. The scripts remain available for
-manual debugging:
-
-```sh
-uv run python infra/windmill/bootstrap_provider_schedule.py \
-  --provider vast --disabled
-uv run python infra/windmill/bootstrap_provider_schedule.py \
-  --provider lium --disabled
-```
-
-The bootstrap client calls Windmill's dedicated schedule `setenabled` endpoint
-after create/update so `--disabled` changes the actual recurring state.
+There are no separate provider schedules. Provider failures are isolated and
+recorded inside the single market run, avoiding duplicate or competing hourly
+generations.
 
 Run a manual smoke through the same VPC worker path:
 
@@ -308,28 +298,12 @@ do not depend on an open client connection.
 The success marker is a market-run manifest with provider checks, nonzero gold row counts, dashboard
 output refs, and provider manifests with `publish_mode: kafka`.
 
-## Smoke Command
+## Verification
 
-Inside a VPC-connected worker image, this is the equivalent command:
-
-```sh
-gpu-prices ingest-vast
-gpu-prices ingest-lium --size 200 --paginate --max-pages 10
-gpu-prices ingest-rate-card --provider published_rate_cards
-gpu-prices market-hourly
-```
-
-From your laptop, use the SSH tunnel and local token to prove the Stage 1 surface:
-
-```sh
-WINDMILL_BASE_URL=http://127.0.0.1:8081 uv run gpu-prices stage1-check
-```
-
-From the VPC worker, add the private Kafka check:
-
-```sh
-gpu-prices stage1-check --check-automq --require-ingest-env
-```
+Run the maintained hermetic tests locally, then use the bootstrap script's
+`--run-now --wait` path for an end-to-end check through the VPC worker. A
+successful result includes provider checks, nonzero Gold row counts, public
+output references, and a market-run manifest.
 
 The current dev worker runs with `DISABLE_NSJAIL=true` so it can use the baked project virtualenv
 at `/opt/compute-bazaar`. Tighten that before production by moving the worker image to a registry

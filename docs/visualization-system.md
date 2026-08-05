@@ -35,21 +35,17 @@ That build uses compiled Tailwind for the component stylesheet and bundles D3
 and Motion locally. It does not introduce a Svelte or React runtime and it
 does not load framework CDNs in production.
 
-The bundle currently owns three deliberately different cards:
+The bundle currently owns these active benchmark views:
 
 ```text
 GPU Price Index
   four GPU families and their published benchmark/range history
 
 Sandbox Cost
-  fixed-cohort hourly rates and every complete same-job observation
-
-Rate Movement
-  H100, exact-shape VM, and managed-sandbox rates rebased by DataFusion
-  to one actual common starting observation
+  estimated cost for every compatible job in the latest StarSling run
 ```
 
-All three use one measured-height Motion transition helper. A cover expands
+They use one measured-height Motion transition helper. A cover expands
 downward into its analytical view in normal document flow. Share replaces the
 analytical view with one compact 16:9 chart artifact. Work uses the same frame
 for the public endpoint, retained-series signal, and concise processing reel.
@@ -102,9 +98,8 @@ The browser renders publication-ready gold data. It must not become a second
 calculation engine. DataFusion and the recurring pipeline remain responsible
 for medians, percentiles, benchmark membership, and public-safe exports.
 
-The article card runtime follows the same rule. In particular, the common-start
-view reads `sandbox/relative.json`; it does not join or rebase GPU, VM, and
-sandbox observations in JavaScript.
+The article card runtime follows the same rule. It selects and draws the
+published workload-cost rows; it does not calculate costs in JavaScript.
 
 ## Publication Boundaries
 
@@ -421,8 +416,8 @@ Supported tones are:
 - `warning`: the payload failed or the card is intentionally incomplete.
 
 Status text is operational truth, not marketing copy. It should be specific to
-the figure, such as "Hourly seven-vendor cohort" or "Dated public rate-card
-evidence," rather than a generic success message. Freshness timestamps remain
+the figure, such as "Hourly GPU market observation" or "Latest compatible
+StarSling run," rather than a generic success message. Freshness timestamps remain
 in the chart or article copy when they are part of the data.
 
 ## Adding a Chart

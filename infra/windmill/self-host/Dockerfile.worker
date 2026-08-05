@@ -1,4 +1,5 @@
-FROM ghcr.io/windmill-labs/windmill:main
+ARG WINDMILL_BASE_IMAGE=ghcr.io/windmill-labs/windmill@sha256:b21a570fd5245b294a578fad19828bb8da00e4d5f6b46e039889d7564a07b89c
+FROM ${WINDMILL_BASE_IMAGE}
 
 WORKDIR /opt/compute-bazaar
 

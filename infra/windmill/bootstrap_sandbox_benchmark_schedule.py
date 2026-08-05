@@ -10,19 +10,19 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
 
-from bootstrap_provider_schedule import (
+from client import (
     DEFAULT_BASE_URL,
     DEFAULT_FOLDER,
     DEFAULT_WORKSPACE,
     WindmillClient,
-    _load_local_env,
-    _read_token_file,
+    load_local_env,
+    read_token_file,
 )
 DEFAULT_CRON = "0 30 6 * * *"
 
 
 def main() -> None:
-    _load_local_env()
+    load_local_env()
     parser = argparse.ArgumentParser(
         description="Create or update the daily sandbox benchmark job"
     )
@@ -40,7 +40,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--token",
-        default=os.getenv("WINDMILL_TOKEN") or _read_token_file(),
+        default=os.getenv("WINDMILL_TOKEN") or read_token_file(),
     )
     parser.add_argument(
         "--timezone",

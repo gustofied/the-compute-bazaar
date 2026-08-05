@@ -7,14 +7,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from the_compute_bazaar.sandbox_cost.pipeline import build_sandbox_cost
-from the_compute_bazaar.sandbox_cost.vm_capacity import (
-    refresh_vm_capacity_sources,
-    resolve_vm_capacity_state_refs,
-)
-from the_compute_bazaar.sandbox_cost.vm_discovery import (
-    refresh_vm_capacity_discovery_sources,
-    resolve_vm_discovery_state_refs,
-)
 
 from .coverage import query_frontier_coverage_ref
 from .events import new_run_id
@@ -70,6 +62,34 @@ OPTIONAL_API_PROVIDERS = {
     "gpus_io": "GPUS_IO_API_KEY",
     "getdeploying": "GETDEPLOYING_API_KEY",
     "jarvislabs": "JL_API_KEY",
+}
+MARKET_PROVIDER_INGESTERS = {
+    "vast": ingest_vast,
+    "aws_spot": ingest_aws_spot,
+    "azure": ingest_azure_retail,
+    "spheron": ingest_spheron,
+    "inference_sh": ingest_inference_sh,
+    "gridstackhub": ingest_gridstackhub,
+    "cloud_gpu_prices": ingest_cloud_gpu_prices,
+    "getdeploying": ingest_getdeploying,
+    "thunder_compute": ingest_thunder_compute,
+    "vultr": ingest_vultr,
+    "scaleway": ingest_scaleway,
+    "oracle_cloud": ingest_oracle_cloud,
+    "ovhcloud": ingest_ovhcloud,
+    "gpus_io": ingest_gpus_io,
+    "clore": ingest_clore,
+    "verda": ingest_verda,
+    "akash": ingest_akash,
+    "prime_intellect": ingest_prime_intellect,
+    "shadeform": ingest_shadeform,
+    "sesterce": ingest_sesterce,
+    "runpod": ingest_runpod,
+    "tensordock": ingest_tensordock,
+    "hyperstack": ingest_hyperstack,
+    "lambda": ingest_lambda_cloud,
+    "digitalocean": ingest_digitalocean,
+    "jarvislabs": ingest_jarvislabs,
 }
 
 
@@ -233,98 +253,15 @@ def run_market_hourly(
         limit=dashboard_limit,
     )
     sandbox_output_root = "/".join([lake_root.rstrip("/"), "sandbox_cost"])
-    vm_state_refs = resolve_vm_capacity_state_refs(sandbox_output_root)
-    vm_history_ref = vm_state_refs["history_ref"]
-    vm_current_ref = vm_state_refs["current_ref"]
-    vm_manifest_ref = vm_state_refs["manifest_ref"]
-    vm_discovery_state_refs = resolve_vm_discovery_state_refs(sandbox_output_root)
-    vm_discovery_history_ref = vm_discovery_state_refs["history_ref"]
-    vm_discovery_current_ref = vm_discovery_state_refs["current_ref"]
-    vm_discovery_manifest_ref = vm_discovery_state_refs["manifest_ref"]
-    try:
-        if dry_run:
-            raise RuntimeError("VM-capacity source refresh skipped in dry-run mode")
-        vm_capacity = refresh_vm_capacity_sources(
-            output_root=sandbox_output_root,
-            raw_root=raw_root,
-            observed_at=observed_at,
-        )
-        vm_history_ref = vm_capacity.history_ref
-        vm_current_ref = vm_capacity.current_ref
-        vm_manifest_ref = vm_capacity.manifest_ref
-        checks["vm_capacity"] = vm_capacity.status
-        data_quality["vm_capacity"] = {
-            "run_id": vm_capacity.run_id,
-            "checked_at": vm_capacity.checked_at,
-            "status": vm_capacity.status,
-            "successful_providers": vm_capacity.successful_providers,
-            "failed_providers": vm_capacity.failed_providers,
-            "history_event_count": vm_capacity.history_event_count,
-            "history_observation_count": vm_capacity.history_event_count,
-            "current_member_count": vm_capacity.current_member_count,
-            "manifest_ref": vm_capacity.manifest_ref,
-        }
-    except Exception as exc:  # noqa: BLE001 - preserve the market heartbeat.
-        checks["vm_capacity"] = "warning"
-        data_quality["vm_capacity"] = {
-            "status": "warning",
-            "error_type": type(exc).__name__,
-            "error": _provider_error_message(exc),
-            "using_last_retained_state": True,
-        }
-    try:
-        if dry_run:
-            raise RuntimeError("VM discovery source refresh skipped in dry-run mode")
-        vm_discovery = refresh_vm_capacity_discovery_sources(
-            output_root=sandbox_output_root,
-            raw_root=raw_root,
-            observed_at=observed_at,
-        )
-        vm_discovery_history_ref = vm_discovery.history_ref
-        vm_discovery_current_ref = vm_discovery.current_ref
-        vm_discovery_manifest_ref = vm_discovery.manifest_ref
-        checks["vm_capacity_discovery"] = vm_discovery.status
-        data_quality["vm_capacity_discovery"] = {
-            "run_id": vm_discovery.run_id,
-            "checked_at": vm_discovery.checked_at,
-            "status": vm_discovery.status,
-            "successful_sources": vm_discovery.successful_sources,
-            "failed_sources": vm_discovery.failed_sources,
-            "history_event_count": vm_discovery.history_event_count,
-            "history_observation_count": vm_discovery.history_event_count,
-            "current_source_count": vm_discovery.current_source_count,
-            "manifest_ref": vm_discovery.manifest_ref,
-        }
-    except Exception as exc:  # noqa: BLE001 - preserve the market heartbeat.
-        checks["vm_capacity_discovery"] = "warning"
-        data_quality["vm_capacity_discovery"] = {
-            "status": "warning",
-            "error_type": type(exc).__name__,
-            "error": _provider_error_message(exc),
-            "using_last_retained_state": True,
-        }
     sandbox_cost = build_sandbox_cost(
         output_root=sandbox_output_root,
         dashboard_output_root=dashboard_output_root,
-        gpu_history_ref=dashboard_export["output_refs"]["benchmark_history"],
-        vm_capacity_history_ref=vm_history_ref,
-        vm_capacity_current_ref=vm_current_ref,
-        vm_capacity_manifest_ref=vm_manifest_ref,
-        vm_discovery_history_ref=vm_discovery_history_ref,
-        vm_discovery_current_ref=vm_discovery_current_ref,
-        vm_discovery_manifest_ref=vm_discovery_manifest_ref,
     )
     dashboard_output_refs = {
         **dashboard_export["output_refs"],
         "sandbox_cost": str(sandbox_cost.public_ref),
-        "sandbox_rates": "/".join(
-            [dashboard_output_root.rstrip("/"), "sandbox", "rates.json"]
-        ),
         "sandbox_workload": "/".join(
             [dashboard_output_root.rstrip("/"), "sandbox", "workload.json"]
-        ),
-        "sandbox_relative": "/".join(
-            [dashboard_output_root.rstrip("/"), "sandbox", "relative.json"]
         ),
         "market_run": _dashboard_market_run_ref(dashboard_output_root),
         "market_history": _dashboard_market_history_ref(dashboard_output_root),
@@ -338,15 +275,8 @@ def run_market_hourly(
         "compute_market_state": gold_result.row_counts.get(
             "fact_compute_market_state", 0
         ),
-        "sandbox_price_observations": sandbox_cost.row_counts.get(
-            "sandbox_hourly_price_series", 0
-        ),
         "sandbox_benchmark_results": sandbox_cost.row_counts.get(
             "sandbox_workload_latest_replicates", 0
-        ),
-        "vm_capacity_offers": sandbox_cost.row_counts.get(
-            "vm_capacity_expanded_current",
-            sandbox_cost.row_counts.get("vm_capacity_current", 0),
         ),
     }
     checks["gold"] = (
@@ -358,7 +288,7 @@ def run_market_hourly(
     checks["sandbox_cost"] = (
         "ok"
         if sandbox_cost.public_ref
-        and sandbox_cost.row_counts.get("sandbox_gpu_cpu_common_start", 0) > 0
+        and sandbox_cost.row_counts.get("sandbox_workload_latest_replicates", 0) > 0
         else "warning"
     )
     data_quality["sandbox_cost"] = {
@@ -492,8 +422,6 @@ def _ingest_market_provider(
         "run_id": f"{provider}-{market_run_id}",
         "trace_id": market_run_id,
     }
-    if provider == "vast":
-        return ingest_vast(**common_kwargs)
     if provider == "lium":
         return ingest_lium(
             **common_kwargs,
@@ -501,61 +429,15 @@ def _ingest_market_provider(
             paginate=lium_paginate,
             max_pages=lium_max_pages,
         )
-    if provider == "aws_spot":
-        return ingest_aws_spot(**common_kwargs)
-    if provider == "azure":
-        return ingest_azure_retail(**common_kwargs)
-    if provider == "spheron":
-        return ingest_spheron(**common_kwargs)
-    if provider == "inference_sh":
-        return ingest_inference_sh(**common_kwargs)
-    if provider == "gridstackhub":
-        return ingest_gridstackhub(**common_kwargs)
-    if provider == "cloud_gpu_prices":
-        return ingest_cloud_gpu_prices(**common_kwargs)
-    if provider == "getdeploying":
-        return ingest_getdeploying(**common_kwargs)
-    if provider == "thunder_compute":
-        return ingest_thunder_compute(**common_kwargs)
-    if provider == "vultr":
-        return ingest_vultr(**common_kwargs)
-    if provider == "scaleway":
-        return ingest_scaleway(**common_kwargs)
-    if provider == "oracle_cloud":
-        return ingest_oracle_cloud(**common_kwargs)
-    if provider == "ovhcloud":
-        return ingest_ovhcloud(**common_kwargs)
-    if provider == "gpus_io":
-        return ingest_gpus_io(**common_kwargs)
-    if provider == "clore":
-        return ingest_clore(**common_kwargs)
-    if provider == "verda":
-        return ingest_verda(**common_kwargs)
-    if provider == "akash":
-        return ingest_akash(**common_kwargs)
-    if provider == "prime_intellect":
-        return ingest_prime_intellect(**common_kwargs)
-    if provider == "shadeform":
-        return ingest_shadeform(**common_kwargs)
-    if provider == "sesterce":
-        return ingest_sesterce(**common_kwargs)
-    if provider == "runpod":
-        return ingest_runpod(**common_kwargs)
-    if provider == "tensordock":
-        return ingest_tensordock(**common_kwargs)
-    if provider == "hyperstack":
-        return ingest_hyperstack(**common_kwargs)
-    if provider == "lambda":
-        return ingest_lambda_cloud(**common_kwargs)
-    if provider == "digitalocean":
-        return ingest_digitalocean(**common_kwargs)
-    if provider == "jarvislabs":
-        return ingest_jarvislabs(**common_kwargs)
     if provider == DEFAULT_RATE_CARD_PROVIDER:
         return ingest_rate_card(provider=DEFAULT_RATE_CARD_PROVIDER, **common_kwargs)
     if provider in rate_card_providers():
         return ingest_rate_card(provider=provider, **common_kwargs)
-    raise ValueError(f"Unsupported market provider: {provider}")
+    try:
+        ingester = MARKET_PROVIDER_INGESTERS[provider]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported market provider: {provider}") from exc
+    return ingester(**common_kwargs)
 
 
 def write_market_run_manifest(

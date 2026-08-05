@@ -28,7 +28,7 @@ jobs:
       - name: Sync the project
         run: uv sync --locked --package the-compute-bazaar
 
-      - name: Check public snapshot and VM benchmark freshness
+      - name: Check measured workload-cost snapshot
         run: >-
           uv run --package the-compute-bazaar sandbox-cost check-public
           --url https://bazaar.adamsioud.com/sandbox-cost.json

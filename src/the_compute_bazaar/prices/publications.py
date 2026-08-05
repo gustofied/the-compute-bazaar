@@ -283,16 +283,14 @@ def publish_prime_offer_shelf_publications(
     }
 
 
-def publish_sandbox_market_publications(
+def publish_sandbox_workload_publication(
     *,
     output_root: str,
-    rates_card: dict[str, Any],
     workload_card: dict[str, Any],
-    relative_card: dict[str, Any],
     public_base_url: str | None = None,
     article_url: str | None = None,
 ) -> dict[str, Any]:
-    """Publish immutable preview wrappers for the sandbox and relative cards."""
+    """Publish the latest measured StarSling workload-cost card."""
     public_base = (
         public_base_url
         or os.getenv("COMPUTE_BAZAAR_PUBLIC_BASE_URL")
@@ -301,164 +299,54 @@ def publish_sandbox_market_publications(
     live_article = (
         article_url or os.getenv("COMPUTE_BAZAAR_ARTICLE_URL") or DEFAULT_ARTICLE_URL
     )
-    source_cards = {
-        "rates": rates_card,
-        "workload": workload_card,
-        "relative": relative_card,
-    }
     content_digest = _market_card_publication_digest(
-        source_cards,
+        {"workload": workload_card},
         public_base_url=public_base,
         article_url=live_article,
     )
-    publication_rows: list[dict[str, Any]] = []
-
-    rate_rows = _sandbox_rate_rows(rates_card)
-    rate_observed_at = _latest_observed_at(rate_rows) or _parse_datetime(
-        rates_card.get("as_of")
-    )
-    rate_link = _publish_market_card_state(
+    observed_at = _workload_observed_at(workload_card)
+    link = _publish_market_card_state(
         output_root=output_root,
         public_base_url=public_base,
         card_id="sandbox-cost",
-        subject_id="rates",
-        view_id="hourly-rate",
-        observed_at=rate_observed_at,
+        subject_id="workload",
+        view_id="estimated-cost",
+        observed_at=observed_at,
         content_digest=content_digest,
         live_url=_live_market_card_url(
             article_url=live_article,
             card_id="sandbox-cost",
-            state={"sandbox": "rates"},
+            state={},
             anchor="sandbox-benchmark-card",
         ),
-        data_url=f"{public_base}/sandbox/rates.json",
-        image=render_sandbox_rate_publication(rates_card),
-        metadata=_sandbox_rate_publication_metadata(
-            card=rates_card,
-            rows=rate_rows,
-            observed_at=rate_observed_at,
+        data_url=f"{public_base}/sandbox/workload.json",
+        image=render_sandbox_workload_publication(workload_card),
+        metadata=_sandbox_workload_publication_metadata(
+            card=workload_card,
+            observed_at=observed_at,
         ),
     )
-    rates_card["publication"] = _card_publication_contract(
-        card_id="sandbox-cost",
-        default_state="rates",
-        states={"rates": rate_link},
-    )
-    publication_rows.append({"state_id": "rates", **rate_link})
-
-    workload_states: dict[str, dict[str, Any]] = {}
-    for metric in ("cost", "runtime"):
-        observed_at = _workload_observed_at(workload_card)
-        link = _publish_market_card_state(
-            output_root=output_root,
-            public_base_url=public_base,
-            card_id="sandbox-cost",
-            subject_id="workload",
-            view_id=("estimated-cost" if metric == "cost" else "measured-runtime"),
-            observed_at=observed_at,
-            content_digest=content_digest,
-            live_url=_live_market_card_url(
-                article_url=live_article,
-                card_id="sandbox-cost",
-                state={"sandbox": "workload", "measure": metric},
-                anchor="sandbox-benchmark-card",
-            ),
-            data_url=f"{public_base}/sandbox/workload.json",
-            image=render_sandbox_workload_publication(
-                workload_card,
-                metric=metric,
-            ),
-            metadata=_sandbox_workload_publication_metadata(
-                card=workload_card,
-                metric=metric,
-                observed_at=observed_at,
-            ),
-        )
-        workload_states[metric] = link
-        publication_rows.append({"state_id": metric, **link})
     workload_card["publication"] = _card_publication_contract(
         card_id="sandbox-cost",
         default_state="cost",
-        states=workload_states,
-    )
-
-    relative_states: dict[str, dict[str, Any]] = {}
-    relative_rows = _relative_price_rows(relative_card)
-    for band in RELATIVE_SERIES:
-        for range_id in GPU_RANGES:
-            state_id = f"{band}:{range_id}"
-            visible_rows = _visible_relative_rows(relative_rows, range_id)
-            if not visible_rows:
-                continue
-            observed_at = _latest_observed_at(visible_rows) or _parse_datetime(
-                relative_card.get("as_of")
-            )
-            link = _publish_market_card_state(
-                output_root=output_root,
-                public_base_url=public_base,
-                card_id="relative-prices",
-                subject_id=band,
-                view_id=GPU_RANGE_PRESENTATION[range_id]["path"],
-                observed_at=observed_at,
-                content_digest=content_digest,
-                live_url=_live_market_card_url(
-                    article_url=live_article,
-                    card_id="relative-prices",
-                    state={
-                        "relativeRange": range_id,
-                        "relativeBand": band,
-                    },
-                    anchor="relative-market-card",
-                ),
-                data_url=f"{public_base}/sandbox/relative.json",
-                image=render_relative_price_publication(
-                    relative_card,
-                    band=band,
-                    range_id=range_id,
-                ),
-                metadata=_relative_price_publication_metadata(
-                    card=relative_card,
-                    rows=visible_rows,
-                    band=band,
-                    range_id=range_id,
-                    observed_at=observed_at,
-                ),
-            )
-            relative_states[state_id] = link
-            publication_rows.append({"state_id": state_id, **link})
-    relative_card["publication"] = _card_publication_contract(
-        card_id="relative-prices",
-        default_state="gpu:all",
-        states=relative_states,
-    )
-
-    latest_observed_at = max(
-        (
-            observed_at
-            for observed_at in (
-                rate_observed_at,
-                _workload_observed_at(workload_card),
-                _latest_observed_at(relative_rows),
-            )
-            if observed_at is not None
-        ),
-        default=None,
+        states={"cost": link},
     )
     revision = PublicationRoute.create(
-        card_id="market-cards",
-        subject_id="sandbox-and-relative",
-        view_id="all-views",
-        observed_at=latest_observed_at,
+        card_id="sandbox-cost",
+        subject_id="workload",
+        view_id="estimated-cost",
+        observed_at=observed_at,
         content_digest=content_digest,
     ).revision
     manifest_ref = _join(
         output_root,
-        "publications/market-cards/manifest.json",
+        "publications/sandbox-cost/manifest.json",
     )
+    publication_rows = [{"state_id": "cost", **link}]
     manifest = {
         "schema_version": PUBLICATION_SCHEMA_VERSION,
         "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
-        "publication_type": "sandbox_and_relative_market_cards",
+        "publication_type": "sandbox_workload_cost",
         "revision": revision,
         "publication_count": len(publication_rows),
         "rows": publication_rows,
@@ -1193,34 +1081,23 @@ def render_sandbox_rate_publication(card: Mapping[str, Any]) -> bytes:
 
 def render_sandbox_workload_publication(
     card: Mapping[str, Any],
-    *,
-    metric: str,
 ) -> bytes:
-    """Render one comparable software job across the retained services."""
+    """Render the latest StarSling workload-cost comparison."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
     from matplotlib.patches import Rectangle
 
-    if metric not in {"cost", "runtime"}:
-        raise ValueError(f"Unknown sandbox workload metric: {metric}")
     workload = (card.get("data") or {}).get("workload") or {}
     summaries = [
         dict(row)
         for row in workload.get("service_summary") or []
         if isinstance(row, Mapping)
     ]
-    fields = {
-        "cost": (
-            "median_estimated_cost_usd",
-            "p25_estimated_cost_usd",
-            "p75_estimated_cost_usd",
-        ),
-        "runtime": (
-            "median_runtime_seconds",
-            "p25_runtime_seconds",
-            "p75_runtime_seconds",
-        ),
-    }[metric]
+    fields = (
+        "median_estimated_cost_usd",
+        "p25_estimated_cost_usd",
+        "p75_estimated_cost_usd",
+    )
     rows: list[dict[str, Any]] = []
     for row in summaries:
         median = _finite_number(row.get(fields[0]))
@@ -1266,18 +1143,12 @@ def render_sandbox_workload_publication(
         )
     )
     headline = card.get("headline") or {}
-    headline_value = _finite_number(
-        headline.get(
-            "median_estimated_cost_usd"
-            if metric == "cost"
-            else "median_runtime_seconds"
-        )
-    )
+    headline_value = _finite_number(headline.get("median_estimated_cost_usd"))
     observed_at = _workload_observed_at(card)
     figure.text(
         0.052,
         0.915,
-        "SAME MEASURED SOFTWARE JOB",
+        "MEASURED WORKLOAD COST",
         color=muted,
         fontsize=13,
         fontweight=700,
@@ -1295,17 +1166,13 @@ def render_sandbox_workload_publication(
     figure.text(
         0.052,
         0.825,
-        "ESTIMATED COST" if metric == "cost" else "MEASURED RUNTIME",
+        "LATEST STARSLING RUN",
         color=accent,
         fontsize=11,
         fontweight=700,
         family="sans-serif",
     )
-    value_label = (
-        _format_cents(headline_value)
-        if metric == "cost"
-        else _format_seconds(headline_value)
-    )
+    value_label = _format_cents(headline_value)
     figure.text(
         0.052,
         0.748,
@@ -1349,14 +1216,9 @@ def render_sandbox_workload_publication(
         axes.set_yticks(positions, [row["label"] for row in rows])
         axes.set_ylim(-0.7, len(rows) - 0.3)
         axes.grid(axis="x", color=rule, alpha=0.28, linewidth=0.8)
-        if metric == "cost":
-            axes.xaxis.set_major_formatter(
-                lambda value, _position: f"{value * 100:.1f}c"
-            )
-        else:
-            axes.xaxis.set_major_formatter(
-                lambda value, _position: _format_axis_seconds(value)
-            )
+        axes.xaxis.set_major_formatter(
+            lambda value, _position: f"{value * 100:.1f}c"
+        )
     else:
         axes.text(
             0.5,
@@ -1391,11 +1253,7 @@ def render_sandbox_workload_publication(
     figure.text(
         0.948,
         0.105,
-        (
-            "PROCESSOR AND MEMORY ESTIMATE"
-            if metric == "cost"
-            else "COMPLETE ALIGNED RUNS"
-        ),
+        "ESTIMATED COST PER COMPLETED JOB",
         color=muted,
         fontsize=11,
         family="sans-serif",
@@ -1840,37 +1698,32 @@ def _sandbox_rate_publication_metadata(
 def _sandbox_workload_publication_metadata(
     *,
     card: Mapping[str, Any],
-    metric: str,
     observed_at: datetime | None,
 ) -> dict[str, Any]:
     headline = card.get("headline") or {}
-    if metric == "cost":
-        raw_value = _finite_number(
-            headline.get("median_estimated_cost_usd")
-            or headline.get("median_service_cost")
-        )
-        value = _format_cents(raw_value)
-        subject_label = "Sandbox workload cost"
-        view_label = "Estimated cost"
-        measure = "estimated processor-and-memory cost"
-    else:
-        raw_value = _finite_number(headline.get("median_runtime_seconds"))
-        value = _format_seconds(raw_value)
-        subject_label = "Sandbox workload runtime"
-        view_label = "Measured runtime"
-        measure = "measured runtime"
+    raw_value = _finite_number(
+        headline.get("median_estimated_cost_usd")
+        or headline.get("median_service_cost")
+    )
+    value = _format_cents(raw_value)
+    subject_label = "Measured workload cost"
+    view_label = "Latest measured run"
+    measure = "estimated processor-and-memory cost"
     observed_label = _format_observed_date(observed_at)
     display_line = (
-        f"Sandbox / {view_label.lower()} / {value} median / "
+        f"StarSling / {value} median cost per job / "
         f"observed {observed_label.replace(' at ', ', ')}"
     )
     return {
-        "title": f"Same measured software job | {view_label} | {value}",
+        "title": f"Measured workload cost | {value} median per job",
         "description": (
-            f"Median {measure} for the same aligned software job across "
-            f"the retained comparable sandbox services. Observed {observed_label}."
+            f"Median {measure} for the latest compatible StarSling HPC Sandbox "
+            f"Benchmark run. Observed {observed_label}."
         ),
-        "image_alt": (f"Same measured software job with median {measure} of {value}"),
+        "image_alt": (
+            f"Latest StarSling HPC Sandbox Benchmark run with median estimated "
+            f"job cost of {value}"
+        ),
         "subject_label": subject_label,
         "view_label": view_label,
         "value": value,
