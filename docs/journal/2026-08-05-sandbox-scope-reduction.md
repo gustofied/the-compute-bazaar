@@ -21,7 +21,7 @@ processor-and-memory rate applicable to each service to estimate job cost.
 
 ## Changes
 
-- Archived the 33 rate-card observations under `archive/sandbox-rate-cards/`.
+- Archived the 33 sandbox-price observations under `archive/sandbox-prices/`.
 - Retained one documented cost input per benchmark service in
   `workload-cost-inputs.json`.
 - Removed rate-card and common-start JSON from the public build contract.

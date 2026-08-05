@@ -318,11 +318,11 @@ warnings or errors.
 
 `market_hourly` now refreshes the fixed VM cohort before building sandbox gold.
 It preserves raw checks and carries the VM refs into the market-run manifest.
-The daily `sandbox-cost-sources` workflow also performs a temporary live schema
+The daily `measured-workload-sources` workflow also performs a temporary live schema
 and exact-shape check, then runs focused tests. The daily check does not write
 durable history; Windmill owns that role.
 
-Managed-sandbox rate cards remain manually reviewed. StarSling benchmark
+Managed sandbox prices remain manually reviewed. StarSling benchmark
 evidence remains commit-pinned and manually promoted after the daily source
 check detects new compatible data.
 

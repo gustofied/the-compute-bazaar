@@ -105,7 +105,7 @@ dashboard/compute-bazaar/market-state.json
 dashboard/compute-bazaar/manifest.json
 ```
 
-The archived sandbox rate cards are not part of this public contract. New
+The archived sandbox prices are not part of this public contract. New
 frontends should compose active Gold objects for the question they need rather
 than copying calculations into JavaScript.
 
@@ -151,7 +151,7 @@ uv run sandbox-cost check-public \
   --max-age-hours 2.5
 ```
 
-The daily `.github/workflows/sandbox-cost-sources.yml` job validates canonical
+The daily `.github/workflows/measured-workload-sources.yml` job validates canonical
 evidence, detects new or changed public StarSling runs, and runs focused tests. A separate daily
 Windmill source poll promotes compatible public commits into operational
 bronze and silver. It has no benchmark credentials and launches no workloads.

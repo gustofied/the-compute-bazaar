@@ -2,7 +2,7 @@
 
 ## Trigger
 
-The scheduled `sandbox-cost-sources` workflow stopped at its review gate after
+The scheduled `measured-workload-sources` workflow stopped at its review gate after
 StarSling published three compatible Better Auth benchmark runs. This was the
 intended behavior: new source observations must not silently change canonical
 workload history.

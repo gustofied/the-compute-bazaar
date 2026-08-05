@@ -1,15 +1,17 @@
-name: Public compute feed freshness
+name: Tests
 
 "on":
   workflow_dispatch:
-  schedule:
-    - cron: "35 * * * *"
+  pull_request:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
 concurrency:
-  group: public-feed-freshness
+  group: tests-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -17,10 +19,9 @@ env:
   UV_NO_PROGRESS: "1"
 
 jobs:
-  check:
-    name: Check measured workload freshness
+  test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Check out the project
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -36,8 +37,5 @@ jobs:
       - name: Install Python
         run: uv python install 3.13
 
-      - name: Check measured workload-cost snapshot
-        run: >-
-          uv run sandbox-cost check-public
-          --url https://bazaar.adamsioud.com/sandbox-cost.json
-          --max-age-hours 2.5
+      - name: Run tests
+        run: uv run python -m unittest discover -s tests -v

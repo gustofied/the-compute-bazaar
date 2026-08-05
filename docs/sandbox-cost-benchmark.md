@@ -53,10 +53,10 @@ They exist only to calculate workload cost. Each row preserves the public price
 URL, observed date, billing unit, machine-shape assumptions, and normalized
 hourly amount.
 
-The previous 33-observation vendor rate-card research is archived at:
+The previous 33-observation sandbox-price research is archived at:
 
 ```text
-archive/sandbox-rate-cards/hourly-price-observations.json
+archive/sandbox-prices/hourly-price-observations.json
 ```
 
 Those observations are sparse manual quotes. They are not an hourly market feed
