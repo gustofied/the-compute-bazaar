@@ -49,8 +49,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       MODE: worker
       WORKER_GROUP: default
-      AWS_REGION: ${AWS_REGION}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      AWS_REGION: ${AWS_REGION:-eu-west-3}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-west-3}
       PYTHON_PATH: /opt/compute-bazaar/.venv/bin/python
       PIP_LOCAL_DEPENDENCIES: the_compute_bazaar
       ENABLE_UNSHARE_PID: "true"

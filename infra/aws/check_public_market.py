@@ -73,7 +73,7 @@ def validate_public_market(
                 f"{family.upper()} card is {card_age_hours:.2f} hours old; "
                 f"limit is {max_age_hours:.2f}"
             )
-        if card.get("status") not in {"observed", "success"}:
+        if card.get("status") not in {"live", "observed", "success"}:
             raise RuntimeError(f"{family.upper()} card status is {card.get('status')!r}")
 
     return {

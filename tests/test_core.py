@@ -290,7 +290,7 @@ order by provider, price_usd_gpu_hr
 
     def test_public_market_freshness_requires_complete_current_payload(self) -> None:
         cards = {
-            family: {"as_of": OBSERVED_AT.isoformat(), "status": "observed"}
+            family: {"as_of": OBSERVED_AT.isoformat(), "status": "live"}
             for family in ("h100", "h200", "b200", "b300")
         }
         summary = validate_public_market(
