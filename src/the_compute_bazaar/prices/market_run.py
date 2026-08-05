@@ -2,45 +2,14 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
-
-from the_compute_bazaar.sandbox_cost.pipeline import build_sandbox_cost
 
 from .coverage import query_frontier_coverage_ref
 from .events import new_run_id
 from .gold import build_gold_market_tables, export_gold_dashboard_snapshot
-from .pipeline import (
-    IngestResult,
-    ingest_akash,
-    ingest_aws_spot,
-    ingest_azure_retail,
-    ingest_clore,
-    ingest_cloud_gpu_prices,
-    ingest_digitalocean,
-    ingest_gpus_io,
-    ingest_getdeploying,
-    ingest_gridstackhub,
-    ingest_hyperstack,
-    ingest_inference_sh,
-    ingest_jarvislabs,
-    ingest_lambda_cloud,
-    ingest_lium,
-    ingest_oracle_cloud,
-    ingest_ovhcloud,
-    ingest_prime_intellect,
-    ingest_runpod,
-    ingest_scaleway,
-    ingest_sesterce,
-    ingest_shadeform,
-    ingest_spheron,
-    ingest_tensordock,
-    ingest_thunder_compute,
-    ingest_verda,
-    ingest_vast,
-    ingest_vultr,
-)
+from .pipeline import IngestResult
+from .provider_registry import enabled_provider_names, get_provider
 from .public_views import GPU_FAMILIES, market_overview_view
 from .schemas import to_jsonable, utc_now
 from .storage import list_refs, read_json, write_json
@@ -48,74 +17,8 @@ from .storage import list_refs, read_json, write_json
 
 MARKET_RUN_MANIFEST_VERSION = "v1"
 MARKET_RUN_TABLE = "market_runs"
-OPTIONAL_API_PROVIDERS = {
-    "clore": "CLORE_API_KEY",
-    "prime_intellect": "PRIME_INTELLECT_API_KEY",
-    "shadeform": "SHADEFORM_API_KEY",
-    "sesterce": "SESTERCE_API_KEY",
-    "tensordock": "TENSORDOCK_API_KEY",
-    "hyperstack": "HYPERSTACK_API_KEY",
-    "lambda": "LAMBDA_CLOUD_API_KEY",
-    "digitalocean": "DIGITALOCEAN_API_TOKEN",
-    "gpus_io": "GPUS_IO_API_KEY",
-    "getdeploying": "GETDEPLOYING_API_KEY",
-    "jarvislabs": "JL_API_KEY",
-}
-MARKET_PROVIDER_INGESTERS = {
-    "vast": ingest_vast,
-    "aws_spot": ingest_aws_spot,
-    "azure": ingest_azure_retail,
-    "spheron": ingest_spheron,
-    "inference_sh": ingest_inference_sh,
-    "gridstackhub": ingest_gridstackhub,
-    "cloud_gpu_prices": ingest_cloud_gpu_prices,
-    "getdeploying": ingest_getdeploying,
-    "thunder_compute": ingest_thunder_compute,
-    "vultr": ingest_vultr,
-    "scaleway": ingest_scaleway,
-    "oracle_cloud": ingest_oracle_cloud,
-    "ovhcloud": ingest_ovhcloud,
-    "gpus_io": ingest_gpus_io,
-    "clore": ingest_clore,
-    "verda": ingest_verda,
-    "akash": ingest_akash,
-    "prime_intellect": ingest_prime_intellect,
-    "shadeform": ingest_shadeform,
-    "sesterce": ingest_sesterce,
-    "runpod": ingest_runpod,
-    "tensordock": ingest_tensordock,
-    "hyperstack": ingest_hyperstack,
-    "lambda": ingest_lambda_cloud,
-    "digitalocean": ingest_digitalocean,
-    "jarvislabs": ingest_jarvislabs,
-}
-
-
 def default_market_providers() -> list[str]:
-    providers = [
-        "vast",
-        "lium",
-        "spheron",
-        "inference_sh",
-        "gridstackhub",
-        "cloud_gpu_prices",
-        "thunder_compute",
-        "vultr",
-        "scaleway",
-        "oracle_cloud",
-        "ovhcloud",
-        "akash",
-        "aws_spot",
-        "azure",
-        "runpod",
-        "verda",
-    ]
-    providers.extend(
-        provider
-        for provider, env_name in OPTIONAL_API_PROVIDERS.items()
-        if os.getenv(env_name)
-    )
-    return providers
+    return enabled_provider_names()
 
 
 @dataclass(frozen=True)
@@ -221,6 +124,7 @@ def run_market_hourly(
     ]
     data_quality["successful_providers"] = successful_providers
     data_quality["failed_providers"] = failed_providers
+    data_quality["cohort_status"] = "complete" if not failed_providers else "degraded"
     normalization_warnings = {
         provider: quality["unknown_gpu_names"]
         for provider, quality in data_quality["providers"].items()
@@ -232,6 +136,11 @@ def run_market_hourly(
     if not successful_providers:
         raise RuntimeError(
             "All market providers failed or returned no normalized offers"
+        )
+    if failed_providers:
+        raise RuntimeError(
+            "Market cohort incomplete; refusing to replace the last complete publication. "
+            f"Failed providers: {', '.join(failed_providers)}"
         )
 
     gold_run_id = f"gold-{market_run_id}"
@@ -249,17 +158,8 @@ def run_market_hourly(
         output_root=dashboard_output_root,
         limit=dashboard_limit,
     )
-    sandbox_output_root = "/".join([lake_root.rstrip("/"), "sandbox_cost"])
-    sandbox_cost = build_sandbox_cost(
-        output_root=sandbox_output_root,
-        dashboard_output_root=dashboard_output_root,
-    )
     dashboard_output_refs = {
         **dashboard_export["output_refs"],
-        "sandbox_cost": str(sandbox_cost.public_ref),
-        "sandbox_workload": "/".join(
-            [dashboard_output_root.rstrip("/"), "sandbox", "workload.json"]
-        ),
         "market_run": _dashboard_market_run_ref(dashboard_output_root),
         "market_history": _dashboard_market_history_ref(dashboard_output_root),
     }
@@ -274,9 +174,6 @@ def run_market_hourly(
         "compute_market_state": gold_result.row_counts.get(
             "fact_compute_market_state", 0
         ),
-        "sandbox_benchmark_results": sandbox_cost.row_counts.get(
-            "sandbox_workload_latest_replicates", 0
-        ),
     }
     checks["gold"] = (
         "ok" if all(value > 0 for value in row_counts.values()) else "warning"
@@ -284,17 +181,6 @@ def run_market_hourly(
     checks["dashboard_export"] = (
         "ok" if dashboard_export.get("output_refs") else "warning"
     )
-    checks["sandbox_cost"] = (
-        "ok"
-        if sandbox_cost.public_ref
-        and sandbox_cost.row_counts.get("sandbox_workload_latest_replicates", 0) > 0
-        else "warning"
-    )
-    data_quality["sandbox_cost"] = {
-        "build_id": sandbox_cost.build_id,
-        "row_counts": sandbox_cost.row_counts,
-        "manifest_ref": sandbox_cost.manifest_ref,
-    }
     status = "success" if all(value == "ok" for value in checks.values()) else "warning"
 
     payload = {
@@ -339,13 +225,11 @@ def run_market_hourly(
         read_json(dashboard_output_refs[f"gpu_benchmark_{family.lower()}"])
         for family in GPU_FAMILIES
     ]
-    sandbox_rates = read_json(dashboard_output_refs["sandbox_rates"])
     write_json(
         dashboard_output_refs["market_overview"],
         market_overview_view(
             manifest=_public_market_run_manifest(payload),
             benchmark_cards=benchmark_cards,
-            sandbox_rates=sandbox_rates,
         ),
     )
     manifest_ref = write_market_run_manifest(
@@ -422,17 +306,13 @@ def _ingest_market_provider(
         "trace_id": market_run_id,
     }
     if provider == "lium":
-        return ingest_lium(
+        return get_provider(provider).ingester(
             **common_kwargs,
             query={"size": lium_size},
             paginate=lium_paginate,
             max_pages=lium_max_pages,
         )
-    try:
-        ingester = MARKET_PROVIDER_INGESTERS[provider]
-    except KeyError as exc:
-        raise ValueError(f"Unsupported market provider: {provider}") from exc
-    return ingester(**common_kwargs)
+    return get_provider(provider).ingester(**common_kwargs)
 
 
 def write_market_run_manifest(

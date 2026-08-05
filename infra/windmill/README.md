@@ -3,10 +3,11 @@
 Windmill runs two scheduled Python jobs:
 
 - `market_hourly.py` calls `run_market_hourly()`.
-- `sandbox_benchmark_daily.py` imports new public StarSling results.
+- `sandbox_benchmark_daily.py` imports new public StarSling results and rebuilds
+  the measured-workload Gold/public output.
 
 The market job pulls providers, writes Bronze and Silver, runs the DataFusion
-SQL models, writes Gold, publishes JSON, and writes the market-run manifest.
+SQL models, writes GPU Gold, publishes JSON, and writes the market-run manifest.
 There are no separate provider schedules.
 
 ## Access
@@ -81,7 +82,7 @@ The default six-field cron is hourly:
 ```
 
 The StarSling job only reads results published in its public repository. It
-does not run paid workloads. The hourly market job picks up new results.
+does not run paid workloads and does not depend on the hourly GPU job.
 
 Run the market job manually with:
 

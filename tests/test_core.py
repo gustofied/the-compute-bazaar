@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from infra.windmill import market_hourly as windmill_market_hourly
+from infra.aws.check_public_market import validate_public_market
 from the_compute_bazaar.prices.gold import (
     build_gold_market_tables,
     query_gold_listings,
@@ -17,7 +18,10 @@ from the_compute_bazaar.prices.datafusion import query_tables
 from the_compute_bazaar.prices.market_run import (
     _public_market_run_manifest,
     default_market_providers,
+    run_market_hourly,
 )
+from the_compute_bazaar.prices.pipeline import IngestResult
+from the_compute_bazaar.prices.provider_registry import PROVIDERS
 from the_compute_bazaar.prices.providers.lium import normalize_executor
 from the_compute_bazaar.prices.providers.vast import normalize_offer
 from the_compute_bazaar.prices.schemas import GpuOffer
@@ -34,6 +38,13 @@ OBSERVED_AT = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
 
 
 class CoreTests(unittest.TestCase):
+    def test_provider_registry_is_unique_and_callable(self) -> None:
+        names = [provider.name for provider in PROVIDERS]
+
+        self.assertEqual(len(names), len(set(names)))
+        self.assertTrue(all(callable(provider.ingester) for provider in PROVIDERS))
+        self.assertNotIn("published_rate_cards", names)
+
     def test_windmill_calls_market_service_directly(self) -> None:
         self.assertNotIn("published_rate_cards", default_market_providers())
         result = Mock()
@@ -100,6 +111,38 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual((vast.gpu_model, vast.price_usd_hr), ("H100_80GB", 2.25))
         self.assertEqual((lium.gpu_model, lium.price_usd_hr), ("H100_80GB_x2", 2.5))
+
+    def test_incomplete_provider_cohort_does_not_build_gold(self) -> None:
+        successful = IngestResult(
+            provider="vast",
+            run_id="vast-market-test",
+            raw_ref="memory://raw/vast.json",
+            normalized_ref="memory://lake/vast.parquet",
+            raw_offer_count=1,
+            normalized_offer_count=1,
+            unknown_gpu_names=[],
+            published_events=1,
+            publish_mode="dry-run",
+        )
+        with (
+            patch(
+                "the_compute_bazaar.prices.market_run._ingest_market_provider",
+                side_effect=[successful, RuntimeError("provider unavailable")],
+            ),
+            patch(
+                "the_compute_bazaar.prices.market_run.build_gold_market_tables"
+            ) as build_gold,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "cohort incomplete"):
+                run_market_hourly(
+                    providers=["vast", "lium"],
+                    raw_root="memory://raw",
+                    lake_root="memory://lake",
+                    dashboard_output_root="memory://dashboard",
+                    dry_run=True,
+                )
+
+        build_gold.assert_not_called()
 
     def test_datafusion_builds_and_queries_gold_listings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -244,6 +287,29 @@ order by provider, price_usd_gpu_hr
             "publications/gpu-index/h100/1-day/2026-08-01-1200-utc-abcdef1234",
         )
         self.assertEqual(route.page_path, f"{route.public_path}.html")
+
+    def test_public_market_freshness_requires_complete_current_payload(self) -> None:
+        cards = {
+            family: {"as_of": OBSERVED_AT.isoformat(), "status": "observed"}
+            for family in ("h100", "h200", "b200", "b300")
+        }
+        summary = validate_public_market(
+            market_run={
+                "market_run_id": "market-test",
+                "observed_at": OBSERVED_AT.isoformat(),
+                "status": "success",
+                "successful_providers": ["vast", "lium"],
+                "failed_providers": [],
+            },
+            cards=cards,
+            max_age_hours=2.5,
+            required_providers={"vast", "lium"},
+            forbidden_providers={"published_rate_cards"},
+            now=OBSERVED_AT,
+        )
+
+        self.assertEqual(summary["status"], "ok")
+        self.assertEqual(summary["provider_count"], 2)
 
 
 def _offer(*, provider: str, offer_id: str, price: float) -> GpuOffer:

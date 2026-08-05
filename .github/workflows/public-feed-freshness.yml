@@ -17,7 +17,34 @@ env:
   UV_NO_PROGRESS: "1"
 
 jobs:
-  check:
+  market:
+    name: Check GPU market freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the project
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.31"
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.13
+
+      - name: Check public GPU market
+        run: >-
+          uv run python infra/aws/check_public_market.py
+          --max-age-hours 2.5
+          --require-provider vast
+          --require-provider lium
+          --forbid-provider published_rate_cards
+
+  measured-workload:
     name: Check measured workload freshness
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -40,4 +67,4 @@ jobs:
         run: >-
           uv run sandbox-cost check-public
           --url https://bazaar.adamsioud.com/sandbox-cost.json
-          --max-age-hours 2.5
+          --max-age-hours 30

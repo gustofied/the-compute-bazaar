@@ -5,7 +5,9 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import asdict
 
+from the_compute_bazaar.sandbox_cost.pipeline import build_sandbox_cost
 from the_compute_bazaar.sandbox_cost.refresh import refresh_benchmark_sources
 
 
@@ -13,6 +15,7 @@ def main(
     source_repository: str = "starslingdev/hpc-sandbox-benchmarks",
     source_ref: str = "main",
     lake_root: str | None = None,
+    dashboard_output_root: str | None = None,
     aws_region: str = "eu-west-3",
 ) -> dict[str, object]:
     """Ingest the latest compatible public StarSling dataset."""
@@ -24,16 +27,17 @@ def main(
             source_ref=source_ref,
             publish_operational=True,
         )
+        build = build_sandbox_cost(
+            output_root=output_root,
+            dashboard_output_root=dashboard_output_root,
+        )
 
     return {
         "output_root": output_root,
         "aws_region": aws_region,
         "source_repository": source_repository,
         "source_refresh": source_refresh,
-        "gold_pickup": (
-            "The next hourly market run reads the operational workload "
-            "manifest and rebuilds sandbox gold/public JSON."
-        ),
+        "build": asdict(build),
     }
 
 

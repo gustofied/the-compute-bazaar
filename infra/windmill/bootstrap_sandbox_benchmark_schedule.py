@@ -158,8 +158,14 @@ def required_variables(
     source_repository: str,
 ) -> list[dict[str, Any]]:
     lake_root = os.getenv("COMPUTE_BAZAAR_LAKE_ROOT")
+    dashboard_output_root = os.getenv("COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT")
     if not lake_root:
         raise SystemExit("Missing required environment variable: COMPUTE_BAZAAR_LAKE_ROOT")
+    if not dashboard_output_root:
+        raise SystemExit(
+            "Missing required environment variable: "
+            "COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT"
+        )
     return [
         {
             "path": f"f/{folder}/sandbox_benchmark_source_repository",
@@ -172,6 +178,12 @@ def required_variables(
             "value": lake_root,
             "is_secret": False,
             "description": "Compute Bazaar lake S3 root",
+        },
+        {
+            "path": f"f/{folder}/dashboard_output_root",
+            "value": dashboard_output_root,
+            "is_secret": False,
+            "description": "Public-safe dashboard JSON output root",
         },
     ]
 
@@ -188,6 +200,7 @@ def schedule_args(
         ),
         "source_ref": source_ref,
         "lake_root": f"$var:f/{folder}/lake_root",
+        "dashboard_output_root": f"$var:f/{folder}/dashboard_output_root",
         "aws_region": aws_region,
     }
 

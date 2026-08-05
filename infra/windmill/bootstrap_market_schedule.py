@@ -118,8 +118,8 @@ def main() -> None:
         content=script_body,
         summary="Hourly Compute Bazaar market heartbeat",
         description=(
-            "Ingests live compute-market sources, builds GPU and measured-workload Gold, "
-            "exports public JSON, and writes a market run manifest."
+            "Ingests compute-market sources, builds GPU Gold, exports public JSON, "
+            "and writes a market run manifest."
         ),
     )
     run_args = schedule_args(
