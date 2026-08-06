@@ -47,10 +47,7 @@ offer_aggregated as (
       as secure_offer_count,
     sum(case when coalesce(is_spot, false) then 1 else 0 end)
       as spot_offer_count,
-    max(observed_at) as latest_observed_at,
-    max(source_run_id) as source_run_id,
-    max(source_manifest_ref) as source_manifest_ref,
-    max(source_normalized_ref) as source_normalized_ref
+    max(observed_at) as latest_observed_at
   from row_scored
   group by benchmark_family_id
 ),
@@ -72,7 +69,7 @@ provider_aggregated as (
 )
 select
   concat(
-    'CBZ-', offers.benchmark_family_id, '-OBSERVED:', offers.source_run_id
+    'CBZ-', offers.benchmark_family_id, '-OBSERVED:', ${gold_run_id}
   ) as benchmark_value_id,
   concat('CBZ-', offers.benchmark_family_id, '-OBSERVED') as benchmark_symbol,
   offers.benchmark_family_id,
@@ -102,9 +99,7 @@ select
   offers.spot_offer_count,
   offers.latest_observed_at,
   'observed' as status,
-  offers.source_run_id,
-  offers.source_manifest_ref,
-  offers.source_normalized_ref,
+  ${gold_run_id} as gold_run_id,
   ${calculated_at} as calculated_at
 from offer_aggregated offers
 join provider_aggregated providers

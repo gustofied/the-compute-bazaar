@@ -27,6 +27,7 @@ from .public_view_gpu import GPU_FAMILIES
 from .public_view_market import market_overview_view
 from .schemas import to_jsonable, utc_now
 from .storage import read_json, write_json
+from ..sample_data import publish_public_lake
 
 
 MARKET_RUN_MANIFEST_VERSION = "v1"
@@ -237,6 +238,11 @@ def run_market_hourly(
         "market_run": _dashboard_market_run_ref(dashboard_output_root),
         "market_history": _dashboard_market_history_ref(dashboard_output_root),
     }
+    portable_lake = publish_public_lake(
+        source_lake_root=lake_root,
+        output_root=f"{dashboard_output_root.rstrip('/')}/lake",
+    )
+    dashboard_output_refs["portable_lake"] = portable_lake["index_ref"]
 
     row_counts = {
         "listings": gold_result.row_counts.get("fact_gpu_listings", 0),
@@ -255,6 +261,7 @@ def run_market_hourly(
     checks["dashboard_export"] = (
         "ok" if dashboard_export.get("output_refs") else "warning"
     )
+    checks["portable_lake"] = "ok" if portable_lake.get("file_count") else "warning"
     status = "success" if all(value == "ok" for value in checks.values()) else "warning"
 
     payload = {

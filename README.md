@@ -4,17 +4,28 @@
 
 ## Setup
 
-Install the project, activate its environment, and query the bundled public market
-snapshot. No cloud credentials are needed.
+Install the project and query the bundled public market snapshot. No cloud
+credentials are needed.
 
 ```bash
 uv sync
 source .venv/bin/activate
+compute-bazaar data status
 compute-bazaar price-index
 ```
 
 `compute-bazaar` prints tables in a terminal. Use `--format json` for scripts and
 agents.
+
+Download the latest sanitized Silver and Gold lake:
+
+```bash
+compute-bazaar data sync
+compute-bazaar data status
+```
+
+The CLI uses that checksummed local copy on later runs. Set
+`COMPUTE_BAZAAR_DATA_HOME` to choose its cache location.
 
 ## Query
 
@@ -28,10 +39,5 @@ The main tables are `silver.gpu_offers`, `gold.fact_gpu_price_index`, and
 and `compute-bazaar describe gold.fact_gpu_price_index`.
 
 Use another local or S3-backed lake with `--lake-root PATH`, or set
-`COMPUTE_BAZAAR_LAKE_ROOT`.
-
-Run the tests:
-
-```bash
-uv run python -m unittest discover -s tests -v
-```
+`COMPUTE_BAZAAR_LAKE_ROOT`. Direct S3 access requires `uv sync --extra s3`;
+the public sync above does not need AWS credentials.

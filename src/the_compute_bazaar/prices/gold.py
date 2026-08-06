@@ -16,7 +16,9 @@ from .gold_manifest import (
 )
 from .datafusion import DataFusionEngine
 from .gold_sources import (
+    SilverOfferSource,
     merge_compute_market_state_history,
+    merge_gpu_price_index_history,
     silver_source_cte,
     silver_state_cte_fragment,
     silver_state_union_fragment,
@@ -40,6 +42,7 @@ GOLD_TABLES = {
     "dim_providers": "providers.parquet",
     "dim_sources": "sources.parquet",
     "fact_gpu_price_index": "gpu_price_index.parquet",
+    "fact_gpu_price_index_history": "gpu_price_index_history.parquet",
     "fact_gpu_price_index_constituents": "gpu_price_index_constituents.parquet",
     "fact_compute_market_state": "compute_market_state.parquet",
     "fact_compute_market_state_history": "compute_market_state_history.parquet",
@@ -131,28 +134,12 @@ def build_gold_market_tables(
         for table_name, filename in GOLD_TABLES.items()
     }
 
+    calculated_at_value = calculated_at or utc_now().isoformat()
+    gold_observed_at = manifest_observed_at or calculated_at_value
     query_context = {
-        "source_run_id": ",".join(
-            f"{name}:{source_run_ids[name]}" for name in provider_scope
-        ),
-        "source_manifest_ref": ",".join(
-            str(source_manifests[name].get("manifest_ref") or "")
-            for name in provider_scope
-        ),
-        "source_raw_ref": ",".join(
-            str(source_manifests[name].get("raw_ref") or "") for name in provider_scope
-        ),
-        "source_normalized_ref": ",".join(
-            source_normalized_refs[name] for name in provider_scope
-        ),
-        "source_market_state_ref": ",".join(
-            source_market_state_refs[name]
-            for name in provider_scope
-            if name in source_market_state_refs
-        ),
         "gold_run_id": gold_run_id,
         "gold_observed_date": observed_date,
-        "calculated_at": calculated_at or utc_now().isoformat(),
+        "calculated_at": calculated_at_value,
         "market_state_methodology_version": MARKET_STATE_METHODOLOGY_VERSION,
     }
 
@@ -161,7 +148,20 @@ def build_gold_market_tables(
         for index, source_provider in enumerate(provider_scope)
     }
     engine = DataFusionEngine(tables)
-    silver_source_cte_sql = silver_source_cte(list(tables))
+    silver_sources = [
+        SilverOfferSource(
+            table_name=f"silver_gpu_offers_{index}",
+            source_run_id=source_run_ids[source_provider],
+            source_manifest_ref=(
+                str(source_manifests[source_provider]["manifest_ref"])
+                if source_manifests[source_provider].get("manifest_ref")
+                else None
+            ),
+            source_normalized_ref=source_normalized_refs[source_provider],
+        )
+        for index, source_provider in enumerate(provider_scope)
+    ]
+    silver_source_cte_sql = silver_source_cte(silver_sources)
     source_catalog_values_sql = source_catalog_values(provider_scope)
     rows_by_table = {
         "fact_gpu_listings": engine.query(
@@ -280,6 +280,19 @@ def build_gold_market_tables(
     )
     rows_by_table["fact_gpu_price_index"] = benchmark_values
     write_parquet_rows(table_refs["fact_gpu_price_index"], benchmark_values)
+    rows_by_table["fact_gpu_price_index_history"] = merge_gpu_price_index_history(
+        previous_ref=previous_gold_manifest.get("table_refs", {}).get(
+            "fact_gpu_price_index_history"
+        ),
+        current_rows=benchmark_values,
+        gold_run_id=gold_run_id,
+        gold_observed_at=gold_observed_at,
+        gold_observed_date=observed_date,
+    )
+    write_parquet_rows(
+        table_refs["fact_gpu_price_index_history"],
+        rows_by_table["fact_gpu_price_index_history"],
+    )
 
     prime_frontier_rows, prime_frontier_refs = build_prime_frontier_gold_products(
         lake_root=lake_root,

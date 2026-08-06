@@ -2,20 +2,63 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 from .datafusion import DataFusionEngine
-from .provider_registry import source_catalog_rows
 from .silver_contract import silver_market_state_select, silver_offer_select
 
 
-def silver_source_cte(table_names: list[str]) -> str:
-    selects = [silver_offer_select(table_name) for table_name in table_names]
+@dataclass(frozen=True)
+class SilverOfferSource:
+    table_name: str
+    source_run_id: str
+    source_manifest_ref: str | None
+    source_normalized_ref: str
+
+
+GPU_PRICE_INDEX_HISTORY_FIELDS = (
+    "benchmark_symbol",
+    "benchmark_family_id",
+    "benchmark_label",
+    "methodology_version",
+    "methodology_query_id",
+    "benchmark_basis",
+    "benchmark_usd_gpu_hr",
+    "floor_usd_gpu_hr",
+    "provider_floor_p25_usd_gpu_hr",
+    "provider_floor_p75_usd_gpu_hr",
+    "offer_count",
+    "included_offer_count",
+    "provider_count",
+    "latest_observed_at",
+    "calculated_at",
+    "gold_run_id",
+    "gold_observed_at",
+    "gold_observed_date",
+)
+
+
+def silver_source_select(source: SilverOfferSource) -> str:
+    return silver_offer_select(
+        source.table_name,
+        source_run_id=source.source_run_id,
+        source_manifest_ref=source.source_manifest_ref,
+        source_normalized_ref=source.source_normalized_ref,
+    )
+
+
+def silver_source_cte(sources: list[SilverOfferSource]) -> str:
+    selects = [silver_source_select(source) for source in sources]
     return f"silver_gpu_offers as ({' union all '.join(selects)})"
 
 
 def source_catalog_values(provider_scope: list[str]) -> str:
+    # Importing provider adapters is worker-only work; query clients should not
+    # load every HTTP connector just to construct the logical lake catalog.
+    from .provider_registry import source_catalog_rows
+
     rows = source_catalog_rows(provider_scope)
     return "values " + ", ".join(
         "("
@@ -103,6 +146,66 @@ def merge_compute_market_state_history(
             str(row.get("source_connector") or ""),
         ),
     )
+
+
+def merge_gpu_price_index_history(
+    *,
+    previous_ref: Any,
+    current_rows: list[dict[str, Any]],
+    gold_run_id: str,
+    gold_observed_at: str,
+    gold_observed_date: str,
+) -> list[dict[str, Any]]:
+    previous_rows: list[dict[str, Any]] = []
+    if previous_ref:
+        previous_rows = DataFusionEngine(
+            {"fact_gpu_price_index_history": str(previous_ref)}
+        ).query("select * from fact_gpu_price_index_history")
+    current_history = [
+        gpu_price_index_history_row(
+            row,
+            gold_run_id=gold_run_id,
+            gold_observed_at=gold_observed_at,
+            gold_observed_date=gold_observed_date,
+        )
+        for row in current_rows
+    ]
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in [*previous_rows, *current_history]:
+        row = gpu_price_index_history_row(row)
+        row["latest_observed_at"] = _timestamp(row.get("latest_observed_at"))
+        row["calculated_at"] = _timestamp(row.get("calculated_at"))
+        row["gold_observed_at"] = _timestamp(row.get("gold_observed_at"))
+        run_id = str(row.get("gold_run_id") or "")
+        family = str(row.get("benchmark_family_id") or "")
+        if not run_id or not family:
+            raise ValueError("GPU Price Index history row has no run or family")
+        merged[(run_id, family)] = row
+    return sorted(
+        merged.values(),
+        key=lambda row: (
+            str(row.get("gold_observed_at") or ""),
+            str(row.get("benchmark_family_id") or ""),
+        ),
+    )
+
+
+def gpu_price_index_history_row(
+    row: dict[str, Any],
+    *,
+    gold_run_id: str | None = None,
+    gold_observed_at: str | None = None,
+    gold_observed_date: str | None = None,
+) -> dict[str, Any]:
+    """Project one index observation into the stable retained-history contract."""
+    values = dict(row)
+    if gold_run_id is not None:
+        values["gold_run_id"] = gold_run_id
+    if gold_observed_at is not None:
+        values["gold_observed_at"] = gold_observed_at
+    if gold_observed_date is not None:
+        values["gold_observed_date"] = gold_observed_date
+    return {field: values.get(field) for field in GPU_PRICE_INDEX_HISTORY_FIELDS}
 
 
 def _timestamp(value: Any) -> datetime | None:

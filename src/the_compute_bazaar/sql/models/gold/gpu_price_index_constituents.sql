@@ -52,7 +52,7 @@ select
     'CBZ-',
     frontier.benchmark_family_id,
     '-OBSERVED:',
-    ${source_run_id}
+    ${gold_run_id}
   ) as benchmark_value_id,
   concat(
     'CBZ-',
@@ -112,9 +112,10 @@ select
   frontier.observed_at,
   frontier.raw_ref,
   frontier.has_raw_evidence,
-  ${source_run_id} as source_run_id,
-  ${source_manifest_ref} as source_manifest_ref,
-  ${source_normalized_ref} as source_normalized_ref,
+  frontier.source_run_id,
+  frontier.source_manifest_ref,
+  frontier.source_normalized_ref,
+  ${gold_run_id} as gold_run_id,
   ${calculated_at} as calculated_at
 from frontier_offers frontier
 left join eligible_ranked eligible

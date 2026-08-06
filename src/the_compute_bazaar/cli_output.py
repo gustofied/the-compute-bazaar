@@ -11,6 +11,7 @@ Column = tuple[str, str, int]
 
 TABLE_TITLES = {
     "availability": "GPU AVAILABILITY",
+    "data": "MARKET DATA",
     "describe": "TABLE COLUMNS",
     "listings": "GPU LISTINGS",
     "price-index": "GPU PRICE INDEX",

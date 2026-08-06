@@ -172,6 +172,27 @@ GPU_OFFER_COLUMNS = (
     ),
 )
 
+GPU_OFFER_LINEAGE_COLUMNS = (
+    SilverColumn(
+        "source_run_id",
+        "Utf8",
+        "",
+        "Ingestion run that produced this provider observation.",
+    ),
+    SilverColumn(
+        "source_manifest_ref",
+        "Utf8",
+        "",
+        "Manifest for the ingestion run that produced this observation.",
+    ),
+    SilverColumn(
+        "source_normalized_ref",
+        "Utf8",
+        "",
+        "Silver Parquet object containing this observation.",
+    ),
+)
+
 
 MARKET_STATE_COLUMNS = (
     SilverColumn(
@@ -310,7 +331,7 @@ MARKET_STATE_COLUMNS = (
 
 
 SILVER_TABLE_CONTRACTS = {
-    "gpu_offers": GPU_OFFER_COLUMNS,
+    "gpu_offers": GPU_OFFER_COLUMNS + GPU_OFFER_LINEAGE_COLUMNS,
     "compute_market_state": MARKET_STATE_COLUMNS,
 }
 
@@ -322,8 +343,24 @@ def select_contract(table_name: str, columns: tuple[SilverColumn, ...]) -> str:
     return f"select\n      {projection}\n    from {table_name}"
 
 
-def silver_offer_select(table_name: str) -> str:
-    return select_contract(table_name, GPU_OFFER_COLUMNS)
+def silver_offer_select(
+    table_name: str,
+    *,
+    source_run_id: str,
+    source_manifest_ref: str | None,
+    source_normalized_ref: str,
+) -> str:
+    projection = ",\n      ".join(
+        f"{column.expression} as {column.name}" for column in GPU_OFFER_COLUMNS
+    )
+    lineage = ",\n      ".join(
+        (
+            f"{_sql_text(source_run_id)} as source_run_id",
+            f"{_sql_text(source_manifest_ref)} as source_manifest_ref",
+            f"{_sql_text(source_normalized_ref)} as source_normalized_ref",
+        )
+    )
+    return f"select\n      {projection},\n      {lineage}\n    from {table_name}"
 
 
 def silver_market_state_select(table_name: str) -> str:
@@ -332,3 +369,9 @@ def silver_market_state_select(table_name: str) -> str:
 
 def silver_contract(table_name: str) -> tuple[SilverColumn, ...] | None:
     return SILVER_TABLE_CONTRACTS.get(table_name)
+
+
+def _sql_text(value: str | None) -> str:
+    if value is None:
+        return "cast(null as varchar)"
+    return "'" + value.replace("'", "''") + "'"

@@ -55,9 +55,9 @@ listing_depth as (
     $market_state_methodology_version as methodology_version,
     'Offer depth is a listing-surface measure, not physical fleet capacity or rented share.'
       as notes,
-    $source_run_id as source_run_id,
-    $source_manifest_ref as source_manifest_ref,
-    $source_normalized_ref as source_normalized_ref,
+    min(source_run_id) as source_run_id,
+    min(source_manifest_ref) as source_manifest_ref,
+    min(source_normalized_ref) as source_normalized_ref,
     cast(null as varchar) as source_market_state_ref
   from silver_gpu_offers
   group by provider, coalesce(source_connector, provider), gpu_model

@@ -8,11 +8,11 @@ from typing import Any
 
 from .datafusion import DataFusionEngine
 from .gold_manifest import read_latest_gold_manifest
+from .gold_sources import SilverOfferSource, silver_source_select
 from .query_catalog import bounded_query_limit, validate_catalog_sql, with_scratch_limit
 from .silver_contract import (
     silver_contract,
     silver_market_state_select,
-    silver_offer_select,
 )
 
 
@@ -77,11 +77,27 @@ order by ordinal_position
         }
 
     def _register_silver(self) -> None:
-        offer_refs = sorted(
-            str(ref)
-            for ref in dict(self.manifest.get("source_normalized_refs") or {}).values()
-            if ref
-        )
+        normalized_refs = dict(self.manifest.get("source_normalized_refs") or {})
+        source_run_ids = dict(self.manifest.get("source_run_ids") or {})
+        source_manifest_refs = dict(self.manifest.get("source_manifest_refs") or {})
+        provider_scope = [
+            str(provider)
+            for provider in self.manifest.get("provider_scope") or []
+            if normalized_refs.get(provider)
+        ]
+        offer_sources = [
+            SilverOfferSource(
+                table_name=f"_silver_gpu_offers_{index}",
+                source_run_id=str(source_run_ids.get(provider) or ""),
+                source_manifest_ref=(
+                    str(source_manifest_refs[provider])
+                    if source_manifest_refs.get(provider)
+                    else None
+                ),
+                source_normalized_ref=str(normalized_refs[provider]),
+            )
+            for index, provider in enumerate(provider_scope)
+        ]
         state_refs = sorted(
             str(ref)
             for ref in dict(
@@ -92,25 +108,23 @@ order by ordinal_position
         tables = {
             **{
                 f"_silver_gpu_offers_{index}": ref
-                for index, ref in enumerate(offer_refs)
+                for index, ref in enumerate(
+                    str(normalized_refs[provider]) for provider in provider_scope
+                )
             },
             **{
                 f"_silver_compute_market_state_{index}": ref
                 for index, ref in enumerate(state_refs)
             },
         }
-        if not offer_refs:
+        if not offer_sources:
             raise RuntimeError("Latest Gold manifest has no Silver offer references")
         self.engine.register_tables(tables)
         self.engine.create_schema("silver")
         self.engine.create_view(
             "silver",
             "gpu_offers",
-            _union_all(
-                "_silver_gpu_offers",
-                len(offer_refs),
-                select=silver_offer_select,
-            ),
+            " union all ".join(silver_source_select(source) for source in offer_sources),
         )
         if state_refs:
             self.engine.create_view(

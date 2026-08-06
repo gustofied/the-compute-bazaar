@@ -2646,18 +2646,15 @@ name = "the-compute-bazaar"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "boto3" },
-    { name = "confluent-kafka" },
     { name = "datafusion" },
-    { name = "fastapi" },
-    { name = "matplotlib" },
-    { name = "pillow" },
     { name = "pyarrow" },
-    { name = "requests" },
-    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
+api = [
+    { name = "fastapi" },
+    { name = "uvicorn", extra = ["standard"] },
+]
 bench = [
     { name = "prime" },
     { name = "verifiers" },
@@ -2665,23 +2662,34 @@ bench = [
 ops = [
     { name = "awscli" },
 ]
+s3 = [
+    { name = "boto3" },
+]
+worker = [
+    { name = "boto3" },
+    { name = "confluent-kafka" },
+    { name = "matplotlib" },
+    { name = "pillow" },
+    { name = "requests" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "awscli", marker = "extra == 'ops'", specifier = ">=1.45.30" },
-    { name = "boto3", specifier = ">=1.41.0" },
-    { name = "confluent-kafka", specifier = ">=2.12.2" },
+    { name = "boto3", marker = "extra == 's3'", specifier = ">=1.41.0" },
+    { name = "boto3", marker = "extra == 'worker'", specifier = ">=1.41.0" },
+    { name = "confluent-kafka", marker = "extra == 'worker'", specifier = ">=2.12.2" },
     { name = "datafusion", specifier = ">=51.0.0" },
-    { name = "fastapi", specifier = ">=0.137.1" },
-    { name = "matplotlib", specifier = ">=3.10.8" },
-    { name = "pillow", specifier = ">=12.0.0" },
+    { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.137.1" },
+    { name = "matplotlib", marker = "extra == 'worker'", specifier = ">=3.10.8" },
+    { name = "pillow", marker = "extra == 'worker'", specifier = ">=12.0.0" },
     { name = "prime", marker = "extra == 'bench'", specifier = ">=0.6.19" },
     { name = "pyarrow", specifier = ">=22.0.0" },
-    { name = "requests", specifier = ">=2.33.1" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.49.0" },
+    { name = "requests", marker = "extra == 'worker'", specifier = ">=2.33.1" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.49.0" },
     { name = "verifiers", marker = "extra == 'bench'", specifier = ">=0.2.0" },
 ]
-provides-extras = ["bench", "ops"]
+provides-extras = ["api", "bench", "ops", "s3", "worker"]
 
 [[package]]
 name = "tiktoken"

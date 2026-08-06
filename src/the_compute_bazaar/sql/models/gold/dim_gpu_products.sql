@@ -12,7 +12,7 @@ select
   max(gpu_count) as max_gpu_count,
   min(observed_at) as first_observed_at,
   max(observed_at) as latest_observed_at,
-  $source_run_id as source_run_id,
+  $gold_run_id as gold_run_id,
   $calculated_at as calculated_at
 from products
 group by gpu_model

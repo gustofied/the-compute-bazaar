@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from .gold_manifest import is_canonical_market_run_id
-from .gold_models import BENCHMARK_METHODOLOGY_VERSION
 from .storage import read_json
 
 
@@ -52,7 +51,7 @@ def public_benchmark_value(row: dict[str, Any]) -> dict[str, Any]:
         "spot_offer_count",
         "latest_observed_at",
         "status",
-        "source_run_id",
+        "gold_run_id",
         "calculated_at",
     )
 
@@ -98,7 +97,7 @@ def merge_benchmark_history(
     ]
     candidates.extend(current_rows)
     for row in candidates:
-        if row.get("methodology_version") != BENCHMARK_METHODOLOGY_VERSION:
+        if not row.get("methodology_version"):
             continue
         if not has_benchmark_value(row):
             continue
@@ -231,6 +230,7 @@ def public_benchmark_constituent(row: dict[str, Any]) -> dict[str, Any]:
         "observed_at",
         "has_raw_evidence",
         "source_run_id",
+        "gold_run_id",
         "calculated_at",
     )
 

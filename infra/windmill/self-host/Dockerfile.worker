@@ -10,6 +10,6 @@ COPY src ./src
 
 RUN uv python install 3.13 \
     && uv venv /opt/compute-bazaar/.venv --python 3.13 \
-    && uv pip install --python /opt/compute-bazaar/.venv/bin/python --no-cache .
+    && uv pip install --python /opt/compute-bazaar/.venv/bin/python --no-cache '.[worker]'
 
 ENV PYTHON_PATH=/opt/compute-bazaar/.venv/bin/python

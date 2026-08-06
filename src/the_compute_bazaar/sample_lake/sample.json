@@ -1,6 +1,6 @@
 {
-  "history_run_count": 24,
-  "observed_at": "2026-08-02T06:01:11.391853+00:00",
+  "history_row_count": 3969,
+  "observed_at": "2026-08-06T21:01:26.892530+00:00",
   "private_evidence_removed": true,
   "provider_scope": [
     "vast",
@@ -21,6 +21,6 @@
     "verda",
     "prime_intellect"
   ],
-  "run_id": "gold-market-20260802T060000-aef2c141",
-  "sample_type": "sanitized_public_market_snapshot"
+  "run_id": "gold-market-20260806T210000-f3191dbe",
+  "schema_version": "compute_bazaar_portable_lake_v1"
 }

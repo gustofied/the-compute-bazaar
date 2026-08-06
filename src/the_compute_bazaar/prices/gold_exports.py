@@ -53,7 +53,7 @@ def export_gold_dashboard_snapshot(
     lake_root: str,
     output_root: str,
     limit: int = 100,
-    benchmark_history_limit: int = 24,
+    benchmark_history_limit: int = 24 * 90,
 ) -> dict[str, Any]:
     """Export public JSON snapshots for static D3/blog consumers."""
     manifest = read_latest_gold_manifest(lake_root)

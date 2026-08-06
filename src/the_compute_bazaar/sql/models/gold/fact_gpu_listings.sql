@@ -38,9 +38,10 @@ select
   observed_at,
   raw_ref,
   raw_ref is not null as has_raw_evidence,
-  $source_run_id as source_run_id,
-  $source_manifest_ref as source_manifest_ref,
-  $source_normalized_ref as source_normalized_ref,
+  source_run_id,
+  source_manifest_ref,
+  source_normalized_ref,
+  $gold_run_id as gold_run_id,
   $calculated_at as calculated_at
 from silver_gpu_offers
 left join source_catalog catalog using (source_connector)

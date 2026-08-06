@@ -219,9 +219,7 @@ def write_parquet_rows(uri: str, rows: Iterable[Mapping[str, Any]]) -> str:
         import pyarrow as pa
         import pyarrow.parquet as pq
     except ImportError as exc:
-        raise RuntimeError(
-            "Writing Parquet requires the 'platform' extra: uv sync --extra platform"
-        ) from exc
+        raise RuntimeError("Writing Parquet requires the project dependencies: uv sync") from exc
 
     table = pa.Table.from_pylist(materialized)
     if uri.startswith("s3://"):
@@ -252,9 +250,7 @@ def read_parquet_rows(uri: str) -> list[dict[str, Any]]:
     try:
         import pyarrow.parquet as pq
     except ImportError as exc:
-        raise RuntimeError(
-            "Reading Parquet requires the 'platform' extra: uv sync --extra platform"
-        ) from exc
+        raise RuntimeError("Reading Parquet requires the project dependencies: uv sync") from exc
 
     uri = resolve_read_uri(uri)
     if uri.startswith("s3://"):

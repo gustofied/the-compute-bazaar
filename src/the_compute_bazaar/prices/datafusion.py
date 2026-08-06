@@ -133,7 +133,16 @@ def query_market_summary(
     if limit is not None:
         sql = f"{sql.rstrip()}\nlimit {int(limit)}"
     engine = DataFusionEngine({"_gpu_offers": parquet_uri})
-    engine.create_view("public", "gpu_offers", silver_offer_select("_gpu_offers"))
+    engine.create_view(
+        "public",
+        "gpu_offers",
+        silver_offer_select(
+            "_gpu_offers",
+            source_run_id="ad-hoc",
+            source_manifest_ref=None,
+            source_normalized_ref=parquet_uri,
+        ),
+    )
     return engine.query(sql)
 
 

@@ -5,8 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from .datafusion import DataFusionEngine
-from .gold_manifest import list_gold_manifests, read_latest_gold_manifest
-from .gold_models import BENCHMARK_METHODOLOGY_VERSION
+from .gold_manifest import (
+    is_canonical_market_run_id,
+    list_gold_manifests,
+    read_latest_gold_manifest,
+)
 
 
 def query_gold_gpu_price_index(
@@ -49,6 +52,35 @@ def query_gold_gpu_price_index_history(
     canonical_market_runs_only: bool = False,
 ) -> dict[str, Any]:
     """Read GPU Price Index values stored with retained Gold snapshots."""
+    latest_manifest = read_latest_gold_manifest(lake_root)
+    history_ref = latest_manifest.get("table_refs", {}).get(
+        "fact_gpu_price_index_history"
+    )
+    if history_ref:
+        rows = DataFusionEngine(
+            {"fact_gpu_price_index_history": str(history_ref)}
+        ).query("""
+select *
+from fact_gpu_price_index_history
+order by gold_observed_at, benchmark_family_id
+""")
+        if canonical_market_runs_only:
+            rows = [
+                row
+                for row in rows
+                if is_canonical_market_run_id(row.get("gold_run_id"))
+            ]
+        selected_runs = list(
+            dict.fromkeys(str(row.get("gold_run_id") or "") for row in rows)
+        )[-max(1, int(history_limit)) :]
+        selected = set(selected_runs)
+        rows = [row for row in rows if str(row.get("gold_run_id") or "") in selected]
+        return {
+            "manifest": latest_manifest,
+            "history_manifest_count": len(selected_runs),
+            "rows": rows,
+        }
+
     manifests = list_gold_manifests(
         lake_root,
         limit=history_limit,
@@ -86,11 +118,6 @@ order by benchmark_family_id
                 f"{manifest.get('run_id') or '<unknown>'}"
             ) from exc
 
-        benchmark_rows = [
-            row
-            for row in benchmark_rows
-            if row.get("methodology_version") == BENCHMARK_METHODOLOGY_VERSION
-        ]
         if not benchmark_rows:
             continue
         included_manifest_count += 1
@@ -112,7 +139,7 @@ order by benchmark_family_id
         )
     )
     return {
-        "manifest": read_latest_gold_manifest(lake_root),
+        "manifest": latest_manifest,
         "history_manifest_count": included_manifest_count,
         "rows": rows,
     }

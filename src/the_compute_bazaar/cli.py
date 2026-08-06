@@ -5,21 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
-from urllib.request import Request, urlopen
 
-from .api import create_app
 from .cli_output import available_formats, render_table_payload, supports_auto_table
 from .data_root import resolve_lake_root
-from .market_query_service import MarketQueryService
-from .prices.market_catalog import MarketDataCatalog
 from .prices.schemas import to_jsonable
-from .sandbox_cost.evidence import validate_evidence
-from .sandbox_cost.pipeline import build_sandbox_cost
-from .sandbox_cost.refresh import refresh_benchmark_sources
-from .sandbox_cost.status import check_public_payload_freshness
 
 
 def main() -> None:
@@ -27,9 +18,10 @@ def main() -> None:
     args = parser.parse_args()
     selection = resolve_lake_root(args.lake_root)
     args.lake_root = selection.root
+    args.data_source = selection.to_dict()
     payload = dispatch(args, parser=parser)
     if payload is not None:
-        if args.command != "sandbox" and isinstance(payload, dict):
+        if args.command not in {"data", "sandbox"} and isinstance(payload, dict):
             payload = {
                 "data_source": selection.to_dict(),
                 **_compact_cli_run(payload),
@@ -63,6 +55,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format; auto uses tables in an interactive terminal",
     )
     commands = parser.add_subparsers(dest="command", required=True)
+
+    data = commands.add_parser("data", help="Inspect or update the local public lake")
+    data_commands = data.add_subparsers(dest="data_command", required=True)
+    data_commands.add_parser("status", help="Show the selected lake and market run")
+    data_sync = data_commands.add_parser(
+        "sync", help="Download the current sanitized Silver and Gold lake"
+    )
+    data_sync.add_argument(
+        "--url",
+        default="https://bazaar.adamsioud.com/lake",
+        help="Public portable-lake base URL",
+    )
+    data_sync.add_argument("--output-root", help="Override the local cache directory")
 
     commands.add_parser("manifest", help="Show the latest public-safe Gold manifest")
     commands.add_parser("catalog", help="List saved DataFusion queries")
@@ -157,8 +162,29 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def dispatch(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> Any:
+    if args.command == "data":
+        from .data_sync import inspect_lake, sync_public_lake
+
+        if args.data_command == "status":
+            return inspect_lake(
+                root=args.lake_root,
+                kind=args.data_source["kind"],
+                label=args.data_source["label"],
+            )
+        if args.data_command == "sync":
+            return sync_public_lake(
+                base_url=args.url,
+                output_root=args.output_root,
+            )
+        raise AssertionError(f"Unhandled data command: {args.data_command}")
+
     if args.command == "api":
-        import uvicorn
+        try:
+            import uvicorn
+
+            from .api import create_app
+        except ImportError:
+            parser.error("The API requires: uv sync --extra api")
 
         uvicorn.run(
             create_app(
@@ -173,6 +199,8 @@ def dispatch(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> An
         return _run_sandbox(args, parser=parser)
 
     if args.command in {"tables", "describe", "sql"}:
+        from .prices.market_catalog import MarketDataCatalog
+
         catalog = MarketDataCatalog(lake_root=args.lake_root)
         if args.command == "tables":
             return catalog.tables()
@@ -182,6 +210,8 @@ def dispatch(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> An
             _read_sql_statement(args, parser=parser),
             limit=args.limit,
         )
+
+    from .market_query_service import MarketQueryService
 
     service = MarketQueryService(lake_root=args.lake_root)
     if args.command == "manifest":
@@ -222,6 +252,10 @@ def dispatch(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> An
 
 def _run_sandbox(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> Any:
     if args.sandbox_command == "build":
+        from dataclasses import asdict
+
+        from .sandbox_cost.pipeline import build_sandbox_cost
+
         return asdict(
             build_sandbox_cost(
                 output_root=args.output_root,
@@ -230,8 +264,12 @@ def _run_sandbox(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -
             )
         )
     if args.sandbox_command == "validate":
+        from .sandbox_cost.evidence import validate_evidence
+
         return validate_evidence()
     if args.sandbox_command == "refresh":
+        from .sandbox_cost.refresh import refresh_benchmark_sources
+
         if args.check and args.update_evidence:
             parser.error("--check and --update-evidence cannot be used together")
         result = refresh_benchmark_sources(
@@ -245,6 +283,10 @@ def _run_sandbox(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -
             _print_before_exit(result, status=1)
         return result
     if args.sandbox_command == "check-public":
+        from urllib.request import Request, urlopen
+
+        from .sandbox_cost.status import check_public_payload_freshness
+
         request = Request(
             args.url,
             headers={"User-Agent": "the-compute-bazaar-freshness-check/1"},
