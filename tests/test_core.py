@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from fastapi.testclient import TestClient
+
 from infra.windmill import market_hourly as windmill_market_hourly
 from infra.aws.check_public_market import validate_public_market
 from the_compute_bazaar.prices.datafusion import query_tables
@@ -15,6 +17,7 @@ from the_compute_bazaar.prices.gold import (
     build_gold_market_tables,
     query_gold_listings,
 )
+from the_compute_bazaar.prices.gold_exports import export_gold_dashboard_snapshot
 from the_compute_bazaar.prices.ingestion import IngestResult, persist_provider_snapshot
 from the_compute_bazaar.prices.market_run import (
     _public_market_run_manifest,
@@ -36,6 +39,8 @@ from the_compute_bazaar.prices.storage import (
     write_offers_parquet,
 )
 from the_compute_bazaar.publication_contract import PublicationRoute
+from the_compute_bazaar.sandbox_cost import build_sandbox_cost
+from the_compute_bazaar.api import create_app
 
 
 OBSERVED_AT = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
@@ -297,6 +302,11 @@ order by source_connector
 """,
             )
             manifest = read_json(build.manifest_ref)
+            export = export_gold_dashboard_snapshot(
+                lake_root=str(lake_root),
+                output_root=str(root / "public"),
+            )
+            exported_manifest = read_json(export["output_refs"]["manifest"])
 
         self.assertEqual(build.provider_scope, ["vast", "lium"])
         self.assertEqual(
@@ -379,6 +389,8 @@ order by source_connector
             )
         )
         self.assertEqual(len(load_query_catalog()), 7)
+        self.assertEqual(export["row_counts"]["gpu_benchmark_cards"], 4)
+        self.assertEqual(exported_manifest["run_id"], "gold-test")
 
     def test_public_market_payload_does_not_expose_private_storage(self) -> None:
         payload = _public_market_run_manifest(
@@ -437,6 +449,92 @@ order by source_connector
 
         self.assertEqual(summary["status"], "ok")
         self.assertEqual(summary["provider_count"], 2)
+
+    def test_sandbox_publication_preserves_runs_and_exposes_measured_history(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            public_root = root / "public"
+            build = build_sandbox_cost(
+                output_root=str(root / "lake"),
+                dashboard_output_root=str(public_root),
+            )
+            card = read_json(str(public_root / "sandbox" / "workload.json"))
+
+        measured_history = card["data"]["workload"]["measured_history"]
+        run_history = card["series"]
+        self.assertEqual(card["card_type"], "sandbox_workload_cost")
+        self.assertEqual(build.row_counts["sandbox_workload_measured_history"], 63)
+        self.assertEqual(len(measured_history), 63)
+        self.assertEqual(len(run_history), 14)
+        self.assertTrue(all(row["observed_date"] for row in measured_history))
+        self.assertTrue(all(row["source_run_count"] >= 1 for row in measured_history))
+
+    def test_query_api_reads_latest_gold_and_blocks_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            lake_root = root / "lake"
+            _write_provider_snapshot(
+                root,
+                "vast",
+                [
+                    _offer(provider="vast", offer_id="vast-1", price=2.0),
+                    _offer(provider="vast", offer_id="vast-2", price=4.0),
+                ],
+            )
+            _write_provider_snapshot(
+                root,
+                "lium",
+                _offer(
+                    provider="coreweave",
+                    source_connector="lium",
+                    offer_id="lium-1",
+                    price=2.5,
+                ),
+            )
+            build_gold_market_tables(
+                lake_root=str(lake_root),
+                providers=["vast", "lium"],
+                run_id="gold-api-test",
+            )
+            client = TestClient(
+                create_app(lake_root=str(lake_root), enable_scratch_sql=True)
+            )
+
+            manifest_response = client.get("/v1/manifest")
+            listings_response = client.get(
+                "/v1/listings",
+                params={"provider": "vast", "limit": 1},
+            )
+            catalog_response = client.get("/v1/queries/benchmark_values")
+            sql_response = client.post(
+                "/v1/sql",
+                json={
+                    "sql": "select provider, price_usd_gpu_hr from fact_gpu_listings order by price_usd_gpu_hr",
+                    "limit": 2,
+                },
+            )
+            write_response = client.post(
+                "/v1/sql",
+                json={"sql": "delete from fact_gpu_listings", "limit": 2},
+            )
+
+        self.assertEqual(manifest_response.status_code, 200)
+        manifest = manifest_response.json()
+        self.assertEqual(manifest["run_id"], "gold-api-test")
+        self.assertNotIn("table_refs", manifest)
+        self.assertNotIn("s3://", json.dumps(manifest))
+        self.assertEqual(listings_response.status_code, 200)
+        self.assertEqual(listings_response.json()["row_count"], 1)
+        self.assertEqual(listings_response.json()["rows"][0]["provider"], "vast")
+        self.assertEqual(catalog_response.status_code, 200)
+        self.assertEqual(catalog_response.json()["query"]["engine"], "datafusion")
+        self.assertNotIn("s3://", catalog_response.text)
+        self.assertNotIn("source_manifest_ref", catalog_response.text)
+        self.assertEqual(sql_response.status_code, 200)
+        self.assertEqual(sql_response.json()["row_count"], 2)
+        self.assertEqual(write_response.status_code, 400)
 
 
 def _offer(

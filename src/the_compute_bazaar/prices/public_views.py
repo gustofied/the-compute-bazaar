@@ -229,7 +229,6 @@ def market_state_view(payload: Mapping[str, Any]) -> dict[str, Any]:
         data={
             "measurement_kinds": payload.get("measurement_kinds"),
             "current_rows": current_rows,
-            "vm_and_sandbox": payload.get("vm_and_sandbox"),
         },
         observation_window=_observation_window(timestamps),
     )
@@ -327,7 +326,6 @@ def market_overview_view(
     *,
     manifest: Mapping[str, Any],
     benchmark_cards: list[Mapping[str, Any]],
-    sandbox_rates: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     benchmarks = []
     for card in benchmark_cards:
@@ -347,9 +345,6 @@ def market_overview_view(
                 "ref": f"gpu-benchmark/{str(data.get('family_id') or '').lower()}.json",
             }
         )
-    sandbox_headline = (
-        dict(sandbox_rates.get("headline") or {}) if sandbox_rates else None
-    )
     public_run = {
         key: manifest.get(key)
         for key in [
@@ -397,7 +392,6 @@ def market_overview_view(
         data={
             "market_run": public_run,
             "benchmarks": benchmarks,
-            "sandbox_rates": sandbox_headline,
         },
         observation_window={
             "started_at": manifest.get("observed_at"),

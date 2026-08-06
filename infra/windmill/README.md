@@ -3,7 +3,7 @@
 Windmill runs two scheduled Python jobs:
 
 - `market_hourly.py` calls `run_market_hourly()`.
-- `sandbox_benchmark_daily.py` imports new public StarSling results and rebuilds
+- `sandbox_benchmark_weekly.py` imports new public StarSling results and rebuilds
   the measured-workload Gold/public output.
 
 The market job pulls providers, writes Bronze and Silver, runs the DataFusion
@@ -72,17 +72,19 @@ export WINDMILL_TOKEN=...
 export WINDMILL_WORKSPACE=compute-bazaar
 
 uv run python infra/windmill/bootstrap_market_schedule.py
-uv run python infra/windmill/bootstrap_sandbox_benchmark_schedule.py
+uv run python infra/windmill/bootstrap_sandbox_benchmark_weekly_schedule.py
 ```
 
-The default six-field cron is hourly:
+The market schedule's default six-field cron is hourly:
 
 ```text
 0 0 * * * *
 ```
 
 The StarSling job only reads results published in its public repository. It
-does not run paid workloads and does not depend on the hourly GPU job.
+polls weekly, does not run paid workloads, and does not depend on the hourly
+GPU job. Its chart uses the measured dates retained in the source; it does not
+create daily observations between source runs.
 
 Run the market job manually with:
 

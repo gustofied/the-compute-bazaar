@@ -8,7 +8,8 @@ from typing import Any
 
 from .coverage import query_frontier_coverage_ref
 from .events import new_run_id
-from .gold import build_gold_market_tables, export_gold_dashboard_snapshot
+from .gold import build_gold_market_tables
+from .gold_exports import export_gold_dashboard_snapshot
 from .ingestion import IngestResult
 from .provider_registry import ProviderRunContext, enabled_provider_names, get_provider
 from .public_views import GPU_FAMILIES, market_overview_view

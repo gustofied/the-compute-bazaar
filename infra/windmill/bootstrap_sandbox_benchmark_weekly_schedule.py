@@ -1,4 +1,4 @@
-"""Bootstrap the daily public sandbox benchmark source poll."""
+"""Bootstrap the weekly public StarSling source poll."""
 
 from __future__ import annotations
 
@@ -18,13 +18,13 @@ from client import (
     load_local_env,
     read_token_file,
 )
-DEFAULT_CRON = "0 30 6 * * *"
+DEFAULT_CRON = "0 30 6 * * 1"
 
 
 def main() -> None:
     load_local_env()
     parser = argparse.ArgumentParser(
-        description="Create or update the daily sandbox benchmark job"
+        description="Create or update the weekly StarSling source poll"
     )
     parser.add_argument(
         "--base-url",
@@ -48,7 +48,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--cron",
-        default=os.getenv("WINDMILL_SANDBOX_BENCHMARK_CRON", DEFAULT_CRON),
+        default=os.getenv("WINDMILL_STARSLING_CRON", DEFAULT_CRON),
     )
     parser.add_argument(
         "--source-repository",
@@ -92,17 +92,17 @@ def main() -> None:
     for variable in variables:
         client.upsert_variable(**variable)
 
-    script_path = f"f/{args.folder}/sandbox_benchmark_daily"
-    schedule_path = f"f/{args.folder}/sandbox_benchmark_daily_schedule"
+    script_path = f"f/{args.folder}/sandbox_benchmark_weekly"
+    schedule_path = f"f/{args.folder}/sandbox_benchmark_weekly_schedule"
     script_body = (
         Path(__file__)
-        .with_name("sandbox_benchmark_daily.py")
+        .with_name("sandbox_benchmark_weekly.py")
         .read_text(encoding="utf-8")
     )
     client.upsert_script(
         path=script_path,
         content=script_body,
-        summary="Daily public StarSling source ingestion",
+        summary="Weekly public StarSling source poll",
         description=(
             "Ingests the latest trusted StarSling dataset into immutable "
             "bronze and content-addressed silver. It does not execute paid "
@@ -120,13 +120,15 @@ def main() -> None:
         schedule=args.cron,
         timezone=args.timezone,
         enabled=not args.disabled,
-        summary="Daily public StarSling source ingestion",
+        summary="Weekly public StarSling source poll",
         description=(
             "Polls public committed benchmark results and retains only new "
             "compatible source generations."
         ),
         args=run_args,
     )
+    client.delete_schedule(f"f/{args.folder}/sandbox_benchmark_daily_schedule")
+    client.delete_script(f"f/{args.folder}/sandbox_benchmark_daily")
 
     job_id = None
     job_result = None

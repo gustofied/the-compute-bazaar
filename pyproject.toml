@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-sandbox-cost = "the_compute_bazaar.sandbox_cost.cli:main"
+compute-bazaar = "the_compute_bazaar.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]

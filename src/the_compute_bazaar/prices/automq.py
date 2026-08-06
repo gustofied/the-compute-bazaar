@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterable
-from typing import Protocol
+from typing import Any, Protocol
 
 from .schemas import EventEnvelope, to_jsonable
 
@@ -33,7 +33,7 @@ class KafkaPublisher:
             from confluent_kafka import Producer
         except ImportError as exc:
             raise RuntimeError(
-                "Publishing to AutoMQ/Kafka requires the 'platform' extra: uv sync --extra platform"
+                "Publishing to AutoMQ/Kafka requires confluent-kafka. Run uv sync first."
             ) from exc
 
         producer_config = {
@@ -45,17 +45,36 @@ class KafkaPublisher:
         if config:
             producer_config.update(config)
         self._producer = Producer(producer_config)
+        self._delivery_errors: list[str] = []
 
     def publish(self, topic: str, event: EventEnvelope, *, key: str | None = None) -> None:
-        self._producer.produce(
-            topic,
-            key=key,
-            value=json.dumps(to_jsonable(event), sort_keys=True).encode("utf-8"),
-        )
+        payload = json.dumps(to_jsonable(event), sort_keys=True).encode("utf-8")
+        while True:
+            try:
+                self._producer.produce(
+                    topic,
+                    key=key,
+                    value=payload,
+                    on_delivery=self._on_delivery,
+                )
+                break
+            except BufferError:
+                self._producer.poll(1)
         self._producer.poll(0)
 
     def flush(self) -> None:
-        self._producer.flush()
+        remaining = self._producer.flush(30)
+        if remaining:
+            raise RuntimeError(
+                f"Kafka delivery timed out with {remaining} event(s) still queued"
+            )
+        if self._delivery_errors:
+            details = "; ".join(self._delivery_errors[:3])
+            raise RuntimeError(f"Kafka rejected event delivery: {details}")
+
+    def _on_delivery(self, error: Any, _message: Any) -> None:
+        if error is not None:
+            self._delivery_errors.append(str(error))
 
 
 def publish_all(

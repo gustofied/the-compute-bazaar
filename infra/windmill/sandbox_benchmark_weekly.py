@@ -1,4 +1,4 @@
-"""Windmill script for daily public sandbox benchmark source ingestion."""
+"""Windmill script for the weekly public StarSling source poll."""
 
 # the_compute_bazaar is installed in the custom worker image and allowlisted locally.
 

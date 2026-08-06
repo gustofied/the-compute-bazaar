@@ -40,6 +40,7 @@ SOURCE_MANIFEST = EVIDENCE_ROOT / "source-manifest.json"
 TARGET_SHAPE = {"vcpus": 4, "memory_gib": 8, "disk_gb": 40}
 WORKLOAD_COST_COHORT = "workload-cost-input"
 WORKLOAD_BATCH_QUERY_ID = "sandbox_workload_batch_history_v2"
+WORKLOAD_MEASURED_HISTORY_QUERY_ID = "sandbox_workload_measured_history_v1"
 WORKLOAD_REPLICATE_QUERY_ID = "sandbox_workload_latest_replicates_v2"
 WORKLOAD_PHASE_QUERY_ID = "sandbox_workload_latest_phases_v1"
 WORKLOAD_PHASE_SUMMARY_QUERY_ID = "sandbox_workload_phase_summary_v1"
@@ -262,6 +263,10 @@ RUN_METADATA_FIELDS = {
 }
 
 WORKLOAD_BATCH_SQL = sandbox_model_sql("sandbox_workload_batch_history")
+
+WORKLOAD_MEASURED_HISTORY_SQL = sandbox_model_sql(
+    "sandbox_workload_measured_history"
+)
 
 WORKLOAD_LATEST_REPLICATES_SQL = sandbox_model_sql(
     "sandbox_workload_latest_replicates"
@@ -502,6 +507,14 @@ def _build_workload_cost_unlocked(
             sql=WORKLOAD_RUN_SUMMARY_SQL,
         )
     )
+    workload_measured_history = _canonicalize_numeric_rows(
+        query_tables(
+            tables={
+                "sandbox_benchmark_batches": silver_refs["sandbox_benchmark_batches"]
+            },
+            sql=WORKLOAD_MEASURED_HISTORY_SQL,
+        )
+    )
     latest_replicates = _canonicalize_numeric_rows(
         query_tables(
             tables={
@@ -552,6 +565,10 @@ def _build_workload_cost_unlocked(
             output_root,
             "gold/sandbox_workload_run_history.parquet",
         ),
+        "sandbox_workload_measured_history": _join(
+            output_root,
+            "gold/sandbox_workload_measured_history.parquet",
+        ),
         "sandbox_workload_latest_replicates": latest_replicates_ref,
         "sandbox_workload_latest_phases": latest_phases_ref,
         "sandbox_workload_phase_summary": _join(
@@ -568,6 +585,10 @@ def _build_workload_cost_unlocked(
         table_refs["sandbox_workload_run_history"],
         workload_run_history,
     )
+    write_parquet_rows(
+        table_refs["sandbox_workload_measured_history"],
+        workload_measured_history,
+    )
     write_parquet_rows(table_refs["sandbox_workload_phase_summary"], phase_summary)
     write_parquet_rows(
         table_refs["sandbox_workload_service_summary"],
@@ -577,6 +598,7 @@ def _build_workload_cost_unlocked(
     query_hashes = {
         "workload_batches": _sha256_text(WORKLOAD_BATCH_SQL),
         "workload_run_history": _sha256_text(WORKLOAD_RUN_SUMMARY_SQL),
+        "workload_measured_history": _sha256_text(WORKLOAD_MEASURED_HISTORY_SQL),
         "workload_replicates": _sha256_text(WORKLOAD_LATEST_REPLICATES_SQL),
         "workload_phases": _sha256_text(WORKLOAD_LATEST_PHASES_SQL),
         "workload_phase_summary": _sha256_text(WORKLOAD_PHASE_SUMMARY_SQL),
@@ -612,6 +634,7 @@ def _build_workload_cost_unlocked(
     row_counts = {
         "sandbox_workload_batch_history": len(workload_batches),
         "sandbox_workload_run_history": len(workload_run_history),
+        "sandbox_workload_measured_history": len(workload_measured_history),
         "sandbox_workload_latest_replicates": len(latest_replicates),
         "sandbox_workload_latest_phases": len(latest_phases),
         "sandbox_workload_phase_summary": len(phase_summary),
@@ -637,6 +660,7 @@ def _build_workload_cost_unlocked(
         "query_ids": {
             "workload_batches": WORKLOAD_BATCH_QUERY_ID,
             "workload_run_history": WORKLOAD_RUN_SUMMARY_QUERY_ID,
+            "workload_measured_history": WORKLOAD_MEASURED_HISTORY_QUERY_ID,
             "workload_replicates": WORKLOAD_REPLICATE_QUERY_ID,
             "workload_phases": WORKLOAD_PHASE_QUERY_ID,
             "workload_phase_summary": WORKLOAD_PHASE_SUMMARY_QUERY_ID,
@@ -683,6 +707,7 @@ def _build_workload_cost_unlocked(
             manifest=manifest,
             workload_batches=workload_batches,
             workload_run_history=workload_run_history,
+            workload_measured_history=workload_measured_history,
             latest_replicates=latest_replicates,
             latest_phases=latest_phases,
             phase_summary=phase_summary,
@@ -1138,6 +1163,7 @@ def _public_payload(
     manifest: dict[str, Any],
     workload_batches: list[dict[str, Any]],
     workload_run_history: list[dict[str, Any]],
+    workload_measured_history: list[dict[str, Any]],
     latest_replicates: list[dict[str, Any]],
     latest_phases: list[dict[str, Any]],
     phase_summary: list[dict[str, Any]],
@@ -1230,6 +1256,7 @@ def _public_payload(
             "latest_phase_count": len(latest_phases),
             "batch_history": workload_batches,
             "run_history": workload_run_history,
+            "measured_history": workload_measured_history,
             "latest_replicates": latest_replicates,
             "phase_summary": phase_summary,
             "service_summary": workload_summary,

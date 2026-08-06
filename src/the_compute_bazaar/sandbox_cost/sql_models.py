@@ -16,6 +16,7 @@ SQL_ROOT = Path(__file__).with_name("sql")
 
 SANDBOX_MODELS = {
     "sandbox_workload_batch_history": "workload_batch_history.sql",
+    "sandbox_workload_measured_history": "workload_measured_history.sql",
     "sandbox_workload_run_history": "workload_run_history.sql",
     "sandbox_workload_latest_replicates": "workload_latest_replicates.sql",
     "sandbox_workload_latest_phases": "workload_latest_phases.sql",
