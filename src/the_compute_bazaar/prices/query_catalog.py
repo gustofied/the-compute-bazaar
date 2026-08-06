@@ -255,6 +255,21 @@ def with_scratch_limit(sql: str, limit: int) -> str:
 
 
 def validate_scratch_sql(sql: str) -> str:
+    return _validate_read_only_sql(
+        sql,
+        forbidden_identifiers=FORBIDDEN_SCRATCH_SQL_IDENTIFIERS,
+    )
+
+
+def validate_catalog_sql(sql: str) -> str:
+    return _validate_read_only_sql(sql, forbidden_identifiers=set())
+
+
+def _validate_read_only_sql(
+    sql: str,
+    *,
+    forbidden_identifiers: set[str],
+) -> str:
     cleaned = _strip_sql_comments(sql).strip()
     if not cleaned:
         raise ValueError("Scratch SQL is empty")
@@ -283,11 +298,10 @@ def validate_scratch_sql(sql: str) -> str:
         raise ValueError(
             f"Scratch SQL cannot read external files or object paths: {forbidden_functions[0]}"
         )
-    forbidden_identifiers = sorted(tokens & FORBIDDEN_SCRATCH_SQL_IDENTIFIERS)
-    if forbidden_identifiers:
+    blocked_identifiers = sorted(tokens & forbidden_identifiers)
+    if blocked_identifiers:
         raise ValueError(
-            "Scratch SQL cannot read private evidence fields: "
-            f"{forbidden_identifiers[0]}"
+            f"Scratch SQL cannot read private evidence fields: {blocked_identifiers[0]}"
         )
     return statement
 

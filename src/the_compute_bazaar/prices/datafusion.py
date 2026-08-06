@@ -28,7 +28,9 @@ class DataFusionEngine:
                 "DataFusion queries require the project dependencies: uv sync"
             ) from exc
 
-        config = SessionConfig().with_parquet_pruning(True)
+        config = (
+            SessionConfig().with_parquet_pruning(True).with_information_schema(True)
+        )
         self._arrow = pa
         self._context = SessionContext(config)
         self._registered_buckets: set[str] = set()
@@ -55,6 +57,12 @@ class DataFusionEngine:
             self._context.register_parquet(table_name, parquet_uri)
             self._table_refs[table_name] = parquet_uri
 
+    def deregister_tables(self, table_names: Iterable[str]) -> None:
+        for table_name in table_names:
+            name = _validated_table_name(table_name)
+            self._context.deregister_table(name)
+            self._table_refs.pop(name, None)
+
     def query(self, sql: str) -> list[dict[str, Any]]:
         if not sql.strip():
             raise ValueError("DataFusion SQL must not be empty")
@@ -62,6 +70,17 @@ class DataFusionEngine:
         if not batches:
             return []
         return self._arrow.Table.from_batches(batches).to_pylist()
+
+    def create_schema(self, schema_name: str) -> None:
+        schema = _validated_table_name(schema_name)
+        self._context.sql(f"create schema if not exists {schema}").collect()
+
+    def create_view(self, schema_name: str, table_name: str, sql: str) -> None:
+        schema = _validated_table_name(schema_name)
+        table = _validated_table_name(table_name)
+        if not sql.strip():
+            raise ValueError("DataFusion view SQL must not be empty")
+        self._context.sql(f"create view {schema}.{table} as {sql}").collect()
 
     def _register_object_stores(self, uris: Iterable[str]) -> None:
         s3_buckets = {

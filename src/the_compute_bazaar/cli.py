@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 
 from .api import DEFAULT_LAKE_ROOT, create_app
 from .market_query_service import MarketQueryService
+from .prices.market_catalog import MarketDataCatalog
 from .prices.schemas import to_jsonable
 from .sandbox_cost.evidence import validate_evidence
 from .sandbox_cost.pipeline import build_sandbox_cost
@@ -39,13 +40,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("manifest", help="Show the latest public-safe Gold manifest")
     commands.add_parser("catalog", help="List saved DataFusion queries")
+    commands.add_parser("tables", help="List Silver and Gold tables")
+
+    describe = commands.add_parser("describe", help="Describe one catalog table")
+    describe.add_argument("table")
 
     saved_query = commands.add_parser("query", help="Run one saved DataFusion query")
     saved_query.add_argument("query_id")
     saved_query.add_argument("--version")
     saved_query.add_argument("--limit", type=_positive_limit, default=100)
 
-    scratch = commands.add_parser("sql", help="Run bounded read-only SQL over Gold")
+    scratch = commands.add_parser(
+        "sql", help="Run bounded read-only SQL over Silver and Gold"
+    )
     scratch.add_argument("statement", nargs="?")
     scratch.add_argument("--file", type=Path)
     scratch.add_argument("--limit", type=_positive_limit, default=100)
@@ -126,6 +133,17 @@ def dispatch(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> An
     if args.command == "sandbox":
         return _run_sandbox(args, parser=parser)
 
+    if args.command in {"tables", "describe", "sql"}:
+        catalog = MarketDataCatalog(lake_root=args.lake_root)
+        if args.command == "tables":
+            return catalog.tables()
+        if args.command == "describe":
+            return catalog.describe(args.table)
+        return catalog.query(
+            _read_sql_statement(args, parser=parser),
+            limit=args.limit,
+        )
+
     service = MarketQueryService(lake_root=args.lake_root)
     if args.command == "manifest":
         return service.manifest()
@@ -135,11 +153,6 @@ def dispatch(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> An
         return service.saved_query(
             query_id=args.query_id,
             version=args.version,
-            limit=args.limit,
-        )
-    if args.command == "sql":
-        return service.scratch_sql(
-            sql=_read_sql_statement(args, parser=parser),
             limit=args.limit,
         )
     if args.command == "benchmarks":
@@ -204,7 +217,9 @@ def _read_sql_statement(
     parser: argparse.ArgumentParser,
 ) -> str:
     if args.statement and args.file:
-        parser.error("Provide SQL as an argument, through --file, or on stdin; choose one")
+        parser.error(
+            "Provide SQL as an argument, through --file, or on stdin; choose one"
+        )
     if args.file:
         return args.file.read_text(encoding="utf-8")
     if args.statement:

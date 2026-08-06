@@ -28,6 +28,7 @@ from the_compute_bazaar.prices.market_run import (
 from the_compute_bazaar.prices.market_run_manifest import (
     _public_market_run_manifest,
 )
+from the_compute_bazaar.prices.market_catalog import MarketDataCatalog
 from the_compute_bazaar.prices.provider_registry import (
     PROVIDERS,
     ProviderDefinition,
@@ -403,6 +404,17 @@ select source_connector, source_kind, observation_kind
 from dim_sources
 order by source_connector
 """)
+            catalog = MarketDataCatalog(lake_root=str(lake_root))
+            catalog_tables = catalog.tables()["tables"]
+            silver_rows = catalog.query(
+                """
+select provider, count(*) as offer_count
+from silver.gpu_offers
+group by provider
+order by provider
+"""
+            )["rows"]
+            gold_description = catalog.describe("gold.fact_gpu_listings")
             manifest = read_json(build.manifest_ref)
             export = export_gold_dashboard_snapshot(
                 lake_root=str(lake_root),
@@ -411,6 +423,36 @@ order by source_connector
             exported_manifest = read_json(export["output_refs"]["manifest"])
 
         self.assertEqual(build.provider_scope, ["vast", "lium"])
+        self.assertIn(
+            {
+                "layer": "silver",
+                "table_name": "gpu_offers",
+                "table_type": "VIEW",
+                "row_count": None,
+            },
+            catalog_tables,
+        )
+        self.assertIn(
+            {
+                "layer": "gold",
+                "table_name": "fact_gpu_listings",
+                "table_type": "VIEW",
+                "row_count": 3,
+            },
+            catalog_tables,
+        )
+        self.assertEqual(
+            silver_rows,
+            [
+                {"provider": "coreweave", "offer_count": 1},
+                {"provider": "vast", "offer_count": 2},
+            ],
+        )
+        self.assertEqual(gold_description["table"], "gold.fact_gpu_listings")
+        self.assertIn(
+            "price_usd_gpu_hr",
+            [column["column_name"] for column in gold_description["columns"]],
+        )
         self.assertEqual(
             [row["provider"] for row in rows], ["vast", "coreweave", "vast"]
         )
