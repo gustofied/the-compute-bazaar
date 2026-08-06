@@ -118,10 +118,11 @@ def normalize_prime_frontier_history(
         row = {column: source.get(column) for column in PRIME_FRONTIER_HISTORY_COLUMNS}
         row["gpu_family_id"] = product.family_id
         row["source_connector"] = "prime_intellect"
+        row["observed_at"] = _timestamp(source.get("observed_at"))
         row["price_basis"] = (
             source.get("price_basis") or "provider_reported_gpu_base_rate"
         )
-        row["gold_observed_at"] = (
+        row["gold_observed_at"] = _timestamp(
             source.get("gold_observed_at")
             or source.get("calculated_at")
             or source.get("observed_at")
@@ -352,6 +353,12 @@ def _date_part(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)[:10] or None
+
+
+def _timestamp(value: Any) -> datetime | None:
+    if value is None or isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
 
 
 def _seconds_between(start: Any, end: Any) -> float | None:
