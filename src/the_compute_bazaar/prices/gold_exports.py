@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .gold import MARKET_STATE_METHODOLOGY_VERSION
+from ..contracts import CARD_CONTRACT, GOLD_MARKET_CONTRACT, transform_contract
+from .gold import MARKET_STATE_METHODOLOGY
 from .gold_manifest import read_latest_gold_manifest
 from .gold_queries import (
     query_gold_gpu_price_index,
@@ -16,10 +17,10 @@ from .gold_queries import (
     query_gold_prime_frontier_offer_market,
     query_gold_provider_comparison,
 )
-from .gold_models import BENCHMARK_FAMILIES, BENCHMARK_METHODOLOGY_VERSION
+from .gold_models import BENCHMARK_FAMILIES, BENCHMARK_METHODOLOGY
 from .offer_reference import (
     PRIME_FRONTIER_API_DOCS_URL,
-    PRIME_FRONTIER_METHOD_VERSION,
+    PRIME_FRONTIER_METHODOLOGY,
     PRIME_FRONTIER_PROVISION_DOCS_URL,
     PRIME_FRONTIER_SCOPE,
     PRIME_FRONTIER_SOURCE_URL,
@@ -33,8 +34,8 @@ from .publications import (
     publish_prime_offer_shelf_publications,
 )
 from .public_series import (
-    PUBLIC_MARKET_STATE_HISTORY_RESOURCES,
     has_benchmark_value,
+    is_public_market_state_history_row,
     merge_benchmark_history,
     merge_market_state_history,
     public_benchmark_constituent,
@@ -65,9 +66,9 @@ def export_gold_dashboard_snapshot(
     benchmark_values_payload = query_gold_gpu_price_index(lake_root=lake_root)
     benchmark_values = benchmark_values_payload["rows"]
     # Benchmark evidence is a complete audit surface, not a sampled dashboard table.
-    benchmark_constituents = query_gold_gpu_price_index_constituents(lake_root=lake_root)[
-        "rows"
-    ]
+    benchmark_constituents = query_gold_gpu_price_index_constituents(
+        lake_root=lake_root
+    )["rows"]
     public_benchmark_values = [public_benchmark_value(row) for row in benchmark_values]
     public_benchmark_constituents = [
         public_benchmark_constituent(row) for row in benchmark_constituents
@@ -117,9 +118,7 @@ def export_gold_dashboard_snapshot(
         [
             public_market_state_row(row)
             for row in market_state_history_payload["rows"]
-            if row.get("measurement_kind") == "rental_occupancy"
-            and row.get("resource_type") in PUBLIC_MARKET_STATE_HISTORY_RESOURCES
-            and row.get("aggregation_eligible") is not False
+            if is_public_market_state_history_row(row)
         ],
     )
     try:
@@ -168,9 +167,10 @@ def export_gold_dashboard_snapshot(
         benchmark_history=public_benchmark_history,
     )
     prime_frontier_public = {
-        "schema_version": "prime_frontier_offer_market_public_v1",
+        "contract": CARD_CONTRACT,
+        "card_type": "prime_frontier_offer_market_collection",
         "manifest": public_manifest,
-        "methodology_version": PRIME_FRONTIER_METHOD_VERSION,
+        "methodology": PRIME_FRONTIER_METHODOLOGY,
         "reference_scope": PRIME_FRONTIER_SCOPE,
         "source": {
             "name": "Prime Intellect GPU availability",
@@ -206,9 +206,10 @@ def export_gold_dashboard_snapshot(
         "products": prime_frontier_products,
     }
     prime_frontier_shelf_public = {
-        "schema_version": "prime_frontier_offer_shelf_public_v1",
+        "contract": CARD_CONTRACT,
+        "card_type": "prime_frontier_offer_shelf_collection",
         "manifest": public_manifest,
-        "methodology_version": PRIME_FRONTIER_METHOD_VERSION,
+        "methodology": PRIME_FRONTIER_METHODOLOGY,
         "reference_scope": PRIME_FRONTIER_SCOPE,
         "source": prime_frontier_public["source"],
         "measurement_notes": prime_frontier_public["measurement_notes"],
@@ -242,7 +243,7 @@ def export_gold_dashboard_snapshot(
             current=benchmark_by_family.get(family),
             history=public_benchmark_history,
             constituents=public_benchmark_constituents,
-            methodology_version=BENCHMARK_METHODOLOGY_VERSION,
+            methodology=BENCHMARK_METHODOLOGY,
         )
         for family in GPU_FAMILIES
     }
@@ -259,7 +260,7 @@ def export_gold_dashboard_snapshot(
         str(product.get("family_id") or ""): prime_frontier_view(
             manifest=public_manifest,
             product=product,
-            methodology_version=PRIME_FRONTIER_METHOD_VERSION,
+            methodology=PRIME_FRONTIER_METHODOLOGY,
             source=prime_frontier_public["source"],
             measurement_notes=prime_frontier_public["measurement_notes"],
             execution_data=prime_frontier_public["execution_data"],
@@ -291,9 +292,10 @@ def export_gold_dashboard_snapshot(
             [output_root.rstrip("/"), "prime-frontier", f"{family.lower()}.json"]
         )
     public_market_state_payload = {
-        "schema_version": "compute_market_state_public_v1",
+        "contract": CARD_CONTRACT,
+        "card_type": "compute_market_state_collection",
         "manifest": public_manifest,
-        "methodology_version": MARKET_STATE_METHODOLOGY_VERSION,
+        "methodology": MARKET_STATE_METHODOLOGY,
         "measurement_kinds": {
             "rental_occupancy": "Rented units divided by a source-defined total.",
             "availability_pressure": "Current deployability or free stock; not rented share unless a denominator is present.",
@@ -321,7 +323,7 @@ def export_gold_dashboard_snapshot(
         output_refs["featured_benchmarks"],
         {
             "manifest": public_manifest,
-            "methodology_version": BENCHMARK_METHODOLOGY_VERSION,
+            "methodology": BENCHMARK_METHODOLOGY,
             "families": BENCHMARK_FAMILIES,
             "rows": public_benchmark_values,
         },
@@ -330,7 +332,7 @@ def export_gold_dashboard_snapshot(
         output_refs["benchmark_history"],
         {
             "manifest": public_manifest,
-            "methodology_version": BENCHMARK_METHODOLOGY_VERSION,
+            "methodology": BENCHMARK_METHODOLOGY,
             "families": BENCHMARK_FAMILIES,
             "history_manifest_count": len(
                 {
@@ -346,7 +348,7 @@ def export_gold_dashboard_snapshot(
         output_refs["benchmark_constituents"],
         {
             "manifest": public_manifest,
-            "methodology_version": BENCHMARK_METHODOLOGY_VERSION,
+            "methodology": BENCHMARK_METHODOLOGY,
             "complete": True,
             "row_count": len(public_benchmark_constituents),
             "rows": public_benchmark_constituents,
@@ -403,19 +405,23 @@ def export_gold_dashboard_snapshot(
         "warnings": warnings,
     }
 
+
 def _public_gold_manifest(
     manifest: dict[str, Any],
     *,
     dashboard_exported_at: str | None = None,
 ) -> dict[str, Any]:
-    return {
-        "manifest_version": manifest.get("manifest_version"),
-        "methodology_version": manifest.get("methodology_version"),
-        "run_id": manifest.get("run_id"),
-        "observed_at": manifest.get("observed_at"),
-        "observed_date": manifest.get("observed_date"),
-        "provider_scope": manifest.get("provider_scope"),
-        "row_counts": manifest.get("row_counts"),
-        "source_run_ids": manifest.get("source_run_ids"),
-        "dashboard_exported_at": dashboard_exported_at,
-    }
+    return transform_contract(
+        {
+            "methodology": manifest.get("methodology")
+            or manifest.get("methodology_version"),
+            "run_id": manifest.get("run_id"),
+            "observed_at": manifest.get("observed_at"),
+            "observed_date": manifest.get("observed_date"),
+            "provider_scope": manifest.get("provider_scope"),
+            "row_counts": manifest.get("row_counts"),
+            "source_run_ids": manifest.get("source_run_ids"),
+            "dashboard_exported_at": dashboard_exported_at,
+        },
+        contract=GOLD_MARKET_CONTRACT,
+    )

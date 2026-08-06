@@ -10,14 +10,10 @@ from .public_view_common import card, observation_window
 
 def market_state_view(payload: Mapping[str, Any]) -> dict[str, Any]:
     current_rows = [
-        dict(row)
-        for row in payload.get("current_rows", [])
-        if isinstance(row, Mapping)
+        dict(row) for row in payload.get("current_rows", []) if isinstance(row, Mapping)
     ]
     history_rows = [
-        dict(row)
-        for row in payload.get("history_rows", [])
-        if isinstance(row, Mapping)
+        dict(row) for row in payload.get("history_rows", []) if isinstance(row, Mapping)
     ]
     timestamps = [
         {
@@ -45,7 +41,7 @@ def market_state_view(payload: Mapping[str, Any]) -> dict[str, Any]:
         status="live" if current_rows else "unavailable",
         unit="source-defined capacity units",
         methodology={
-            "id": payload.get("methodology_version"),
+            "id": payload.get("methodology"),
             "measurement_kinds": payload.get("measurement_kinds"),
         },
         headline={
@@ -99,15 +95,14 @@ def market_overview_view(
                 ),
                 "status": benchmark_card.get("status"),
                 "ref": (
-                    "gpu-benchmark/"
-                    f"{str(data.get('family_id') or '').lower()}.json"
+                    f"gpu-benchmark/{str(data.get('family_id') or '').lower()}.json"
                 ),
             }
         )
     public_run = {
         key: manifest.get(key)
         for key in [
-            "manifest_version",
+            "contract",
             "market_run_id",
             "run_id",
             "status",
@@ -134,8 +129,7 @@ def market_overview_view(
         },
         headline={
             "label": "Compute Bazaar market observation",
-            "market_run_id": manifest.get("market_run_id")
-            or manifest.get("run_id"),
+            "market_run_id": manifest.get("market_run_id") or manifest.get("run_id"),
         },
         series=[],
         band=None,

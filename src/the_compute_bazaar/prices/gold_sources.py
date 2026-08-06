@@ -122,6 +122,7 @@ def merge_compute_market_state_history(
     *,
     previous_ref: Any,
     current_rows: list[dict[str, Any]],
+    methodology: str,
 ) -> list[dict[str, Any]]:
     previous_rows: list[dict[str, Any]] = []
     if previous_ref:
@@ -131,6 +132,7 @@ def merge_compute_market_state_history(
     merged: dict[str, dict[str, Any]] = {}
     for row in [*previous_rows, *current_rows]:
         row = dict(row)
+        row["methodology_version"] = methodology
         row["observed_at"] = _timestamp(row.get("observed_at"))
         observation_id = str(row.get("observation_id") or "")
         if not observation_id:
@@ -155,6 +157,7 @@ def merge_gpu_price_index_history(
     gold_run_id: str,
     gold_observed_at: str,
     gold_observed_date: str,
+    methodology: str,
 ) -> list[dict[str, Any]]:
     previous_rows: list[dict[str, Any]] = []
     if previous_ref:
@@ -173,6 +176,7 @@ def merge_gpu_price_index_history(
     merged: dict[tuple[str, str], dict[str, Any]] = {}
     for row in [*previous_rows, *current_history]:
         row = gpu_price_index_history_row(row)
+        row["methodology_version"] = methodology
         row["latest_observed_at"] = _timestamp(row.get("latest_observed_at"))
         row["calculated_at"] = _timestamp(row.get("calculated_at"))
         row["gold_observed_at"] = _timestamp(row.get("gold_observed_at"))

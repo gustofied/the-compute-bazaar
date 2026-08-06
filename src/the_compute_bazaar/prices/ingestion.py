@@ -129,9 +129,9 @@ def persist_provider_snapshot(
         query=snapshot_query,
     )
     publisher.publish(
-        f"{topic_prefix}.provider_snapshot.v1",
+        f"{topic_prefix}.provider_snapshot",
         make_event(
-            event_type="gpu.provider_snapshot.v1",
+            event_type="gpu.provider_snapshot",
             provider=provider,
             payload=snapshot.to_dict(),
             run_id=run_id,
@@ -144,9 +144,9 @@ def persist_provider_snapshot(
     published_events = 1
     for offer in normalized:
         publisher.publish(
-            f"{topic_prefix}.normalized_offer.v1",
+            f"{topic_prefix}.normalized_offer",
             make_event(
-                event_type="gpu.normalized_offer.v1",
+                event_type="gpu.normalized_offer",
                 provider=provider,
                 payload=offer.to_dict(),
                 run_id=run_id,
@@ -159,9 +159,9 @@ def persist_provider_snapshot(
         published_events += 1
     for observation in market_state_rows:
         publisher.publish(
-            f"{topic_prefix}.market_state_observation.v1",
+            f"{topic_prefix}.market_state_observation",
             make_event(
-                event_type="gpu.market_state_observation.v1",
+                event_type="gpu.market_state_observation",
                 provider=provider,
                 payload=observation.to_dict(),
                 run_id=run_id,

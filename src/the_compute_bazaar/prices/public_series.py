@@ -18,62 +18,78 @@ PUBLIC_MARKET_STATE_HISTORY_RESOURCES = {
 }
 
 
+def is_public_market_state_history_row(row: dict[str, Any]) -> bool:
+    if row.get("aggregation_eligible") is False:
+        return False
+    measurement_kind = row.get("measurement_kind")
+    if measurement_kind == "rental_occupancy":
+        return row.get("resource_type") in PUBLIC_MARKET_STATE_HISTORY_RESOURCES
+    return (
+        measurement_kind == "availability_pressure"
+        and row.get("resource_market") == "gpu"
+    )
+
+
 def public_benchmark_value(row: dict[str, Any]) -> dict[str, Any]:
-    return _select(
+    return _with_methodology(
+        _select(
+            row,
+            "benchmark_value_id",
+            "benchmark_symbol",
+            "benchmark_family_id",
+            "benchmark_label",
+            "gpu_model_prefixes",
+            "methodology_query_id",
+            "benchmark_basis",
+            "benchmark_usd_gpu_hr",
+            "observed_average_usd_gpu_hr",
+            "provider_floor_median_usd_gpu_hr",
+            "provider_floor_mean_usd_gpu_hr",
+            "provider_floor_p25_usd_gpu_hr",
+            "provider_floor_p75_usd_gpu_hr",
+            "floor_usd_gpu_hr",
+            "median_usd_gpu_hr",
+            "simple_mean_usd_gpu_hr",
+            "trimmed_mean_usd_gpu_hr",
+            "p25_usd_gpu_hr",
+            "p75_usd_gpu_hr",
+            "cheapest_offer_usd_instance_hr",
+            "offer_count",
+            "included_offer_count",
+            "provider_count",
+            "gpu_model_count",
+            "country_count",
+            "secure_offer_count",
+            "spot_offer_count",
+            "latest_observed_at",
+            "status",
+            "gold_run_id",
+            "calculated_at",
+        ),
         row,
-        "benchmark_value_id",
-        "benchmark_symbol",
-        "benchmark_family_id",
-        "benchmark_label",
-        "gpu_model_prefixes",
-        "methodology_version",
-        "methodology_query_id",
-        "benchmark_basis",
-        "benchmark_usd_gpu_hr",
-        "observed_average_usd_gpu_hr",
-        "provider_floor_median_usd_gpu_hr",
-        "provider_floor_mean_usd_gpu_hr",
-        "provider_floor_p25_usd_gpu_hr",
-        "provider_floor_p75_usd_gpu_hr",
-        "floor_usd_gpu_hr",
-        "median_usd_gpu_hr",
-        "simple_mean_usd_gpu_hr",
-        "trimmed_mean_usd_gpu_hr",
-        "p25_usd_gpu_hr",
-        "p75_usd_gpu_hr",
-        "cheapest_offer_usd_instance_hr",
-        "offer_count",
-        "included_offer_count",
-        "provider_count",
-        "gpu_model_count",
-        "country_count",
-        "secure_offer_count",
-        "spot_offer_count",
-        "latest_observed_at",
-        "status",
-        "gold_run_id",
-        "calculated_at",
     )
 
 
 def public_benchmark_history_value(row: dict[str, Any]) -> dict[str, Any]:
-    return _select(
+    return _with_methodology(
+        _select(
+            row,
+            "benchmark_symbol",
+            "benchmark_family_id",
+            "benchmark_label",
+            "benchmark_basis",
+            "benchmark_usd_gpu_hr",
+            "provider_floor_p25_usd_gpu_hr",
+            "provider_floor_p75_usd_gpu_hr",
+            "included_offer_count",
+            "provider_count",
+            "latest_observed_at",
+            "calculated_at",
+            "gold_run_id",
+            "gold_observed_at",
+            "gold_observed_date",
+        ),
         row,
-        "benchmark_symbol",
-        "benchmark_family_id",
-        "benchmark_label",
-        "methodology_version",
-        "benchmark_basis",
-        "benchmark_usd_gpu_hr",
-        "provider_floor_p25_usd_gpu_hr",
-        "provider_floor_p75_usd_gpu_hr",
-        "included_offer_count",
-        "provider_count",
-        "latest_observed_at",
-        "calculated_at",
-        "gold_run_id",
-        "gold_observed_at",
-        "gold_observed_date",
     )
 
 
@@ -97,7 +113,8 @@ def merge_benchmark_history(
     ]
     candidates.extend(current_rows)
     for row in candidates:
-        if not row.get("methodology_version"):
+        row = _with_methodology(dict(row), row)
+        if not row.get("methodology"):
             continue
         if not has_benchmark_value(row):
             continue
@@ -120,41 +137,43 @@ def merge_benchmark_history(
 def read_benchmark_history(ref: str) -> list[dict[str, Any]]:
     payload = _read_optional_json(ref)
     rows = payload.get("rows", []) if isinstance(payload, dict) else []
-    return [row for row in rows if isinstance(row, dict)]
+    return [_with_methodology(dict(row), row) for row in rows if isinstance(row, dict)]
 
 
 def public_market_state_row(row: dict[str, Any]) -> dict[str, Any]:
-    return _select(
+    return _with_methodology(
+        _select(
+            row,
+            "observation_id",
+            "observed_at",
+            "resource_market",
+            "resource_type",
+            "provider",
+            "source_connector",
+            "source_role",
+            "measurement_kind",
+            "measurement_scope",
+            "unit",
+            "total_units",
+            "rented_units",
+            "available_units",
+            "pending_units",
+            "rented_share",
+            "available_share",
+            "stock_status",
+            "count_precision",
+            "numerator_definition",
+            "denominator_definition",
+            "aggregation_eligible",
+            "aggregation_exclusion_reason",
+            "source_url",
+            "notes",
+            "calculated_at",
+            "gold_run_id",
+            "gold_observed_at",
+            "gold_observed_date",
+        ),
         row,
-        "observation_id",
-        "observed_at",
-        "resource_market",
-        "resource_type",
-        "provider",
-        "source_connector",
-        "source_role",
-        "measurement_kind",
-        "measurement_scope",
-        "unit",
-        "total_units",
-        "rented_units",
-        "available_units",
-        "pending_units",
-        "rented_share",
-        "available_share",
-        "stock_status",
-        "count_precision",
-        "numerator_definition",
-        "denominator_definition",
-        "aggregation_eligible",
-        "aggregation_exclusion_reason",
-        "source_url",
-        "methodology_version",
-        "notes",
-        "calculated_at",
-        "gold_run_id",
-        "gold_observed_at",
-        "gold_observed_date",
     )
 
 
@@ -166,13 +185,11 @@ def merge_market_state_history(
     candidates = [
         row
         for row in (existing_rows if isinstance(existing_rows, list) else [])
-        if isinstance(row, dict)
-        and row.get("measurement_kind") == "rental_occupancy"
-        and row.get("resource_type") in PUBLIC_MARKET_STATE_HISTORY_RESOURCES
-        and row.get("aggregation_eligible") is not False
+        if isinstance(row, dict) and is_public_market_state_history_row(row)
     ]
     candidates.extend(current_rows)
     for row in candidates:
+        row = _with_methodology(dict(row), row)
         observation_id = str(row.get("observation_id") or "")
         observed_at = str(row.get("gold_observed_at") or row.get("observed_at") or "")
         run_id = str(row.get("gold_run_id") or "")
@@ -193,50 +210,62 @@ def merge_market_state_history(
 def read_market_state_history(ref: str) -> list[dict[str, Any]]:
     payload = _read_optional_json(ref)
     rows = payload.get("history_rows", []) if isinstance(payload, dict) else []
-    return [row for row in rows if isinstance(row, dict)]
+    return [_with_methodology(dict(row), row) for row in rows if isinstance(row, dict)]
 
 
 def public_benchmark_constituent(row: dict[str, Any]) -> dict[str, Any]:
-    return _select(
+    return _with_methodology(
+        _select(
+            row,
+            "benchmark_value_id",
+            "benchmark_symbol",
+            "benchmark_family_id",
+            "benchmark_label",
+            "methodology_query_id",
+            "listing_id",
+            "provider",
+            "source_connector",
+            "source_offer_id",
+            "gpu_model",
+            "gpu_raw_name",
+            "gpu_count",
+            "available_gpu_count_lower_bound",
+            "vram_gb",
+            "price_usd_gpu_hr",
+            "price_usd_instance_hr",
+            "country",
+            "region",
+            "is_spot",
+            "is_secure",
+            "source_availability_status",
+            "included",
+            "inclusion_reason",
+            "exclusion_reason",
+            "constituent_rank",
+            "provider_rank",
+            "is_floor_constituent",
+            "observed_at",
+            "has_raw_evidence",
+            "source_run_id",
+            "gold_run_id",
+            "calculated_at",
+        ),
         row,
-        "benchmark_value_id",
-        "benchmark_symbol",
-        "benchmark_family_id",
-        "benchmark_label",
-        "methodology_version",
-        "methodology_query_id",
-        "listing_id",
-        "provider",
-        "source_connector",
-        "source_offer_id",
-        "gpu_model",
-        "gpu_raw_name",
-        "gpu_count",
-        "available_gpu_count_lower_bound",
-        "vram_gb",
-        "price_usd_gpu_hr",
-        "price_usd_instance_hr",
-        "country",
-        "region",
-        "is_spot",
-        "is_secure",
-        "source_availability_status",
-        "included",
-        "inclusion_reason",
-        "exclusion_reason",
-        "constituent_rank",
-        "provider_rank",
-        "is_floor_constituent",
-        "observed_at",
-        "has_raw_evidence",
-        "source_run_id",
-        "gold_run_id",
-        "calculated_at",
     )
 
 
 def _select(row: dict[str, Any], *keys: str) -> dict[str, Any]:
     return {key: row.get(key) for key in keys}
+
+
+def _with_methodology(
+    projected: dict[str, Any], source: dict[str, Any]
+) -> dict[str, Any]:
+    projected.pop("methodology_version", None)
+    projected["methodology"] = source.get("methodology") or source.get(
+        "methodology_version"
+    )
+    return projected
 
 
 def _read_optional_json(ref: str) -> Any:

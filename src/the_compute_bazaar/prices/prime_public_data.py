@@ -63,7 +63,10 @@ def public_prime_frontier_products(
                 "last_seen": _public_reference(
                     last_seen_source,
                     benchmark=benchmark_by_run.get(
-                        (family_id, str((last_seen_source or {}).get("gold_run_id") or ""))
+                        (
+                            family_id,
+                            str((last_seen_source or {}).get("gold_run_id") or ""),
+                        )
                     ),
                 ),
                 "benchmark_current": benchmark_current,
@@ -99,9 +102,7 @@ def _family_rows(
     payload: dict[str, Any], key: str, family_id: str
 ) -> list[dict[str, Any]]:
     return [
-        row
-        for row in payload.get(key, [])
-        if row.get("gpu_family_id") == family_id
+        row for row in payload.get(key, []) if row.get("gpu_family_id") == family_id
     ]
 
 
@@ -139,8 +140,8 @@ def _public_reference(
         "gold_run_id",
         "gold_observed_at",
         "gold_observed_date",
-        "methodology_version",
     )
+    result["methodology"] = row.get("methodology") or row.get("methodology_version")
     market_value = _float_or_none((benchmark or {}).get("benchmark_usd_gpu_hr"))
     prime_value = _float_or_none(row.get("reference_usd_gpu_hr"))
     result.update(
@@ -155,7 +156,9 @@ def _public_reference(
             "market_benchmark_provider_count": (benchmark or {}).get("provider_count"),
             "premium_to_market_benchmark_fraction": (
                 prime_value / market_value - 1
-                if prime_value is not None and market_value is not None and market_value > 0
+                if prime_value is not None
+                and market_value is not None
+                and market_value > 0
                 else None
             ),
         }
@@ -201,8 +204,8 @@ def _public_ladder_row(
         "gold_run_id",
         "gold_observed_at",
         "status",
-        "methodology_version",
     )
+    projected["methodology"] = row.get("methodology") or row.get("methodology_version")
     projected["offers"] = [
         _public_offer(offer, benchmark=benchmark, source_url=source_url)
         for offer in offers
@@ -219,7 +222,7 @@ def _public_ladder_row(
 
 
 def _public_event(row: dict[str, Any]) -> dict[str, Any]:
-    return _select(
+    projected = _select(
         row,
         "event_id",
         "listing_id",
@@ -242,10 +245,11 @@ def _public_event(row: dict[str, Any]) -> dict[str, Any]:
         "observed_at",
         "comparison_gap_seconds",
         "gold_run_id",
-        "methodology_version",
         "source_url",
         "notes",
     )
+    projected["methodology"] = row.get("methodology") or row.get("methodology_version")
+    return projected
 
 
 def _public_offer(
@@ -254,9 +258,7 @@ def _public_offer(
     benchmark: dict[str, Any] | None,
     source_url: str,
 ) -> dict[str, Any]:
-    minimum_total = _float_or_none(
-        row.get("minimum_executable_price_usd_instance_hr")
-    )
+    minimum_total = _float_or_none(row.get("minimum_executable_price_usd_instance_hr"))
     gpu_count = _float_or_none(row.get("gpu_count"))
     minimum_total_per_gpu = (
         minimum_total / gpu_count

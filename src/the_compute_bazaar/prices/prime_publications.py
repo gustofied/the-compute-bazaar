@@ -6,10 +6,11 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
-from ..publication_contract import (
-    PUBLICATION_ROUTE_SCHEMA_VERSION,
-    PublicationRoute,
+from ..contracts import (
+    PUBLICATION_CONTRACT,
+    PUBLICATION_ROUTE_CONTRACT,
 )
+from ..publication_contract import PublicationRoute
 from .publication_chart_common import (
     PRIME_OFFER_FAMILIES,
 )
@@ -23,7 +24,6 @@ from .storage import write_json
 from .publication_store import (
     DEFAULT_ARTICLE_URL,
     DEFAULT_PUBLIC_DATA_BASE_URL,
-    PUBLICATION_SCHEMA_VERSION,
     _card_publication_contract,
     _join,
     _latest_card_observed_at,
@@ -102,8 +102,8 @@ def publish_prime_offer_shelf_publications(
         "publications/prime-gpu-market/manifest.json",
     )
     manifest = {
-        "schema_version": PUBLICATION_SCHEMA_VERSION,
-        "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
+        "contract": PUBLICATION_CONTRACT,
+        "route_contract": PUBLICATION_ROUTE_CONTRACT,
         "publication_type": "prime_offer_market",
         "revision": revision,
         "publication_count": len(publication_rows),

@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-
-CARD_SCHEMA_VERSION = "compute_bazaar_card_v1"
+from ..contracts import CARD_CONTRACT
 
 
 def card(
@@ -27,7 +26,7 @@ def card(
     observation_window: Any,
 ) -> dict[str, Any]:
     return {
-        "schema_version": CARD_SCHEMA_VERSION,
+        "contract": CARD_CONTRACT,
         "card_type": card_type,
         "card_id": card_id,
         "as_of": as_of,
@@ -47,11 +46,7 @@ def card(
 
 def observation_window(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
     timestamps = sorted(
-        {
-            str(row.get("observed_at"))
-            for row in rows
-            if row.get("observed_at")
-        }
+        {str(row.get("observed_at")) for row in rows if row.get("observed_at")}
     )
     return {
         "started_at": timestamps[0] if timestamps else None,

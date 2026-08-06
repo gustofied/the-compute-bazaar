@@ -18,7 +18,6 @@ DEFAULT_QUERY_CATALOG_PATH = SQL_ROOT / "catalog.json"
 DEFAULT_QUERY_LIMIT = 100
 MAX_QUERY_LIMIT = 1000
 SCRATCH_QUERY_ID = "scratch_sql"
-SCRATCH_QUERY_VERSION = "adhoc"
 READ_ONLY_SQL_PREFIXES = {"select", "with"}
 FORBIDDEN_SCRATCH_SQL_TOKENS = {
     "alter",
@@ -71,7 +70,6 @@ SCRATCH_TABLE_ALLOWLIST = {
 @dataclass(frozen=True)
 class CatalogQuery:
     query_id: str
-    version: str
     title: str
     description: str
     tables: tuple[str, ...]
@@ -82,7 +80,7 @@ class CatalogQuery:
 
     @property
     def query_key(self) -> str:
-        return f"{self.query_id}:{self.version}"
+        return self.query_id
 
     @property
     def query_hash(self) -> str:
@@ -99,7 +97,6 @@ class CatalogQuery:
             ]
         return {
             "query_id": self.query_id,
-            "version": self.version,
             "query_key": self.query_key,
             "query_hash": self.query_hash,
             "engine": self.engine,
@@ -124,7 +121,6 @@ def load_query_catalog(catalog_path: Path | None = None) -> tuple[CatalogQuery, 
         queries.append(
             CatalogQuery(
                 query_id=str(row["query_id"]),
-                version=str(row.get("version") or "v0"),
                 title=str(row["title"]),
                 description=str(row.get("description") or ""),
                 tables=tuple(str(table) for table in row.get("tables", [])),
@@ -137,14 +133,11 @@ def load_query_catalog(catalog_path: Path | None = None) -> tuple[CatalogQuery, 
     return tuple(queries)
 
 
-def get_catalog_query(query_id: str, *, version: str | None = None) -> CatalogQuery:
-    matches = [query for query in load_query_catalog() if query.query_id == query_id]
-    if version:
-        matches = [query for query in matches if query.version == version]
-    if not matches:
-        suffix = f" version {version}" if version else ""
-        raise KeyError(f"Unknown saved query: {query_id}{suffix}")
-    return max(matches, key=lambda query: query.version)
+def get_catalog_query(query_id: str) -> CatalogQuery:
+    for query in load_query_catalog():
+        if query.query_id == query_id:
+            return query
+    raise KeyError(f"Unknown saved query: {query_id}")
 
 
 def list_catalog_queries(
@@ -157,10 +150,9 @@ def run_catalog_query(
     *,
     manifest: dict[str, Any],
     query_id: str,
-    version: str | None = None,
     limit: int | None = None,
 ) -> dict[str, Any]:
-    query = get_catalog_query(query_id, version=version)
+    query = get_catalog_query(query_id)
     selected_limit = bounded_query_limit(
         limit if limit is not None else query.default_limit
     )
@@ -202,8 +194,7 @@ def scratch_query_entry(
     table_names = sorted(scratch_table_refs(manifest))
     entry: dict[str, Any] = {
         "query_id": SCRATCH_QUERY_ID,
-        "version": SCRATCH_QUERY_VERSION,
-        "query_key": f"{SCRATCH_QUERY_ID}:{SCRATCH_QUERY_VERSION}",
+        "query_key": SCRATCH_QUERY_ID,
         "engine": "datafusion",
         "title": "Scratch SQL",
         "description": "Read-only ad hoc SQL over latest gold tables.",

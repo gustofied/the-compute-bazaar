@@ -23,6 +23,11 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from the_compute_bazaar.contracts import (
+    SANDBOX_OBSERVATION_CONTRACT,
+    SANDBOX_SOURCE_CONTRACT,
+    SANDBOX_WORKLOAD_INPUT_CONTRACT,
+)
 from the_compute_bazaar.prices.storage import (
     write_bytes,
 )
@@ -38,19 +43,19 @@ def validate_evidence(
     prices_payload = _read_local_json(price_path)
     benchmarks_payload = _read_local_json(benchmark_path)
     source_manifest = _read_local_json(source_manifest_path)
-    _require_schema(
+    _require_contract(
         prices_payload,
-        "sandbox_workload_cost_input_v2",
+        SANDBOX_WORKLOAD_INPUT_CONTRACT,
         price_path,
     )
-    _require_schema(
+    _require_contract(
         benchmarks_payload,
-        "sandbox_benchmark_observation_v2",
+        SANDBOX_OBSERVATION_CONTRACT,
         benchmark_path,
     )
-    _require_schema(
+    _require_contract(
         source_manifest,
-        "sandbox_source_manifest_v1",
+        SANDBOX_SOURCE_CONTRACT,
         source_manifest_path,
     )
 
@@ -477,11 +482,11 @@ def _read_local_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _require_schema(payload: dict[str, Any], expected: str, path: Path) -> None:
-    observed = payload.get("schema_version")
+def _require_contract(payload: dict[str, Any], expected: str, path: Path) -> None:
+    observed = payload.get("contract")
     if observed != expected:
         raise ValueError(
-            f"Schema drift in {path}: expected {expected!r}, found {observed!r}"
+            f"Contract drift in {path}: expected {expected!r}, found {observed!r}"
         )
 
 

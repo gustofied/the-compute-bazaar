@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..contracts import GPU_OFFERS_RUN_CONTRACT, transform_contract
 from .schemas import utc_now
 from .storage import read_json, write_json
 
 
-MANIFEST_VERSION = "v1"
 TABLE_NAME = "gpu_offers"
 
 
@@ -32,7 +32,7 @@ class GpuOffersRunManifest:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "manifest_version": MANIFEST_VERSION,
+            "contract": GPU_OFFERS_RUN_CONTRACT,
             "table": TABLE_NAME,
             "provider": self.provider,
             "run_id": self.run_id,
@@ -62,7 +62,9 @@ def latest_manifest_ref(lake_root: str, *, provider: str = "vast") -> str:
     )
 
 
-def run_manifest_ref(lake_root: str, *, provider: str, observed_date: str, run_id: str) -> str:
+def run_manifest_ref(
+    lake_root: str, *, provider: str, observed_date: str, run_id: str
+) -> str:
     return "/".join(
         [
             lake_root.rstrip("/"),
@@ -119,7 +121,10 @@ def write_run_manifest(
 
 
 def read_latest_manifest(lake_root: str, *, provider: str = "vast") -> dict[str, Any]:
-    manifest = dict(read_json(latest_manifest_ref(lake_root, provider=provider)))
+    manifest = transform_contract(
+        dict(read_json(latest_manifest_ref(lake_root, provider=provider))),
+        contract=GPU_OFFERS_RUN_CONTRACT,
+    )
     if manifest.get("ref_base") != "lake_root":
         return manifest
     if "://" in lake_root:

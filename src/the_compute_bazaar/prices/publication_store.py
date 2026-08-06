@@ -9,10 +9,11 @@ from hashlib import sha256
 from typing import Any
 from urllib.parse import urlencode
 
-from ..publication_contract import (
-    PUBLICATION_ROUTE_SCHEMA_VERSION,
-    PublicationRoute,
+from ..contracts import (
+    PUBLICATION_CONTRACT,
+    PUBLICATION_ROUTE_CONTRACT,
 )
+from ..publication_contract import PublicationRoute
 from .publication_chart_common import (
     IMAGE_HEIGHT,
     IMAGE_WIDTH,
@@ -22,9 +23,7 @@ from .publication_page import publication_html
 from .storage import write_bytes
 
 
-PUBLICATION_SCHEMA_VERSION = "compute_bazaar_publication_v7"
-
-PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_market_cards_v3"
+PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_market_cards"
 
 DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
 
@@ -111,8 +110,8 @@ def _card_publication_contract(
     states: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     return {
-        "schema_version": PUBLICATION_SCHEMA_VERSION,
-        "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
+        "contract": PUBLICATION_CONTRACT,
+        "route_contract": PUBLICATION_ROUTE_CONTRACT,
         "kind": "crawler_preview_live_handoff",
         "card_id": card_id,
         "default_state": default_state,
@@ -131,8 +130,8 @@ def _market_card_publication_digest(
         for card_id, card in cards.items()
     }
     publication_material = {
-        "schema_version": PUBLICATION_SCHEMA_VERSION,
-        "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
+        "contract": PUBLICATION_CONTRACT,
+        "route_contract": PUBLICATION_ROUTE_CONTRACT,
         "render_profile": PUBLICATION_RENDER_PROFILE,
         "image_width": IMAGE_WIDTH,
         "image_height": IMAGE_HEIGHT,
@@ -178,8 +177,8 @@ def _publication_digest(
         for family, card in cards.items()
     }
     publication_material = {
-        "schema_version": PUBLICATION_SCHEMA_VERSION,
-        "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
+        "contract": PUBLICATION_CONTRACT,
+        "route_contract": PUBLICATION_ROUTE_CONTRACT,
         "render_profile": PUBLICATION_RENDER_PROFILE,
         "image_width": IMAGE_WIDTH,
         "image_height": IMAGE_HEIGHT,

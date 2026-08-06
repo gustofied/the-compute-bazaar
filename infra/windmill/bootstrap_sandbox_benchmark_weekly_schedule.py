@@ -127,9 +127,6 @@ def main() -> None:
         ),
         args=run_args,
     )
-    client.delete_schedule(f"f/{args.folder}/sandbox_benchmark_daily_schedule")
-    client.delete_script(f"f/{args.folder}/sandbox_benchmark_daily")
-
     job_id = None
     job_result = None
     if args.run_now:

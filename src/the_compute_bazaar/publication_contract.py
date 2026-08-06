@@ -6,8 +6,8 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from .contracts import PUBLICATION_ROUTE_CONTRACT
 
-PUBLICATION_ROUTE_SCHEMA_VERSION = "compute_bazaar_publication_route_v2"
 _SEGMENT_PATTERN = re.compile(r"[^a-z0-9]+")
 
 
@@ -33,9 +33,7 @@ class PublicationRoute:
         digest = _segment(content_digest)[:10]
         normalized_observed_at = observed_at
         if normalized_observed_at and normalized_observed_at.tzinfo is None:
-            normalized_observed_at = normalized_observed_at.replace(
-                tzinfo=timezone.utc
-            )
+            normalized_observed_at = normalized_observed_at.replace(tzinfo=timezone.utc)
         timestamp = (
             normalized_observed_at.astimezone(timezone.utc).strftime(
                 "%Y-%m-%d-%H%M-utc"
@@ -52,9 +50,7 @@ class PublicationRoute:
 
     @property
     def publication_id(self) -> str:
-        return ":".join(
-            (self.card_id, self.subject_id, self.view_id, self.revision)
-        )
+        return ":".join((self.card_id, self.subject_id, self.view_id, self.revision))
 
     @property
     def prefix(self) -> str:
@@ -84,7 +80,7 @@ class PublicationRoute:
 
     def as_dict(self) -> dict[str, str]:
         return {
-            "schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
+            "contract": PUBLICATION_ROUTE_CONTRACT,
             "card_id": self.card_id,
             "subject_id": self.subject_id,
             "view_id": self.view_id,

@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from .gold_models import gold_model_sql, gold_sql_models
+from ..contracts import GOLD_MARKET_CONTRACT
+from .gold_models import BENCHMARK_METHODOLOGY, gold_model_sql, gold_sql_models
 from .gold_manifest import (
     GOLD_MANIFEST_TABLE,
-    GOLD_MANIFEST_VERSION,
     gold_manifest_ref,
     latest_gold_manifest_ref,
     read_latest_gold_manifest,
@@ -25,7 +25,7 @@ from .gold_sources import (
     source_catalog_values,
 )
 from .manifest import read_latest_manifest
-from .offer_reference import PRIME_FRONTIER_METHOD_VERSION
+from .offer_reference import PRIME_FRONTIER_METHODOLOGY
 from .prime_gold import (
     PRIME_FRONTIER_GOLD_TABLES,
     build_prime_frontier_gold_products,
@@ -34,8 +34,8 @@ from .schemas import to_jsonable, utc_now
 from .storage import table_partition, write_json, write_parquet_rows
 
 
-GOLD_METHODOLOGY_VERSION = "gold_gpu_market_v4"
-MARKET_STATE_METHODOLOGY_VERSION = "compute_market_state_gold_v1"
+GOLD_METHODOLOGY = "gpu_market_gold"
+MARKET_STATE_METHODOLOGY = "compute_market_state"
 GOLD_TABLES = {
     "fact_gpu_listings": "listings.parquet",
     "dim_gpu_products": "gpu_products.parquet",
@@ -140,7 +140,7 @@ def build_gold_market_tables(
         "gold_run_id": gold_run_id,
         "gold_observed_date": observed_date,
         "calculated_at": calculated_at_value,
-        "market_state_methodology_version": MARKET_STATE_METHODOLOGY_VERSION,
+        "market_state_methodology_version": MARKET_STATE_METHODOLOGY,
     }
 
     tables = {
@@ -225,6 +225,7 @@ def build_gold_market_tables(
                 "fact_compute_market_state_history"
             ),
             current_rows=rows_by_table["fact_compute_market_state"],
+            methodology=MARKET_STATE_METHODOLOGY,
         )
     )
 
@@ -288,6 +289,7 @@ def build_gold_market_tables(
         gold_run_id=gold_run_id,
         gold_observed_at=gold_observed_at,
         gold_observed_date=observed_date,
+        methodology=BENCHMARK_METHODOLOGY,
     )
     write_parquet_rows(
         table_refs["fact_gpu_price_index_history"],
@@ -318,12 +320,10 @@ def build_gold_market_tables(
     )
     sql_models = gold_sql_models(
         executed_gold_models,
-        methodology_versions={
-            "fact_compute_market_state": MARKET_STATE_METHODOLOGY_VERSION,
-            "fact_prime_frontier_offer_reference_history": (
-                PRIME_FRONTIER_METHOD_VERSION
-            ),
-            "fact_prime_frontier_offer_ladder": PRIME_FRONTIER_METHOD_VERSION,
+        methodologies={
+            "fact_compute_market_state": MARKET_STATE_METHODOLOGY,
+            "fact_prime_frontier_offer_reference_history": (PRIME_FRONTIER_METHODOLOGY),
+            "fact_prime_frontier_offer_ladder": PRIME_FRONTIER_METHODOLOGY,
         },
     )
     manifest_ref = write_gold_manifest(
@@ -367,9 +367,9 @@ def write_gold_manifest(
         lake_root, observed_date=observed_date, run_id=run_id
     )
     payload = {
-        "manifest_version": GOLD_MANIFEST_VERSION,
+        "contract": GOLD_MARKET_CONTRACT,
         "table": GOLD_MANIFEST_TABLE,
-        "methodology_version": GOLD_METHODOLOGY_VERSION,
+        "methodology": GOLD_METHODOLOGY,
         "provider_scope": provider_scope,
         "run_id": run_id,
         "observed_at": observed_at or utc_now().isoformat(),

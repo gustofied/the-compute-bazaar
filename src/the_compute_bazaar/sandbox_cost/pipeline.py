@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from the_compute_bazaar.contracts import SANDBOX_WORKLOAD_GOLD_CONTRACT
 from the_compute_bazaar.prices.datafusion import DataFusionEngine
 from the_compute_bazaar.prices.leases import exclusive_lease
 from the_compute_bazaar.prices.public_view_sandbox import sandbox_workload_view
@@ -45,13 +46,13 @@ from the_compute_bazaar.sandbox_cost.sql_models import (
     sandbox_sql_models,
 )
 
-WORKLOAD_BATCH_QUERY_ID = "sandbox_workload_batch_history_v2"
-WORKLOAD_MEASURED_HISTORY_QUERY_ID = "sandbox_workload_measured_history_v1"
-WORKLOAD_REPLICATE_QUERY_ID = "sandbox_workload_latest_replicates_v2"
-WORKLOAD_PHASE_QUERY_ID = "sandbox_workload_latest_phases_v1"
-WORKLOAD_PHASE_SUMMARY_QUERY_ID = "sandbox_workload_phase_summary_v1"
-WORKLOAD_SUMMARY_QUERY_ID = "sandbox_workload_service_summary_v2"
-WORKLOAD_RUN_SUMMARY_QUERY_ID = "sandbox_workload_run_summary_v1"
+WORKLOAD_BATCH_QUERY_ID = "sandbox_workload_batch_history"
+WORKLOAD_MEASURED_HISTORY_QUERY_ID = "sandbox_workload_measured_history"
+WORKLOAD_REPLICATE_QUERY_ID = "sandbox_workload_latest_replicates"
+WORKLOAD_PHASE_QUERY_ID = "sandbox_workload_latest_phases"
+WORKLOAD_PHASE_SUMMARY_QUERY_ID = "sandbox_workload_phase_summary"
+WORKLOAD_SUMMARY_QUERY_ID = "sandbox_workload_service_summary"
+WORKLOAD_RUN_SUMMARY_QUERY_ID = "sandbox_workload_run_summary"
 WORKLOAD_SERVICE_COUNT = 6
 NUMERIC_DECIMAL_PLACES = 12
 
@@ -313,7 +314,7 @@ def _build_workload_cost_unlocked(
         f"_manifests/sandbox_cost/date={built_at[:10]}/build_id={build_id}.json",
     )
     manifest = {
-        "manifest_version": "sandbox_workload_cost_gold_v1",
+        "contract": SANDBOX_WORKLOAD_GOLD_CONTRACT,
         "manifest_ref": manifest_ref,
         "build_id": build_id,
         "built_at": built_at,

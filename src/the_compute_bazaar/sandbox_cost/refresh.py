@@ -31,6 +31,10 @@ from typing import Any
 
 import requests
 
+from the_compute_bazaar.contracts import (
+    SANDBOX_OBSERVATION_CONTRACT,
+    SANDBOX_SOURCE_CONTRACT,
+)
 from .evidence import (
     BENCHMARK_EVIDENCE,
     SOURCE_MANIFEST,
@@ -135,7 +139,7 @@ def refresh_benchmark_sources(
         ),
     )
     changed = (
-        canonical.get("schema_version") != "sandbox_benchmark_observation_v2"
+        canonical.get("contract") != SANDBOX_OBSERVATION_CONTRACT
         or _stable_rows(canonical_batches) != _stable_rows(merged_batches)
         or canonical.get("replicate_rows", []) != merged_replicates
         or canonical.get("phase_rows", []) != merged_phases
@@ -162,7 +166,7 @@ def refresh_benchmark_sources(
             }
         )
     runtime_manifest = {
-        "schema_version": "sandbox_source_manifest_v1",
+        "contract": SANDBOX_SOURCE_CONTRACT,
         "retrieved_at": retrieved_at,
         "source_repository": source_repository,
         "source_commit": commit,
@@ -197,7 +201,7 @@ def refresh_benchmark_sources(
 
     if update_evidence and changed:
         benchmark_payload = {
-            "schema_version": "sandbox_benchmark_observation_v2",
+            "contract": SANDBOX_OBSERVATION_CONTRACT,
             "retrieved_at": retrieved_at,
             "source_repository": source_repository,
             "source_commit": commit,

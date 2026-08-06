@@ -35,7 +35,7 @@ def build_public_payload(
     latest_run = max(run_metadata, key=lambda row: row["generated_at"])
     return {
         "manifest": {
-            "manifest_version": manifest["manifest_version"],
+            "contract": manifest["contract"],
             "build_id": manifest["build_id"],
             "built_at": manifest["built_at"],
             "target_shape": manifest["target_shape"],

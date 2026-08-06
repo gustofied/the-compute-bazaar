@@ -113,7 +113,7 @@ select
   end as aggregation_exclusion_reason,
   source_url,
   raw_ref,
-  methodology_version,
+  $market_state_methodology_version as methodology_version,
   notes,
   source_run_id,
   source_manifest_ref,

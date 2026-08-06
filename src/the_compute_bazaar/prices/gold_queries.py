@@ -35,7 +35,7 @@ select
   included_offer_count,
   provider_count,
   latest_observed_at,
-  methodology_version
+  methodology_version as methodology
 from fact_gpu_price_index
 order by benchmark_family_id
 """
@@ -64,6 +64,7 @@ select *
 from fact_gpu_price_index_history
 order by gold_observed_at, benchmark_family_id
 """)
+        rows = [_current_methodology(row) for row in rows]
         if canonical_market_runs_only:
             rows = [
                 row
@@ -108,7 +109,7 @@ select
   included_offer_count,
   provider_count,
   latest_observed_at,
-  methodology_version
+  methodology_version as methodology
 from fact_gpu_price_index
 order by benchmark_family_id
 """)
@@ -155,9 +156,7 @@ def query_gold_gpu_availability(
     manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = manifest or read_latest_gold_manifest(lake_root)
-    table_name = (
-        "fact_gpu_availability_history" if history else "fact_gpu_availability"
-    )
+    table_name = "fact_gpu_availability_history" if history else "fact_gpu_availability"
     table_ref = manifest.get("table_refs", {}).get(table_name)
     if not table_ref:
         return {"manifest": manifest, "rows": []}
@@ -171,9 +170,7 @@ def query_gold_gpu_availability(
             f"concat({_sql_literal(model)}, '_%'))"
         )
     if measurement_kind:
-        filters.append(
-            f"measurement_kind = {_sql_literal(measurement_kind)}"
-        )
+        filters.append(f"measurement_kind = {_sql_literal(measurement_kind)}")
     where = f"where {' and '.join(filters)}" if filters else ""
     sql = f"""
 select
@@ -192,14 +189,12 @@ select
   available_share,
   stock_status,
   count_precision,
-  methodology_version
+  methodology_version as methodology
 from {table_name}
 {where}
 order by observed_at desc, measurement_kind, provider, resource_type
 """
-    rows = DataFusionEngine({table_name: str(table_ref)}).query(
-        _with_limit(sql, limit)
-    )
+    rows = DataFusionEngine({table_name: str(table_ref)}).query(_with_limit(sql, limit))
     return {"manifest": manifest, "rows": rows}
 
 
@@ -403,6 +398,7 @@ select *
 from fact_prime_frontier_offer_reference_history
 order by gold_observed_at, gold_run_id, gpu_family_id
 """)
+    history = [_current_methodology(row) for row in history]
     current_run_id = str(manifest.get("run_id") or "")
     current = {
         str(row.get("gpu_family_id") or ""): row
@@ -425,6 +421,7 @@ select *
 from fact_prime_frontier_offer_ladder
 order by gpu_family_id, price_level_usd_gpu_hr desc
 """)
+        ladder = [_current_methodology(row) for row in ladder]
     events_ref = refs.get("fact_prime_frontier_offer_events")
     if events_ref:
         event_history = engine.query("""
@@ -433,6 +430,7 @@ from fact_prime_frontier_offer_events
 where event_type <> 'remained'
 order by observed_at, gpu_family_id, event_type, provider
 """)
+        event_history = [_current_methodology(row) for row in event_history]
     if events_ref and current_run_id:
         events = [
             row
@@ -446,6 +444,7 @@ where gold_run_id = {_sql_literal(current_run_id)}
   and event_type = 'remained'
 order by gpu_family_id, price_level_usd_gpu_hr desc, provider
 """)
+        remained = [_current_methodology(row) for row in remained]
         events.extend(remained)
         events.sort(
             key=lambda row: (
@@ -481,6 +480,14 @@ order by gpu_family_id, price_usd_gpu_hr asc, provider, gpu_count
 
 def _sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def _current_methodology(row: dict[str, Any]) -> dict[str, Any]:
+    projected = dict(row)
+    methodology = projected.pop("methodology_version", None)
+    if methodology is not None:
+        projected["methodology"] = methodology
+    return projected
 
 
 def _with_limit(sql: str, limit: int | None) -> str:

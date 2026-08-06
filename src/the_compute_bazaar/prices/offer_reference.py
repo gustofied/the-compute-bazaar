@@ -13,7 +13,7 @@ from typing import Any
 from .gold_models import gold_model_sql
 
 
-PRIME_FRONTIER_METHOD_VERSION = "prime_frontier_offer_market_v1"
+PRIME_FRONTIER_METHODOLOGY = "prime_provider_floor_median"
 PRIME_FRONTIER_SCOPE = "prime_secure_ondemand_frontier_all_shapes"
 PRIME_FRONTIER_PRICE_INCREMENT = 0.25
 PRIME_FRONTIER_SOURCE_URL = (
@@ -107,7 +107,7 @@ def prime_frontier_product_for_model(
 def normalize_prime_frontier_history(
     rows: Iterable[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Keep one schema across historical Gold versions and four GPU families."""
+    """Transform retained Prime observations into the current Gold contract."""
     normalized: list[dict[str, Any]] = []
     for source in rows:
         if str(source.get("source_connector") or "") != "prime_intellect":
@@ -118,6 +118,12 @@ def normalize_prime_frontier_history(
         row = {column: source.get(column) for column in PRIME_FRONTIER_HISTORY_COLUMNS}
         row["gpu_family_id"] = product.family_id
         row["source_connector"] = "prime_intellect"
+        # Prime history comes from its public availability endpoint. Older
+        # retained rows omitted this field, but their presence in the response
+        # already means they were available at observation time.
+        row["source_availability_status"] = (
+            source.get("source_availability_status") or "available"
+        )
         row["observed_at"] = _timestamp(source.get("observed_at"))
         row["price_basis"] = (
             source.get("price_basis") or "provider_reported_gpu_base_rate"
@@ -249,7 +255,7 @@ def build_prime_frontier_offer_events(
                         "comparison_gap_seconds": comparison_gap_seconds,
                         "previous_gold_run_id": previous_run_id,
                         "gold_run_id": run_id,
-                        "methodology_version": PRIME_FRONTIER_METHOD_VERSION,
+                        "methodology": PRIME_FRONTIER_METHODOLOGY,
                         "source_url": product.market_url,
                         "notes": (
                             "Observable availability event; leaving public "
@@ -269,7 +275,7 @@ def prime_frontier_reference_history_sql() -> str:
         "fact_prime_frontier_offer_reference_history",
         {
             "reference_scope": PRIME_FRONTIER_SCOPE,
-            "methodology_version": PRIME_FRONTIER_METHOD_VERSION,
+            "methodology_version": PRIME_FRONTIER_METHODOLOGY,
         },
     )
 

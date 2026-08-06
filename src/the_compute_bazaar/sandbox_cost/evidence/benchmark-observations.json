@@ -134497,7 +134497,7 @@
     }
   ],
   "runtime_definition": "Batch rows sum ten published task means. Replicate rows sum ten task samples carrying the same upstream replicate index. Neither includes sandbox startup, teardown, retries, or unmeasured task preparation.",
-  "schema_version": "sandbox_benchmark_observation_v2",
+  "contract": "sandbox_benchmark_observation",
   "source_commit": "398c60d74e0b29bcb2abfe61a8b8a6428185c00f",
   "source_repository": "starslingdev/hpc-sandbox-benchmarks",
   "target_shape": {

@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from ..contracts import MARKET_RUN_CONTRACT
 from .coverage import query_frontier_coverage_ref
 from .events import new_run_id
 from .gold import build_gold_market_tables
@@ -30,7 +31,6 @@ from .storage import read_json, write_json
 from ..sample_data import publish_public_lake
 
 
-MARKET_RUN_MANIFEST_VERSION = "v1"
 MARKET_RUN_TABLE = "market_runs"
 
 
@@ -265,7 +265,7 @@ def run_market_hourly(
     status = "success" if all(value == "ok" for value in checks.values()) else "warning"
 
     payload = {
-        "manifest_version": MARKET_RUN_MANIFEST_VERSION,
+        "contract": MARKET_RUN_CONTRACT,
         "table": MARKET_RUN_TABLE,
         "market_run_id": market_run_id,
         "status": status,

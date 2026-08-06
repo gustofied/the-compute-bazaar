@@ -12,6 +12,12 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
+from .contracts import (
+    GOLD_MARKET_CONTRACT,
+    GPU_OFFERS_RUN_CONTRACT,
+    PORTABLE_LAKE_CONTRACT,
+    transform_contract,
+)
 from .data_root import bundled_sample_lake_root
 from .prices.gold_manifest import (
     GOLD_MANIFEST_TABLE,
@@ -33,7 +39,6 @@ from .prices.storage import (
 )
 
 
-PORTABLE_LAKE_VERSION = "compute_bazaar_portable_lake_v1"
 DEFAULT_HISTORY_LIMIT = 24 * 90
 PRIVATE_REF_FIELDS = {
     "manifest_ref",
@@ -105,7 +110,7 @@ def build_public_sample_lake(
     _make_source_manifests_portable(output, provider_scope)
 
     metadata = {
-        "schema_version": PORTABLE_LAKE_VERSION,
+        "contract": PORTABLE_LAKE_CONTRACT,
         "run_id": source_latest["run_id"],
         "observed_at": source_latest["observed_at"],
         "provider_scope": provider_scope,
@@ -161,9 +166,7 @@ def _copy_latest_silver(
     for provider in provider_scope:
         normalized_relative = f"silver/gpu_offers/{provider}/offers.parquet"
         manifest_relative = f"_manifests/gpu_offers/provider={provider}/latest.json"
-        state_relative = (
-            f"silver/compute_market_state/{provider}/observations.parquet"
-        )
+        state_relative = f"silver/compute_market_state/{provider}/observations.parquet"
         source_run_id = source_run_ids.get(provider) or f"{provider}-portable"
         offer_rows = _sanitize_rows(read_parquet_rows(source_offer_refs[provider]))
         for row in offer_rows:
@@ -197,7 +200,7 @@ def _copy_latest_silver(
         write_json(
             str(manifest_path),
             {
-                "manifest_version": "v1",
+                "contract": GPU_OFFERS_RUN_CONTRACT,
                 "table": "gpu_offers",
                 "provider": provider,
                 "run_id": source_run_id,
@@ -209,11 +212,7 @@ def _copy_latest_silver(
                 "published_events": 0,
                 "publish_mode": "portable_lake",
                 "unknown_gpu_names": [],
-                "market_state_ref": (
-                    state_relative
-                    if state_ref
-                    else None
-                ),
+                "market_state_ref": (state_relative if state_ref else None),
                 "market_state_observation_count": len(state_rows),
                 "manifest_ref": _relative(output_root, str(manifest_path)),
                 "ref_base": "lake_root",
@@ -343,20 +342,22 @@ def _portable_gold_manifest(
     table_refs: dict[str, str],
     row_counts: dict[str, int],
 ) -> dict[str, Any]:
-    manifest = {
-        key: value
-        for key, value in source_manifest.items()
-        if key
-        not in {
-            "manifest_ref",
-            "source_manifest_refs",
-            "source_normalized_refs",
-            "source_market_state_refs",
-            "table_refs",
-            "row_counts",
-        }
-    }
-    manifest["manifest_version"] = source_manifest.get("manifest_version") or "v1"
+    manifest = transform_contract(
+        {
+            key: value
+            for key, value in source_manifest.items()
+            if key
+            not in {
+                "manifest_ref",
+                "source_manifest_refs",
+                "source_normalized_refs",
+                "source_market_state_refs",
+                "table_refs",
+                "row_counts",
+            }
+        },
+        contract=GOLD_MARKET_CONTRACT,
+    )
     manifest["table"] = GOLD_MANIFEST_TABLE
     manifest["ref_base"] = "lake_root"
     manifest["provider_scope"] = provider_scope
@@ -427,7 +428,7 @@ def _write_inventory(
             }
         )
     inventory = {
-        "schema_version": PORTABLE_LAKE_VERSION,
+        "contract": PORTABLE_LAKE_CONTRACT,
         "run_id": metadata["run_id"],
         "observed_at": metadata["observed_at"],
         "provider_scope": metadata["provider_scope"],
@@ -470,9 +471,7 @@ def _portableize_lineage(
                 f"silver/gpu_offers/{connector}/offers.parquet"
             )
         if "source_market_state_ref" in row:
-            relative = (
-                f"silver/compute_market_state/{connector}/observations.parquet"
-            )
+            relative = f"silver/compute_market_state/{connector}/observations.parquet"
             row["source_market_state_ref"] = (
                 relative if (output_root / relative).is_file() else None
             )
@@ -514,8 +513,7 @@ def _content_type(path: Path) -> str:
 def _cache_control(relative_path: str) -> str:
     path = PurePosixPath(relative_path)
     if path.parts[0] == "gold" or (
-        path.parts[:2] == ("_manifests", "gold_market")
-        and path.name != "latest.json"
+        path.parts[:2] == ("_manifests", "gold_market") and path.name != "latest.json"
     ):
         return "public, max-age=31536000, immutable"
     return "public, max-age=60, must-revalidate"

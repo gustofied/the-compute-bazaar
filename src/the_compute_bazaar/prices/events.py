@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from .schemas import EventEnvelope, SCHEMA_VERSION, to_jsonable, utc_now
+from .schemas import EventEnvelope, to_jsonable, utc_now
 
 
 def stable_json_dumps(value: Any) -> str:
@@ -53,7 +53,6 @@ def make_event(
     return EventEnvelope(
         event_id=event_id,
         event_type=event_type,
-        schema_version=SCHEMA_VERSION,
         provider=provider,
         event_time=event_time or now,
         ingest_time=now,
@@ -63,4 +62,3 @@ def make_event(
         payload_hash=payload_hash,
         payload=payload,
     )
-

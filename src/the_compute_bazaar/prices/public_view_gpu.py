@@ -18,7 +18,7 @@ def gpu_benchmark_view(
     current: Mapping[str, Any] | None,
     history: list[Mapping[str, Any]],
     constituents: list[Mapping[str, Any]],
-    methodology_version: str,
+    methodology: str,
 ) -> dict[str, Any]:
     family = family_id.upper()
     family_history = [
@@ -54,7 +54,7 @@ def gpu_benchmark_view(
         status="live" if value is not None else "unavailable",
         unit="USD per GPU-hour",
         methodology={
-            "id": methodology_version,
+            "id": methodology,
             "basis": latest.get("benchmark_basis"),
             "query_id": latest.get("methodology_query_id"),
         },

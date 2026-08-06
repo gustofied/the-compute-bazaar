@@ -6,10 +6,11 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
-from ..publication_contract import (
-    PUBLICATION_ROUTE_SCHEMA_VERSION,
-    PublicationRoute,
+from ..contracts import (
+    PUBLICATION_CONTRACT,
+    PUBLICATION_ROUTE_CONTRACT,
 )
+from ..publication_contract import PublicationRoute
 from .publication_chart_common import (
     GPU_FAMILIES,
     GPU_RANGES,
@@ -29,7 +30,6 @@ from .storage import write_bytes, write_json
 from .publication_store import (
     DEFAULT_ARTICLE_URL,
     DEFAULT_PUBLIC_DATA_BASE_URL,
-    PUBLICATION_SCHEMA_VERSION,
     _join,
     _latest_card_observed_at,
     _live_gpu_url,
@@ -159,8 +159,8 @@ def publish_gpu_benchmark_publications(
             )
 
         card["publication"] = {
-            "schema_version": PUBLICATION_SCHEMA_VERSION,
-            "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
+            "contract": PUBLICATION_CONTRACT,
+            "route_contract": PUBLICATION_ROUTE_CONTRACT,
             "kind": "frozen_chart_snapshot",
             "card_id": "gpu-index",
             "default_range": "1d",
@@ -172,8 +172,8 @@ def publish_gpu_benchmark_publications(
         "publications/gpu-index/manifest.json",
     )
     manifest = {
-        "schema_version": PUBLICATION_SCHEMA_VERSION,
-        "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
+        "contract": PUBLICATION_CONTRACT,
+        "route_contract": PUBLICATION_ROUTE_CONTRACT,
         "publication_type": "gpu_benchmark",
         "revision": revision,
         "publication_count": len(publication_rows),

@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from ..publication_contract import (
-    PUBLICATION_ROUTE_SCHEMA_VERSION,
-    PublicationRoute,
+from ..contracts import (
+    PUBLICATION_CONTRACT,
+    PUBLICATION_ROUTE_CONTRACT,
 )
+from ..publication_contract import PublicationRoute
 from .publication_chart_common import (
     _workload_observed_at,
 )
@@ -22,7 +23,6 @@ from .storage import write_json
 from .publication_store import (
     DEFAULT_ARTICLE_URL,
     DEFAULT_PUBLIC_DATA_BASE_URL,
-    PUBLICATION_SCHEMA_VERSION,
     _card_publication_contract,
     _join,
     _live_market_card_url,
@@ -92,8 +92,8 @@ def publish_sandbox_workload_publication(
     )
     publication_rows = [{"state_id": "cost", **link}]
     manifest = {
-        "schema_version": PUBLICATION_SCHEMA_VERSION,
-        "route_schema_version": PUBLICATION_ROUTE_SCHEMA_VERSION,
+        "contract": PUBLICATION_CONTRACT,
+        "route_contract": PUBLICATION_ROUTE_CONTRACT,
         "publication_type": "sandbox_workload_cost",
         "revision": revision,
         "publication_count": len(publication_rows),

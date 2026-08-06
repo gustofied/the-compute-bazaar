@@ -12,7 +12,7 @@ def prime_frontier_view(
     *,
     manifest: Mapping[str, Any],
     product: Mapping[str, Any],
-    methodology_version: str,
+    methodology: str,
     source: Mapping[str, Any],
     measurement_notes: list[str],
     execution_data: Mapping[str, Any],
@@ -28,9 +28,7 @@ def prime_frontier_view(
     history.sort(key=lambda row: str(row.get("observed_at") or ""))
     value = number(current_row.get("reference_usd_gpu_hr"))
     source_rows = [
-        dict(row)
-        for row in product.get("sources", [])
-        if isinstance(row, Mapping)
+        dict(row) for row in product.get("sources", []) if isinstance(row, Mapping)
     ]
     return card(
         card_type="prime_frontier_offer_market",
@@ -43,7 +41,7 @@ def prime_frontier_view(
         status="live" if value is not None else "unavailable",
         unit="USD per GPU-hour",
         methodology={
-            "id": methodology_version,
+            "id": methodology,
             "scope": current_row.get("reference_scope"),
             "notes": list(measurement_notes),
             "execution_data": dict(execution_data),
@@ -51,9 +49,7 @@ def prime_frontier_view(
         headline={
             "label": f"Prime {family} offer reference",
             "value": value,
-            "market_benchmark": number(
-                current_row.get("market_benchmark_usd_gpu_hr")
-            ),
+            "market_benchmark": number(current_row.get("market_benchmark_usd_gpu_hr")),
             "best": number(current_row.get("best_usd_gpu_hr")),
         },
         series=history,
@@ -64,18 +60,12 @@ def prime_frontier_view(
         },
         coverage={
             "upstream_provider_count": int(current_row.get("provider_count") or 0),
-            "configuration_count": int(
-                current_row.get("configuration_count") or 0
-            ),
+            "configuration_count": int(current_row.get("configuration_count") or 0),
             "observation_count": len(history),
         },
         sources=[dict(source), *source_rows],
         drilldown_ref="prime-frontier-offer-market.json",
-        data={
-            key: item
-            for key, item in dict(product).items()
-            if key != "history"
-        },
+        data={key: item for key, item in dict(product).items() if key != "history"},
         observation_window=observation_window(history),
     )
 

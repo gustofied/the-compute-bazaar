@@ -36,8 +36,8 @@ PRIVATE_FIELD_NAMES = {
     "table_refs",
 }
 PUBLIC_MANIFEST_FIELDS = (
-    "manifest_version",
-    "methodology_version",
+    "contract",
+    "methodology",
     "run_id",
     "observed_at",
     "observed_date",
@@ -83,20 +83,18 @@ class MarketQueryService:
         self,
         *,
         query_id: str,
-        version: str | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
         manifest = self._latest_manifest()
         selected_limit = bounded_query_limit(limit or 100)
         return self._cached(
             manifest,
-            ("saved_query", query_id, version, selected_limit),
+            ("saved_query", query_id, selected_limit),
             lambda: _with_public_run(
                 _sanitize_public_value(
                     run_catalog_query(
                         manifest=manifest,
                         query_id=query_id,
-                        version=version,
                         limit=selected_limit,
                     )
                 ),
@@ -291,7 +289,9 @@ class MarketQueryService:
         return value
 
 
-def _typed_payload(manifest: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _typed_payload(
+    manifest: dict[str, Any], rows: list[dict[str, Any]]
+) -> dict[str, Any]:
     public_rows = _sanitize_public_value(rows)
     return {
         "run": _public_manifest(manifest),
@@ -300,7 +300,9 @@ def _typed_payload(manifest: dict[str, Any], rows: list[dict[str, Any]]) -> dict
     }
 
 
-def _with_public_run(payload: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
+def _with_public_run(
+    payload: dict[str, Any], manifest: dict[str, Any]
+) -> dict[str, Any]:
     return {"run": _public_manifest(manifest), **payload}
 
 
@@ -318,9 +320,7 @@ def _family_rows(
     if not family:
         return rows
     return [
-        row
-        for row in rows
-        if str(row.get("gpu_family_id") or "").upper() == family
+        row for row in rows if str(row.get("gpu_family_id") or "").upper() == family
     ]
 
 

@@ -6,11 +6,11 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ..contracts import GOLD_MARKET_CONTRACT, transform_contract
 from .storage import list_refs, read_json
 
 
 GOLD_MANIFEST_TABLE = "gold_market"
-GOLD_MANIFEST_VERSION = "v1"
 
 
 def latest_gold_manifest_ref(lake_root: str) -> str:
@@ -33,7 +33,10 @@ def gold_manifest_ref(lake_root: str, *, observed_date: str, run_id: str) -> str
 
 def read_latest_gold_manifest(lake_root: str) -> dict[str, Any]:
     return _resolve_lake_relative_refs(
-        dict(read_json(latest_gold_manifest_ref(lake_root))),
+        transform_contract(
+            dict(read_json(latest_gold_manifest_ref(lake_root))),
+            contract=GOLD_MARKET_CONTRACT,
+        ),
         lake_root=lake_root,
     )
 
@@ -54,7 +57,10 @@ def list_gold_manifests(
     for ref in refs:
         try:
             manifest = _resolve_lake_relative_refs(
-                dict(read_json(ref)),
+                transform_contract(
+                    dict(read_json(ref)),
+                    contract=GOLD_MARKET_CONTRACT,
+                ),
                 lake_root=lake_root,
             )
         except Exception as exc:

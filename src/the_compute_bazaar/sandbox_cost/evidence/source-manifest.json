@@ -138,7 +138,7 @@
     "Unlike machine shapes are retained in bronze and rejected before silver."
   ],
   "retrieved_at": "2026-08-05T10:43:18.359846+00:00",
-  "schema_version": "sandbox_source_manifest_v1",
+  "contract": "sandbox_source_manifest",
   "source_commit": "398c60d74e0b29bcb2abfe61a8b8a6428185c00f",
   "source_repository": "starslingdev/hpc-sandbox-benchmarks"
 }

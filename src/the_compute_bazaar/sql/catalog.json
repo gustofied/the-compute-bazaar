@@ -1,10 +1,8 @@
 {
-  "catalog_version": "v1",
   "engine": "datafusion",
   "queries": [
     {
       "query_id": "gpu_price_index",
-      "version": "v1",
       "title": "GPU Price Index",
       "description": "Latest GPU Price Index values.",
       "tables": ["fact_gpu_price_index"],
@@ -13,7 +11,6 @@
     },
     {
       "query_id": "gpu_price_index_constituents",
-      "version": "v1",
       "title": "GPU Price Index Constituents",
       "description": "Rows included in or excluded from each index value.",
       "tables": ["fact_gpu_price_index_constituents"],
@@ -22,7 +19,6 @@
     },
     {
       "query_id": "frontier_listings",
-      "version": "v1",
       "title": "Frontier Listings",
       "description": "Eligible H100, H200, B200, and B300 offers.",
       "tables": ["fact_gpu_listings"],
@@ -31,7 +27,6 @@
     },
     {
       "query_id": "provider_comparison",
-      "version": "v1",
       "title": "Provider Comparison",
       "description": "GPU prices summarized by provider.",
       "tables": ["fact_gpu_listings"],
@@ -40,7 +35,6 @@
     },
     {
       "query_id": "gpu_availability",
-      "version": "v1",
       "title": "GPU Availability",
       "description": "Latest GPU availability and capacity measures.",
       "tables": ["fact_gpu_availability"],
@@ -49,7 +43,6 @@
     },
     {
       "query_id": "prime_offer_history",
-      "version": "v1",
       "title": "Prime Offer History",
       "description": "Prime GPU price and availability history.",
       "tables": ["fact_prime_frontier_offer_reference_history"],
@@ -58,7 +51,6 @@
     },
     {
       "query_id": "prime_offer_levels",
-      "version": "v1",
       "title": "Prime Offer Levels",
       "description": "Prime offers grouped by GPU and price level.",
       "tables": ["fact_prime_frontier_offer_ladder"],

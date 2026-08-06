@@ -1,6 +1,6 @@
 {
+  "contract": "compute_bazaar_gpu_offers_run",
   "manifest_ref": "_manifests/gpu_offers/provider=scaleway/latest.json",
-  "manifest_version": "v1",
   "market_state_observation_count": 0,
   "market_state_ref": null,
   "normalized_offer_count": 30,

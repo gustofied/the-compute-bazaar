@@ -1,4 +1,5 @@
 {
+  "contract": "compute_bazaar_portable_lake",
   "history_row_count": 3969,
   "observed_at": "2026-08-06T21:01:26.892530+00:00",
   "private_evidence_removed": true,
@@ -21,6 +22,5 @@
     "verda",
     "prime_intellect"
   ],
-  "run_id": "gold-market-20260806T210000-f3191dbe",
-  "schema_version": "compute_bazaar_portable_lake_v1"
+  "run_id": "gold-market-20260806T210000-f3191dbe"
 }

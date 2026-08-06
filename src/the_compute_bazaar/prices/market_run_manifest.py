@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..contracts import MARKET_RUN_CONTRACT, transform_contract
 from .ingestion import IngestResult
 from .storage import list_refs, read_json, write_json
 
 
-MARKET_RUN_MANIFEST_VERSION = "v1"
 MARKET_RUN_TABLE = "market_runs"
 
 
@@ -45,7 +45,7 @@ def _failed_market_run_payload(
     provider_results: dict[str, IngestResult],
 ) -> dict[str, Any]:
     return {
-        "manifest_version": MARKET_RUN_MANIFEST_VERSION,
+        "contract": MARKET_RUN_CONTRACT,
         "table": MARKET_RUN_TABLE,
         "market_run_id": market_run_id,
         "status": "failed",
@@ -78,7 +78,10 @@ def _failed_market_run_payload(
 
 
 def read_latest_market_run(lake_root: str) -> dict[str, Any]:
-    return dict(read_json(latest_market_run_ref(lake_root)))
+    return transform_contract(
+        dict(read_json(latest_market_run_ref(lake_root))),
+        contract=MARKET_RUN_CONTRACT,
+    )
 
 
 def list_market_runs(lake_root: str, *, limit: int = 24) -> list[dict[str, Any]]:
@@ -91,7 +94,10 @@ def list_market_runs(lake_root: str, *, limit: int = 24) -> list[dict[str, Any]]
     manifests: list[dict[str, Any]] = []
     for ref in refs:
         try:
-            manifest = dict(read_json(ref))
+            manifest = transform_contract(
+                dict(read_json(ref)),
+                contract=MARKET_RUN_CONTRACT,
+            )
         except Exception as exc:
             raise RuntimeError(
                 f"Cannot read market-run history manifest: {ref}"
@@ -178,7 +184,7 @@ def _dashboard_market_history_ref(output_root: str) -> str:
 
 def _public_market_run_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     return {
-        "manifest_version": payload.get("manifest_version"),
+        "contract": MARKET_RUN_CONTRACT,
         "market_run_id": payload.get("market_run_id"),
         "status": payload.get("status"),
         "data_quality_status": payload.get("data_quality_status"),

@@ -7,8 +7,7 @@ from datetime import date, datetime, timezone
 from math import isfinite
 from typing import Any
 
-
-SCHEMA_VERSION = "v1"
+from ..contracts import MARKET_EVENT_CONTRACT
 
 
 def utc_now() -> datetime:
@@ -33,7 +32,6 @@ class EventEnvelope:
 
     event_id: str
     event_type: str
-    schema_version: str
     provider: str
     event_time: datetime
     ingest_time: datetime
@@ -42,6 +40,7 @@ class EventEnvelope:
     raw_ref: str | None
     payload_hash: str
     payload: dict[str, Any]
+    contract: str = MARKET_EVENT_CONTRACT
 
     def to_dict(self) -> dict[str, Any]:
         return to_jsonable(self)
@@ -151,7 +150,7 @@ class ComputeMarketState:
     aggregation_exclusion_reason: str | None
     source_url: str
     raw_ref: str | None
-    methodology_version: str = "compute_market_state_v1"
+    methodology_version: str = "compute_market_state"
     notes: str | None = None
 
     def event_key(self) -> str:

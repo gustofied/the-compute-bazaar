@@ -1,180 +1,181 @@
 {
+  "contract": "compute_bazaar_portable_lake",
   "file_count": 55,
   "files": [
     {
       "path": "_manifests/gold_market/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe.json",
-      "sha256": "501c2db68fa47a25ec102f7bc6bf69657b6b8b10484d6d8158a6cc0b824c1304",
-      "size": 10217
+      "sha256": "2ce6bb92f4b38d4e10c1629fa8195eeef8745966e87ba56872df4daf3e0853ac",
+      "size": 10143
     },
     {
       "path": "_manifests/gold_market/latest.json",
-      "sha256": "501c2db68fa47a25ec102f7bc6bf69657b6b8b10484d6d8158a6cc0b824c1304",
-      "size": 10217
+      "sha256": "2ce6bb92f4b38d4e10c1629fa8195eeef8745966e87ba56872df4daf3e0853ac",
+      "size": 10143
     },
     {
       "path": "_manifests/gpu_offers/provider=akash/latest.json",
-      "sha256": "3ca44f327e8fe721b10edc16484afd1531e9b8645f418765b392d97c4ca3e09e",
-      "size": 624
+      "sha256": "df8182214e2291187ba956a96ba7800fa4d54b571d937d754ef39eb0a4bd5f02",
+      "size": 643
     },
     {
       "path": "_manifests/gpu_offers/provider=aws_spot/latest.json",
-      "sha256": "63affff805781336f4b35d801cb04bb89fd205b0217df9c9e9170e2b64cb3029",
-      "size": 585
+      "sha256": "9710d272724c033e09c04d49f79c92a4e925a27753c97b407135b95bf394dbf7",
+      "size": 604
     },
     {
       "path": "_manifests/gpu_offers/provider=azure/latest.json",
-      "sha256": "e6f846de322e0d2c0cad70755971d0993e0c5f939769f31daa29feb4a05b7755",
-      "size": 575
+      "sha256": "5be5f20a5325e28ddfcafa6547c041f2738ea7003d4eab646b3d4308d3503aba",
+      "size": 594
     },
     {
       "path": "_manifests/gpu_offers/provider=cloud_gpu_prices/latest.json",
-      "sha256": "0dc076ed54dfa8ec4da20735e9f7ad34c8e4f9b6f1ff5cf4bf0231007aaf0e03",
-      "size": 619
+      "sha256": "80fc881991d1df17064cf93e31cd157757ebebf1e617fafd602a35c15f02bdcb",
+      "size": 638
     },
     {
       "path": "_manifests/gpu_offers/provider=gridstackhub/latest.json",
-      "sha256": "282480d6b27cdf72808561525ea9ea0bc465c359f334a452292f2bdceae95e82",
-      "size": 603
+      "sha256": "f07a5ba4217dc7d6deb7626e10f984e177e0e1b084fa7542d4439b7569f8f2f7",
+      "size": 622
     },
     {
       "path": "_manifests/gpu_offers/provider=inference_sh/latest.json",
-      "sha256": "c0ab528e519b8a82771252b6a07bc4d7507afbce3114e5430e18b6c5370cd664",
-      "size": 603
+      "sha256": "2f38189043f7b9d26c03b7cf0cedb2b73a4ea036f0c266bf44b27de3af9c70ee",
+      "size": 622
     },
     {
       "path": "_manifests/gpu_offers/provider=lium/latest.json",
-      "sha256": "0ddac8d59bdb32a993efb4c3eda28f67ea31d3ed72577d778a969344468bb1e9",
-      "size": 569
+      "sha256": "c601de5643b9b99f99dabe9d0533ee720c1147c30cb1fcd3fc4456a3cb740ae0",
+      "size": 588
     },
     {
       "path": "_manifests/gpu_offers/provider=oracle_cloud/latest.json",
-      "sha256": "5c94a90f18a8cebe0148dcea71327da13bd1cea8edb58dca5ae65269e87b1f46",
-      "size": 599
+      "sha256": "defe9dcda83184432f126910489ef594f545fc37b8d302c90e123ae711741d00",
+      "size": 618
     },
     {
       "path": "_manifests/gpu_offers/provider=ovhcloud/latest.json",
-      "sha256": "fa1d2bfff1ef790173fa8f97fa8887f02bee3320f394ec725e3ee19f3002fac6",
-      "size": 585
+      "sha256": "c96757e1ac68d79079de17b797038804dd20868a615b5f630f960092d00dcdfa",
+      "size": 604
     },
     {
       "path": "_manifests/gpu_offers/provider=prime_intellect/latest.json",
-      "sha256": "fd33bd4dd7ea44b560d61c0305a38560aa739becca745569a18038d7f86f02d4",
-      "size": 675
+      "sha256": "670711a932ad537c688f8b384972c96185a50d04a18df6d8de7f82aac233ec43",
+      "size": 694
     },
     {
       "path": "_manifests/gpu_offers/provider=runpod/latest.json",
-      "sha256": "965978f34e186347d93ec2343f45f764e71a14ec633f58d9dbb0c70dcfb1f0dc",
-      "size": 631
+      "sha256": "8d479b4d4d6d276bf838864cba48c0ea4638e5accb4155948ddf330ac1f9dc02",
+      "size": 650
     },
     {
       "path": "_manifests/gpu_offers/provider=scaleway/latest.json",
-      "sha256": "16ef821851bb421e9044ce26c8b68a0988541280bb085e20dd82742ee67a9b6b",
-      "size": 585
+      "sha256": "23b13bd97a98c518844c84511e516c5a24ae16a1223a3420f52216746cfcca60",
+      "size": 604
     },
     {
       "path": "_manifests/gpu_offers/provider=spheron/latest.json",
-      "sha256": "0293c0aa52a4674ee50d22909513c48421fe37665f2f975d67c5b641c68cfa4e",
-      "size": 581
+      "sha256": "37fdf9f2f9d2766df64e42e50afe17d697b926ad6354a2662b2d45b6cbc20014",
+      "size": 600
     },
     {
       "path": "_manifests/gpu_offers/provider=thunder_compute/latest.json",
-      "sha256": "b4433b1546713fd8916f120975490ecc1a221522d76a322429fcb528c9937feb",
-      "size": 613
+      "sha256": "8b990d86940d27d19cf667b2f461a0bebc397724c04799c0ad6c6df65e523d7b",
+      "size": 632
     },
     {
       "path": "_manifests/gpu_offers/provider=vast/latest.json",
-      "sha256": "42baf5a36a5862e966b61a66000ad753d494979a5ca6ed4ddfae1a4da6249929",
-      "size": 571
+      "sha256": "bd11e3fd81ce3f3538e7d80d85f487a1b8ebaf01cc987a578e636dae3e70c98f",
+      "size": 590
     },
     {
       "path": "_manifests/gpu_offers/provider=verda/latest.json",
-      "sha256": "d8c457207fb21cc292f7b41db17d9011587d7a174207dad393c2f7d75274e5b4",
-      "size": 573
+      "sha256": "352e9bc944393e256d25a5c21689de7c7c207393f27f48130cd9786560690f1b",
+      "size": 592
     },
     {
       "path": "_manifests/gpu_offers/provider=vultr/latest.json",
-      "sha256": "3c2a10793ac76d695a6fcd220b6ed09fe1ca6f0cef2947df9221f8c923002092",
-      "size": 573
+      "sha256": "71ac0f455ed659fa69ce45efaaa3ca790a3db003bd5140f22235aae3f0b8216d",
+      "size": 592
     },
     {
       "path": "gold/dim_gpu_products/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/gpu_products.parquet",
-      "sha256": "00cd095fbc621f5ee01f6257b3ccdf044dce55d1dff1bc94dc29192b07b3802c",
+      "sha256": "3dc296db2a33abec3244d78b7cc43d62c813d8f9badc226863bdccbc030cff0e",
       "size": 7981
     },
     {
       "path": "gold/dim_providers/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/providers.parquet",
-      "sha256": "5330f90b568cf4a955f9b477014f38967f75960b8e912cd255e4d581569eb28b",
+      "sha256": "e8ff7ceeba001e2ecb9f9a4a63b8a512af95c34257cfc05bf7cb50e61734996b",
       "size": 3765
     },
     {
       "path": "gold/dim_sources/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/sources.parquet",
-      "sha256": "ea9eaefab94bf1ae5320ad534b774007810a383e4a5558762e3f35bfa75d2036",
+      "sha256": "8cecdcc01067bd2588e1b43e7c2720ab5b74d15a767326e74cdecca7c9f82808",
       "size": 3611
     },
     {
       "path": "gold/fact_compute_market_state/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/compute_market_state.parquet",
-      "sha256": "e7f8ec274ba2bf68ed15045e60f04098b19a92da6ea6c08796cacf4e7dee6f76",
-      "size": 32049
+      "sha256": "997156f762493e2ea4fd91445bc5c290e4d4704851589fd739a3a0713311ac22",
+      "size": 32008
     },
     {
       "path": "gold/fact_compute_market_state_history/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/compute_market_state_history.parquet",
-      "sha256": "c68d9996290e93da757561ef1a08c709bec187d206520e288727bc066f96e4e9",
-      "size": 3321178
+      "sha256": "ddd311315c3306244c35961de637ab18c35154f274d0befca7a23402054c32e8",
+      "size": 3327901
     },
     {
       "path": "gold/fact_gpu_availability/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/gpu_availability.parquet",
-      "sha256": "795ab33061370e8f9d9ed52f987f53166ee65329866c07c0a6e0127328f8fda6",
-      "size": 29842
+      "sha256": "8d8f1113fbc1e302262289cf6f0238e0cc6ca728f3064bfd0fda56104ed9db48",
+      "size": 29794
     },
     {
       "path": "gold/fact_gpu_availability_history/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/gpu_availability_history.parquet",
-      "sha256": "d6415cd2427bcf30f6e70fec612cc26d46d122502d72e0a43e16a7b47736d73a",
-      "size": 3161925
+      "sha256": "658d54c3d183da3947cf63e31e39f5bf7b0bea84571305fa1f69a6c891eb7858",
+      "size": 3168438
     },
     {
       "path": "gold/fact_gpu_listings/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/listings.parquet",
-      "sha256": "9c9ca597cacfd4f03bae1de4e82a3f7bd441e1a1eccc38732b795a10bc3d694b",
-      "size": 125750
+      "sha256": "2ad8fb54126aa2af37b5181c5de9a301e44198e10fbac8b060d61099725c2dd0",
+      "size": 126232
     },
     {
       "path": "gold/fact_gpu_price_index/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/gpu_price_index.parquet",
-      "sha256": "3f4a7b9c10686040b225f5d713737a7c64f0a1e19b0dde88d128fd9b540c29c1",
-      "size": 11413
+      "sha256": "5c29d505e135978b6a92a44afa6b29a24614821d14eb0278975a2d808da6e4de",
+      "size": 11353
     },
     {
       "path": "gold/fact_gpu_price_index_constituents/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/gpu_price_index_constituents.parquet",
-      "sha256": "979250caeaa95e7c96c48620f8c92cec8a9886e47ab7ba14cfd21eeddf8c54b1",
-      "size": 79016
+      "sha256": "a02b4786854e346a84134fbd1ef86b50fd58548c261ca026518aa3a8ff9c1104",
+      "size": 79001
     },
     {
       "path": "gold/fact_gpu_price_index_history/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/gpu_price_index_history.parquet",
-      "sha256": "1c9893f49948d5f40f3b3ae9cf316d7f94b716754b41cd4ae744a51a5444ee7e",
-      "size": 85022
+      "sha256": "57a8fe8adc65bb1cb15734e8595676a8e916c3619833d4ae358a76e8c630ef2f",
+      "size": 84974
     },
     {
       "path": "gold/fact_prime_frontier_offer_events/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/prime_frontier_offer_events.parquet",
-      "sha256": "b992bc5be07a51be77ee95922fef04241d54e37fbf519cf903f35d6111c27a47",
-      "size": 14008
+      "sha256": "75c3081d9306c89990117b9595a602a6f325b534eb6ef0e7d640be9f2df46e2d",
+      "size": 129211
     },
     {
       "path": "gold/fact_prime_frontier_offer_history/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/prime_frontier_offer_history.parquet",
-      "sha256": "209cc842deaa05e5b8e0301d7ee7f9fef08338764fbf81e5bdca494b2c99e2e6",
-      "size": 87177
+      "sha256": "7582acc8877ee3e919204004dbb1234357011e96e3d00534e7df193372b94299",
+      "size": 87173
     },
     {
       "path": "gold/fact_prime_frontier_offer_ladder/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/prime_frontier_offer_ladder.parquet",
-      "sha256": "5c63ee82fefa11f0eac0c0569ca201c6240eb1d783a67f0dea70d8c08bfafdbb",
-      "size": 10330
+      "sha256": "ae1790f3fb9cfa0399f0056ca40cce868245ac96fcc4f6a215ba64bd721ae488",
+      "size": 10315
     },
     {
       "path": "gold/fact_prime_frontier_offer_reference_history/date=2026-08-06/run_id=gold-market-20260806T210000-f3191dbe/prime_frontier_offer_reference_history.parquet",
-      "sha256": "b970cdea7af0174232ab6fd026dc44539cf1e42f6dbc19f009a6aded4ed21c1c",
-      "size": 10850
+      "sha256": "1b9e3dac987b69616f802bc1340dd787e166ea9686488b3e268f85fd57aadd59",
+      "size": 33951
     },
     {
       "path": "sample.json",
-      "sha256": "dbd6e9b2d510f1879f70d5aba3664190fb3887227dfe642878cd8fe590c3c80f",
-      "size": 536
+      "sha256": "68f3d645f807ebbe2881b69dffef68b07b8286a3affe0fafb6355546ba41e485",
+      "size": 527
     },
     {
       "path": "silver/compute_market_state/akash/observations.parquet",
@@ -297,6 +298,5 @@
     "verda",
     "prime_intellect"
   ],
-  "run_id": "gold-market-20260806T210000-f3191dbe",
-  "schema_version": "compute_bazaar_portable_lake_v1"
+  "run_id": "gold-market-20260806T210000-f3191dbe"
 }

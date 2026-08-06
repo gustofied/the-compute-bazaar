@@ -12,12 +12,12 @@ from typing import Any
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+from .contracts import PORTABLE_LAKE_CONTRACT, require_contract
 from .data_root import default_synced_lake_root
 from .prices.gold_manifest import read_latest_gold_manifest
 
 
 DEFAULT_PUBLIC_LAKE_URL = "https://bazaar.adamsioud.com/lake"
-PORTABLE_LAKE_VERSION = "compute_bazaar_portable_lake_v1"
 MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_LAKE_BYTES = 1024 * 1024 * 1024
 
@@ -93,9 +93,7 @@ def sync_public_lake(
     }
 
 
-def inspect_lake(
-    *, root: str, kind: str, label: str
-) -> dict[str, Any]:
+def inspect_lake(*, root: str, kind: str, label: str) -> dict[str, Any]:
     """Describe the local lake selected by the CLI without making a network call."""
     manifest = read_latest_gold_manifest(root)
     path = Path(root)
@@ -119,7 +117,7 @@ def inspect_lake(
 
 
 def _download(url: str) -> bytes:
-    request = Request(url, headers={"User-Agent": "compute-bazaar-data-sync/1"})
+    request = Request(url, headers={"User-Agent": "compute-bazaar-data-sync"})
     with urlopen(request, timeout=60) as response:
         return response.read(MAX_FILE_BYTES + 1)
 
@@ -129,8 +127,9 @@ def _validated_index(payload: bytes) -> dict[str, Any]:
         value = json.loads(payload.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RuntimeError("Portable lake index is not valid JSON") from exc
-    if not isinstance(value, dict) or value.get("schema_version") != PORTABLE_LAKE_VERSION:
+    if not isinstance(value, dict):
         raise RuntimeError("Unsupported portable lake index")
+    require_contract(value, contract=PORTABLE_LAKE_CONTRACT)
     files = value.get("files")
     if not isinstance(files, list) or value.get("file_count") != len(files):
         raise RuntimeError("Portable lake index has an invalid file inventory")

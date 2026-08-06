@@ -78,7 +78,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     saved_query = commands.add_parser("query", help="Run one saved DataFusion query")
     saved_query.add_argument("query_id")
-    saved_query.add_argument("--version")
     saved_query.add_argument("--limit", type=_positive_limit, default=100)
 
     scratch = commands.add_parser(
@@ -221,7 +220,6 @@ def dispatch(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> An
     if args.command == "query":
         return service.saved_query(
             query_id=args.query_id,
-            version=args.version,
             limit=args.limit,
         )
     if args.command == "price-index":

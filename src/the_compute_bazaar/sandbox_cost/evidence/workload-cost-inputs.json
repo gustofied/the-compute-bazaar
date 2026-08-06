@@ -1,5 +1,5 @@
 {
-  "schema_version": "sandbox_workload_cost_input_v2",
+  "contract": "sandbox_workload_cost_input",
   "retrieved_at": "2026-07-24T18:11:31Z",
   "target_shape": {
     "memory_gib": 8,

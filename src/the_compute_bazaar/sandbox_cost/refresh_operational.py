@@ -8,6 +8,11 @@ import hashlib
 import json
 from typing import Any
 
+from the_compute_bazaar.contracts import (
+    SANDBOX_SOURCE_CONTRACT,
+    SANDBOX_WORKLOAD_DATASET_CONTRACT,
+    SANDBOX_WORKLOAD_POLL_CONTRACT,
+)
 
 from .evidence import (
     BENCHMARK_EVIDENCE,
@@ -51,7 +56,7 @@ def _publish_operational_benchmark(
     _validate_source_manifest(source_manifest, batches)
 
     stable_source_manifest = {
-        "schema_version": "sandbox_source_manifest_v1",
+        "contract": SANDBOX_SOURCE_CONTRACT,
         "source_repository": source_repository,
         "source_commit": source_commit,
         "files": source_manifest["files"],
@@ -97,7 +102,7 @@ def _publish_operational_benchmark(
     )
     latest_run = max(runs, key=lambda row: str(row["generated_at"]))
     dataset_manifest = {
-        "manifest_version": "sandbox_workload_dataset_v1",
+        "contract": SANDBOX_WORKLOAD_DATASET_CONTRACT,
         "manifest_ref": dataset_manifest_ref,
         "generation_id": generation_id,
         "content_sha256": generation_hash,
@@ -119,7 +124,7 @@ def _publish_operational_benchmark(
         "latest_run_id": latest_run["benchmark_run_id"],
     }
     poll_manifest = {
-        "manifest_version": "sandbox_workload_poll_v1",
+        "contract": SANDBOX_WORKLOAD_POLL_CONTRACT,
         "refresh_id": refresh_id,
         "checked_at": checked_at,
         "source_repository": source_repository,

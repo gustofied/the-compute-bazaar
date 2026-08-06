@@ -42,14 +42,11 @@ def create_app(
     )
     scratch_api_key = query_api_key or os.getenv("COMPUTE_BAZAAR_QUERY_API_KEY")
     if scratch_sql_enabled and not scratch_api_key:
-        raise RuntimeError(
-            "Scratch SQL requires COMPUTE_BAZAAR_QUERY_API_KEY"
-        )
+        raise RuntimeError("Scratch SQL requires COMPUTE_BAZAAR_QUERY_API_KEY")
     service = MarketQueryService(lake_root=selected_root)
     scratch_query_slot = BoundedSemaphore(value=1)
     app = FastAPI(
         title="Compute Bazaar Query API",
-        version="0.1.0",
         description="Read-only DataFusion queries over the latest complete Gold run.",
     )
     app.state.query_service = service
@@ -66,30 +63,28 @@ def create_app(
             )
         return {"status": "ok", "run_id": manifest["run_id"]}
 
-    @app.get("/v1/manifest")
+    @app.get("/manifest")
     def manifest() -> dict[str, Any]:
         return _api_call(service.manifest)
 
-    @app.get("/v1/catalog")
+    @app.get("/catalog")
     def catalog() -> dict[str, Any]:
         return _api_call(service.catalog)
 
-    @app.get("/v1/queries/{query_id}")
+    @app.get("/queries/{query_id}")
     def saved_query(
         query_id: str,
         limit: Limit = 100,
-        version: str | None = None,
     ) -> dict[str, Any]:
         return _api_call(
             service.saved_query,
             query_id=query_id,
-            version=version,
             limit=limit,
         )
 
     if scratch_sql_enabled:
 
-        @app.post("/v1/sql")
+        @app.post("/sql")
         def scratch_sql(
             request: ScratchQueryRequest,
             authorization: Annotated[str | None, Header()] = None,
@@ -109,7 +104,7 @@ def create_app(
             finally:
                 scratch_query_slot.release()
 
-    @app.get("/v1/gpu-price-index")
+    @app.get("/gpu-price-index")
     def gpu_price_index(
         family: str | None = None,
         history: bool = False,
@@ -122,7 +117,7 @@ def create_app(
             limit=limit,
         )
 
-    @app.get("/v1/gpu-availability")
+    @app.get("/gpu-availability")
     def gpu_availability(
         gpu_model: str | None = None,
         measurement_kind: str | None = None,
@@ -137,7 +132,7 @@ def create_app(
             limit=limit,
         )
 
-    @app.get("/v1/listings")
+    @app.get("/listings")
     def listings(
         gpu_model: str | None = None,
         provider: str | None = None,
@@ -150,14 +145,14 @@ def create_app(
             limit=limit,
         )
 
-    @app.get("/v1/providers")
+    @app.get("/providers")
     def providers(
         gpu_model: str | None = None,
         limit: Limit = 100,
     ) -> dict[str, Any]:
         return _api_call(service.providers, gpu_model=gpu_model, limit=limit)
 
-    @app.get("/v1/prime/offers")
+    @app.get("/prime/offers")
     def prime_offers(family: str | None = None) -> dict[str, Any]:
         return _api_call(service.prime_offers, family=family)
 
@@ -185,7 +180,9 @@ def _require_bearer_token(value: str | None, *, expected: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Serve read-only Compute Bazaar Gold queries")
+    parser = argparse.ArgumentParser(
+        description="Serve read-only Compute Bazaar Gold queries"
+    )
     parser.add_argument(
         "--lake-root",
         default=None,
