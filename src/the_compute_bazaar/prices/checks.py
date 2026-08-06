@@ -9,11 +9,16 @@ from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from .automq import check_cluster, kafka_bootstrap_servers_from_env, kafka_config_from_env
+from .automq import (
+    check_cluster,
+    kafka_bootstrap_servers_from_env,
+    kafka_config_from_env,
+)
 from .datafusion import query_market_summary
-from .gold import query_gold_benchmark_values, read_latest_gold_manifest
+from .gold_manifest import read_latest_gold_manifest
+from .gold_queries import query_gold_benchmark_values
 from .manifest import read_latest_manifest
-from .market_run import read_latest_market_run
+from .market_run_manifest import read_latest_market_run
 
 
 @dataclass(frozen=True)
@@ -58,7 +63,9 @@ def _check_environment(*, lake_root: str, require_ingest_env: bool) -> CheckResu
     missing_core = []
     if not lake_root:
         missing_core.append("lake_root")
-    if lake_root.startswith("s3://") and not _first_env("AWS_REGION", "AWS_DEFAULT_REGION"):
+    if lake_root.startswith("s3://") and not _first_env(
+        "AWS_REGION", "AWS_DEFAULT_REGION"
+    ):
         missing_core.append("AWS_REGION or AWS_DEFAULT_REGION")
 
     ingest_required = [
@@ -94,7 +101,10 @@ def _check_latest_manifest_and_index(*, lake_root: str, provider: str) -> CheckR
             return CheckResult(
                 name="latest_manifest",
                 status="fail",
-                detail={"reason": "latest manifest has no normalized_ref", "manifest": _public_manifest(manifest)},
+                detail={
+                    "reason": "latest manifest has no normalized_ref",
+                    "manifest": _public_manifest(manifest),
+                },
             )
         rows = query_market_summary(parquet_uri=str(normalized_ref), limit=10)
         return CheckResult(
@@ -107,7 +117,9 @@ def _check_latest_manifest_and_index(*, lake_root: str, provider: str) -> CheckR
             },
         )
     except Exception as exc:  # noqa: BLE001 - stage checks should report all failures as data.
-        return CheckResult(name="latest_manifest_and_index", status="fail", detail={"error": str(exc)})
+        return CheckResult(
+            name="latest_manifest_and_index", status="fail", detail={"error": str(exc)}
+        )
 
 
 def _check_latest_gold(*, lake_root: str) -> CheckResult:
@@ -124,7 +136,9 @@ def _check_latest_gold(*, lake_root: str) -> CheckResult:
             },
         )
     except Exception as exc:  # noqa: BLE001 - stage checks should report all failures as data.
-        return CheckResult(name="latest_gold", status="fail", detail={"error": str(exc)})
+        return CheckResult(
+            name="latest_gold", status="fail", detail={"error": str(exc)}
+        )
 
 
 def _check_latest_market_run(*, lake_root: str) -> CheckResult:
@@ -136,7 +150,11 @@ def _check_latest_market_run(*, lake_root: str) -> CheckResult:
             for name, status in checks.items()
             if status not in {"ok", "skipped", "warning"}
         }
-        status = "ok" if manifest.get("status") in {"success", "warning"} and not failing else "fail"
+        status = (
+            "ok"
+            if manifest.get("status") in {"success", "warning"} and not failing
+            else "fail"
+        )
         return CheckResult(
             name="latest_market_run",
             status=status,
@@ -146,7 +164,9 @@ def _check_latest_market_run(*, lake_root: str) -> CheckResult:
             },
         )
     except Exception as exc:  # noqa: BLE001 - stage checks should report all failures as data.
-        return CheckResult(name="latest_market_run", status="fail", detail={"error": str(exc)})
+        return CheckResult(
+            name="latest_market_run", status="fail", detail={"error": str(exc)}
+        )
 
 
 def _check_automq(*, enabled: bool) -> CheckResult:
@@ -154,13 +174,21 @@ def _check_automq(*, enabled: bool) -> CheckResult:
         return CheckResult(
             name="automq",
             status="skipped",
-            detail={"reason": "private VPC check; rerun with --check-automq from a VPC-connected worker"},
+            detail={
+                "reason": "private VPC check; rerun with --check-automq from a VPC-connected worker"
+            },
         )
     bootstrap_servers = kafka_bootstrap_servers_from_env()
     if not bootstrap_servers:
-        return CheckResult(name="automq", status="skipped", detail={"reason": "missing Kafka bootstrap servers"})
+        return CheckResult(
+            name="automq",
+            status="skipped",
+            detail={"reason": "missing Kafka bootstrap servers"},
+        )
     try:
-        topics = check_cluster(bootstrap_servers=bootstrap_servers, config=kafka_config_from_env())
+        topics = check_cluster(
+            bootstrap_servers=bootstrap_servers, config=kafka_config_from_env()
+        )
         expected = {"gpu.provider_snapshot.v1", "gpu.normalized_offer.v1"}
         missing = sorted(expected - set(topics))
         return CheckResult(
@@ -190,7 +218,9 @@ def _check_windmill(
         return CheckResult(
             name="windmill",
             status="skipped",
-            detail={"reason": "set WINDMILL_BASE_URL and WINDMILL_TOKEN to check schedule"},
+            detail={
+                "reason": "set WINDMILL_BASE_URL and WINDMILL_TOKEN to check schedule"
+            },
         )
     try:
         health = _windmill_get(base_url, "/health/status")
@@ -213,9 +243,13 @@ def _check_windmill(
         return CheckResult(name="windmill", status="fail", detail={"error": str(exc)})
 
 
-def _windmill_get(base_url: str, path: str, *, token: str | None = None) -> dict[str, Any]:
+def _windmill_get(
+    base_url: str, path: str, *, token: str | None = None
+) -> dict[str, Any]:
     headers = {"Authorization": f"Bearer {token}"} if token else {}
-    request = Request(f"{base_url.rstrip('/')}/api{path}", headers=headers, method="GET")
+    request = Request(
+        f"{base_url.rstrip('/')}/api{path}", headers=headers, method="GET"
+    )
     try:
         with urlopen(request, timeout=20) as response:
             import json

@@ -41,6 +41,29 @@ FORBIDDEN_SCRATCH_SQL_FUNCTIONS = {
     "read_ndjson",
     "read_parquet",
 }
+FORBIDDEN_SCRATCH_SQL_IDENTIFIERS = {
+    "bronze_refs",
+    "manifest_ref",
+    "raw_ref",
+    "silver_refs",
+    "source_manifest_ref",
+    "source_normalized_ref",
+    "table_refs",
+}
+SCRATCH_TABLE_ALLOWLIST = {
+    "dim_gpu_products",
+    "dim_providers",
+    "dim_sources",
+    "fact_benchmark_constituents",
+    "fact_benchmark_values",
+    "fact_compute_market_state",
+    "fact_compute_market_state_history",
+    "fact_gpu_listings",
+    "fact_prime_frontier_offer_events",
+    "fact_prime_frontier_offer_history",
+    "fact_prime_frontier_offer_ladder",
+    "fact_prime_frontier_offer_reference_history",
+}
 
 
 @dataclass(frozen=True)
@@ -193,7 +216,7 @@ def scratch_table_refs(manifest: dict[str, Any]) -> dict[str, str]:
     return {
         table_name: str(ref)
         for table_name, ref in table_refs.items()
-        if ref
+        if ref and table_name in SCRATCH_TABLE_ALLOWLIST
     }
 
 
@@ -244,6 +267,12 @@ def validate_scratch_sql(sql: str) -> str:
     forbidden_functions = sorted(tokens & FORBIDDEN_SCRATCH_SQL_FUNCTIONS)
     if forbidden_functions:
         raise ValueError(f"Scratch SQL cannot read external files or object paths: {forbidden_functions[0]}")
+    forbidden_identifiers = sorted(tokens & FORBIDDEN_SCRATCH_SQL_IDENTIFIERS)
+    if forbidden_identifiers:
+        raise ValueError(
+            "Scratch SQL cannot read private evidence fields: "
+            f"{forbidden_identifiers[0]}"
+        )
     return statement
 
 

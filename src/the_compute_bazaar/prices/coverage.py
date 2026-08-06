@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .datafusion import query_parquet
-from .gold import read_latest_gold_manifest
+from .gold_manifest import read_latest_gold_manifest
 
 
 FRONTIER_COVERAGE_TARGET = 50

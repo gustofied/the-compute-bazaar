@@ -9,7 +9,7 @@ from typing import Any
 from .sql_models import render_sql, sql_metadata
 
 
-BENCHMARK_METHODOLOGY_VERSION = "advertised_provider_floor_median_v1"
+BENCHMARK_METHODOLOGY_VERSION = "advertised_provider_floor_median_v2"
 BENCHMARK_FAMILIES = [
     {"family_id": "H100", "label": "H100", "gpu_model_prefixes": ["H100_"]},
     {"family_id": "H200", "label": "H200", "gpu_model_prefixes": ["H200_"]},

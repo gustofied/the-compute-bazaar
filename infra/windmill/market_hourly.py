@@ -32,6 +32,8 @@ def main(
     aws_region: str = "eu-west-3",
     topic_prefix: str = "gpu",
     providers: str | None = None,
+    required_providers: str | None = None,
+    minimum_successful_providers: int = 1,
     dashboard_limit: int = 100,
     dry_run: bool = False,
     run_id: str | None = None,
@@ -61,6 +63,11 @@ def main(
         if providers
         else None
     )
+    required_provider_scope = (
+        [item.strip() for item in required_providers.split(",") if item.strip()]
+        if required_providers
+        else None
+    )
 
     with _temporary_environment(environment):
         result = run_market_hourly(
@@ -68,6 +75,8 @@ def main(
             lake_root=effective_lake_root,
             dashboard_output_root=dashboard_output_root,
             providers=provider_scope or default_market_providers(),
+            required_providers=required_provider_scope,
+            minimum_successful_providers=minimum_successful_providers,
             automq_bootstrap_servers=automq_bootstrap_servers,
             automq_config=kafka_config,
             topic_prefix=topic_prefix,

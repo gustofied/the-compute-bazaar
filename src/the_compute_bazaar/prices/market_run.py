@@ -1,6 +1,17 @@
-"""Top-level market run orchestration and manifests."""
+"""Execute one provider-to-publication market observation cycle."""
 
 from __future__ import annotations
+
+from .market_run_manifest import (
+    _dashboard_market_history_ref,
+    _dashboard_market_run_ref,
+    _failed_market_run_payload,
+    _provider_check_status,
+    _provider_error_message,
+    _public_market_run_manifest,
+    write_dashboard_market_run_snapshots,
+    write_market_run_manifest,
+)
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -12,9 +23,10 @@ from .gold import build_gold_market_tables
 from .gold_exports import export_gold_dashboard_snapshot
 from .ingestion import IngestResult
 from .provider_registry import ProviderRunContext, enabled_provider_names, get_provider
-from .public_views import GPU_FAMILIES, market_overview_view
+from .public_view_gpu import GPU_FAMILIES
+from .public_view_market import market_overview_view
 from .schemas import to_jsonable, utc_now
-from .storage import list_refs, read_json, write_json
+from .storage import read_json, write_json
 
 
 MARKET_RUN_MANIFEST_VERSION = "v1"
@@ -58,6 +70,8 @@ def run_market_hourly(
     lake_root: str = "data/lake",
     dashboard_output_root: str = "data/dashboard/compute-bazaar",
     providers: list[str] | None = None,
+    required_providers: list[str] | None = None,
+    minimum_successful_providers: int = 1,
     automq_bootstrap_servers: str | None = None,
     automq_config: dict[str, str] | None = None,
     topic_prefix: str = "gpu",
@@ -71,6 +85,19 @@ def run_market_hourly(
     observed_at = utc_now()
     observed_date = observed_at.date().isoformat()
     provider_scope = list(dict.fromkeys(providers or default_market_providers()))
+    required_provider_scope = list(dict.fromkeys(required_providers or []))
+    unknown_required_providers = set(required_provider_scope) - set(provider_scope)
+    if unknown_required_providers:
+        raise ValueError(
+            "Required providers are outside the market cohort: "
+            + ", ".join(sorted(unknown_required_providers))
+        )
+    if minimum_successful_providers < 1:
+        raise ValueError("minimum_successful_providers must be at least 1")
+    if minimum_successful_providers > len(provider_scope):
+        raise ValueError(
+            "minimum_successful_providers cannot exceed the provider cohort"
+        )
     unknown_option_providers = set(provider_options or {}) - set(provider_scope)
     if unknown_option_providers:
         raise ValueError(
@@ -131,26 +158,64 @@ def run_market_hourly(
     failed_providers = [
         provider for provider in provider_scope if provider not in successful_providers
     ]
+    missing_required_providers = [
+        provider
+        for provider in required_provider_scope
+        if provider not in successful_providers
+    ]
+    cohort_is_viable = (
+        len(successful_providers) >= minimum_successful_providers
+        and not missing_required_providers
+    )
     data_quality["successful_providers"] = successful_providers
     data_quality["failed_providers"] = failed_providers
-    data_quality["cohort_status"] = "complete" if not failed_providers else "degraded"
+    data_quality["cohort"] = {
+        "required_providers": required_provider_scope,
+        "optional_providers": [
+            provider
+            for provider in provider_scope
+            if provider not in required_provider_scope
+        ],
+        "minimum_successful_providers": minimum_successful_providers,
+        "missing_required_providers": missing_required_providers,
+        "status": (
+            "complete"
+            if not failed_providers
+            else "degraded"
+            if cohort_is_viable
+            else "failed"
+        ),
+    }
     normalization_warnings = {
         provider: quality["unknown_gpu_names"]
         for provider, quality in data_quality["providers"].items()
         if quality.get("unknown_gpu_names")
     }
-    data_quality_status = "warning" if normalization_warnings else "ok"
+    data_quality_status = (
+        "warning" if normalization_warnings or failed_providers else "ok"
+    )
     data_quality["status"] = data_quality_status
     data_quality["normalization_warnings"] = normalization_warnings
-    if not successful_providers:
-        raise RuntimeError(
-            "All market providers failed or returned no normalized offers"
+    if not cohort_is_viable:
+        data_quality["status"] = "error"
+        failure_payload = _failed_market_run_payload(
+            market_run_id=market_run_id,
+            observed_at=observed_at.isoformat(),
+            observed_date=observed_date,
+            provider_scope=provider_scope,
+            failed_providers=failed_providers,
+            checks=checks,
+            data_quality=data_quality,
+            provider_results=provider_results,
         )
-    if failed_providers:
-        raise RuntimeError(
-            "Market cohort incomplete; refusing to replace the last complete publication. "
-            f"Failed providers: {', '.join(failed_providers)}"
+        write_market_run_manifest(
+            lake_root=lake_root,
+            observed_date=observed_date,
+            market_run_id=market_run_id,
+            payload=failure_payload,
+            update_latest=False,
         )
+        raise RuntimeError("Market provider cohort did not meet its publication policy")
 
     gold_run_id = f"gold-{market_run_id}"
     gold_result = build_gold_market_tables(
@@ -296,159 +361,3 @@ def _ingest_market_provider(
     context: ProviderRunContext,
 ) -> IngestResult:
     return get_provider(provider).ingest(context)
-
-
-def write_market_run_manifest(
-    *,
-    lake_root: str,
-    observed_date: str,
-    market_run_id: str,
-    payload: dict[str, Any],
-) -> str:
-    manifest_ref = market_run_manifest_ref(
-        lake_root,
-        observed_date=observed_date,
-        market_run_id=market_run_id,
-    )
-    payload_with_ref = dict(payload)
-    payload_with_ref["manifest_ref"] = manifest_ref
-    write_json(manifest_ref, payload_with_ref)
-    write_json(latest_market_run_ref(lake_root), payload_with_ref)
-    return manifest_ref
-
-
-def read_latest_market_run(lake_root: str) -> dict[str, Any]:
-    return dict(read_json(latest_market_run_ref(lake_root)))
-
-
-def list_market_runs(lake_root: str, *, limit: int = 24) -> list[dict[str, Any]]:
-    requested_limit = max(1, int(limit))
-    refs = [
-        ref
-        for ref in list_refs(market_runs_manifest_prefix(lake_root), suffix=".json")
-        if "/run_id=" in ref or "/run_id%3D" in ref
-    ]
-    manifests: list[dict[str, Any]] = []
-    for ref in reversed(refs):
-        try:
-            manifest = dict(read_json(ref))
-        except Exception:  # noqa: BLE001 - a partial/bad manifest should not hide the good history.
-            continue
-        manifests.append(manifest)
-        if len(manifests) >= requested_limit:
-            break
-
-    manifests.sort(key=lambda row: str(row.get("observed_at") or ""), reverse=True)
-    return manifests[:requested_limit]
-
-
-def write_dashboard_market_run_snapshots(
-    *,
-    lake_root: str,
-    output_root: str,
-    latest: dict[str, Any] | None = None,
-    limit: int = 24,
-) -> dict[str, str]:
-    latest_manifest = latest or read_latest_market_run(lake_root)
-    history = [
-        _public_market_run_manifest(row)
-        for row in list_market_runs(lake_root, limit=limit)
-    ]
-    if not history:
-        history = [_public_market_run_manifest(latest_manifest)]
-
-    output_refs = {
-        "market_run": _dashboard_market_run_ref(output_root),
-        "market_history": _dashboard_market_history_ref(output_root),
-    }
-    write_json(output_refs["market_run"], _public_market_run_manifest(latest_manifest))
-    write_json(
-        output_refs["market_history"],
-        {
-            "latest_market_run_id": latest_manifest.get("market_run_id"),
-            "row_count": len(history),
-            "rows": history,
-        },
-    )
-    return output_refs
-
-
-def latest_market_run_ref(lake_root: str) -> str:
-    return "/".join(
-        [lake_root.rstrip("/"), "_manifests", MARKET_RUN_TABLE, "latest.json"]
-    )
-
-
-def market_runs_manifest_prefix(lake_root: str) -> str:
-    return "/".join([lake_root.rstrip("/"), "_manifests", MARKET_RUN_TABLE])
-
-
-def market_run_manifest_ref(
-    lake_root: str, *, observed_date: str, market_run_id: str
-) -> str:
-    return "/".join(
-        [
-            lake_root.rstrip("/"),
-            "_manifests",
-            MARKET_RUN_TABLE,
-            f"date={observed_date}",
-            f"run_id={market_run_id}.json",
-        ]
-    )
-
-
-def _provider_check_status(result: IngestResult) -> str:
-    if result.normalized_offer_count <= 0 or result.published_events <= 0:
-        return "error"
-    return "ok"
-
-
-def _provider_error_message(exc: Exception) -> str:
-    message = " ".join(str(exc).split())
-    return message[:500] or type(exc).__name__
-
-
-def _dashboard_market_run_ref(output_root: str) -> str:
-    return "/".join([output_root.rstrip("/"), "market-run.json"])
-
-
-def _dashboard_market_history_ref(output_root: str) -> str:
-    return "/".join([output_root.rstrip("/"), "market-history.json"])
-
-
-def _public_market_run_manifest(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "manifest_version": payload.get("manifest_version"),
-        "market_run_id": payload.get("market_run_id"),
-        "status": payload.get("status"),
-        "data_quality_status": payload.get("data_quality_status"),
-        "observed_at": payload.get("observed_at"),
-        "observed_date": payload.get("observed_date"),
-        "providers": payload.get("providers"),
-        "successful_providers": payload.get("successful_providers"),
-        "failed_providers": payload.get("failed_providers"),
-        "provider_runs": payload.get("provider_runs"),
-        "gold_run_id": payload.get("gold_run_id"),
-        "dashboard_export_id": payload.get("dashboard_export_id"),
-        "row_counts": payload.get("row_counts"),
-        "checks": payload.get("checks"),
-        "data_quality": _without_private_refs(payload.get("data_quality")),
-    }
-
-
-def _without_private_refs(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: cleaned
-            for key, item in value.items()
-            if (cleaned := _without_private_refs(item)) is not None
-        }
-    if isinstance(value, list):
-        return [
-            cleaned
-            for item in value
-            if (cleaned := _without_private_refs(item)) is not None
-        ]
-    if isinstance(value, str) and value.startswith("s3://"):
-        return None
-    return value

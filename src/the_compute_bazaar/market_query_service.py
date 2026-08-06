@@ -8,12 +8,12 @@ from copy import deepcopy
 from threading import RLock
 from typing import Any
 
-from .prices.gold import (
+from .prices.gold_manifest import read_latest_gold_manifest
+from .prices.gold_queries import (
     query_gold_benchmark_values,
     query_gold_listings,
     query_gold_prime_frontier_offer_market,
     query_gold_provider_comparison,
-    read_latest_gold_manifest,
 )
 from .prices.query_catalog import (
     bounded_query_limit,
@@ -106,10 +106,12 @@ class MarketQueryService:
         manifest = self._latest_manifest()
         selected_limit = bounded_query_limit(limit or 100)
         return _with_public_run(
-            run_scratch_query(
-                manifest=manifest,
-                sql=sql,
-                limit=selected_limit,
+            _sanitize_public_value(
+                run_scratch_query(
+                    manifest=manifest,
+                    sql=sql,
+                    limit=selected_limit,
+                )
             ),
             manifest,
         )

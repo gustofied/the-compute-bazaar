@@ -13,16 +13,20 @@ from fastapi.testclient import TestClient
 from infra.windmill import market_hourly as windmill_market_hourly
 from infra.aws.check_public_market import validate_public_market
 from the_compute_bazaar.prices.datafusion import query_tables
-from the_compute_bazaar.prices.gold import (
-    build_gold_market_tables,
-    query_gold_listings,
-)
+from the_compute_bazaar.prices.gold import build_gold_market_tables
 from the_compute_bazaar.prices.gold_exports import export_gold_dashboard_snapshot
+from the_compute_bazaar.prices.gold_manifest import (
+    gold_manifest_ref,
+    list_gold_manifests,
+)
+from the_compute_bazaar.prices.gold_queries import query_gold_listings
 from the_compute_bazaar.prices.ingestion import IngestResult, persist_provider_snapshot
 from the_compute_bazaar.prices.market_run import (
-    _public_market_run_manifest,
     default_market_providers,
     run_market_hourly,
+)
+from the_compute_bazaar.prices.market_run_manifest import (
+    _public_market_run_manifest,
 )
 from the_compute_bazaar.prices.provider_registry import (
     PROVIDERS,
@@ -199,7 +203,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(manifest["raw_ref"], str(raw_ref))
         self.assertEqual(manifest["normalized_ref"], result.normalized_ref)
 
-    def test_incomplete_provider_cohort_does_not_build_gold(self) -> None:
+    def test_partial_provider_cohort_publishes_warning_gold(self) -> None:
         successful = IngestResult(
             provider="vast",
             run_id="vast-market-test",
@@ -219,10 +223,106 @@ class CoreTests(unittest.TestCase):
             patch(
                 "the_compute_bazaar.prices.market_run.build_gold_market_tables"
             ) as build_gold,
+            patch(
+                "the_compute_bazaar.prices.market_run.export_gold_dashboard_snapshot"
+            ) as export_dashboard,
+            patch(
+                "the_compute_bazaar.prices.market_run.query_frontier_coverage_ref",
+                return_value=[],
+            ),
+            patch(
+                "the_compute_bazaar.prices.market_run.read_json",
+                return_value={"card_id": "test"},
+            ),
+            patch("the_compute_bazaar.prices.market_run.write_json"),
+            patch(
+                "the_compute_bazaar.prices.market_run.write_market_run_manifest",
+                return_value="memory://market-run.json",
+            ),
+            patch(
+                "the_compute_bazaar.prices.market_run.write_dashboard_market_run_snapshots"
+            ),
         ):
-            with self.assertRaisesRegex(RuntimeError, "cohort incomplete"):
+            build_gold.return_value = Mock(
+                run_id="gold-market-test",
+                manifest_ref="memory://gold-manifest.json",
+                table_refs={"fact_gpu_listings": "memory://listings.parquet"},
+                row_counts={
+                    "fact_gpu_listings": 1,
+                    "dim_gpu_products": 1,
+                    "fact_benchmark_values": 1,
+                    "fact_benchmark_constituents": 1,
+                    "fact_compute_market_state": 1,
+                },
+            )
+            export_dashboard.return_value = {
+                "output_refs": {
+                    "market_overview": "memory://market-overview.json",
+                    **{
+                        f"gpu_benchmark_{family}": f"memory://{family}.json"
+                        for family in ("h100", "h200", "b200", "b300")
+                    },
+                }
+            }
+            result = run_market_hourly(
+                providers=["vast", "lium"],
+                raw_root="memory://raw",
+                lake_root="memory://lake",
+                dashboard_output_root="memory://dashboard",
+                dry_run=True,
+            )
+
+        self.assertEqual(result.status, "warning")
+        self.assertEqual(result.successful_providers, ["vast"])
+        self.assertEqual(result.failed_providers, ["lium"])
+        build_gold.assert_called_once()
+        self.assertEqual(build_gold.call_args.kwargs["providers"], ["vast"])
+        self.assertEqual(
+            result.data_quality["cohort"],
+            {
+                "required_providers": [],
+                "optional_providers": ["vast", "lium"],
+                "minimum_successful_providers": 1,
+                "missing_required_providers": [],
+                "status": "degraded",
+            },
+        )
+
+    def test_missing_required_provider_is_recorded_without_replacing_latest(
+        self,
+    ) -> None:
+        successful = IngestResult(
+            provider="vast",
+            run_id="vast-market-test",
+            raw_ref="memory://raw/vast.json",
+            normalized_ref="memory://lake/vast.parquet",
+            raw_offer_count=1,
+            normalized_offer_count=1,
+            unknown_gpu_names=[],
+            published_events=1,
+            publish_mode="dry-run",
+        )
+        with (
+            patch(
+                "the_compute_bazaar.prices.market_run._ingest_market_provider",
+                side_effect=[
+                    successful,
+                    RuntimeError("lium unavailable"),
+                ],
+            ),
+            patch(
+                "the_compute_bazaar.prices.market_run.write_market_run_manifest",
+                return_value="memory://failed-market-run.json",
+            ) as write_manifest,
+            patch(
+                "the_compute_bazaar.prices.market_run.build_gold_market_tables"
+            ) as build_gold,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "publication policy"):
                 run_market_hourly(
                     providers=["vast", "lium"],
+                    required_providers=["lium"],
+                    minimum_successful_providers=1,
                     raw_root="memory://raw",
                     lake_root="memory://lake",
                     dashboard_output_root="memory://dashboard",
@@ -230,6 +330,12 @@ class CoreTests(unittest.TestCase):
                 )
 
         build_gold.assert_not_called()
+        write_manifest.assert_called_once()
+        call = write_manifest.call_args.kwargs
+        self.assertFalse(call["update_latest"])
+        self.assertEqual(call["payload"]["status"], "failed")
+        self.assertEqual(call["payload"]["provider_runs"], {"vast": "vast-market-test"})
+        self.assertEqual(call["payload"]["failed_providers"], ["lium"])
 
     def test_datafusion_builds_and_queries_gold_listings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -392,6 +498,98 @@ order by source_connector
         self.assertEqual(export["row_counts"]["gpu_benchmark_cards"], 4)
         self.assertEqual(exported_manifest["run_id"], "gold-test")
 
+    def test_gold_history_filters_before_limiting(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            lake_root = str(Path(temporary_directory) / "lake")
+            for run_id, observed_at in (
+                ("gold-market-20260801T010000-11111111", "2026-08-01T01:00:00+00:00"),
+                ("gold-manual-review", "2026-08-01T03:00:00+00:00"),
+                ("gold-market-20260801T020000-22222222", "2026-08-01T02:00:00+00:00"),
+            ):
+                write_json(
+                    gold_manifest_ref(
+                        lake_root,
+                        observed_date="2026-08-01",
+                        run_id=run_id,
+                    ),
+                    {
+                        "run_id": run_id,
+                        "observed_at": observed_at,
+                        "table_refs": {"fact_benchmark_values": "memory://values"},
+                    },
+                )
+
+            manifests = list_gold_manifests(
+                lake_root,
+                limit=1,
+                canonical_market_runs_only=True,
+            )
+
+        self.assertEqual(
+            manifests[0]["run_id"],
+            "gold-market-20260801T020000-22222222",
+        )
+
+    def test_benchmark_excludes_aggregated_reference_prices(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            lake_root = root / "lake"
+            _write_provider_snapshot(
+                root,
+                "vast",
+                _offer(provider="vast", offer_id="vast-1", price=2.0),
+            )
+            _write_provider_snapshot(
+                root,
+                "cloud_gpu_prices",
+                _offer(
+                    provider="reference-source",
+                    source_connector="cloud_gpu_prices",
+                    offer_id="reference-1",
+                    price=0.5,
+                ),
+            )
+            build = build_gold_market_tables(
+                lake_root=str(lake_root),
+                providers=["vast", "cloud_gpu_prices"],
+                run_id="gold-eligibility-test",
+            )
+            rows = query_tables(
+                tables={
+                    "fact_benchmark_constituents": build.table_refs[
+                        "fact_benchmark_constituents"
+                    ]
+                },
+                sql="""
+select
+  provider,
+  eligible_for_benchmark,
+  included,
+  exclusion_reason
+from fact_benchmark_constituents
+where benchmark_family_id = 'H100'
+order by provider
+""",
+            )
+
+        self.assertEqual(
+            rows,
+            [
+                {
+                    "provider": "reference-source",
+                    "eligible_for_benchmark": False,
+                    "included": False,
+                    "exclusion_reason": "aggregated_reference_price",
+                },
+                {
+                    "provider": "vast",
+                    "eligible_for_benchmark": True,
+                    "included": True,
+                    "exclusion_reason": None,
+                },
+            ],
+        )
+
     def test_public_market_payload_does_not_expose_private_storage(self) -> None:
         payload = _public_market_run_manifest(
             {
@@ -465,6 +663,11 @@ order by source_connector
         measured_history = card["data"]["workload"]["measured_history"]
         run_history = card["series"]
         self.assertEqual(card["card_type"], "sandbox_workload_cost")
+        self.assertEqual(
+            build.public_ref,
+            str(public_root / "sandbox" / "workload.json"),
+        )
+        self.assertFalse((public_root / "sandbox-cost.json").exists())
         self.assertEqual(build.row_counts["sandbox_workload_measured_history"], 63)
         self.assertEqual(len(measured_history), 63)
         self.assertEqual(len(run_history), 14)
@@ -499,7 +702,11 @@ order by source_connector
                 run_id="gold-api-test",
             )
             client = TestClient(
-                create_app(lake_root=str(lake_root), enable_scratch_sql=True)
+                create_app(
+                    lake_root=str(lake_root),
+                    enable_scratch_sql=True,
+                    query_api_key="test-query-key",
+                )
             )
 
             manifest_response = client.get("/v1/manifest")
@@ -514,10 +721,24 @@ order by source_connector
                     "sql": "select provider, price_usd_gpu_hr from fact_gpu_listings order by price_usd_gpu_hr",
                     "limit": 2,
                 },
+                headers={"Authorization": "Bearer test-query-key"},
+            )
+            private_ref_response = client.post(
+                "/v1/sql",
+                json={
+                    "sql": "select raw_ref as evidence from fact_gpu_listings",
+                    "limit": 2,
+                },
+                headers={"Authorization": "Bearer test-query-key"},
             )
             write_response = client.post(
                 "/v1/sql",
                 json={"sql": "delete from fact_gpu_listings", "limit": 2},
+                headers={"Authorization": "Bearer test-query-key"},
+            )
+            unauthorized_response = client.post(
+                "/v1/sql",
+                json={"sql": "select * from fact_gpu_listings", "limit": 2},
             )
 
         self.assertEqual(manifest_response.status_code, 200)
@@ -534,7 +755,18 @@ order by source_connector
         self.assertNotIn("source_manifest_ref", catalog_response.text)
         self.assertEqual(sql_response.status_code, 200)
         self.assertEqual(sql_response.json()["row_count"], 2)
+        self.assertEqual(private_ref_response.status_code, 400)
+        self.assertNotIn("s3://", private_ref_response.text)
         self.assertEqual(write_response.status_code, 400)
+        self.assertEqual(unauthorized_response.status_code, 401)
+
+    def test_query_api_health_is_unavailable_without_gold(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            client = TestClient(create_app(lake_root=temporary_directory))
+            response = client.get("/healthz")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"status": "unavailable"})
 
 
 def _offer(

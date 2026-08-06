@@ -7,34 +7,40 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping
 
-from .provider_ingestion import (
-    ingest_akash,
-    ingest_aws_spot,
-    ingest_azure_retail,
-    ingest_clore,
+from .provider_ingestion_aggregators import (
     ingest_cloud_gpu_prices,
-    ingest_digitalocean,
     ingest_getdeploying,
     ingest_gpus_io,
     ingest_gridstackhub,
+    ingest_shadeform,
+)
+from .provider_ingestion_clouds import (
     ingest_hyperstack,
     ingest_inference_sh,
     ingest_jarvislabs,
     ingest_lambda_cloud,
-    ingest_lium,
-    ingest_oracle_cloud,
-    ingest_ovhcloud,
-    ingest_prime_intellect,
-    ingest_runpod,
-    ingest_scaleway,
     ingest_sesterce,
-    ingest_shadeform,
-    ingest_spheron,
-    ingest_tensordock,
     ingest_thunder_compute,
     ingest_verda,
-    ingest_vast,
+)
+from .provider_ingestion_public_clouds import (
+    ingest_aws_spot,
+    ingest_azure_retail,
+    ingest_digitalocean,
+    ingest_oracle_cloud,
+    ingest_ovhcloud,
+    ingest_scaleway,
     ingest_vultr,
+)
+from .provider_ingestion_marketplaces import (
+    ingest_akash,
+    ingest_clore,
+    ingest_lium,
+    ingest_prime_intellect,
+    ingest_runpod,
+    ingest_spheron,
+    ingest_tensordock,
+    ingest_vast,
 )
 
 if TYPE_CHECKING:

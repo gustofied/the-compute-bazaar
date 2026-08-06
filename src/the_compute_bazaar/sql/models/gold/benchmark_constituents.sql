@@ -37,9 +37,14 @@ eligible_ranked as (
   from frontier_offers
   where availability_status in (
     'available',
-    'published_rate',
-    'published_rate_request'
+    'published_rate'
   )
+    and observation_kind in (
+      'live_offer',
+      'published_rate',
+      'mixed_advertised_price'
+    )
+    and coalesce(is_spot, false) = false
 )
 select
   frontier.sort_order,
@@ -90,10 +95,13 @@ select
     ) then 'different_price_basis_spot'
     when frontier.availability_status = 'published_rate_future' then 'future_rate'
     when frontier.availability_status = 'published_rate_reserved' then 'committed_term_rate'
+    when frontier.availability_status = 'published_rate_request' then 'request_price'
+    when frontier.observation_kind = 'reference_price' then 'aggregated_reference_price'
+    when frontier.observation_kind = 'spot_price' or coalesce(frontier.is_spot, false)
+      then 'different_price_basis_spot'
     when frontier.availability_status not in (
       'available',
-      'published_rate',
-      'published_rate_request'
+      'published_rate'
     ) then 'not_currently_available'
     when eligible.provider_rank > 1 then 'higher_same_provider_offer'
     else 'not_eligible'
