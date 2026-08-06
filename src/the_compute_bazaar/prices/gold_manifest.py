@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 from .storage import list_refs, read_json
@@ -31,7 +32,10 @@ def gold_manifest_ref(lake_root: str, *, observed_date: str, run_id: str) -> str
 
 
 def read_latest_gold_manifest(lake_root: str) -> dict[str, Any]:
-    return dict(read_json(latest_gold_manifest_ref(lake_root)))
+    return _resolve_lake_relative_refs(
+        dict(read_json(latest_gold_manifest_ref(lake_root))),
+        lake_root=lake_root,
+    )
 
 
 def list_gold_manifests(
@@ -49,14 +53,17 @@ def list_gold_manifests(
     manifests: list[dict[str, Any]] = []
     for ref in refs:
         try:
-            manifest = dict(read_json(ref))
+            manifest = _resolve_lake_relative_refs(
+                dict(read_json(ref)),
+                lake_root=lake_root,
+            )
         except Exception as exc:
             raise RuntimeError(f"Cannot read Gold history manifest: {ref}") from exc
         if canonical_market_runs_only and not is_canonical_market_run_id(
             manifest.get("run_id")
         ):
             continue
-        if manifest.get("table_refs", {}).get("fact_benchmark_values"):
+        if manifest.get("table_refs", {}).get("fact_gpu_price_index"):
             manifests.append(manifest)
 
     manifests.sort(key=lambda row: str(row.get("observed_at") or ""), reverse=True)
@@ -74,3 +81,37 @@ def is_canonical_market_run_id(run_id: Any) -> bool:
             str(run_id or ""),
         )
     )
+
+
+def _resolve_lake_relative_refs(
+    manifest: dict[str, Any],
+    *,
+    lake_root: str,
+) -> dict[str, Any]:
+    if manifest.get("ref_base") != "lake_root":
+        return manifest
+    if "://" in lake_root:
+        raise ValueError("lake-relative manifests require a local lake root")
+
+    root = Path(lake_root).resolve()
+    for field in (
+        "source_manifest_refs",
+        "source_normalized_refs",
+        "source_market_state_refs",
+        "table_refs",
+    ):
+        values = dict(manifest.get(field) or {})
+        manifest[field] = {
+            name: _resolve_ref(root, ref) for name, ref in values.items() if ref
+        }
+    manifest_ref = manifest.get("manifest_ref")
+    if manifest_ref:
+        manifest["manifest_ref"] = _resolve_ref(root, manifest_ref)
+    return manifest
+
+
+def _resolve_ref(root: Path, ref: Any) -> str:
+    value = str(ref)
+    if "://" in value or Path(value).is_absolute():
+        return value
+    return str(root / value)

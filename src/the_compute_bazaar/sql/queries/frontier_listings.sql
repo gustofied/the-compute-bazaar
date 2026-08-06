@@ -9,7 +9,8 @@ select
   region,
   is_spot,
   is_secure,
-  availability_status,
+  is_available,
+  source_availability_status,
   has_raw_evidence,
   source_offer_id,
   source_run_id,
@@ -18,7 +19,7 @@ select
   source_normalized_ref,
   observed_at
 from fact_gpu_listings
-where availability_status in ('available', 'published_rate')
+where source_availability_status in ('available', 'published_rate')
   and (
     gpu_model like 'H100%'
     or gpu_model like 'H200%'

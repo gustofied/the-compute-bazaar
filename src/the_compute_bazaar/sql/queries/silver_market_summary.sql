@@ -4,25 +4,22 @@ with usable_offers as (
     gpu_model,
     source_offer_id,
     observed_at,
-    price_usd_hr,
-    case
-      when gpu_count is not null and gpu_count > 0 then price_usd_hr / gpu_count
-      else price_usd_hr
-    end as unit_price_usd_hr,
+    price_usd_instance_hr,
+    price_usd_gpu_hr,
     gpu_count,
     country,
     region,
     is_secure,
     is_spot
   from gpu_offers
-  where price_usd_hr > 0
-    and availability_status in ('available', 'published_rate')
+  where price_usd_instance_hr > 0
+    and is_available is true
 )
 select
   gpu_model,
-  min(unit_price_usd_hr) as observed_floor_usd_gpu_hr,
-  avg(unit_price_usd_hr) as simple_mean_usd_gpu_hr,
-  min(price_usd_hr) as cheapest_offer_usd_hr,
+  min(price_usd_gpu_hr) as observed_floor_usd_gpu_hr,
+  avg(price_usd_gpu_hr) as simple_mean_usd_gpu_hr,
+  min(price_usd_instance_hr) as cheapest_offer_usd_instance_hr,
   count(*) as offer_count,
   count(distinct provider) as provider_count,
   count(distinct country) as country_count,

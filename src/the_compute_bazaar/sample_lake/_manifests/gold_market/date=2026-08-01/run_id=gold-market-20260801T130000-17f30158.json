@@ -1,0 +1,65 @@
+{
+  "manifest_ref": "_manifests/gold_market/date=2026-08-01/run_id=gold-market-20260801T130000-17f30158.json",
+  "manifest_version": "v1",
+  "methodology_version": "gold_gpu_market_v4",
+  "observed_at": "2026-08-01T13:01:08.760423+00:00",
+  "observed_date": "2026-08-01",
+  "provider_scope": [
+    "vast",
+    "lium",
+    "spheron",
+    "inference_sh",
+    "gridstackhub",
+    "cloud_gpu_prices",
+    "thunder_compute",
+    "vultr",
+    "scaleway",
+    "oracle_cloud",
+    "ovhcloud",
+    "akash",
+    "aws_spot",
+    "azure",
+    "runpod",
+    "verda",
+    "prime_intellect"
+  ],
+  "ref_base": "lake_root",
+  "row_counts": {
+    "fact_gpu_price_index": 4
+  },
+  "run_id": "gold-market-20260801T130000-17f30158",
+  "source_manifest_refs": {},
+  "source_market_state_refs": {},
+  "source_normalized_refs": {},
+  "source_run_ids": {
+    "akash": "akash-market-20260801T130000-17f30158",
+    "aws_spot": "aws_spot-market-20260801T130000-17f30158",
+    "azure": "azure-market-20260801T130000-17f30158",
+    "cloud_gpu_prices": "cloud_gpu_prices-market-20260801T130000-17f30158",
+    "gridstackhub": "gridstackhub-market-20260801T130000-17f30158",
+    "inference_sh": "inference_sh-market-20260801T130000-17f30158",
+    "lium": "lium-market-20260801T130000-17f30158",
+    "oracle_cloud": "oracle_cloud-market-20260801T130000-17f30158",
+    "ovhcloud": "ovhcloud-market-20260801T130000-17f30158",
+    "prime_intellect": "prime_intellect-market-20260801T130000-17f30158",
+    "runpod": "runpod-market-20260801T130000-17f30158",
+    "scaleway": "scaleway-market-20260801T130000-17f30158",
+    "spheron": "spheron-market-20260801T130000-17f30158",
+    "thunder_compute": "thunder_compute-market-20260801T130000-17f30158",
+    "vast": "vast-market-20260801T130000-17f30158",
+    "verda": "verda-market-20260801T130000-17f30158",
+    "vultr": "vultr-market-20260801T130000-17f30158"
+  },
+  "sql_models": {
+    "fact_gpu_price_index": {
+      "methodology_version": "advertised_provider_floor_median_v2",
+      "model_id": "gpu_price_index_v1",
+      "path": "sql/models/gold/gpu_price_index.sql",
+      "sha256": "a98bce84098eb9f91cb70d65a32bbc48de3519649d3d677bc455d25268acd4bc"
+    }
+  },
+  "table": "gold_market",
+  "table_refs": {
+    "fact_gpu_price_index": "gold/fact_gpu_price_index/date=2026-08-01/run_id=gold-market-20260801T130000-17f30158/gpu_price_index.parquet"
+  }
+}

@@ -7,9 +7,9 @@ from typing import Any
 from .gold import MARKET_STATE_METHODOLOGY_VERSION
 from .gold_manifest import read_latest_gold_manifest
 from .gold_queries import (
-    query_gold_benchmark_constituents,
-    query_gold_benchmark_history,
-    query_gold_benchmark_values,
+    query_gold_gpu_price_index,
+    query_gold_gpu_price_index_constituents,
+    query_gold_gpu_price_index_history,
     query_gold_listings,
     query_gold_market_state,
     query_gold_market_state_history,
@@ -62,10 +62,10 @@ def export_gold_dashboard_snapshot(
         dashboard_exported_at=utc_now().isoformat(),
     )
     warnings = []
-    benchmark_values_payload = query_gold_benchmark_values(lake_root=lake_root)
+    benchmark_values_payload = query_gold_gpu_price_index(lake_root=lake_root)
     benchmark_values = benchmark_values_payload["rows"]
     # Benchmark evidence is a complete audit surface, not a sampled dashboard table.
-    benchmark_constituents = query_gold_benchmark_constituents(lake_root=lake_root)[
+    benchmark_constituents = query_gold_gpu_price_index_constituents(lake_root=lake_root)[
         "rows"
     ]
     public_benchmark_values = [public_benchmark_value(row) for row in benchmark_values]
@@ -73,7 +73,7 @@ def export_gold_dashboard_snapshot(
         public_benchmark_constituent(row) for row in benchmark_constituents
     ]
     try:
-        benchmark_history_payload = query_gold_benchmark_history(
+        benchmark_history_payload = query_gold_gpu_price_index_history(
             lake_root=lake_root,
             history_limit=benchmark_history_limit,
             canonical_market_runs_only=True,

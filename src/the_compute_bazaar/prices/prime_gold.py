@@ -31,7 +31,7 @@ def build_prime_frontier_gold_products(
     current_listing_rows: list[dict[str, Any]],
     observed_date: str,
     gold_run_id: str,
-    benchmark_values_ref: str,
+    gpu_price_index_ref: str,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
     previous_history_ref = previous_gold_manifest.get("table_refs", {}).get(
         "fact_prime_frontier_offer_history"
@@ -113,7 +113,7 @@ def build_prime_frontier_gold_products(
             "fact_prime_frontier_offer_events": refs[
                 "fact_prime_frontier_offer_events"
             ],
-            "fact_benchmark_values": benchmark_values_ref,
+            "fact_gpu_price_index": gpu_price_index_ref,
         }
     )
     ladder = engine.query(prime_frontier_ladder_sql(current_gold_run_id=gold_run_id))

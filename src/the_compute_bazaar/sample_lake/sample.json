@@ -1,0 +1,26 @@
+{
+  "history_run_count": 24,
+  "observed_at": "2026-08-02T06:01:11.391853+00:00",
+  "private_evidence_removed": true,
+  "provider_scope": [
+    "vast",
+    "lium",
+    "spheron",
+    "inference_sh",
+    "gridstackhub",
+    "cloud_gpu_prices",
+    "thunder_compute",
+    "vultr",
+    "scaleway",
+    "oracle_cloud",
+    "ovhcloud",
+    "akash",
+    "aws_spot",
+    "azure",
+    "runpod",
+    "verda",
+    "prime_intellect"
+  ],
+  "run_id": "gold-market-20260802T060000-aef2c141",
+  "sample_type": "sanitized_public_market_snapshot"
+}

@@ -14,14 +14,10 @@ select
   gpu_raw_name,
   source_connector,
   gpu_count,
-  available_gpu_count,
+  available_gpu_count_lower_bound,
   vram_gb,
-  price_usd_hr,
-  price_usd_hr as price_usd_instance_hr,
-  case
-    when gpu_count is not null and gpu_count > 0 then price_usd_hr / gpu_count
-    else price_usd_hr
-  end as price_usd_gpu_hr,
+  price_usd_instance_hr,
+  price_usd_gpu_hr,
   currency,
   country,
   region,
@@ -31,12 +27,13 @@ select
   end as region_id,
   is_spot,
   is_secure,
-  availability_status,
+  source_availability_status,
+  is_available,
   gpu_socket,
-  stock_status,
+  source_stock_status,
   price_is_variable,
-  minimum_executable_price_usd_hr,
-  required_resource_price_usd_hr,
+  minimum_executable_price_usd_instance_hr,
+  required_resource_price_usd_instance_hr,
   price_basis,
   observed_at,
   raw_ref,
@@ -47,4 +44,4 @@ select
   $calculated_at as calculated_at
 from silver_gpu_offers
 left join source_catalog catalog using (source_connector)
-where price_usd_hr > 0
+where price_usd_instance_hr > 0

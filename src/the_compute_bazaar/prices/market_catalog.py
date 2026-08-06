@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 from .datafusion import DataFusionEngine
 from .gold_manifest import read_latest_gold_manifest
 from .query_catalog import bounded_query_limit, validate_catalog_sql, with_scratch_limit
+from .silver_contract import (
+    silver_contract,
+    silver_market_state_select,
+    silver_offer_select,
+)
 
 
 TABLE_REF_PATTERN = re.compile(r"^(silver|gold)\.([A-Za-z_][A-Za-z0-9_]*)$")
@@ -52,6 +58,11 @@ order by ordinal_position
         )
         if not rows:
             raise KeyError(f"Unknown catalog table: {table_ref}")
+        if layer == "silver":
+            contract = silver_contract(table_name)
+            meanings = {column.name: column.meaning for column in contract or ()}
+            for row in rows:
+                row["meaning"] = meanings.get(str(row["column_name"]))
         return {"run": self._run(), "table": table_ref, "columns": rows}
 
     def query(self, sql: str, *, limit: int = 100) -> dict[str, Any]:
@@ -95,13 +106,21 @@ order by ordinal_position
         self.engine.create_view(
             "silver",
             "gpu_offers",
-            _union_all("_silver_gpu_offers", len(offer_refs)),
+            _union_all(
+                "_silver_gpu_offers",
+                len(offer_refs),
+                select=silver_offer_select,
+            ),
         )
         if state_refs:
             self.engine.create_view(
                 "silver",
                 "compute_market_state",
-                _union_all("_silver_compute_market_state", len(state_refs)),
+                _union_all(
+                    "_silver_compute_market_state",
+                    len(state_refs),
+                    select=silver_market_state_select,
+                ),
             )
         self.engine.deregister_tables(tables)
 
@@ -134,9 +153,15 @@ order by ordinal_position
         }
 
 
-def _union_all(prefix: str, count: int) -> str:
+def _union_all(
+    prefix: str,
+    count: int,
+    *,
+    select: Callable[[str], str] | None = None,
+) -> str:
+    select_table = select or (lambda table_name: f"select * from {table_name}")
     return " union all ".join(
-        f"select * from {prefix}_{index}" for index in range(count)
+        select_table(f"{prefix}_{index}") for index in range(count)
     )
 
 

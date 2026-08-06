@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from .schemas import utc_now
@@ -118,4 +119,19 @@ def write_run_manifest(
 
 
 def read_latest_manifest(lake_root: str, *, provider: str = "vast") -> dict[str, Any]:
-    return dict(read_json(latest_manifest_ref(lake_root, provider=provider)))
+    manifest = dict(read_json(latest_manifest_ref(lake_root, provider=provider)))
+    if manifest.get("ref_base") != "lake_root":
+        return manifest
+    if "://" in lake_root:
+        raise ValueError("lake-relative manifests require a local lake root")
+    root = Path(lake_root).resolve()
+    for field in ("raw_ref", "normalized_ref", "market_state_ref", "manifest_ref"):
+        ref = manifest.get(field)
+        if ref:
+            value = str(ref)
+            manifest[field] = (
+                value
+                if "://" in value or Path(value).is_absolute()
+                else str(root / value)
+            )
+    return manifest

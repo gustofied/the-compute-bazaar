@@ -62,9 +62,8 @@ PRIME_FRONTIER_HISTORY_COLUMNS = (
     "gpu_raw_name",
     "source_connector",
     "gpu_count",
-    "available_gpu_count",
+    "available_gpu_count_lower_bound",
     "vram_gb",
-    "price_usd_hr",
     "price_usd_instance_hr",
     "price_usd_gpu_hr",
     "currency",
@@ -73,12 +72,12 @@ PRIME_FRONTIER_HISTORY_COLUMNS = (
     "region_id",
     "is_spot",
     "is_secure",
-    "availability_status",
+    "source_availability_status",
     "gpu_socket",
-    "stock_status",
+    "source_stock_status",
     "price_is_variable",
-    "minimum_executable_price_usd_hr",
-    "required_resource_price_usd_hr",
+    "minimum_executable_price_usd_instance_hr",
+    "required_resource_price_usd_instance_hr",
     "price_basis",
     "observed_at",
     "raw_ref",
@@ -230,10 +229,10 @@ def build_prime_frontier_offer_events(
                         "gpu_socket": active.get("gpu_socket"),
                         "region": active.get("region"),
                         "stock_status_before": (
-                            previous.get("stock_status") if previous else None
+                            previous.get("source_stock_status") if previous else None
                         ),
                         "stock_status_after": (
-                            current.get("stock_status") if current else None
+                            current.get("source_stock_status") if current else None
                         ),
                         "price_before_usd_gpu_hr": before,
                         "price_after_usd_gpu_hr": after,
@@ -292,7 +291,7 @@ def _is_eligible_offer(row: Mapping[str, Any]) -> bool:
     return bool(
         price is not None
         and price > 0
-        and str(row.get("availability_status") or "") == "available"
+        and str(row.get("source_availability_status") or "") == "available"
         and row.get("is_spot") is not True
         and row.get("is_secure") is True
     )
@@ -314,8 +313,8 @@ def _event_type(
         and not math.isclose(before, after, rel_tol=1e-9, abs_tol=1e-9)
     ):
         return "repriced_up" if after > before else "repriced_down"
-    if str(previous.get("stock_status") or "") != str(
-        current.get("stock_status") or ""
+    if str(previous.get("source_stock_status") or "") != str(
+        current.get("source_stock_status") or ""
     ):
         return "stock_status_changed"
     return "remained"

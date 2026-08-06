@@ -9,35 +9,46 @@ from .gold_manifest import list_gold_manifests, read_latest_gold_manifest
 from .gold_models import BENCHMARK_METHODOLOGY_VERSION
 
 
-def query_gold_benchmark_values(
+def query_gold_gpu_price_index(
     *,
     lake_root: str,
     limit: int | None = None,
     manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = manifest or read_latest_gold_manifest(lake_root)
-    table_ref = manifest["table_refs"].get("fact_benchmark_values")
+    table_ref = manifest["table_refs"].get("fact_gpu_price_index")
     if not table_ref:
         return {"manifest": manifest, "rows": []}
 
     sql = """
-select *
-from fact_benchmark_values
+select
+  benchmark_symbol,
+  benchmark_family_id,
+  benchmark_usd_gpu_hr,
+  floor_usd_gpu_hr,
+  provider_floor_p25_usd_gpu_hr,
+  provider_floor_p75_usd_gpu_hr,
+  offer_count,
+  included_offer_count,
+  provider_count,
+  latest_observed_at,
+  methodology_version
+from fact_gpu_price_index
 order by benchmark_family_id
 """
-    rows = DataFusionEngine({"fact_benchmark_values": table_ref}).query(
+    rows = DataFusionEngine({"fact_gpu_price_index": table_ref}).query(
         _with_limit(sql, limit)
     )
     return {"manifest": manifest, "rows": rows}
 
 
-def query_gold_benchmark_history(
+def query_gold_gpu_price_index_history(
     *,
     lake_root: str,
     history_limit: int = 24,
     canonical_market_runs_only: bool = False,
 ) -> dict[str, Any]:
-    """Read the benchmark values stored with each retained Gold snapshot."""
+    """Read GPU Price Index values stored with retained Gold snapshots."""
     manifests = list_gold_manifests(
         lake_root,
         limit=history_limit,
@@ -47,13 +58,28 @@ def query_gold_benchmark_history(
     included_manifest_count = 0
 
     for manifest in reversed(manifests):
-        table_ref = manifest.get("table_refs", {}).get("fact_benchmark_values")
+        table_ref = manifest.get("table_refs", {}).get("fact_gpu_price_index")
         if not table_ref:
             continue
         try:
             benchmark_rows = DataFusionEngine(
-                {"fact_benchmark_values": str(table_ref)}
-            ).query("select * from fact_benchmark_values order by benchmark_family_id")
+                {"fact_gpu_price_index": str(table_ref)}
+            ).query("""
+select
+  benchmark_symbol,
+  benchmark_family_id,
+  benchmark_usd_gpu_hr,
+  floor_usd_gpu_hr,
+  provider_floor_p25_usd_gpu_hr,
+  provider_floor_p75_usd_gpu_hr,
+  offer_count,
+  included_offer_count,
+  provider_count,
+  latest_observed_at,
+  methodology_version
+from fact_gpu_price_index
+order by benchmark_family_id
+""")
         except Exception as exc:
             raise RuntimeError(
                 "Cannot read benchmark history table for Gold run "
@@ -92,14 +118,72 @@ def query_gold_benchmark_history(
     }
 
 
-def query_gold_benchmark_constituents(
+def query_gold_gpu_availability(
+    *,
+    lake_root: str,
+    gpu_model: str | None = None,
+    measurement_kind: str | None = None,
+    history: bool = False,
+    limit: int | None = None,
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    manifest = manifest or read_latest_gold_manifest(lake_root)
+    table_name = (
+        "fact_gpu_availability_history" if history else "fact_gpu_availability"
+    )
+    table_ref = manifest.get("table_refs", {}).get(table_name)
+    if not table_ref:
+        return {"manifest": manifest, "rows": []}
+
+    filters: list[str] = []
+    if gpu_model:
+        model = gpu_model.upper()
+        filters.append(
+            "(upper(resource_type) = "
+            f"{_sql_literal(model)} or upper(resource_type) like "
+            f"concat({_sql_literal(model)}, '_%'))"
+        )
+    if measurement_kind:
+        filters.append(
+            f"measurement_kind = {_sql_literal(measurement_kind)}"
+        )
+    where = f"where {' and '.join(filters)}" if filters else ""
+    sql = f"""
+select
+  observation_id,
+  observed_at,
+  resource_type,
+  provider,
+  source_connector,
+  measurement_kind,
+  measurement_scope,
+  unit,
+  total_units,
+  rented_units,
+  available_units,
+  rented_share,
+  available_share,
+  stock_status,
+  count_precision,
+  methodology_version
+from {table_name}
+{where}
+order by observed_at desc, measurement_kind, provider, resource_type
+"""
+    rows = DataFusionEngine({table_name: str(table_ref)}).query(
+        _with_limit(sql, limit)
+    )
+    return {"manifest": manifest, "rows": rows}
+
+
+def query_gold_gpu_price_index_constituents(
     *,
     lake_root: str,
     benchmark_family_id: str | None = None,
     limit: int | None = None,
 ) -> dict[str, Any]:
     manifest = read_latest_gold_manifest(lake_root)
-    table_ref = manifest["table_refs"].get("fact_benchmark_constituents")
+    table_ref = manifest["table_refs"].get("fact_gpu_price_index_constituents")
     if not table_ref:
         return {"manifest": manifest, "rows": []}
 
@@ -108,11 +192,11 @@ def query_gold_benchmark_constituents(
         filters = f"where benchmark_family_id = {_sql_literal(benchmark_family_id)}"
     sql = f"""
 select *
-from fact_benchmark_constituents
+from fact_gpu_price_index_constituents
 {filters}
 order by benchmark_family_id, included desc, constituent_rank asc, price_usd_gpu_hr asc
 """
-    rows = DataFusionEngine({"fact_benchmark_constituents": table_ref}).query(
+    rows = DataFusionEngine({"fact_gpu_price_index_constituents": table_ref}).query(
         _with_limit(sql, limit)
     )
     return {"manifest": manifest, "rows": rows}
@@ -127,7 +211,7 @@ def query_gold_provider_comparison(
 ) -> dict[str, Any]:
     manifest = manifest or read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"]["fact_gpu_listings"]
-    filters = ["availability_status in ('available', 'published_rate')"]
+    filters = ["source_availability_status in ('available', 'published_rate')"]
     if gpu_model:
         filters.append(f"gpu_model = {_sql_literal(gpu_model)}")
     where = f"where {' and '.join(filters)}"
@@ -137,7 +221,7 @@ select
   provider,
   min(price_usd_gpu_hr) as floor_usd_gpu_hr,
   avg(price_usd_gpu_hr) as simple_mean_usd_gpu_hr,
-  min(price_usd_hr) as cheapest_offer_usd_hr,
+  min(price_usd_instance_hr) as cheapest_offer_usd_instance_hr,
   count(*) as listing_count,
   count(distinct country) as country_count,
   max(observed_at) as latest_observed_at
@@ -162,7 +246,7 @@ def query_gold_listings(
 ) -> dict[str, Any]:
     manifest = manifest or read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"]["fact_gpu_listings"]
-    filters = ["availability_status in ('available', 'published_rate')"]
+    filters = ["source_availability_status in ('available', 'published_rate')"]
     if gpu_model:
         filters.append(f"gpu_model = {_sql_literal(gpu_model)}")
     if provider:
@@ -179,20 +263,21 @@ select
   price_usd_gpu_hr,
   price_usd_instance_hr,
   gpu_count,
-  available_gpu_count,
+  available_gpu_count_lower_bound,
   vram_gb,
   country,
   region,
   is_spot,
   is_secure,
-  availability_status,
+  is_available,
+  source_availability_status,
   has_raw_evidence,
   source_offer_id,
   source_run_id,
   observed_at
 from fact_gpu_listings
 {where}
-order by price_usd_gpu_hr asc, price_usd_hr asc
+order by price_usd_gpu_hr asc, price_usd_instance_hr asc
 """
     rows = DataFusionEngine({"fact_gpu_listings": table_ref}).query(
         _with_limit(sql, limit)
@@ -349,7 +434,7 @@ order by gpu_family_id, price_level_usd_gpu_hr desc, provider
 select *
 from fact_prime_frontier_offer_history
 where gold_run_id = {_sql_literal(current_run_id)}
-  and availability_status = 'available'
+  and source_availability_status = 'available'
   and price_usd_gpu_hr > 0
   and coalesce(is_spot, false) = false
   and coalesce(is_secure, false) = true

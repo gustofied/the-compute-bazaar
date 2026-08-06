@@ -57,9 +57,9 @@ matched as (
     families.gpu_family,
     listings.provider,
     coalesce(listings.source_connector, listings.provider) as source_connector,
-    listings.availability_status,
+    listings.source_availability_status,
     listings.gpu_count,
-    listings.available_gpu_count
+    listings.available_gpu_count_lower_bound
   from frontier_families families
   left join fact_gpu_listings listings
     on listings.gpu_model = rtrim(families.gpu_model_prefix, '_')
@@ -73,12 +73,12 @@ capacity_by_connector as (
     source_connector,
     sum(
       case
-        when availability_status in (
+        when source_availability_status in (
           'available',
           'spot_available',
           'available_component_rate'
         )
-        then coalesce(available_gpu_count, gpu_count, 0)
+        then coalesce(available_gpu_count_lower_bound, gpu_count, 0)
         else 0
       end
     ) as connector_capacity
@@ -108,17 +108,17 @@ listing_metrics as (
     sort_order,
     gpu_family,
     sum(
-      case when availability_status in ('available', 'spot_available') then 1 else 0 end
+      case when source_availability_status in ('available', 'spot_available') then 1 else 0 end
     ) as live_offer_count,
     count(
       distinct case
-        when availability_status in ('available', 'spot_available') then provider
+        when source_availability_status in ('available', 'spot_available') then provider
         else null
       end
     ) as live_provider_count,
     count(
       distinct case
-        when availability_status in (
+        when source_availability_status in (
           'available',
           'spot_available',
           'available_component_rate'
@@ -127,32 +127,32 @@ listing_metrics as (
         else null
       end
     ) as live_capacity_provider_count,
-    sum(case when availability_status = 'available' then 1 else 0 end) as live_on_demand_offer_count,
-    sum(case when availability_status = 'spot_available' then 1 else 0 end) as live_spot_offer_count,
+    sum(case when source_availability_status = 'available' then 1 else 0 end) as live_on_demand_offer_count,
+    sum(case when source_availability_status = 'spot_available' then 1 else 0 end) as live_spot_offer_count,
     sum(
-      case when availability_status = 'available_component_rate' then 1 else 0 end
+      case when source_availability_status = 'available_component_rate' then 1 else 0 end
     ) as live_component_rate_offer_count,
-    sum(case when availability_status = 'spot_price_observed' then 1 else 0 end) as spot_price_observation_count,
+    sum(case when source_availability_status = 'spot_price_observed' then 1 else 0 end) as spot_price_observation_count,
     count(
-      distinct case when availability_status = 'spot_price_observed' then provider else null end
+      distinct case when source_availability_status = 'spot_price_observed' then provider else null end
     ) as spot_provider_count,
     sum(
       case
-        when availability_status in ('published_rate', 'published_rate_request', 'published_rate_spot')
+        when source_availability_status in ('published_rate', 'published_rate_request', 'published_rate_spot')
         then 1
         else 0
       end
     ) as published_rate_count,
     count(
       distinct case
-        when availability_status in ('published_rate', 'published_rate_request', 'published_rate_spot')
+        when source_availability_status in ('published_rate', 'published_rate_request', 'published_rate_spot')
         then provider
         else null
       end
     ) as published_rate_provider_count,
     sum(
       case
-        when availability_status in (
+        when source_availability_status in (
           'published_rate_future',
           'published_rate_reserved',
           'published_rate_expired'
@@ -163,9 +163,9 @@ listing_metrics as (
     ) as non_current_rate_count,
     sum(
       case
-        when availability_status in ('available', 'spot_available')
-          or availability_status = 'spot_price_observed'
-          or availability_status in ('published_rate', 'published_rate_request', 'published_rate_spot')
+        when source_availability_status in ('available', 'spot_available')
+          or source_availability_status = 'spot_price_observed'
+          or source_availability_status in ('published_rate', 'published_rate_request', 'published_rate_spot')
         then 1
         else 0
       end

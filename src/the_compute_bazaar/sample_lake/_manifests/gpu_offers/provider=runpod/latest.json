@@ -1,0 +1,18 @@
+{
+  "manifest_ref": "_manifests/gpu_offers/provider=runpod/latest.json",
+  "manifest_version": "v1",
+  "market_state_observation_count": 38,
+  "market_state_ref": "silver/compute_market_state/runpod/observations.parquet",
+  "normalized_offer_count": 33,
+  "normalized_ref": "silver/gpu_offers/runpod/offers.parquet",
+  "observed_at": "2026-08-02T06:01:11.391853+00:00",
+  "provider": "runpod",
+  "publish_mode": "bundled_sample",
+  "published_events": 0,
+  "raw_offer_count": 33,
+  "raw_ref": null,
+  "ref_base": "lake_root",
+  "run_id": "runpod-market-20260802T060000-aef2c141",
+  "table": "gpu_offers",
+  "unknown_gpu_names": []
+}

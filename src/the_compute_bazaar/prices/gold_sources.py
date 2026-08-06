@@ -6,35 +6,11 @@ from typing import Any
 
 from .datafusion import DataFusionEngine
 from .provider_registry import source_catalog_rows
+from .silver_contract import silver_market_state_select, silver_offer_select
 
 
 def silver_source_cte(table_names: list[str]) -> str:
-    columns = """
-      provider,
-      source_offer_id,
-      observed_at,
-      gpu_raw_name,
-      gpu_model,
-      coalesce(source_connector, provider) as source_connector,
-      gpu_count,
-      available_gpu_count,
-      vram_gb,
-      price_usd_hr,
-      currency,
-      country,
-      region,
-      is_spot,
-      is_secure,
-      availability_status,
-      gpu_socket,
-      stock_status,
-      price_is_variable,
-      minimum_executable_price_usd_hr,
-      required_resource_price_usd_hr,
-      price_basis,
-      raw_ref
-    """
-    selects = [f"select {columns} from {table_name}" for table_name in table_names]
+    selects = [silver_offer_select(table_name) for table_name in table_names]
     return f"silver_gpu_offers as ({' union all '.join(selects)})"
 
 
@@ -54,7 +30,7 @@ def source_catalog_values(provider_scope: list[str]) -> str:
 def silver_state_cte_fragment(table_names: list[str]) -> str:
     if not table_names:
         return ""
-    selects = [f"select * from {table_name}" for table_name in table_names]
+    selects = [silver_market_state_select(table_name) for table_name in table_names]
     return f",\nsilver_compute_market_state as ({' union all '.join(selects)})"
 
 

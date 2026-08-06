@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
-from .api import DEFAULT_LAKE_ROOT, create_app
+from .api import create_app
+from .cli_output import available_formats, render_table_payload, supports_auto_table
+from .data_root import resolve_lake_root
 from .market_query_service import MarketQueryService
 from .prices.market_catalog import MarketDataCatalog
 from .prices.schemas import to_jsonable
@@ -24,17 +25,42 @@ from .sandbox_cost.status import check_public_payload_freshness
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+    selection = resolve_lake_root(args.lake_root)
+    args.lake_root = selection.root
     payload = dispatch(args, parser=parser)
     if payload is not None:
-        print(json.dumps(to_jsonable(payload), indent=2, sort_keys=True))
+        if args.command != "sandbox" and isinstance(payload, dict):
+            payload = {
+                "data_source": selection.to_dict(),
+                **_compact_cli_run(payload),
+            }
+        serializable = to_jsonable(payload)
+        output_format = args.output_format
+        if output_format == "auto":
+            output_format = (
+                "table"
+                if sys.stdout.isatty() and supports_auto_table(args.command)
+                else "json"
+            )
+        if output_format == "table" and isinstance(serializable, dict):
+            print(render_table_payload(serializable, command=args.command))
+        else:
+            print(json.dumps(serializable, indent=2, sort_keys=True))
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="compute-bazaar")
     parser.add_argument(
         "--lake-root",
-        default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", DEFAULT_LAKE_ROOT),
+        default=None,
         help="Local or s3:// root containing the manifested lake",
+    )
+    parser.add_argument(
+        "--format",
+        dest="output_format",
+        choices=tuple(available_formats()),
+        default="auto",
+        help="Output format; auto uses tables in an interactive terminal",
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -57,9 +83,22 @@ def build_parser() -> argparse.ArgumentParser:
     scratch.add_argument("--file", type=Path)
     scratch.add_argument("--limit", type=_positive_limit, default=100)
 
-    benchmarks = commands.add_parser("benchmarks", help="Read benchmark values")
-    benchmarks.add_argument("--family")
-    benchmarks.add_argument("--limit", type=_positive_limit, default=20)
+    price_index = commands.add_parser("price-index", help="Read GPU Price Index values")
+    price_index.add_argument("--family")
+    price_index.add_argument(
+        "--history",
+        action="store_true",
+        help="Read retained hourly index snapshots; --limit selects run count",
+    )
+    price_index.add_argument("--limit", type=_positive_limit, default=20)
+
+    availability = commands.add_parser(
+        "availability", help="Read GPU Availability observations"
+    )
+    availability.add_argument("--gpu-model")
+    availability.add_argument("--measurement-kind")
+    availability.add_argument("--history", action="store_true")
+    availability.add_argument("--limit", type=_positive_limit, default=100)
 
     listings = commands.add_parser("listings", help="Read normalized Gold listings")
     listings.add_argument("--gpu-model")
@@ -155,8 +194,19 @@ def dispatch(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> An
             version=args.version,
             limit=args.limit,
         )
-    if args.command == "benchmarks":
-        return service.benchmarks(family=args.family, limit=args.limit)
+    if args.command == "price-index":
+        return service.gpu_price_index(
+            family=args.family,
+            history=args.history,
+            limit=args.limit,
+        )
+    if args.command == "availability":
+        return service.gpu_availability(
+            gpu_model=args.gpu_model,
+            measurement_kind=args.measurement_kind,
+            history=args.history,
+            limit=args.limit,
+        )
     if args.command == "listings":
         return service.listings(
             gpu_model=args.gpu_model,
@@ -234,6 +284,18 @@ def _positive_limit(value: str) -> int:
     if not 1 <= parsed <= 1000:
         raise argparse.ArgumentTypeError("limit must be between 1 and 1000")
     return parsed
+
+
+def _compact_cli_run(payload: dict[str, Any]) -> dict[str, Any]:
+    result = dict(payload)
+    run = result.get("run")
+    if isinstance(run, dict):
+        result["run"] = {
+            field: run.get(field)
+            for field in ("run_id", "observed_at")
+            if run.get(field) is not None
+        }
+    return result
 
 
 def _print_before_exit(payload: Any, *, status: int) -> None:

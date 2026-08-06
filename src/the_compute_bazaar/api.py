@@ -12,11 +12,11 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from .data_root import resolve_lake_root
 from .market_query_service import MarketQueryService
 from .prices.query_catalog import MAX_QUERY_LIMIT
 
 
-DEFAULT_LAKE_ROOT = "data/lake"
 MAX_SQL_LENGTH = 10_000
 Limit = Annotated[int, Query(ge=1, le=MAX_QUERY_LIMIT)]
 
@@ -32,9 +32,8 @@ def create_app(
     enable_scratch_sql: bool | None = None,
     query_api_key: str | None = None,
 ) -> FastAPI:
-    selected_root = lake_root or os.getenv(
-        "COMPUTE_BAZAAR_LAKE_ROOT", DEFAULT_LAKE_ROOT
-    )
+    selected_lake = resolve_lake_root(lake_root)
+    selected_root = selected_lake.root
     scratch_sql_enabled = (
         enable_scratch_sql
         if enable_scratch_sql is not None
@@ -54,6 +53,7 @@ def create_app(
         description="Read-only DataFusion queries over the latest complete Gold run.",
     )
     app.state.query_service = service
+    app.state.data_source = selected_lake
 
     @app.get("/healthz")
     def health() -> Any:
@@ -109,12 +109,33 @@ def create_app(
             finally:
                 scratch_query_slot.release()
 
-    @app.get("/v1/benchmarks")
-    def benchmarks(
+    @app.get("/v1/gpu-price-index")
+    def gpu_price_index(
         family: str | None = None,
+        history: bool = False,
         limit: Limit = 20,
     ) -> dict[str, Any]:
-        return _api_call(service.benchmarks, family=family, limit=limit)
+        return _api_call(
+            service.gpu_price_index,
+            family=family,
+            history=history,
+            limit=limit,
+        )
+
+    @app.get("/v1/gpu-availability")
+    def gpu_availability(
+        gpu_model: str | None = None,
+        measurement_kind: str | None = None,
+        history: bool = False,
+        limit: Limit = 100,
+    ) -> dict[str, Any]:
+        return _api_call(
+            service.gpu_availability,
+            gpu_model=gpu_model,
+            measurement_kind=measurement_kind,
+            history=history,
+            limit=limit,
+        )
 
     @app.get("/v1/listings")
     def listings(
@@ -167,7 +188,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Serve read-only Compute Bazaar Gold queries")
     parser.add_argument(
         "--lake-root",
-        default=os.getenv("COMPUTE_BAZAAR_LAKE_ROOT", DEFAULT_LAKE_ROOT),
+        default=None,
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8766)

@@ -7,7 +7,7 @@ with eligible as (
     ) as provider_rank
   from fact_prime_frontier_offer_history
   where source_connector = 'prime_intellect'
-    and availability_status = 'available'
+    and source_availability_status = 'available'
     and price_usd_gpu_hr > 0
     and coalesce(is_spot, false) = false
     and coalesce(is_secure, false) = true
@@ -37,8 +37,8 @@ reference_base as (
     sum(case when coalesce(price_is_variable, false) then 1 else 0 end)
       as variable_price_provider_count,
     case
-      when count(minimum_executable_price_usd_hr) = count(*)
-      then median(minimum_executable_price_usd_hr / gpu_count)
+      when count(minimum_executable_price_usd_instance_hr) = count(*)
+      then median(minimum_executable_price_usd_instance_hr / gpu_count)
       else cast(null as double)
     end as minimum_executable_reference_usd_gpu_hr,
     max(observed_at) as latest_source_observed_at

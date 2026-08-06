@@ -241,9 +241,9 @@ def run_market_hourly(
     row_counts = {
         "listings": gold_result.row_counts.get("fact_gpu_listings", 0),
         "gpu_products": gold_result.row_counts.get("dim_gpu_products", 0),
-        "benchmark_values": gold_result.row_counts.get("fact_benchmark_values", 0),
-        "benchmark_constituents": gold_result.row_counts.get(
-            "fact_benchmark_constituents", 0
+        "gpu_price_index": gold_result.row_counts.get("fact_gpu_price_index", 0),
+        "gpu_price_index_constituents": gold_result.row_counts.get(
+            "fact_gpu_price_index_constituents", 0
         ),
         "compute_market_state": gold_result.row_counts.get(
             "fact_compute_market_state", 0

@@ -254,7 +254,9 @@ def _public_offer(
     benchmark: dict[str, Any] | None,
     source_url: str,
 ) -> dict[str, Any]:
-    minimum_total = _float_or_none(row.get("minimum_executable_price_usd_hr"))
+    minimum_total = _float_or_none(
+        row.get("minimum_executable_price_usd_instance_hr")
+    )
     gpu_count = _float_or_none(row.get("gpu_count"))
     minimum_total_per_gpu = (
         minimum_total / gpu_count
@@ -275,11 +277,11 @@ def _public_offer(
             "vram_gb",
             "country",
             "region",
-            "stock_status",
+            "source_stock_status",
             "price_is_variable",
             "price_usd_gpu_hr",
             "price_usd_instance_hr",
-            "required_resource_price_usd_hr",
+            "required_resource_price_usd_instance_hr",
             "price_basis",
             "observed_at",
         ),

@@ -1,0 +1,185 @@
+{
+  "manifest_ref": "_manifests/gold_market/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141.json",
+  "manifest_version": "v1",
+  "methodology_version": "gold_gpu_market_v4",
+  "observed_at": "2026-08-02T06:01:11.391853+00:00",
+  "observed_date": "2026-08-02",
+  "provider_scope": [
+    "vast",
+    "lium",
+    "spheron",
+    "inference_sh",
+    "gridstackhub",
+    "cloud_gpu_prices",
+    "thunder_compute",
+    "vultr",
+    "scaleway",
+    "oracle_cloud",
+    "ovhcloud",
+    "akash",
+    "aws_spot",
+    "azure",
+    "runpod",
+    "verda",
+    "prime_intellect"
+  ],
+  "ref_base": "lake_root",
+  "row_counts": {
+    "dim_gpu_products": 239,
+    "dim_providers": 52,
+    "dim_sources": 17,
+    "fact_compute_market_state": 854,
+    "fact_compute_market_state_history": 173459,
+    "fact_gpu_availability": 849,
+    "fact_gpu_availability_history": 172489,
+    "fact_gpu_listings": 1896,
+    "fact_gpu_price_index": 4,
+    "fact_gpu_price_index_constituents": 829,
+    "fact_prime_frontier_offer_events": 15,
+    "fact_prime_frontier_offer_history": 16,
+    "fact_prime_frontier_offer_ladder": 52,
+    "fact_prime_frontier_offer_reference_history": 4
+  },
+  "run_id": "gold-market-20260802T060000-aef2c141",
+  "source_manifest_refs": {
+    "akash": "_manifests/gpu_offers/provider=akash/latest.json",
+    "aws_spot": "_manifests/gpu_offers/provider=aws_spot/latest.json",
+    "azure": "_manifests/gpu_offers/provider=azure/latest.json",
+    "cloud_gpu_prices": "_manifests/gpu_offers/provider=cloud_gpu_prices/latest.json",
+    "gridstackhub": "_manifests/gpu_offers/provider=gridstackhub/latest.json",
+    "inference_sh": "_manifests/gpu_offers/provider=inference_sh/latest.json",
+    "lium": "_manifests/gpu_offers/provider=lium/latest.json",
+    "oracle_cloud": "_manifests/gpu_offers/provider=oracle_cloud/latest.json",
+    "ovhcloud": "_manifests/gpu_offers/provider=ovhcloud/latest.json",
+    "prime_intellect": "_manifests/gpu_offers/provider=prime_intellect/latest.json",
+    "runpod": "_manifests/gpu_offers/provider=runpod/latest.json",
+    "scaleway": "_manifests/gpu_offers/provider=scaleway/latest.json",
+    "spheron": "_manifests/gpu_offers/provider=spheron/latest.json",
+    "thunder_compute": "_manifests/gpu_offers/provider=thunder_compute/latest.json",
+    "vast": "_manifests/gpu_offers/provider=vast/latest.json",
+    "verda": "_manifests/gpu_offers/provider=verda/latest.json",
+    "vultr": "_manifests/gpu_offers/provider=vultr/latest.json"
+  },
+  "source_market_state_refs": {
+    "akash": "silver/compute_market_state/akash/observations.parquet",
+    "prime_intellect": "silver/compute_market_state/prime_intellect/observations.parquet",
+    "runpod": "silver/compute_market_state/runpod/observations.parquet"
+  },
+  "source_normalized_refs": {
+    "akash": "silver/gpu_offers/akash/offers.parquet",
+    "aws_spot": "silver/gpu_offers/aws_spot/offers.parquet",
+    "azure": "silver/gpu_offers/azure/offers.parquet",
+    "cloud_gpu_prices": "silver/gpu_offers/cloud_gpu_prices/offers.parquet",
+    "gridstackhub": "silver/gpu_offers/gridstackhub/offers.parquet",
+    "inference_sh": "silver/gpu_offers/inference_sh/offers.parquet",
+    "lium": "silver/gpu_offers/lium/offers.parquet",
+    "oracle_cloud": "silver/gpu_offers/oracle_cloud/offers.parquet",
+    "ovhcloud": "silver/gpu_offers/ovhcloud/offers.parquet",
+    "prime_intellect": "silver/gpu_offers/prime_intellect/offers.parquet",
+    "runpod": "silver/gpu_offers/runpod/offers.parquet",
+    "scaleway": "silver/gpu_offers/scaleway/offers.parquet",
+    "spheron": "silver/gpu_offers/spheron/offers.parquet",
+    "thunder_compute": "silver/gpu_offers/thunder_compute/offers.parquet",
+    "vast": "silver/gpu_offers/vast/offers.parquet",
+    "verda": "silver/gpu_offers/verda/offers.parquet",
+    "vultr": "silver/gpu_offers/vultr/offers.parquet"
+  },
+  "source_run_ids": {
+    "akash": "akash-market-20260802T060000-aef2c141",
+    "aws_spot": "aws_spot-market-20260802T060000-aef2c141",
+    "azure": "azure-market-20260802T060000-aef2c141",
+    "cloud_gpu_prices": "cloud_gpu_prices-market-20260802T060000-aef2c141",
+    "gridstackhub": "gridstackhub-market-20260802T060000-aef2c141",
+    "inference_sh": "inference_sh-market-20260802T060000-aef2c141",
+    "lium": "lium-market-20260802T060000-aef2c141",
+    "oracle_cloud": "oracle_cloud-market-20260802T060000-aef2c141",
+    "ovhcloud": "ovhcloud-market-20260802T060000-aef2c141",
+    "prime_intellect": "prime_intellect-market-20260802T060000-aef2c141",
+    "runpod": "runpod-market-20260802T060000-aef2c141",
+    "scaleway": "scaleway-market-20260802T060000-aef2c141",
+    "spheron": "spheron-market-20260802T060000-aef2c141",
+    "thunder_compute": "thunder_compute-market-20260802T060000-aef2c141",
+    "vast": "vast-market-20260802T060000-aef2c141",
+    "verda": "verda-market-20260802T060000-aef2c141",
+    "vultr": "vultr-market-20260802T060000-aef2c141"
+  },
+  "sql_models": {
+    "dim_gpu_products": {
+      "model_id": "gold_gpu_products_v1",
+      "path": "sql/models/gold/dim_gpu_products.sql",
+      "sha256": "f8c0e7ca4c3851b560642ed9805be819aaf7cd942d5ee164ccff5af8e2f95271"
+    },
+    "dim_providers": {
+      "model_id": "gold_providers_v1",
+      "path": "sql/models/gold/dim_providers.sql",
+      "sha256": "a9f4189b92cd1572d1f50211504da2a244da9358115023d9b4b6277e418f3af0"
+    },
+    "dim_sources": {
+      "model_id": "gold_sources_v1",
+      "path": "sql/models/gold/dim_sources.sql",
+      "sha256": "91ce71dec7f98570c6e1cde3840ed918114c54c4910dee485d77726f0cb06573"
+    },
+    "fact_compute_market_state": {
+      "methodology_version": "compute_market_state_gold_v1",
+      "model_id": "gold_compute_market_state_v1",
+      "path": "sql/models/gold/fact_compute_market_state.sql",
+      "sha256": "d0b31b780ad50fa41c1365dd075c5af9d6845f5d07981f0dedfb4cc6df1164a0"
+    },
+    "fact_gpu_availability": {
+      "model_id": "gold_gpu_availability_v1",
+      "path": "sql/models/gold/fact_gpu_availability.sql",
+      "sha256": "9a11c33a7885cdda87b7b434f950b2cc00cca6b2ff2b120fbef3de1418f8af58"
+    },
+    "fact_gpu_availability_history": {
+      "model_id": "gold_gpu_availability_history_v1",
+      "path": "sql/models/gold/fact_gpu_availability.sql",
+      "sha256": "9a11c33a7885cdda87b7b434f950b2cc00cca6b2ff2b120fbef3de1418f8af58"
+    },
+    "fact_gpu_listings": {
+      "model_id": "gold_gpu_listings_v1",
+      "path": "sql/models/gold/fact_gpu_listings.sql",
+      "sha256": "f04c13fb2c9c511acc881fb43705b895169670c7f973beb521022b962f9ddbec"
+    },
+    "fact_gpu_price_index": {
+      "methodology_version": "advertised_provider_floor_median_v2",
+      "model_id": "gpu_price_index_v1",
+      "path": "sql/models/gold/gpu_price_index.sql",
+      "sha256": "a98bce84098eb9f91cb70d65a32bbc48de3519649d3d677bc455d25268acd4bc"
+    },
+    "fact_gpu_price_index_constituents": {
+      "methodology_version": "advertised_provider_floor_median_v2",
+      "model_id": "gpu_price_index_constituents_v1",
+      "path": "sql/models/gold/gpu_price_index_constituents.sql",
+      "sha256": "2d839d507d67f8a5cb80385d9d4e46515ca041921e3d216f63587fddf5c8f687"
+    },
+    "fact_prime_frontier_offer_ladder": {
+      "methodology_version": "prime_frontier_offer_market_v1",
+      "model_id": "gold_prime_offer_ladder_v1",
+      "path": "sql/models/gold/prime_offer_ladder.sql",
+      "sha256": "9f50afcb31396e5c8160765be69f4d1e66397894f1399a2a4132e9f3880613ed"
+    },
+    "fact_prime_frontier_offer_reference_history": {
+      "methodology_version": "prime_frontier_offer_market_v1",
+      "model_id": "gold_prime_offer_reference_v1",
+      "path": "sql/models/gold/prime_offer_reference_history.sql",
+      "sha256": "6774a071e659fbc80b9a06ed25be2767a7dcabfd87b70f82a8d569cc8deef413"
+    }
+  },
+  "table": "gold_market",
+  "table_refs": {
+    "dim_gpu_products": "gold/dim_gpu_products/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/gpu_products.parquet",
+    "dim_providers": "gold/dim_providers/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/providers.parquet",
+    "dim_sources": "gold/dim_sources/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/sources.parquet",
+    "fact_compute_market_state": "gold/fact_compute_market_state/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/compute_market_state.parquet",
+    "fact_compute_market_state_history": "gold/fact_compute_market_state_history/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/compute_market_state_history.parquet",
+    "fact_gpu_availability": "gold/fact_gpu_availability/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/gpu_availability.parquet",
+    "fact_gpu_availability_history": "gold/fact_gpu_availability_history/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/gpu_availability_history.parquet",
+    "fact_gpu_listings": "gold/fact_gpu_listings/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/listings.parquet",
+    "fact_gpu_price_index": "gold/fact_gpu_price_index/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/gpu_price_index.parquet",
+    "fact_gpu_price_index_constituents": "gold/fact_gpu_price_index_constituents/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/gpu_price_index_constituents.parquet",
+    "fact_prime_frontier_offer_events": "gold/fact_prime_frontier_offer_events/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/prime_frontier_offer_events.parquet",
+    "fact_prime_frontier_offer_history": "gold/fact_prime_frontier_offer_history/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/prime_frontier_offer_history.parquet",
+    "fact_prime_frontier_offer_ladder": "gold/fact_prime_frontier_offer_ladder/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/prime_frontier_offer_ladder.parquet",
+    "fact_prime_frontier_offer_reference_history": "gold/fact_prime_frontier_offer_reference_history/date=2026-08-02/run_id=gold-market-20260802T060000-aef2c141/prime_frontier_offer_reference_history.parquet"
+  }
+}

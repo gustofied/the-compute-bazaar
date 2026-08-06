@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .sql_models import read_sql
+from .silver_contract import silver_offer_select
 from .storage import resolve_read_uri
 
 
@@ -131,7 +132,9 @@ def query_market_summary(
     sql = DEFAULT_MARKET_SUMMARY_SQL
     if limit is not None:
         sql = f"{sql.rstrip()}\nlimit {int(limit)}"
-    return DataFusionEngine({"gpu_offers": parquet_uri}).query(sql)
+    engine = DataFusionEngine({"_gpu_offers": parquet_uri})
+    engine.create_view("public", "gpu_offers", silver_offer_select("_gpu_offers"))
+    return engine.query(sql)
 
 
 def _validated_table_name(table_name: str) -> str:

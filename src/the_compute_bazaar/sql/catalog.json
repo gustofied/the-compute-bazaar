@@ -3,21 +3,21 @@
   "engine": "datafusion",
   "queries": [
     {
-      "query_id": "benchmark_values",
+      "query_id": "gpu_price_index",
       "version": "v1",
-      "title": "Benchmark Values",
-      "description": "Latest GPU benchmark values.",
-      "tables": ["fact_benchmark_values"],
-      "sql_path": "queries/benchmark_values.sql",
+      "title": "GPU Price Index",
+      "description": "Latest GPU Price Index values.",
+      "tables": ["fact_gpu_price_index"],
+      "sql_path": "queries/gpu_price_index.sql",
       "default_limit": 20
     },
     {
-      "query_id": "benchmark_constituents",
+      "query_id": "gpu_price_index_constituents",
       "version": "v1",
-      "title": "Benchmark Constituents",
-      "description": "Rows included in or excluded from each benchmark.",
-      "tables": ["fact_benchmark_constituents"],
-      "sql_path": "queries/benchmark_constituents.sql",
+      "title": "GPU Price Index Constituents",
+      "description": "Rows included in or excluded from each index value.",
+      "tables": ["fact_gpu_price_index_constituents"],
+      "sql_path": "queries/gpu_price_index_constituents.sql",
       "default_limit": 100
     },
     {
@@ -39,12 +39,12 @@
       "default_limit": 100
     },
     {
-      "query_id": "compute_market_state",
+      "query_id": "gpu_availability",
       "version": "v1",
-      "title": "Compute Market State",
-      "description": "Latest observed capacity and availability measures.",
-      "tables": ["fact_compute_market_state"],
-      "sql_path": "queries/compute_market_state.sql",
+      "title": "GPU Availability",
+      "description": "Latest GPU availability and capacity measures.",
+      "tables": ["fact_gpu_availability"],
+      "sql_path": "queries/gpu_availability.sql",
       "default_limit": 200
     },
     {

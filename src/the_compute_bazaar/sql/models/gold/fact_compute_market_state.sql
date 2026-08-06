@@ -28,12 +28,7 @@ listing_depth as (
     cast(
       sum(
         case
-          when availability_status in (
-            'available',
-            'spot_available',
-            'available_component_rate',
-            'published_rate'
-          ) then 1
+          when is_available is true then 1
           else 0
         end
       ) as double
@@ -43,19 +38,14 @@ listing_depth as (
     cast(
       sum(
         case
-          when availability_status in (
-            'available',
-            'spot_available',
-            'available_component_rate',
-            'published_rate'
-          ) then 1
+          when is_available is true then 1
           else 0
         end
       ) as double
     ) / cast(count(*) as double) as available_share,
     cast(null as varchar) as stock_status,
     'normalized_offer_count' as count_precision,
-    'Normalized listings currently marked available.' as numerator_definition,
+    'Normalized listings whose source explicitly asserts availability.' as numerator_definition,
     'All normalized current listings from the same provider connector and GPU product.'
       as denominator_definition,
     true as aggregation_eligible,

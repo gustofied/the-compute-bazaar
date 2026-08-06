@@ -10,7 +10,9 @@ from typing import Any
 
 from .prices.gold_manifest import read_latest_gold_manifest
 from .prices.gold_queries import (
-    query_gold_benchmark_values,
+    query_gold_gpu_availability,
+    query_gold_gpu_price_index,
+    query_gold_gpu_price_index_history,
     query_gold_listings,
     query_gold_prime_frontier_offer_market,
     query_gold_provider_comparison,
@@ -116,18 +118,29 @@ class MarketQueryService:
             manifest,
         )
 
-    def benchmarks(
-        self, *, family: str | None = None, limit: int | None = None
+    def gpu_price_index(
+        self,
+        *,
+        family: str | None = None,
+        history: bool = False,
+        limit: int | None = None,
     ) -> dict[str, Any]:
         manifest = self._latest_manifest()
         selected_limit = bounded_query_limit(limit or 20)
         normalized_family = family.upper() if family else None
 
         def load() -> dict[str, Any]:
-            result = query_gold_benchmark_values(
-                lake_root=self.lake_root,
-                manifest=manifest,
-            )
+            if history:
+                result = query_gold_gpu_price_index_history(
+                    lake_root=self.lake_root,
+                    history_limit=selected_limit,
+                    canonical_market_runs_only=True,
+                )
+            else:
+                result = query_gold_gpu_price_index(
+                    lake_root=self.lake_root,
+                    manifest=manifest,
+                )
             rows = result["rows"]
             if normalized_family:
                 rows = [
@@ -136,13 +149,49 @@ class MarketQueryService:
                     if str(row.get("benchmark_family_id") or "").upper()
                     == normalized_family
                 ]
-            rows = rows[:selected_limit]
-            return _typed_payload(manifest, rows)
+            if not history:
+                rows = rows[:selected_limit]
+            payload = _typed_payload(manifest, rows)
+            if history:
+                payload["history_run_count"] = result["history_manifest_count"]
+            return payload
 
         return self._cached(
             manifest,
-            ("benchmarks", normalized_family, selected_limit),
+            ("gpu_price_index", normalized_family, history, selected_limit),
             load,
+        )
+
+    def gpu_availability(
+        self,
+        *,
+        gpu_model: str | None = None,
+        measurement_kind: str | None = None,
+        history: bool = False,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        manifest = self._latest_manifest()
+        selected_limit = bounded_query_limit(limit or 100)
+        return self._cached(
+            manifest,
+            (
+                "gpu_availability",
+                gpu_model,
+                measurement_kind,
+                history,
+                selected_limit,
+            ),
+            lambda: _typed_payload(
+                manifest,
+                query_gold_gpu_availability(
+                    lake_root=self.lake_root,
+                    gpu_model=gpu_model,
+                    measurement_kind=measurement_kind,
+                    history=history,
+                    limit=selected_limit,
+                    manifest=manifest,
+                )["rows"],
+            ),
         )
 
     def listings(

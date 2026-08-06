@@ -42,19 +42,27 @@ GOLD_MODELS = {
         "gold_sources_v1",
         "models/gold/dim_sources.sql",
     ),
-    "fact_benchmark_values": GoldModel(
-        "benchmark_frontier_gpu_families_v2",
-        "models/gold/benchmark_values.sql",
+    "fact_gpu_price_index": GoldModel(
+        "gpu_price_index_v1",
+        "models/gold/gpu_price_index.sql",
         BENCHMARK_METHODOLOGY_VERSION,
     ),
-    "fact_benchmark_constituents": GoldModel(
-        "benchmark_frontier_gpu_constituents_v2",
-        "models/gold/benchmark_constituents.sql",
+    "fact_gpu_price_index_constituents": GoldModel(
+        "gpu_price_index_constituents_v1",
+        "models/gold/gpu_price_index_constituents.sql",
         BENCHMARK_METHODOLOGY_VERSION,
     ),
     "fact_compute_market_state": GoldModel(
         "gold_compute_market_state_v1",
         "models/gold/fact_compute_market_state.sql",
+    ),
+    "fact_gpu_availability": GoldModel(
+        "gold_gpu_availability_v1",
+        "models/gold/fact_gpu_availability.sql",
+    ),
+    "fact_gpu_availability_history": GoldModel(
+        "gold_gpu_availability_history_v1",
+        "models/gold/fact_gpu_availability.sql",
     ),
     "fact_prime_frontier_offer_reference_history": GoldModel(
         "gold_prime_offer_reference_v1",

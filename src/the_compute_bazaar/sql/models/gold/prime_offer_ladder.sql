@@ -10,7 +10,7 @@ benchmark_current as (
     provider_floor_p25_usd_gpu_hr as market_benchmark_p25_usd_gpu_hr,
     provider_floor_p75_usd_gpu_hr as market_benchmark_p75_usd_gpu_hr,
     provider_count as market_benchmark_provider_count
-  from fact_benchmark_values
+  from fact_gpu_price_index
 ),
 reference_with_benchmark as (
   select
@@ -36,7 +36,7 @@ current_offers as (
   join reference_with_benchmark reference
     on history.gold_run_id = reference.gold_run_id
    and history.gpu_family_id = reference.gpu_family_id
-  where history.availability_status = 'available'
+  where history.source_availability_status = 'available'
     and history.price_usd_gpu_hr > 0
     and coalesce(history.is_spot, false) = false
     and coalesce(history.is_secure, false) = true

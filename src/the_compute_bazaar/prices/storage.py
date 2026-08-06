@@ -6,7 +6,7 @@ import json
 import os
 from functools import lru_cache
 from collections.abc import Iterable, Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
@@ -21,9 +21,10 @@ def s3_mirror_path(uri: str, *, require_exists: bool = True) -> Path | None:
     parsed = urlparse(uri)
     key = parsed.path.lstrip("/")
     if key:
-        from .archive import archive_object_path
-
-        path = archive_object_path(Path(mirror_root).resolve().parent, parsed.netloc, key)
+        parts = PurePosixPath(key).parts
+        if any(part in {"", ".", ".."} for part in parts):
+            raise ValueError(f"Invalid S3 mirror key: {key}")
+        path = Path(mirror_root).resolve() / parsed.netloc / Path(*parts)
     else:
         path = Path(mirror_root).resolve() / parsed.netloc
     if not require_exists or path.exists():

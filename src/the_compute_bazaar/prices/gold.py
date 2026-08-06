@@ -39,10 +39,12 @@ GOLD_TABLES = {
     "dim_gpu_products": "gpu_products.parquet",
     "dim_providers": "providers.parquet",
     "dim_sources": "sources.parquet",
-    "fact_benchmark_values": "benchmark_values.parquet",
-    "fact_benchmark_constituents": "benchmark_constituents.parquet",
+    "fact_gpu_price_index": "gpu_price_index.parquet",
+    "fact_gpu_price_index_constituents": "gpu_price_index_constituents.parquet",
     "fact_compute_market_state": "compute_market_state.parquet",
     "fact_compute_market_state_history": "compute_market_state_history.parquet",
+    "fact_gpu_availability": "gpu_availability.parquet",
+    "fact_gpu_availability_history": "gpu_availability_history.parquet",
 }
 CORE_GOLD_SQL_TABLES = (
     "fact_gpu_listings",
@@ -50,6 +52,8 @@ CORE_GOLD_SQL_TABLES = (
     "dim_providers",
     "dim_sources",
     "fact_compute_market_state",
+    "fact_gpu_availability",
+    "fact_gpu_availability_history",
 )
 
 
@@ -75,6 +79,8 @@ def build_gold_market_tables(
     provider: str = "vast",
     providers: list[str] | None = None,
     run_id: str | None = None,
+    calculated_at: str | None = None,
+    manifest_observed_at: str | None = None,
 ) -> GoldBuildResult:
     """Build gold market tables from latest silver provider manifests."""
     try:
@@ -146,7 +152,7 @@ def build_gold_market_tables(
         ),
         "gold_run_id": gold_run_id,
         "gold_observed_date": observed_date,
-        "calculated_at": utc_now().isoformat(),
+        "calculated_at": calculated_at or utc_now().isoformat(),
         "market_state_methodology_version": MARKET_STATE_METHODOLOGY_VERSION,
     }
 
@@ -222,26 +228,58 @@ def build_gold_market_tables(
         )
     )
 
+    market_state_table_names = (
+        "fact_compute_market_state",
+        "fact_compute_market_state_history",
+    )
+    for table_name in market_state_table_names:
+        write_parquet_rows(table_refs[table_name], rows_by_table[table_name])
+    engine.register_tables(
+        {
+            "fact_compute_market_state": table_refs["fact_compute_market_state"],
+            "fact_compute_market_state_history": table_refs[
+                "fact_compute_market_state_history"
+            ],
+        }
+    )
+    rows_by_table["fact_gpu_availability"] = engine.query(
+        gold_model_sql(
+            "fact_gpu_availability",
+            fragments={"source_table": "fact_compute_market_state"},
+        )
+    )
+    rows_by_table["fact_gpu_availability_history"] = engine.query(
+        gold_model_sql(
+            "fact_gpu_availability_history",
+            fragments={"source_table": "fact_compute_market_state_history"},
+        )
+    )
+
     for table_name, rows in rows_by_table.items():
-        write_parquet_rows(table_refs[table_name], rows)
+        if table_name not in market_state_table_names:
+            write_parquet_rows(table_refs[table_name], rows)
 
     engine.register_tables({"fact_gpu_listings": table_refs["fact_gpu_listings"]})
     benchmark_constituents = engine.query(
-        gold_model_sql("fact_benchmark_constituents", query_context)
+        gold_model_sql("fact_gpu_price_index_constituents", query_context)
     )
-    rows_by_table["fact_benchmark_constituents"] = benchmark_constituents
+    rows_by_table["fact_gpu_price_index_constituents"] = benchmark_constituents
     write_parquet_rows(
-        table_refs["fact_benchmark_constituents"],
+        table_refs["fact_gpu_price_index_constituents"],
         benchmark_constituents,
     )
     engine.register_tables(
-        {"fact_benchmark_constituents": table_refs["fact_benchmark_constituents"]}
+        {
+            "fact_gpu_price_index_constituents": table_refs[
+                "fact_gpu_price_index_constituents"
+            ]
+        }
     )
     benchmark_values = engine.query(
-        gold_model_sql("fact_benchmark_values", query_context)
+        gold_model_sql("fact_gpu_price_index", query_context)
     )
-    rows_by_table["fact_benchmark_values"] = benchmark_values
-    write_parquet_rows(table_refs["fact_benchmark_values"], benchmark_values)
+    rows_by_table["fact_gpu_price_index"] = benchmark_values
+    write_parquet_rows(table_refs["fact_gpu_price_index"], benchmark_values)
 
     prime_frontier_rows, prime_frontier_refs = build_prime_frontier_gold_products(
         lake_root=lake_root,
@@ -249,7 +287,7 @@ def build_gold_market_tables(
         current_listing_rows=rows_by_table["fact_gpu_listings"],
         observed_date=observed_date,
         gold_run_id=gold_run_id,
-        benchmark_values_ref=table_refs["fact_benchmark_values"],
+        gpu_price_index_ref=table_refs["fact_gpu_price_index"],
     )
     rows_by_table.update(prime_frontier_rows)
     table_refs.update(prime_frontier_refs)
@@ -263,7 +301,7 @@ def build_gold_market_tables(
     if "fact_prime_frontier_offer_ladder" in table_refs:
         executed_gold_models.append("fact_prime_frontier_offer_ladder")
     executed_gold_models.extend(
-        ["fact_benchmark_values", "fact_benchmark_constituents"]
+        ["fact_gpu_price_index", "fact_gpu_price_index_constituents"]
     )
     sql_models = gold_sql_models(
         executed_gold_models,
@@ -284,6 +322,7 @@ def build_gold_market_tables(
         table_refs=table_refs,
         row_counts=row_counts,
         sql_models=sql_models,
+        observed_at=manifest_observed_at,
     )
 
     return GoldBuildResult(
@@ -309,6 +348,7 @@ def write_gold_manifest(
     table_refs: dict[str, str],
     row_counts: dict[str, int],
     sql_models: dict[str, dict[str, str]] | None = None,
+    observed_at: str | None = None,
 ) -> str:
     manifest_ref = gold_manifest_ref(
         lake_root, observed_date=observed_date, run_id=run_id
@@ -319,7 +359,7 @@ def write_gold_manifest(
         "methodology_version": GOLD_METHODOLOGY_VERSION,
         "provider_scope": provider_scope,
         "run_id": run_id,
-        "observed_at": utc_now().isoformat(),
+        "observed_at": observed_at or utc_now().isoformat(),
         "observed_date": observed_date,
         "source_manifest_refs": {
             source_provider: manifest.get("manifest_ref")

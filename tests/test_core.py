@@ -12,6 +12,9 @@ from fastapi.testclient import TestClient
 
 from infra.windmill import market_hourly as windmill_market_hourly
 from infra.aws.check_public_market import validate_public_market
+from the_compute_bazaar.cli_output import render_table_payload
+from the_compute_bazaar.data_root import resolve_lake_root
+from the_compute_bazaar.market_query_service import MarketQueryService
 from the_compute_bazaar.prices.datafusion import DataFusionEngine
 from the_compute_bazaar.prices.gold import build_gold_market_tables
 from the_compute_bazaar.prices.gold_exports import export_gold_dashboard_snapshot
@@ -38,6 +41,10 @@ from the_compute_bazaar.prices.providers.lium import normalize_executor
 from the_compute_bazaar.prices.providers.vast import normalize_offer
 from the_compute_bazaar.prices.schemas import GpuOffer
 from the_compute_bazaar.prices.query_catalog import load_query_catalog
+from the_compute_bazaar.prices.silver_contract import (
+    GPU_OFFER_COLUMNS,
+    silver_offer_select,
+)
 from the_compute_bazaar.prices.storage import (
     read_json,
     write_json,
@@ -251,8 +258,8 @@ class CoreTests(unittest.TestCase):
                 row_counts={
                     "fact_gpu_listings": 1,
                     "dim_gpu_products": 1,
-                    "fact_benchmark_values": 1,
-                    "fact_benchmark_constituents": 1,
+                    "fact_gpu_price_index": 1,
+                    "fact_gpu_price_index_constituents": 1,
                     "fact_compute_market_state": 1,
                 },
             )
@@ -357,7 +364,8 @@ class CoreTests(unittest.TestCase):
                     provider="coreweave",
                     source_connector="lium",
                     offer_id="lium-1",
-                    price=2.5,
+                    price=5.0,
+                    gpu_count=2,
                 ),
             )
 
@@ -368,20 +376,19 @@ class CoreTests(unittest.TestCase):
             )
             rows = query_gold_listings(
                 lake_root=str(lake_root),
-                gpu_model="H100_80GB",
             )["rows"]
             engine = DataFusionEngine(
-                {"fact_benchmark_values": build.table_refs["fact_benchmark_values"]}
+                {"fact_gpu_price_index": build.table_refs["fact_gpu_price_index"]}
             )
             benchmark_rows = engine.query("""
 select benchmark_family_id, benchmark_usd_gpu_hr
-from fact_benchmark_values
+from fact_gpu_price_index
 where benchmark_family_id = 'H100'
 """)
             engine.register_tables(
                 {
-                    "fact_benchmark_constituents": build.table_refs[
-                        "fact_benchmark_constituents"
+                    "fact_gpu_price_index_constituents": build.table_refs[
+                        "fact_gpu_price_index_constituents"
                     ]
                 }
             )
@@ -394,7 +401,7 @@ select
   price_usd_gpu_hr,
   eligible_for_benchmark,
   included
-from fact_benchmark_constituents
+from fact_gpu_price_index_constituents
 where benchmark_family_id = 'H100'
 order by provider, price_usd_gpu_hr
 """)
@@ -415,6 +422,22 @@ order by provider
 """
             )["rows"]
             gold_description = catalog.describe("gold.fact_gpu_listings")
+            silver_description = catalog.describe("silver.gpu_offers")
+            silver_contract_rows = catalog.query(
+                """
+select
+  provider,
+  gpu_count,
+  available_gpu_count_lower_bound,
+  price_usd_instance_hr,
+  price_usd_gpu_hr,
+  is_available,
+  source_availability_status,
+  observed_at
+from silver.gpu_offers
+order by provider, price_usd_instance_hr
+"""
+            )["rows"]
             manifest = read_json(build.manifest_ref)
             export = export_gold_dashboard_snapshot(
                 lake_root=str(lake_root),
@@ -449,9 +472,66 @@ order by provider
             ],
         )
         self.assertEqual(gold_description["table"], "gold.fact_gpu_listings")
+        self.assertEqual(
+            [
+                (column["column_name"], column["data_type"])
+                for column in silver_description["columns"]
+            ],
+            [(column.name, column.data_type) for column in GPU_OFFER_COLUMNS],
+        )
+        self.assertTrue(
+            all(column["meaning"] for column in silver_description["columns"])
+        )
+        self.assertEqual(
+            silver_contract_rows,
+            [
+                {
+                    "provider": "coreweave",
+                    "gpu_count": 2,
+                    "available_gpu_count_lower_bound": 2,
+                    "price_usd_instance_hr": 5.0,
+                    "price_usd_gpu_hr": 2.5,
+                    "is_available": True,
+                    "source_availability_status": "available",
+                    "observed_at": OBSERVED_AT,
+                },
+                {
+                    "provider": "vast",
+                    "gpu_count": 1,
+                    "available_gpu_count_lower_bound": 1,
+                    "price_usd_instance_hr": 2.0,
+                    "price_usd_gpu_hr": 2.0,
+                    "is_available": True,
+                    "source_availability_status": "available",
+                    "observed_at": OBSERVED_AT,
+                },
+                {
+                    "provider": "vast",
+                    "gpu_count": 1,
+                    "available_gpu_count_lower_bound": 1,
+                    "price_usd_instance_hr": 4.0,
+                    "price_usd_gpu_hr": 4.0,
+                    "is_available": True,
+                    "source_availability_status": "available",
+                    "observed_at": OBSERVED_AT,
+                },
+            ],
+        )
         self.assertIn(
             "price_usd_gpu_hr",
             [column["column_name"] for column in gold_description["columns"]],
+        )
+        gold_columns = {
+            column["column_name"] for column in gold_description["columns"]
+        }
+        self.assertFalse(
+            {
+                "price_usd_hr",
+                "available_gpu_count",
+                "availability_status",
+                "stock_status",
+            }
+            & gold_columns
         )
         self.assertEqual(
             [row["provider"] for row in rows], ["vast", "coreweave", "vast"]
@@ -506,11 +586,11 @@ order by provider
             ],
         )
         self.assertEqual(
-            manifest["sql_models"]["fact_benchmark_values"]["path"],
-            "sql/models/gold/benchmark_values.sql",
+            manifest["sql_models"]["fact_gpu_price_index"]["path"],
+            "sql/models/gold/gpu_price_index.sql",
         )
         self.assertEqual(
-            len(manifest["sql_models"]["fact_benchmark_values"]["sha256"]),
+            len(manifest["sql_models"]["fact_gpu_price_index"]["sha256"]),
             64,
         )
         self.assertEqual(
@@ -521,8 +601,10 @@ order by provider
                 "dim_providers",
                 "dim_sources",
                 "fact_compute_market_state",
-                "fact_benchmark_values",
-                "fact_benchmark_constituents",
+                "fact_gpu_availability",
+                "fact_gpu_availability_history",
+                "fact_gpu_price_index",
+                "fact_gpu_price_index_constituents",
             },
         )
         self.assertTrue(
@@ -535,6 +617,140 @@ order by provider
         self.assertEqual(len(load_query_catalog()), 7)
         self.assertEqual(export["row_counts"]["gpu_benchmark_cards"], 4)
         self.assertEqual(exported_manifest["run_id"], "gold-test")
+
+    def test_bundled_sample_is_default_and_queries_both_layers(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            selection = resolve_lake_root()
+            catalog = MarketDataCatalog(lake_root=selection.root)
+            silver = catalog.query(
+                "select count(*) as offer_count from silver.gpu_offers"
+            )
+            gold = catalog.query(
+                "select count(*) as index_count from gold.fact_gpu_price_index"
+            )
+            availability = MarketQueryService(
+                lake_root=selection.root
+            ).gpu_availability(gpu_model="H100", limit=2)
+            client = TestClient(create_app())
+            health_response = client.get("/healthz")
+            index_response = client.get(
+                "/v1/gpu-price-index",
+                params={"family": "H100"},
+            )
+            index_table = render_table_payload(
+                index_response.json(), command="price-index"
+            )
+            availability_response = client.get(
+                "/v1/gpu-availability",
+                params={"gpu_model": "H100", "limit": 2},
+            )
+        with patch.dict(
+            os.environ,
+            {"COMPUTE_BAZAAR_LAKE_ROOT": "/tmp/environment-lake"},
+            clear=True,
+        ):
+            environment_selection = resolve_lake_root()
+            explicit_selection = resolve_lake_root("/tmp/explicit-lake")
+
+        self.assertEqual(selection.kind, "bundled_sample")
+        self.assertEqual(environment_selection.root, "/tmp/environment-lake")
+        self.assertEqual(environment_selection.kind, "environment")
+        self.assertEqual(explicit_selection.root, "/tmp/explicit-lake")
+        self.assertEqual(explicit_selection.kind, "explicit")
+        self.assertGreater(silver["rows"][0]["offer_count"], 1000)
+        self.assertEqual(gold["rows"][0]["index_count"], 4)
+        self.assertEqual(availability["row_count"], 2)
+        self.assertTrue(
+            all(
+                str(row["resource_type"]).startswith("H100")
+                for row in availability["rows"]
+            )
+        )
+        self.assertEqual(health_response.status_code, 200)
+        self.assertEqual(index_response.status_code, 200)
+        self.assertEqual(index_response.json()["row_count"], 1)
+        self.assertIn("GPU PRICE INDEX", index_table)
+        self.assertIn("H100", index_table)
+        self.assertEqual(availability_response.status_code, 200)
+        self.assertEqual(availability_response.json()["row_count"], 2)
+
+    def test_silver_availability_is_explicit_and_tri_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            parquet_ref = Path(temporary_directory) / "offers.parquet"
+            write_offers_parquet(
+                str(parquet_ref),
+                [
+                    _offer(
+                        provider="available",
+                        offer_id="available",
+                        price=2.0,
+                        availability_status="available",
+                    ),
+                    _offer(
+                        provider="unavailable",
+                        offer_id="unavailable",
+                        price=3.0,
+                        availability_status="unavailable",
+                    ),
+                    _offer(
+                        provider="rate_card",
+                        offer_id="rate",
+                        price=4.0,
+                        availability_status="published_rate",
+                    ),
+                    _offer(
+                        provider="expired_rate_card",
+                        offer_id="expired-rate",
+                        price=5.0,
+                        availability_status="published_rate_expired",
+                    ),
+                ],
+            )
+            engine = DataFusionEngine({"raw_offers": str(parquet_ref)})
+            rows = engine.query(
+                silver_offer_select("raw_offers") + " order by price_usd_instance_hr"
+            )
+
+        self.assertEqual(
+            [
+                (
+                    row["source_availability_status"],
+                    row["is_available"],
+                )
+                for row in rows
+            ],
+            [
+                ("available", True),
+                ("unavailable", False),
+                ("published_rate", None),
+                ("published_rate_expired", None),
+            ],
+        )
+
+    def test_normalized_offer_rejects_invalid_currency_and_time(self) -> None:
+        with self.assertRaisesRegex(ValueError, "timezone-aware"):
+            GpuOffer(
+                provider="test",
+                source_offer_id="naive-time",
+                observed_at=datetime(2026, 8, 1, 12, 0),
+                gpu_raw_name="H100",
+                gpu_model="H100_80GB",
+                gpu_count=1,
+                vram_gb=80,
+                price_usd_hr=2.0,
+            )
+        with self.assertRaisesRegex(ValueError, "normalized to USD"):
+            GpuOffer(
+                provider="test",
+                source_offer_id="wrong-currency",
+                observed_at=OBSERVED_AT,
+                gpu_raw_name="H100",
+                gpu_model="H100_80GB",
+                gpu_count=1,
+                vram_gb=80,
+                price_usd_hr=2.0,
+                currency="EUR",
+            )
 
     def test_gold_history_filters_before_limiting(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -553,7 +769,7 @@ order by provider
                     {
                         "run_id": run_id,
                         "observed_at": observed_at,
-                        "table_refs": {"fact_benchmark_values": "memory://values"},
+                        "table_refs": {"fact_gpu_price_index": "memory://values"},
                     },
                 )
 
@@ -594,8 +810,8 @@ order by provider
             )
             rows = DataFusionEngine(
                 {
-                    "fact_benchmark_constituents": build.table_refs[
-                        "fact_benchmark_constituents"
+                    "fact_gpu_price_index_constituents": build.table_refs[
+                        "fact_gpu_price_index_constituents"
                     ]
                 }
             ).query("""
@@ -604,7 +820,7 @@ select
   eligible_for_benchmark,
   included,
   exclusion_reason
-from fact_benchmark_constituents
+from fact_gpu_price_index_constituents
 where benchmark_family_id = 'H100'
 order by provider
 """)
@@ -751,7 +967,7 @@ order by provider
                 "/v1/listings",
                 params={"provider": "vast", "limit": 1},
             )
-            catalog_response = client.get("/v1/queries/benchmark_values")
+            catalog_response = client.get("/v1/queries/gpu_price_index")
             sql_response = client.post(
                 "/v1/sql",
                 json={
@@ -812,23 +1028,26 @@ def _offer(
     offer_id: str,
     price: float,
     source_connector: str | None = None,
+    gpu_count: int = 1,
+    availability_status: str = "available",
 ) -> GpuOffer:
     return GpuOffer(
         provider=provider,
         source_offer_id=offer_id,
         observed_at=OBSERVED_AT,
         gpu_raw_name="NVIDIA H100 80GB",
-        gpu_model="H100_80GB",
-        gpu_count=1,
+        gpu_model="H100_80GB" if gpu_count == 1 else f"H100_80GB_x{gpu_count}",
+        gpu_count=gpu_count,
         vram_gb=80,
         price_usd_hr=price,
-        available_gpu_count=1,
+        available_gpu_count=gpu_count,
         source_connector=source_connector or provider,
         currency="USD",
         country="US",
         region="test",
-        availability_status="available",
+        availability_status=availability_status,
         raw_ref=f"raw/{provider}.json",
+        metadata={f"{provider}_field": "provider-specific"},
     )
 
 

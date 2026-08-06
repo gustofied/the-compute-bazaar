@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import date, datetime, timezone
+from math import isfinite
 from typing import Any
 
 
@@ -61,6 +62,8 @@ class ProviderSnapshot:
 
 @dataclass(frozen=True)
 class GpuOffer:
+    """One normalized offer; ``price_usd_hr`` is the full configuration rate."""
+
     provider: str
     source_offer_id: str
     observed_at: datetime
@@ -85,6 +88,33 @@ class GpuOffer:
     minimum_executable_price_usd_hr: float | None = None
     required_resource_price_usd_hr: float | None = None
     price_basis: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
+            raise ValueError("GpuOffer.observed_at must be timezone-aware")
+        if self.gpu_count <= 0:
+            raise ValueError("GpuOffer.gpu_count must be positive")
+        if not isfinite(self.price_usd_hr) or self.price_usd_hr <= 0:
+            raise ValueError("GpuOffer.price_usd_hr must be a positive instance rate")
+        if self.currency.upper() != "USD":
+            raise ValueError("GpuOffer prices must be normalized to USD")
+        if self.available_gpu_count is not None and self.available_gpu_count < 0:
+            raise ValueError("GpuOffer.available_gpu_count cannot be negative")
+        if not self.availability_status:
+            raise ValueError("GpuOffer.availability_status cannot be empty")
+        if (
+            self.required_resource_price_usd_hr is not None
+            and self.required_resource_price_usd_hr < 0
+        ):
+            raise ValueError(
+                "GpuOffer.required_resource_price_usd_hr cannot be negative"
+            )
+        if self.minimum_executable_price_usd_hr is not None:
+            if self.minimum_executable_price_usd_hr < self.price_usd_hr:
+                raise ValueError(
+                    "GpuOffer.minimum_executable_price_usd_hr cannot be below "
+                    "the instance rate"
+                )
 
     def event_key(self) -> str:
         return f"{self.provider}:{self.gpu_model}:{self.source_offer_id}"
