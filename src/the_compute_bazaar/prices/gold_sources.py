@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from .datafusion import DataFusionEngine
@@ -86,6 +87,8 @@ def merge_compute_market_state_history(
         ).query("select * from fact_compute_market_state_history")
     merged: dict[str, dict[str, Any]] = {}
     for row in [*previous_rows, *current_rows]:
+        row = dict(row)
+        row["observed_at"] = _timestamp(row.get("observed_at"))
         observation_id = str(row.get("observation_id") or "")
         if not observation_id:
             raise ValueError("Compute market-state history row has no observation_id")
@@ -100,6 +103,12 @@ def merge_compute_market_state_history(
             str(row.get("source_connector") or ""),
         ),
     )
+
+
+def _timestamp(value: Any) -> datetime | None:
+    if value is None or isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
 
 
 def _sql_literal(value: str) -> str:
