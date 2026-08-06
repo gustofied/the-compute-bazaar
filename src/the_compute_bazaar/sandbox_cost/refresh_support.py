@@ -10,9 +10,7 @@ from typing import Any
 
 import requests
 
-from .evidence import (
-    EVIDENCE_ROOT,
-)
+from .evidence_schema import EVIDENCE_ROOT
 
 
 REPOSITORY = "starslingdev/hpc-sandbox-benchmarks"

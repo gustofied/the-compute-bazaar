@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .datafusion import query_tables
+from .datafusion import DataFusionEngine
 from .sql_models import PACKAGE_ROOT, SQL_ROOT
 
 PROJECT_ROOT = PACKAGE_ROOT.parents[1]
@@ -92,7 +92,9 @@ class CatalogQuery:
             missing_tables = list(self.tables)
         else:
             table_refs = dict(manifest.get("table_refs") or {})
-            missing_tables = [table for table in self.tables if not table_refs.get(table)]
+            missing_tables = [
+                table for table in self.tables if not table_refs.get(table)
+            ]
         return {
             "query_id": self.query_id,
             "version": self.version,
@@ -143,7 +145,9 @@ def get_catalog_query(query_id: str, *, version: str | None = None) -> CatalogQu
     return max(matches, key=lambda query: query.version)
 
 
-def list_catalog_queries(*, manifest: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+def list_catalog_queries(
+    *, manifest: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     return [query.catalog_entry(manifest) for query in load_query_catalog()]
 
 
@@ -155,12 +159,11 @@ def run_catalog_query(
     limit: int | None = None,
 ) -> dict[str, Any]:
     query = get_catalog_query(query_id, version=version)
-    selected_limit = bounded_query_limit(limit if limit is not None else query.default_limit)
-    table_refs = table_refs_for_catalog_query(manifest, query)
-    rows = query_tables(
-        tables=table_refs,
-        sql=with_limit(query.sql, selected_limit),
+    selected_limit = bounded_query_limit(
+        limit if limit is not None else query.default_limit
     )
+    table_refs = table_refs_for_catalog_query(manifest, query)
+    rows = DataFusionEngine(table_refs).query(with_limit(query.sql, selected_limit))
     return {
         "query": query.catalog_entry(manifest),
         "limit": selected_limit,
@@ -176,11 +179,12 @@ def run_scratch_query(
     limit: int | None = None,
 ) -> dict[str, Any]:
     cleaned_sql = validate_scratch_sql(sql)
-    selected_limit = bounded_query_limit(limit if limit is not None else DEFAULT_QUERY_LIMIT)
+    selected_limit = bounded_query_limit(
+        limit if limit is not None else DEFAULT_QUERY_LIMIT
+    )
     table_refs = scratch_table_refs(manifest)
-    rows = query_tables(
-        tables=table_refs,
-        sql=with_scratch_limit(cleaned_sql, selected_limit),
+    rows = DataFusionEngine(table_refs).query(
+        with_scratch_limit(cleaned_sql, selected_limit)
     )
     return {
         "query": scratch_query_entry(manifest, cleaned_sql),
@@ -190,7 +194,9 @@ def run_scratch_query(
     }
 
 
-def scratch_query_entry(manifest: dict[str, Any], sql: str | None = None) -> dict[str, Any]:
+def scratch_query_entry(
+    manifest: dict[str, Any], sql: str | None = None
+) -> dict[str, Any]:
     table_names = sorted(scratch_table_refs(manifest))
     entry: dict[str, Any] = {
         "query_id": SCRATCH_QUERY_ID,
@@ -220,11 +226,15 @@ def scratch_table_refs(manifest: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def table_refs_for_catalog_query(manifest: dict[str, Any], query: CatalogQuery) -> dict[str, str]:
+def table_refs_for_catalog_query(
+    manifest: dict[str, Any], query: CatalogQuery
+) -> dict[str, str]:
     manifest_refs = dict(manifest.get("table_refs") or {})
     missing = [table for table in query.tables if not manifest_refs.get(table)]
     if missing:
-        raise RuntimeError(f"Latest gold manifest is missing table refs for: {', '.join(missing)}")
+        raise RuntimeError(
+            f"Latest gold manifest is missing table refs for: {', '.join(missing)}"
+        )
     return {table: str(manifest_refs[table]) for table in query.tables}
 
 
@@ -241,7 +251,7 @@ def with_scratch_limit(sql: str, limit: int) -> str:
 
     requested_limit = int(limit_match.group(1))
     clamped_limit = min(requested_limit, limit)
-    return f"{statement[:limit_match.start()].rstrip()}\nlimit {clamped_limit}"
+    return f"{statement[: limit_match.start()].rstrip()}\nlimit {clamped_limit}"
 
 
 def validate_scratch_sql(sql: str) -> str:
@@ -249,7 +259,9 @@ def validate_scratch_sql(sql: str) -> str:
     if not cleaned:
         raise ValueError("Scratch SQL is empty")
 
-    statements = [statement.strip() for statement in cleaned.split(";") if statement.strip()]
+    statements = [
+        statement.strip() for statement in cleaned.split(";") if statement.strip()
+    ]
     if len(statements) != 1:
         raise ValueError("Scratch SQL must contain exactly one read-only statement")
 
@@ -263,10 +275,14 @@ def validate_scratch_sql(sql: str) -> str:
     tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", token_source))
     forbidden_tokens = sorted(tokens & FORBIDDEN_SCRATCH_SQL_TOKENS)
     if forbidden_tokens:
-        raise ValueError(f"Scratch SQL is read-only; forbidden token: {forbidden_tokens[0]}")
+        raise ValueError(
+            f"Scratch SQL is read-only; forbidden token: {forbidden_tokens[0]}"
+        )
     forbidden_functions = sorted(tokens & FORBIDDEN_SCRATCH_SQL_FUNCTIONS)
     if forbidden_functions:
-        raise ValueError(f"Scratch SQL cannot read external files or object paths: {forbidden_functions[0]}")
+        raise ValueError(
+            f"Scratch SQL cannot read external files or object paths: {forbidden_functions[0]}"
+        )
     forbidden_identifiers = sorted(tokens & FORBIDDEN_SCRATCH_SQL_IDENTIFIERS)
     if forbidden_identifiers:
         raise ValueError(

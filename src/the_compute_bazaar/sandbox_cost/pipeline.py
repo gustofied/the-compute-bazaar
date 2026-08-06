@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from the_compute_bazaar.prices.datafusion import query_tables
+from the_compute_bazaar.prices.datafusion import DataFusionEngine
 from the_compute_bazaar.prices.leases import exclusive_lease
 from the_compute_bazaar.prices.public_view_sandbox import sandbox_workload_view
 from the_compute_bazaar.prices.publications import (
@@ -191,49 +191,19 @@ def _build_workload_cost_unlocked(
     write_parquet_rows(silver_refs["sandbox_benchmark_replicates"], replicate_rows)
     write_parquet_rows(silver_refs["sandbox_benchmark_phases"], phase_rows)
     write_parquet_rows(silver_refs["sandbox_benchmark_run_metadata"], run_metadata)
+    engine = DataFusionEngine(silver_refs)
 
-    workload_batches = _canonicalize_numeric_rows(
-        query_tables(
-            tables={
-                "sandbox_benchmark_batches": silver_refs["sandbox_benchmark_batches"]
-            },
-            sql=WORKLOAD_BATCH_SQL,
-        )
-    )
+    workload_batches = _canonicalize_numeric_rows(engine.query(WORKLOAD_BATCH_SQL))
     workload_run_history = _canonicalize_numeric_rows(
-        query_tables(
-            tables={
-                "sandbox_benchmark_batches": silver_refs["sandbox_benchmark_batches"]
-            },
-            sql=WORKLOAD_RUN_SUMMARY_SQL,
-        )
+        engine.query(WORKLOAD_RUN_SUMMARY_SQL)
     )
     workload_measured_history = _canonicalize_numeric_rows(
-        query_tables(
-            tables={
-                "sandbox_benchmark_batches": silver_refs["sandbox_benchmark_batches"]
-            },
-            sql=WORKLOAD_MEASURED_HISTORY_SQL,
-        )
+        engine.query(WORKLOAD_MEASURED_HISTORY_SQL)
     )
     latest_replicates = _canonicalize_numeric_rows(
-        query_tables(
-            tables={
-                "sandbox_benchmark_replicates": silver_refs[
-                    "sandbox_benchmark_replicates"
-                ]
-            },
-            sql=WORKLOAD_LATEST_REPLICATES_SQL,
-        )
+        engine.query(WORKLOAD_LATEST_REPLICATES_SQL)
     )
-    latest_phases = _canonicalize_numeric_rows(
-        query_tables(
-            tables={
-                "sandbox_benchmark_phases": silver_refs["sandbox_benchmark_phases"]
-            },
-            sql=WORKLOAD_LATEST_PHASES_SQL,
-        )
-    )
+    latest_phases = _canonicalize_numeric_rows(engine.query(WORKLOAD_LATEST_PHASES_SQL))
     latest_replicates_ref = _join(
         output_root,
         "gold/sandbox_workload_latest_replicates.parquet",
@@ -244,18 +214,14 @@ def _build_workload_cost_unlocked(
     )
     write_parquet_rows(latest_replicates_ref, latest_replicates)
     write_parquet_rows(latest_phases_ref, latest_phases)
-    workload_summary = _canonicalize_numeric_rows(
-        query_tables(
-            tables={"sandbox_workload_latest_replicates": latest_replicates_ref},
-            sql=WORKLOAD_SUMMARY_SQL,
-        )
+    engine.register_tables(
+        {
+            "sandbox_workload_latest_replicates": latest_replicates_ref,
+            "sandbox_workload_latest_phases": latest_phases_ref,
+        }
     )
-    phase_summary = _canonicalize_numeric_rows(
-        query_tables(
-            tables={"sandbox_workload_latest_phases": latest_phases_ref},
-            sql=WORKLOAD_PHASE_SUMMARY_SQL,
-        )
-    )
+    workload_summary = _canonicalize_numeric_rows(engine.query(WORKLOAD_SUMMARY_SQL))
+    phase_summary = _canonicalize_numeric_rows(engine.query(WORKLOAD_PHASE_SUMMARY_SQL))
 
     table_refs = {
         "sandbox_workload_batch_history": _join(

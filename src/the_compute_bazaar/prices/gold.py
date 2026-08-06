@@ -14,7 +14,7 @@ from .gold_manifest import (
     latest_gold_manifest_ref,
     read_latest_gold_manifest,
 )
-from .datafusion import query_parquet, query_tables
+from .datafusion import DataFusionEngine
 from .gold_sources import (
     merge_compute_market_state_history,
     silver_source_cte,
@@ -51,6 +51,8 @@ CORE_GOLD_SQL_TABLES = (
     "dim_sources",
     "fact_compute_market_state",
 )
+
+
 @dataclass(frozen=True)
 class GoldBuildResult:
     run_id: str
@@ -152,12 +154,12 @@ def build_gold_market_tables(
         f"silver_gpu_offers_{index}": source_normalized_refs[source_provider]
         for index, source_provider in enumerate(provider_scope)
     }
+    engine = DataFusionEngine(tables)
     silver_source_cte_sql = silver_source_cte(list(tables))
     source_catalog_values_sql = source_catalog_values(provider_scope)
     rows_by_table = {
-        "fact_gpu_listings": query_tables(
-            tables=tables,
-            sql=gold_model_sql(
+        "fact_gpu_listings": engine.query(
+            gold_model_sql(
                 "fact_gpu_listings",
                 query_context,
                 fragments={
@@ -166,25 +168,22 @@ def build_gold_market_tables(
                 },
             ),
         ),
-        "dim_gpu_products": query_tables(
-            tables=tables,
-            sql=gold_model_sql(
+        "dim_gpu_products": engine.query(
+            gold_model_sql(
                 "dim_gpu_products",
                 query_context,
                 fragments={"silver_source_cte": silver_source_cte_sql},
             ),
         ),
-        "dim_providers": query_tables(
-            tables=tables,
-            sql=gold_model_sql(
+        "dim_providers": engine.query(
+            gold_model_sql(
                 "dim_providers",
                 query_context,
                 fragments={"silver_source_cte": silver_source_cte_sql},
             ),
         ),
-        "dim_sources": query_tables(
-            tables=tables,
-            sql=gold_model_sql(
+        "dim_sources": engine.query(
+            gold_model_sql(
                 "dim_sources",
                 query_context,
                 fragments={
@@ -201,9 +200,10 @@ def build_gold_market_tables(
         for index, source_provider in enumerate(provider_scope)
         if source_provider in source_market_state_refs
     }
-    rows_by_table["fact_compute_market_state"] = query_tables(
-        tables={**tables, **market_state_tables},
-        sql=gold_model_sql(
+    if market_state_tables:
+        engine.register_tables(market_state_tables)
+    rows_by_table["fact_compute_market_state"] = engine.query(
+        gold_model_sql(
             "fact_compute_market_state",
             query_context,
             fragments={
@@ -225,20 +225,20 @@ def build_gold_market_tables(
     for table_name, rows in rows_by_table.items():
         write_parquet_rows(table_refs[table_name], rows)
 
-    benchmark_constituents = query_parquet(
-        parquet_uri=table_refs["fact_gpu_listings"],
-        table_name="fact_gpu_listings",
-        sql=gold_model_sql("fact_benchmark_constituents", query_context),
+    engine.register_tables({"fact_gpu_listings": table_refs["fact_gpu_listings"]})
+    benchmark_constituents = engine.query(
+        gold_model_sql("fact_benchmark_constituents", query_context)
     )
     rows_by_table["fact_benchmark_constituents"] = benchmark_constituents
     write_parquet_rows(
         table_refs["fact_benchmark_constituents"],
         benchmark_constituents,
     )
-    benchmark_values = query_parquet(
-        parquet_uri=table_refs["fact_benchmark_constituents"],
-        table_name="fact_benchmark_constituents",
-        sql=gold_model_sql("fact_benchmark_values", query_context),
+    engine.register_tables(
+        {"fact_benchmark_constituents": table_refs["fact_benchmark_constituents"]}
+    )
+    benchmark_values = engine.query(
+        gold_model_sql("fact_benchmark_values", query_context)
     )
     rows_by_table["fact_benchmark_values"] = benchmark_values
     write_parquet_rows(table_refs["fact_benchmark_values"], benchmark_values)

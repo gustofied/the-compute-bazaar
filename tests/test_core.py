@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from infra.windmill import market_hourly as windmill_market_hourly
 from infra.aws.check_public_market import validate_public_market
-from the_compute_bazaar.prices.datafusion import query_tables
+from the_compute_bazaar.prices.datafusion import DataFusionEngine
 from the_compute_bazaar.prices.gold import build_gold_market_tables
 from the_compute_bazaar.prices.gold_exports import export_gold_dashboard_snapshot
 from the_compute_bazaar.prices.gold_manifest import (
@@ -369,23 +369,22 @@ class CoreTests(unittest.TestCase):
                 lake_root=str(lake_root),
                 gpu_model="H100_80GB",
             )["rows"]
-            benchmark_rows = query_tables(
-                tables={
-                    "fact_benchmark_values": build.table_refs["fact_benchmark_values"]
-                },
-                sql="""
+            engine = DataFusionEngine(
+                {"fact_benchmark_values": build.table_refs["fact_benchmark_values"]}
+            )
+            benchmark_rows = engine.query("""
 select benchmark_family_id, benchmark_usd_gpu_hr
 from fact_benchmark_values
 where benchmark_family_id = 'H100'
-""",
-            )
-            constituent_rows = query_tables(
-                tables={
+""")
+            engine.register_tables(
+                {
                     "fact_benchmark_constituents": build.table_refs[
                         "fact_benchmark_constituents"
                     ]
-                },
-                sql="""
+                }
+            )
+            constituent_rows = engine.query("""
 select
   provider,
   source_connector,
@@ -397,16 +396,13 @@ select
 from fact_benchmark_constituents
 where benchmark_family_id = 'H100'
 order by provider, price_usd_gpu_hr
-""",
-            )
-            source_rows = query_tables(
-                tables={"dim_sources": build.table_refs["dim_sources"]},
-                sql="""
+""")
+            engine.register_tables({"dim_sources": build.table_refs["dim_sources"]})
+            source_rows = engine.query("""
 select source_connector, source_kind, observation_kind
 from dim_sources
 order by source_connector
-""",
-            )
+""")
             manifest = read_json(build.manifest_ref)
             export = export_gold_dashboard_snapshot(
                 lake_root=str(lake_root),
@@ -554,13 +550,13 @@ order by source_connector
                 providers=["vast", "cloud_gpu_prices"],
                 run_id="gold-eligibility-test",
             )
-            rows = query_tables(
-                tables={
+            rows = DataFusionEngine(
+                {
                     "fact_benchmark_constituents": build.table_refs[
                         "fact_benchmark_constituents"
                     ]
-                },
-                sql="""
+                }
+            ).query("""
 select
   provider,
   eligible_for_benchmark,
@@ -569,8 +565,7 @@ select
 from fact_benchmark_constituents
 where benchmark_family_id = 'H100'
 order by provider
-""",
-            )
+""")
 
         self.assertEqual(
             rows,

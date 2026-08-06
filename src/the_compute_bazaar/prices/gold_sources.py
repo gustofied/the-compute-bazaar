@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .datafusion import query_parquet
+from .datafusion import DataFusionEngine
 from .provider_registry import source_catalog_rows
 
 
@@ -105,11 +105,9 @@ def merge_compute_market_state_history(
 ) -> list[dict[str, Any]]:
     previous_rows: list[dict[str, Any]] = []
     if previous_ref:
-        previous_rows = query_parquet(
-            parquet_uri=str(previous_ref),
-            table_name="fact_compute_market_state_history",
-            sql="select * from fact_compute_market_state_history",
-        )
+        previous_rows = DataFusionEngine(
+            {"fact_compute_market_state_history": str(previous_ref)}
+        ).query("select * from fact_compute_market_state_history")
     merged: dict[str, dict[str, Any]] = {}
     for row in [*previous_rows, *current_rows]:
         observation_id = str(row.get("observation_id") or "")

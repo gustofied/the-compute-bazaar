@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .datafusion import query_parquet, query_tables
+from .datafusion import DataFusionEngine
 from .offer_reference import (
     build_prime_frontier_offer_events,
     normalize_prime_frontier_history,
@@ -38,11 +38,9 @@ def build_prime_frontier_gold_products(
     )
     historical_rows: list[dict[str, Any]] = []
     if previous_history_ref:
-        historical_rows = query_parquet(
-            parquet_uri=str(previous_history_ref),
-            table_name="fact_prime_frontier_offer_history",
-            sql="select * from fact_prime_frontier_offer_history",
-        )
+        historical_rows = DataFusionEngine(
+            {"fact_prime_frontier_offer_history": str(previous_history_ref)}
+        ).query("select * from fact_prime_frontier_offer_history")
     offer_history = normalize_prime_frontier_history(
         [
             *historical_rows,
@@ -76,6 +74,9 @@ def build_prime_frontier_gold_products(
         "fact_prime_frontier_offer_history": offer_history,
     }
     write_parquet_rows(refs["fact_prime_frontier_offer_history"], offer_history)
+    engine = DataFusionEngine(
+        {"fact_prime_frontier_offer_history": refs["fact_prime_frontier_offer_history"]}
+    )
 
     events = build_prime_frontier_offer_events(offer_history)
     rows_by_table["fact_prime_frontier_offer_events"] = events
@@ -84,11 +85,7 @@ def build_prime_frontier_gold_products(
     else:
         refs.pop("fact_prime_frontier_offer_events")
 
-    reference_history = query_parquet(
-        parquet_uri=refs["fact_prime_frontier_offer_history"],
-        table_name="fact_prime_frontier_offer_history",
-        sql=prime_frontier_reference_history_sql(),
-    )
+    reference_history = engine.query(prime_frontier_reference_history_sql())
     rows_by_table["fact_prime_frontier_offer_reference_history"] = reference_history
     if not reference_history:
         refs.pop("fact_prime_frontier_offer_reference_history")
@@ -99,26 +96,27 @@ def build_prime_frontier_gold_products(
         refs["fact_prime_frontier_offer_reference_history"],
         reference_history,
     )
+    engine.register_tables(
+        {
+            "fact_prime_frontier_offer_reference_history": refs[
+                "fact_prime_frontier_offer_reference_history"
+            ]
+        }
+    )
 
     if not events:
         rows_by_table["fact_prime_frontier_offer_ladder"] = []
         refs.pop("fact_prime_frontier_offer_ladder")
         return rows_by_table, refs
-    ladder = query_tables(
-        tables={
-            "fact_prime_frontier_offer_history": refs[
-                "fact_prime_frontier_offer_history"
-            ],
+    engine.register_tables(
+        {
             "fact_prime_frontier_offer_events": refs[
                 "fact_prime_frontier_offer_events"
             ],
-            "fact_prime_frontier_offer_reference_history": refs[
-                "fact_prime_frontier_offer_reference_history"
-            ],
             "fact_benchmark_values": benchmark_values_ref,
-        },
-        sql=prime_frontier_ladder_sql(current_gold_run_id=gold_run_id),
+        }
     )
+    ladder = engine.query(prime_frontier_ladder_sql(current_gold_run_id=gold_run_id))
     rows_by_table["fact_prime_frontier_offer_ladder"] = ladder
     if ladder:
         write_parquet_rows(refs["fact_prime_frontier_offer_ladder"], ladder)

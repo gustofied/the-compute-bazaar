@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .datafusion import query_parquet
+from .datafusion import DataFusionEngine
 from .gold_manifest import list_gold_manifests, read_latest_gold_manifest
 from .gold_models import BENCHMARK_METHODOLOGY_VERSION
 
@@ -25,10 +25,8 @@ select *
 from fact_benchmark_values
 order by benchmark_family_id
 """
-    rows = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_benchmark_values",
-        sql=_with_limit(sql, limit),
+    rows = DataFusionEngine({"fact_benchmark_values": table_ref}).query(
+        _with_limit(sql, limit)
     )
     return {"manifest": manifest, "rows": rows}
 
@@ -53,11 +51,9 @@ def query_gold_benchmark_history(
         if not table_ref:
             continue
         try:
-            benchmark_rows = query_parquet(
-                parquet_uri=str(table_ref),
-                table_name="fact_benchmark_values",
-                sql="select * from fact_benchmark_values order by benchmark_family_id",
-            )
+            benchmark_rows = DataFusionEngine(
+                {"fact_benchmark_values": str(table_ref)}
+            ).query("select * from fact_benchmark_values order by benchmark_family_id")
         except Exception as exc:
             raise RuntimeError(
                 "Cannot read benchmark history table for Gold run "
@@ -116,10 +112,8 @@ from fact_benchmark_constituents
 {filters}
 order by benchmark_family_id, included desc, constituent_rank asc, price_usd_gpu_hr asc
 """
-    rows = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_benchmark_constituents",
-        sql=_with_limit(sql, limit),
+    rows = DataFusionEngine({"fact_benchmark_constituents": table_ref}).query(
+        _with_limit(sql, limit)
     )
     return {"manifest": manifest, "rows": rows}
 
@@ -152,10 +146,8 @@ from fact_gpu_listings
 group by gpu_model, provider
 order by gpu_model, floor_usd_gpu_hr asc
 """
-    rows = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_gpu_listings",
-        sql=_with_limit(sql, limit),
+    rows = DataFusionEngine({"fact_gpu_listings": table_ref}).query(
+        _with_limit(sql, limit)
     )
     return {"manifest": manifest, "rows": rows}
 
@@ -202,10 +194,8 @@ from fact_gpu_listings
 {where}
 order by price_usd_gpu_hr asc, price_usd_hr asc
 """
-    rows = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_gpu_listings",
-        sql=_with_limit(sql, limit),
+    rows = DataFusionEngine({"fact_gpu_listings": table_ref}).query(
+        _with_limit(sql, limit)
     )
     return {"manifest": manifest, "rows": rows}
 
@@ -215,10 +205,8 @@ def query_gold_market_state(
 ) -> dict[str, Any]:
     manifest = read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"]["fact_compute_market_state"]
-    rows = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_compute_market_state",
-        sql=_with_limit(
+    rows = DataFusionEngine({"fact_compute_market_state": table_ref}).query(
+        _with_limit(
             """
 select *
 from fact_compute_market_state
@@ -248,16 +236,14 @@ def query_gold_market_state_history(
         table_ref = manifest.get("table_refs", {}).get("fact_compute_market_state")
     if not table_ref:
         return {"manifest": manifest, "history_manifest_count": 0, "rows": []}
-    rows = query_parquet(
-        parquet_uri=str(table_ref),
-        table_name="fact_compute_market_state_history",
-        sql="""
+    rows = DataFusionEngine(
+        {"fact_compute_market_state_history": str(table_ref)}
+    ).query("""
 select *
 from fact_compute_market_state_history
 where measurement_kind in ('rental_occupancy', 'availability_pressure')
 order by gold_observed_at, measurement_kind, provider, resource_type, source_connector
-""",
-    )
+""")
     run_ids = {
         str(row.get("gold_run_id") or "") for row in rows if row.get("gold_run_id")
     }
@@ -288,15 +274,23 @@ def query_gold_prime_frontier_offer_market(
             "event_history": [],
             "offers": [],
         }
-    history = query_parquet(
-        parquet_uri=str(reference_ref),
-        table_name="fact_prime_frontier_offer_reference_history",
-        sql="""
+    engine = DataFusionEngine(
+        {
+            table_name: str(ref)
+            for table_name in (
+                "fact_prime_frontier_offer_reference_history",
+                "fact_prime_frontier_offer_ladder",
+                "fact_prime_frontier_offer_events",
+                "fact_prime_frontier_offer_history",
+            )
+            if (ref := refs.get(table_name))
+        }
+    )
+    history = engine.query("""
 select *
 from fact_prime_frontier_offer_reference_history
 order by gold_observed_at, gold_run_id, gpu_family_id
-""",
-    )
+""")
     current_run_id = str(manifest.get("run_id") or "")
     current = {
         str(row.get("gpu_family_id") or ""): row
@@ -314,44 +308,32 @@ order by gold_observed_at, gold_run_id, gpu_family_id
     offers: list[dict[str, Any]] = []
     ladder_ref = refs.get("fact_prime_frontier_offer_ladder")
     if ladder_ref:
-        ladder = query_parquet(
-            parquet_uri=str(ladder_ref),
-            table_name="fact_prime_frontier_offer_ladder",
-            sql="""
+        ladder = engine.query("""
 select *
 from fact_prime_frontier_offer_ladder
 order by gpu_family_id, price_level_usd_gpu_hr desc
-""",
-        )
+""")
     events_ref = refs.get("fact_prime_frontier_offer_events")
     if events_ref:
-        event_history = query_parquet(
-            parquet_uri=str(events_ref),
-            table_name="fact_prime_frontier_offer_events",
-            sql="""
+        event_history = engine.query("""
 select *
 from fact_prime_frontier_offer_events
 where event_type <> 'remained'
 order by observed_at, gpu_family_id, event_type, provider
-""",
-        )
+""")
     if events_ref and current_run_id:
         events = [
             row
             for row in event_history
             if str(row.get("gold_run_id") or "") == current_run_id
         ]
-        remained = query_parquet(
-            parquet_uri=str(events_ref),
-            table_name="fact_prime_frontier_offer_events",
-            sql=f"""
+        remained = engine.query(f"""
 select *
 from fact_prime_frontier_offer_events
 where gold_run_id = {_sql_literal(current_run_id)}
   and event_type = 'remained'
 order by gpu_family_id, price_level_usd_gpu_hr desc, provider
-""",
-        )
+""")
         events.extend(remained)
         events.sort(
             key=lambda row: (
@@ -363,10 +345,7 @@ order by gpu_family_id, price_level_usd_gpu_hr desc, provider
         )
     offer_history_ref = refs.get("fact_prime_frontier_offer_history")
     if offer_history_ref and current_run_id:
-        offers = query_parquet(
-            parquet_uri=str(offer_history_ref),
-            table_name="fact_prime_frontier_offer_history",
-            sql=f"""
+        offers = engine.query(f"""
 select *
 from fact_prime_frontier_offer_history
 where gold_run_id = {_sql_literal(current_run_id)}
@@ -375,8 +354,7 @@ where gold_run_id = {_sql_literal(current_run_id)}
   and coalesce(is_spot, false) = false
   and coalesce(is_secure, false) = true
 order by gpu_family_id, price_usd_gpu_hr asc, provider, gpu_count
-""",
-        )
+""")
     return {
         "manifest": manifest,
         "current": current,

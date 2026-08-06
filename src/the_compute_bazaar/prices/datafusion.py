@@ -1,8 +1,9 @@
-"""DataFusion helpers for GPU market benchmarks."""
+"""DataFusion execution boundary for compute-market Parquet tables."""
 
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 from urllib.parse import urlparse
@@ -12,28 +13,97 @@ from .storage import resolve_read_uri
 
 
 DEFAULT_MARKET_SUMMARY_SQL = read_sql("queries/silver_market_summary.sql")
+TABLE_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
-def query_parquet(
-    *,
-    parquet_uri: str,
-    sql: str,
-    table_name: str = "gpu_offers",
-) -> list[dict[str, Any]]:
-    try:
-        import pyarrow as pa
-        from datafusion import SessionContext
-    except ImportError as exc:
-        raise RuntimeError("DataFusion queries require the project dependencies: uv sync") from exc
+class DataFusionEngine:
+    """Own one DataFusion session and its registered market tables."""
 
-    ctx = SessionContext()
-    parquet_uri = resolve_read_uri(parquet_uri)
-    _register_object_stores(ctx, [parquet_uri])
-    ctx.register_parquet(table_name, parquet_uri)
-    batches = ctx.sql(sql).collect()
-    if not batches:
-        return []
-    return pa.Table.from_batches(batches).to_pylist()
+    def __init__(self, tables: Mapping[str, str] | None = None) -> None:
+        try:
+            import pyarrow as pa
+            from datafusion import SessionConfig, SessionContext
+        except ImportError as exc:
+            raise RuntimeError(
+                "DataFusion queries require the project dependencies: uv sync"
+            ) from exc
+
+        config = SessionConfig().with_parquet_pruning(True)
+        self._arrow = pa
+        self._context = SessionContext(config)
+        self._registered_buckets: set[str] = set()
+        self._table_refs: dict[str, str] = {}
+        if tables:
+            self.register_tables(tables)
+
+    @property
+    def table_names(self) -> tuple[str, ...]:
+        return tuple(sorted(self._table_refs))
+
+    def register_tables(self, tables: Mapping[str, str]) -> None:
+        resolved = {
+            _validated_table_name(name): resolve_read_uri(uri)
+            for name, uri in tables.items()
+        }
+        duplicate_names = sorted(set(resolved) & set(self._table_refs))
+        if duplicate_names:
+            raise ValueError(
+                f"DataFusion tables already registered: {', '.join(duplicate_names)}"
+            )
+        self._register_object_stores(resolved.values())
+        for table_name, parquet_uri in resolved.items():
+            self._context.register_parquet(table_name, parquet_uri)
+            self._table_refs[table_name] = parquet_uri
+
+    def query(self, sql: str) -> list[dict[str, Any]]:
+        if not sql.strip():
+            raise ValueError("DataFusion SQL must not be empty")
+        batches = self._context.sql(sql).collect()
+        if not batches:
+            return []
+        return self._arrow.Table.from_batches(batches).to_pylist()
+
+    def _register_object_stores(self, uris: Iterable[str]) -> None:
+        s3_buckets = {
+            urlparse(uri).netloc
+            for uri in uris
+            if uri.startswith("s3://")
+            and urlparse(uri).netloc not in self._registered_buckets
+        }
+        if not s3_buckets:
+            return
+
+        try:
+            import boto3
+            from datafusion.object_store import AmazonS3
+        except ImportError as exc:
+            raise RuntimeError(
+                "Querying s3:// paths requires boto3 and DataFusion S3 support"
+            ) from exc
+
+        session = boto3.Session(
+            profile_name=os.getenv("AWS_PROFILE"),
+            region_name=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION"),
+        )
+        credentials = session.get_credentials()
+        if credentials is None:
+            raise RuntimeError("No AWS credentials available for DataFusion S3 query")
+
+        frozen = credentials.get_frozen_credentials()
+        region = session.region_name or "us-east-1"
+        for bucket in sorted(s3_buckets):
+            kwargs: dict[str, Any] = {
+                "bucket_name": bucket,
+                "region": region,
+                "access_key_id": frozen.access_key,
+                "secret_access_key": frozen.secret_key,
+            }
+            if frozen.token:
+                kwargs["session_token"] = frozen.token
+            self._context.register_object_store(
+                "s3://", AmazonS3(**kwargs), host=bucket
+            )
+            self._registered_buckets.add(bucket)
 
 
 def query_market_summary(
@@ -42,55 +112,10 @@ def query_market_summary(
     sql = DEFAULT_MARKET_SUMMARY_SQL
     if limit is not None:
         sql = f"{sql.rstrip()}\nlimit {int(limit)}"
-    return query_parquet(parquet_uri=parquet_uri, table_name="gpu_offers", sql=sql)
+    return DataFusionEngine({"gpu_offers": parquet_uri}).query(sql)
 
 
-def query_tables(*, tables: Mapping[str, str], sql: str) -> list[dict[str, Any]]:
-    try:
-        import pyarrow as pa
-        from datafusion import SessionContext
-    except ImportError as exc:
-        raise RuntimeError("DataFusion queries require the project dependencies: uv sync") from exc
-
-    ctx = SessionContext()
-    resolved_tables = {name: resolve_read_uri(uri) for name, uri in tables.items()}
-    _register_object_stores(ctx, resolved_tables.values())
-    for table_name, parquet_uri in resolved_tables.items():
-        ctx.register_parquet(table_name, parquet_uri)
-    batches = ctx.sql(sql).collect()
-    if not batches:
-        return []
-    return pa.Table.from_batches(batches).to_pylist()
-
-
-def _register_object_stores(ctx: Any, uris: Iterable[str]) -> None:
-    s3_buckets = {urlparse(uri).netloc for uri in uris if uri.startswith("s3://")}
-    if not s3_buckets:
-        return
-
-    try:
-        import boto3
-        from datafusion.object_store import AmazonS3
-    except ImportError as exc:
-        raise RuntimeError("Querying s3:// paths requires boto3 and DataFusion S3 support") from exc
-
-    session = boto3.Session(
-        profile_name=os.getenv("AWS_PROFILE"),
-        region_name=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION"),
-    )
-    credentials = session.get_credentials()
-    if credentials is None:
-        raise RuntimeError("No AWS credentials available for DataFusion S3 query")
-
-    frozen = credentials.get_frozen_credentials()
-    region = session.region_name or "us-east-1"
-    for bucket in sorted(s3_buckets):
-        kwargs: dict[str, Any] = {
-            "bucket_name": bucket,
-            "region": region,
-            "access_key_id": frozen.access_key,
-            "secret_access_key": frozen.secret_key,
-        }
-        if frozen.token:
-            kwargs["session_token"] = frozen.token
-        ctx.register_object_store("s3://", AmazonS3(**kwargs), host=bucket)
+def _validated_table_name(table_name: str) -> str:
+    if not TABLE_NAME_PATTERN.fullmatch(table_name):
+        raise ValueError(f"Invalid DataFusion table name: {table_name!r}")
+    return table_name

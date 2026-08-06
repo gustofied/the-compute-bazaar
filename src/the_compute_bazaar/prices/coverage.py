@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .datafusion import query_parquet
+from .datafusion import DataFusionEngine
 from .gold_manifest import read_latest_gold_manifest
 
 
@@ -182,11 +182,7 @@ left join capacity_totals capacity
   and metrics.gpu_family = capacity.gpu_family
 order by metrics.sort_order
 """
-    rows = query_parquet(
-        parquet_uri=table_ref,
-        table_name="fact_gpu_listings",
-        sql=sql,
-    )
+    rows = DataFusionEngine({"fact_gpu_listings": table_ref}).query(sql)
     for row in rows:
         live_count = int(row.get("live_offer_count") or 0)
         row["target_live_offer_count"] = int(target)
