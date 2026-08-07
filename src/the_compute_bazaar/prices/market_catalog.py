@@ -136,7 +136,6 @@ order by ordinal_position
                     select=silver_market_state_select,
                 ),
             )
-        self.engine.deregister_tables(tables)
 
     def _register_gold(self) -> None:
         table_refs = {
@@ -157,7 +156,6 @@ order by ordinal_position
                 table_name,
                 f"select * from _gold_{table_name}",
             )
-        self.engine.deregister_tables(physical_tables)
 
     def _run(self) -> dict[str, Any]:
         return {
