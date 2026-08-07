@@ -9,11 +9,9 @@ from typing import Any
 from .events import new_run_id
 from .ingestion import IngestResult, persist_provider_snapshot
 from .market_state_akash import normalize_akash_market_state
-from .market_state_clore import normalize_clore_market_state
 from .market_state_prime import normalize_prime_market_state
 from .market_state_runpod import normalize_runpod_market_state
 from .providers.akash import AkashClient, normalize_gpu_prices
-from .providers.clore import CloreClient, normalize_servers
 from .providers.lium import LiumClient, normalize_executors
 from .providers.prime_intellect import PrimeIntellectClient, normalize_availability
 from .providers.runpod import RunpodClient, normalize_gpu_types
@@ -393,69 +391,6 @@ def ingest_runpod(
         normalized=normalized,
         unknown_gpu_names=unknown_gpu_names,
         snapshot_query={"source_type": "live_gpu_type_pricing", "gpu_count": 1},
-        automq_bootstrap_servers=automq_bootstrap_servers,
-        automq_config=automq_config,
-        topic_prefix=topic_prefix,
-        dry_run=dry_run,
-        market_state=market_state,
-    )
-
-
-def ingest_clore(
-    *,
-    api_key: str | None = None,
-    raw_root: str = "data/raw",
-    lake_root: str = "data/lake",
-    automq_bootstrap_servers: str | None = None,
-    automq_config: dict[str, str] | None = None,
-    topic_prefix: str = "gpu",
-    dry_run: bool = False,
-    run_id: str | None = None,
-    trace_id: str | None = None,
-    marketplace_url: str | None = None,
-) -> IngestResult:
-    provider = "clore"
-    run_id = run_id or new_run_id(provider)
-    trace_id = trace_id or uuid.uuid4().hex
-    observed_at = utc_now()
-    observed_date = observed_at.date().isoformat()
-    raw_ref = date_partition(
-        raw_root,
-        provider=provider,
-        observed_date=observed_date,
-        run_id=run_id,
-        filename="marketplace.json",
-    )
-    client = CloreClient(
-        api_key=api_key or os.getenv("CLORE_API_KEY", ""),
-        **({"marketplace_url": marketplace_url} if marketplace_url else {}),
-    )
-    fetched = client.fetch_marketplace()
-    normalized, unknown_gpu_names = normalize_servers(
-        fetched.servers,
-        observed_at=observed_at,
-        raw_ref=raw_ref,
-    )
-    market_state = normalize_clore_market_state(
-        fetched.servers,
-        observed_at=observed_at,
-        raw_ref=raw_ref,
-    )
-    return persist_provider_snapshot(
-        provider=provider,
-        run_id=run_id,
-        trace_id=trace_id,
-        observed_at=observed_at,
-        lake_root=lake_root,
-        raw_ref=raw_ref,
-        raw_payload=fetched.raw_payload,
-        raw_offer_count=len(fetched.servers),
-        normalized=normalized,
-        unknown_gpu_names=unknown_gpu_names,
-        snapshot_query={
-            "source_type": "authenticated_live_gpu_marketplace",
-            "available_only": True,
-        },
         automq_bootstrap_servers=automq_bootstrap_servers,
         automq_config=automq_config,
         topic_prefix=topic_prefix,

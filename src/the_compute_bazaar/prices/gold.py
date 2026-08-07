@@ -30,6 +30,7 @@ from .prime_gold import (
     PRIME_FRONTIER_GOLD_TABLES,
     build_prime_frontier_gold_products,
 )
+from .provider_registry import registered_provider_names
 from .schemas import to_jsonable, utc_now
 from .storage import table_partition, write_json, write_parquet_rows
 
@@ -226,6 +227,7 @@ def build_gold_market_tables(
             ),
             current_rows=rows_by_table["fact_compute_market_state"],
             methodology=MARKET_STATE_METHODOLOGY,
+            retained_source_connectors=set(registered_provider_names()),
         )
     )
 

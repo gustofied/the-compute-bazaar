@@ -34,7 +34,6 @@ from .provider_ingestion_public_clouds import (
 )
 from .provider_ingestion_marketplaces import (
     ingest_akash,
-    ingest_clore,
     ingest_lium,
     ingest_prime_intellect,
     ingest_runpod,
@@ -174,14 +173,6 @@ PROVIDERS = (
         ),
     ),
     ProviderDefinition(
-        "clore",
-        ingest_clore,
-        "marketplace",
-        "live_offer",
-        default_enabled=False,
-        credentials=(ProviderCredential("CLORE_API_KEY", "Clore API key"),),
-    ),
-    ProviderDefinition(
         "prime_intellect",
         ingest_prime_intellect,
         "marketplace",
@@ -278,6 +269,10 @@ PROVIDER_BY_NAME = {provider.name: provider for provider in PROVIDERS}
 
 def enabled_provider_names() -> list[str]:
     return [provider.name for provider in PROVIDERS if provider.is_enabled()]
+
+
+def registered_provider_names() -> list[str]:
+    return [provider.name for provider in PROVIDERS]
 
 
 def get_provider(name: str) -> ProviderDefinition:

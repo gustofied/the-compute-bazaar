@@ -123,6 +123,7 @@ def merge_compute_market_state_history(
     previous_ref: Any,
     current_rows: list[dict[str, Any]],
     methodology: str,
+    retained_source_connectors: set[str],
 ) -> list[dict[str, Any]]:
     previous_rows: list[dict[str, Any]] = []
     if previous_ref:
@@ -132,6 +133,8 @@ def merge_compute_market_state_history(
     merged: dict[str, dict[str, Any]] = {}
     for row in [*previous_rows, *current_rows]:
         row = dict(row)
+        if str(row.get("source_connector") or "") not in retained_source_connectors:
+            continue
         row["methodology_version"] = methodology
         row["observed_at"] = _timestamp(row.get("observed_at"))
         observation_id = str(row.get("observation_id") or "")
