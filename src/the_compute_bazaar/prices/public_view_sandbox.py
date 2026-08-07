@@ -32,6 +32,7 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(row, Mapping)
     ]
     return card(
+        manifest=dict(manifest),
         card_type="sandbox_workload_cost",
         card_id="sandbox:workload",
         as_of=latest_run.get("generated_at") or manifest.get("built_at"),

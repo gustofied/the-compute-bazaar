@@ -10,6 +10,7 @@ from ..contracts import CARD_CONTRACT
 
 def card(
     *,
+    manifest: Any,
     card_type: str,
     card_id: str,
     as_of: Any,
@@ -27,6 +28,7 @@ def card(
 ) -> dict[str, Any]:
     return {
         "contract": CARD_CONTRACT,
+        "manifest": manifest,
         "card_type": card_type,
         "card_id": card_id,
         "as_of": as_of,

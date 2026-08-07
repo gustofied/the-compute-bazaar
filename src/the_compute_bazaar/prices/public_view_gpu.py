@@ -53,6 +53,7 @@ def gpu_benchmark_view(
     )
     value = number(latest.get("benchmark_usd_gpu_hr"))
     return card(
+        manifest=dict(manifest),
         card_type="gpu_benchmark",
         card_id=f"gpu-benchmark:{family.lower()}",
         as_of=observed_at,

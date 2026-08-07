@@ -30,6 +30,7 @@ def prime_frontier_view(
         dict(row) for row in product.get("sources", []) if isinstance(row, Mapping)
     ]
     return card(
+        manifest=dict(manifest),
         card_type="prime_frontier_offer_market",
         card_id=f"prime-frontier:{family.lower()}",
         as_of=(
