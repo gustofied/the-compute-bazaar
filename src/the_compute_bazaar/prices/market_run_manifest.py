@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from ..contracts import MARKET_RUN_CONTRACT, require_contract
@@ -10,6 +11,12 @@ from .storage import list_refs, read_json, write_json
 
 
 MARKET_RUN_TABLE = "market_runs"
+
+
+@dataclass(frozen=True)
+class MarketRunHistory:
+    rows: list[dict[str, Any]]
+    skipped_manifest_count: int
 
 
 def write_market_run_manifest(
@@ -80,7 +87,9 @@ def read_latest_market_run(lake_root: str) -> dict[str, Any]:
     return _read_market_run_manifest(latest_market_run_ref(lake_root))
 
 
-def list_market_runs(lake_root: str, *, limit: int = 24) -> list[dict[str, Any]]:
+def read_market_run_history(
+    lake_root: str, *, limit: int = 24
+) -> MarketRunHistory:
     requested_limit = max(1, int(limit))
     refs = [
         ref
@@ -88,17 +97,20 @@ def list_market_runs(lake_root: str, *, limit: int = 24) -> list[dict[str, Any]]
         if "/run_id=" in ref or "/run_id%3D" in ref
     ]
     manifests: list[dict[str, Any]] = []
+    skipped_manifest_count = 0
     for ref in refs:
         try:
             manifest = _read_market_run_manifest(ref)
-        except Exception as exc:
-            raise RuntimeError(
-                f"Cannot read market-run history manifest: {ref}"
-            ) from exc
+        except Exception:
+            skipped_manifest_count += 1
+            continue
         manifests.append(manifest)
 
     manifests.sort(key=lambda row: str(row.get("observed_at") or ""), reverse=True)
-    return manifests[:requested_limit]
+    return MarketRunHistory(
+        rows=manifests[:requested_limit],
+        skipped_manifest_count=skipped_manifest_count,
+    )
 
 
 def _read_market_run_manifest(ref: str) -> dict[str, Any]:
@@ -115,9 +127,10 @@ def write_public_market_run_snapshots(
     limit: int = 24,
 ) -> dict[str, str]:
     latest_manifest = latest or read_latest_market_run(lake_root)
+    market_history = read_market_run_history(lake_root, limit=limit)
     history = [
         _public_market_run_manifest(row)
-        for row in list_market_runs(lake_root, limit=limit)
+        for row in market_history.rows
     ]
     if not history:
         history = [_public_market_run_manifest(latest_manifest)]
@@ -132,6 +145,7 @@ def write_public_market_run_snapshots(
         {
             "latest_market_run_id": latest_manifest.get("market_run_id"),
             "row_count": len(history),
+            "skipped_manifest_count": market_history.skipped_manifest_count,
             "rows": history,
         },
     )
