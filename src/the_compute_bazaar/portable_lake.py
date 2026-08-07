@@ -16,7 +16,6 @@ from .contracts import (
     GPU_OFFERS_RUN_CONTRACT,
     PORTABLE_LAKE_CONTRACT,
 )
-from .data_root import bundled_sample_lake_root
 from .prices.gold_manifest import (
     GOLD_MANIFEST_TABLE,
     gold_manifest_ref,
@@ -35,7 +34,6 @@ from .prices.storage import (
 )
 
 
-DEFAULT_HISTORY_LIMIT = 24 * 90
 PRIVATE_REF_FIELDS = {
     "manifest_ref",
     "raw_ref",
@@ -48,8 +46,7 @@ PRIVATE_REF_FIELDS = {
 def build_portable_lake(
     *,
     source_lake_root: str,
-    output_root: str = bundled_sample_lake_root(),
-    history_limit: int = DEFAULT_HISTORY_LIMIT,
+    output_root: str,
 ) -> dict[str, Any]:
     """Materialize the public Silver/Gold contract without private evidence refs."""
     output = Path(output_root).resolve()
@@ -69,7 +66,6 @@ def build_portable_lake(
     table_refs, row_counts = _copy_latest_gold(
         source_manifest=source_latest,
         output_root=output,
-        history_limit=history_limit,
     )
     if "fact_gpu_price_index_history" not in table_refs:
         raise RuntimeError("Gold manifest is missing fact_gpu_price_index_history")
@@ -96,6 +92,7 @@ def build_portable_lake(
         "observed_at": source_latest["observed_at"],
         "provider_scope": provider_scope,
         "history_row_count": row_counts.get("fact_gpu_price_index_history", 0),
+        "history_mode": "complete",
         "private_evidence_removed": True,
     }
     write_json(str(output / "portable.json"), metadata)
@@ -107,7 +104,6 @@ def publish_portable_lake(
     *,
     source_lake_root: str,
     output_root: str,
-    history_limit: int = DEFAULT_HISTORY_LIMIT,
 ) -> dict[str, Any]:
     """Build locally, upload immutable files first, then publish the inventory."""
     with tempfile.TemporaryDirectory(prefix="compute-bazaar-public-lake-") as temp:
@@ -115,7 +111,6 @@ def publish_portable_lake(
         metadata = build_portable_lake(
             source_lake_root=source_lake_root,
             output_root=str(local_root),
-            history_limit=history_limit,
         )
         paths = sorted(path for path in local_root.rglob("*") if path.is_file())
         paths.sort(key=lambda path: path.name == "index.json")
@@ -205,7 +200,6 @@ def _copy_latest_gold(
     *,
     source_manifest: dict[str, Any],
     output_root: Path,
-    history_limit: int,
 ) -> tuple[dict[str, str], dict[str, int]]:
     table_refs: dict[str, str] = {}
     row_counts: dict[str, int] = {}
@@ -216,8 +210,6 @@ def _copy_latest_gold(
             _sanitize_rows(read_parquet_rows(str(source_ref))),
             output_root=output_root,
         )
-        if str(table_name).endswith("_history"):
-            rows = _limit_history_rows(rows, limit=history_limit)
         filename = PurePosixPath(urlparse(str(source_ref)).path).name
         target_ref = table_partition(
             str(output_root),
@@ -231,39 +223,6 @@ def _copy_latest_gold(
         table_refs[str(table_name)] = target_ref
         row_counts[str(table_name)] = len(rows)
     return table_refs, row_counts
-
-
-def _limit_history_rows(
-    rows: list[dict[str, Any]], *, limit: int
-) -> list[dict[str, Any]]:
-    ordered = sorted(rows, key=_history_sort_key)
-    snapshots = list(dict.fromkeys(_history_snapshot_key(row) for row in ordered))
-    selected = set(snapshots[-max(1, int(limit)) :])
-    return [row for row in ordered if _history_snapshot_key(row) in selected]
-
-
-def _history_snapshot_key(row: dict[str, Any]) -> str:
-    return str(
-        row.get("gold_run_id")
-        or row.get("gold_observed_at")
-        or row.get("observed_at")
-        or row.get("latest_observed_at")
-        or ""
-    )
-
-
-def _history_sort_key(row: dict[str, Any]) -> tuple[str, str, str]:
-    return (
-        str(
-            row.get("gold_observed_at")
-            or row.get("observed_at")
-            or row.get("latest_observed_at")
-            or ""
-        ),
-        _history_snapshot_key(row),
-        str(row.get("benchmark_family_id") or row.get("observation_id") or ""),
-    )
-
 
 def _portable_gold_manifest(
     *,
@@ -361,6 +320,7 @@ def _write_inventory(
         "run_id": metadata["run_id"],
         "observed_at": metadata["observed_at"],
         "provider_scope": metadata["provider_scope"],
+        "history_mode": metadata["history_mode"],
         "file_count": len(files),
         "files": files,
     }
@@ -455,21 +415,19 @@ def _relative(root: Path, ref: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-lake-root", required=True)
-    parser.add_argument("--output-root", default=bundled_sample_lake_root())
-    parser.add_argument("--history-limit", type=int, default=DEFAULT_HISTORY_LIMIT)
-    parser.add_argument("--publish-output-root")
+    destination = parser.add_mutually_exclusive_group(required=True)
+    destination.add_argument("--output-root")
+    destination.add_argument("--publish-output-root")
     args = parser.parse_args()
     if args.publish_output_root:
         result = publish_portable_lake(
             source_lake_root=args.source_lake_root,
             output_root=args.publish_output_root,
-            history_limit=args.history_limit,
         )
     else:
         result = build_portable_lake(
             source_lake_root=args.source_lake_root,
             output_root=args.output_root,
-            history_limit=args.history_limit,
         )
     print(json.dumps(to_jsonable(result), indent=2, sort_keys=True))
 

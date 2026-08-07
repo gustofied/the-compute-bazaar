@@ -4,12 +4,13 @@
 
 ## Setup
 
-Install the project and query the bundled public market snapshot. No cloud
-credentials are needed.
+Install the project and download the public market lake. No cloud credentials
+are needed.
 
 ```bash
 uv sync
 source .venv/bin/activate
+compute-bazaar data sync
 compute-bazaar data status
 compute-bazaar price-index
 ```
@@ -17,15 +18,9 @@ compute-bazaar price-index
 `compute-bazaar` prints tables in a terminal. Use
 `compute-bazaar --format json COMMAND` for programs.
 
-Download the latest sanitized Silver and Gold lake:
-
-```bash
-compute-bazaar data sync
-compute-bazaar data status
-```
-
-The CLI uses that checksummed local copy on later runs. Set
-`COMPUTE_BAZAAR_DATA_HOME` to choose its cache location.
+The CLI verifies and caches the latest sanitized Silver tables and complete
+published Gold history for local DataFusion queries. Later runs use that copy.
+Set `COMPUTE_BAZAAR_DATA_HOME` to choose its cache location.
 
 ## Query
 

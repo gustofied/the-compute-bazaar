@@ -47,10 +47,10 @@ order by benchmark_family_id
 def query_gold_gpu_price_index_history(
     *,
     lake_root: str,
-    history_limit: int = 24,
+    history_limit: int | None = None,
     manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Read GPU Price Index values stored with retained Gold snapshots."""
+    """Read GPU Price Index history, optionally limited by market run."""
     manifest = manifest or read_latest_gold_manifest(lake_root)
     history_ref = manifest["table_refs"]["fact_gpu_price_index_history"]
     rows = DataFusionEngine({"fact_gpu_price_index_history": str(history_ref)}).query("""
@@ -65,7 +65,9 @@ order by gold_observed_at, benchmark_family_id
     ]
     selected_runs = list(
         dict.fromkeys(str(row.get("gold_run_id") or "") for row in rows)
-    )[-max(1, int(history_limit)) :]
+    )
+    if history_limit is not None:
+        selected_runs = selected_runs[-max(1, int(history_limit)) :]
     selected = set(selected_runs)
     rows = [row for row in rows if str(row.get("gold_run_id") or "") in selected]
     return {

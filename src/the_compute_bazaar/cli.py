@@ -268,6 +268,8 @@ def serve_api(
     ] = False,
 ) -> None:
     """Serve the typed read-only API."""
+    state = _state(ctx)
+    _require_lake(state.lake)
     try:
         import uvicorn
 
@@ -277,7 +279,7 @@ def serve_api(
 
     uvicorn.run(
         create_app(
-            lake_root=_state(ctx).lake.root,
+            lake_root=state.lake.root,
             enable_scratch_sql=enable_scratch_sql,
         ),
         host=host,
@@ -390,13 +392,30 @@ def _state(ctx: typer.Context) -> CLIState:
 def _service(ctx: typer.Context) -> Any:
     from .market_query_service import MarketQueryService
 
-    return MarketQueryService(lake_root=_state(ctx).lake.root)
+    state = _state(ctx)
+    _require_lake(state.lake)
+    return MarketQueryService(lake_root=state.lake.root)
 
 
 def _market_catalog(ctx: typer.Context) -> Any:
     from .prices.market_catalog import MarketDataCatalog
 
-    return MarketDataCatalog(lake_root=_state(ctx).lake.root)
+    state = _state(ctx)
+    _require_lake(state.lake)
+    return MarketDataCatalog(lake_root=state.lake.root)
+
+
+def _require_lake(lake: LakeSelection) -> None:
+    if "://" in lake.root:
+        return
+    manifest = Path(lake.root) / "_manifests" / "gold_market" / "latest.json"
+    if manifest.is_file():
+        return
+    if lake.kind == "public_cache":
+        message = "No public lake is synced. Run: compute-bazaar data sync"
+    else:
+        message = f"No manifested lake exists at {lake.root}"
+    raise typer.BadParameter(message)
 
 
 def _read_sql(*, statement: str | None, sql_file: Path | None) -> str:

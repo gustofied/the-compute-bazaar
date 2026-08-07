@@ -88,6 +88,7 @@ def sync_public_lake(
         "run_id": index["run_id"],
         "observed_at": index["observed_at"],
         "providers": index["provider_scope"],
+        "history_mode": index.get("history_mode"),
         "file_count": index["file_count"],
         "downloaded_bytes": sum(item["size"] for item in index["files"]),
     }
@@ -95,10 +96,27 @@ def sync_public_lake(
 
 def inspect_lake(*, root: str, kind: str, label: str) -> dict[str, Any]:
     """Describe the local lake selected by the CLI without making a network call."""
+    path = None if "://" in root else Path(root)
+    if path is not None and not (
+        path / "_manifests" / "gold_market" / "latest.json"
+    ).is_file():
+        result = {
+            "status": "missing",
+            "kind": kind,
+            "label": label,
+            "root": root,
+        }
+        if kind == "public_cache":
+            result.update(
+                source_url=DEFAULT_PUBLIC_LAKE_URL,
+                next_command="compute-bazaar data sync",
+            )
+        return result
+
     manifest = read_latest_gold_manifest(root)
-    path = Path(root)
-    index = _read_mapping(path / "index.json") if path.is_dir() else {}
-    sync = _read_mapping(path / ".sync.json") if path.is_dir() else {}
+    index = _read_mapping(path / "index.json") if path and path.is_dir() else {}
+    sync = _read_mapping(path / ".sync.json") if path and path.is_dir() else {}
+    portable = _read_mapping(path / "portable.json") if path and path.is_dir() else {}
     observed_at = str(manifest.get("observed_at") or "")
     return {
         "status": "ready",
@@ -111,6 +129,7 @@ def inspect_lake(*, root: str, kind: str, label: str) -> dict[str, Any]:
         "providers": manifest.get("provider_scope") or [],
         "tables": len(manifest.get("table_refs") or {}),
         "file_count": index.get("file_count"),
+        "history_mode": portable.get("history_mode"),
         "source_url": sync.get("source_url"),
         "synced_at": sync.get("synced_at"),
     }

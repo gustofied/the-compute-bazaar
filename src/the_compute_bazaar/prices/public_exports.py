@@ -39,7 +39,6 @@ def export_public_cards(
     *,
     lake_root: str,
     output_root: str,
-    benchmark_history_limit: int = 24 * 90,
 ) -> dict[str, Any]:
     """Export public JSON snapshots for static D3/blog consumers."""
     manifest = read_latest_gold_manifest(lake_root)
@@ -63,7 +62,6 @@ def export_public_cards(
     ]
     benchmark_history_payload = query_gold_gpu_price_index_history(
         lake_root=lake_root,
-        history_limit=benchmark_history_limit,
         manifest=manifest,
     )
     public_benchmark_history = [

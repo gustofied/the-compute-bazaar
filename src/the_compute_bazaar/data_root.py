@@ -18,10 +18,6 @@ class LakeSelection:
         return asdict(self)
 
 
-def bundled_sample_lake_root() -> str:
-    return str(Path(__file__).with_name("sample_lake"))
-
-
 def default_synced_lake_root() -> str:
     configured = os.getenv("COMPUTE_BAZAAR_DATA_HOME")
     if configured:
@@ -42,16 +38,8 @@ def resolve_lake_root(explicit: str | None = None) -> LakeSelection:
             "COMPUTE_BAZAAR_LAKE_ROOT",
         )
 
-    synced = Path(default_synced_lake_root())
-    if (synced / "_manifests" / "gold_market" / "latest.json").is_file():
-        return LakeSelection(
-            str(synced),
-            "synced_public",
-            "synced public lake",
-        )
-
     return LakeSelection(
-        bundled_sample_lake_root(),
-        "bundled_sample",
-        "bundled public snapshot",
+        default_synced_lake_root(),
+        "public_cache",
+        "public lake cache",
     )
