@@ -8,12 +8,9 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 from urllib.parse import urlparse
 
-from .sql_models import read_sql
-from .silver_contract import silver_offer_select
 from .storage import resolve_read_uri
 
 
-DEFAULT_MARKET_SUMMARY_SQL = read_sql("queries/silver_market_summary.sql")
 TABLE_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -124,26 +121,6 @@ class DataFusionEngine:
                 "s3://", AmazonS3(**kwargs), host=bucket
             )
             self._registered_buckets.add(bucket)
-
-
-def query_market_summary(
-    *, parquet_uri: str, limit: int | None = None
-) -> list[dict[str, Any]]:
-    sql = DEFAULT_MARKET_SUMMARY_SQL
-    if limit is not None:
-        sql = f"{sql.rstrip()}\nlimit {int(limit)}"
-    engine = DataFusionEngine({"_gpu_offers": parquet_uri})
-    engine.create_view(
-        "public",
-        "gpu_offers",
-        silver_offer_select(
-            "_gpu_offers",
-            source_run_id="ad-hoc",
-            source_manifest_ref=None,
-            source_normalized_ref=parquet_uri,
-        ),
-    )
-    return engine.query(sql)
 
 
 def _validated_table_name(table_name: str) -> str:

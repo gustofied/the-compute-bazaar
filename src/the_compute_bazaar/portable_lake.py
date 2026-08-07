@@ -7,7 +7,6 @@ import hashlib
 import json
 import shutil
 import tempfile
-from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
@@ -16,17 +15,14 @@ from .contracts import (
     GOLD_MARKET_CONTRACT,
     GPU_OFFERS_RUN_CONTRACT,
     PORTABLE_LAKE_CONTRACT,
-    transform_contract,
 )
 from .data_root import bundled_sample_lake_root
 from .prices.gold_manifest import (
     GOLD_MANIFEST_TABLE,
     gold_manifest_ref,
     latest_gold_manifest_ref,
-    list_gold_manifests,
     read_latest_gold_manifest,
 )
-from .prices.gold_sources import gpu_price_index_history_row
 from .prices.manifest import latest_manifest_ref
 from .prices.schemas import to_jsonable
 from .prices.storage import (
@@ -49,7 +45,7 @@ PRIVATE_REF_FIELDS = {
 }
 
 
-def build_public_sample_lake(
+def build_portable_lake(
     *,
     source_lake_root: str,
     output_root: str = bundled_sample_lake_root(),
@@ -76,22 +72,7 @@ def build_public_sample_lake(
         history_limit=history_limit,
     )
     if "fact_gpu_price_index_history" not in table_refs:
-        history_rows = _fallback_price_history(
-            source_lake_root=source_lake_root,
-            latest_observed_at=str(source_latest["observed_at"]),
-            limit=history_limit,
-        )
-        history_ref = table_partition(
-            str(output),
-            table="gold/fact_gpu_price_index_history",
-            observed_date=str(source_latest["observed_date"]),
-            provider=None,
-            run_id=str(source_latest["run_id"]),
-            filename="gpu_price_index_history.parquet",
-        )
-        write_parquet_rows(history_ref, history_rows)
-        table_refs["fact_gpu_price_index_history"] = history_ref
-        row_counts["fact_gpu_price_index_history"] = len(history_rows)
+        raise RuntimeError("Gold manifest is missing fact_gpu_price_index_history")
 
     portable_manifest = _portable_gold_manifest(
         source_manifest=source_latest,
@@ -117,12 +98,12 @@ def build_public_sample_lake(
         "history_row_count": row_counts.get("fact_gpu_price_index_history", 0),
         "private_evidence_removed": True,
     }
-    write_json(str(output / "sample.json"), metadata)
+    write_json(str(output / "portable.json"), metadata)
     inventory = _write_inventory(output, metadata=metadata)
     return {**metadata, "file_count": inventory["file_count"]}
 
 
-def publish_public_lake(
+def publish_portable_lake(
     *,
     source_lake_root: str,
     output_root: str,
@@ -131,7 +112,7 @@ def publish_public_lake(
     """Build locally, upload immutable files first, then publish the inventory."""
     with tempfile.TemporaryDirectory(prefix="compute-bazaar-public-lake-") as temp:
         local_root = Path(temp) / "lake"
-        metadata = build_public_sample_lake(
+        metadata = build_portable_lake(
             source_lake_root=source_lake_root,
             output_root=str(local_root),
             history_limit=history_limit,
@@ -284,56 +265,6 @@ def _history_sort_key(row: dict[str, Any]) -> tuple[str, str, str]:
     )
 
 
-def _fallback_price_history(
-    *,
-    source_lake_root: str,
-    latest_observed_at: str,
-    limit: int,
-) -> list[dict[str, Any]]:
-    latest_time = _parse_time(latest_observed_at)
-    manifests: list[dict[str, Any]] = []
-    for manifest in list_gold_manifests(
-        source_lake_root,
-        limit=limit,
-        canonical_market_runs_only=True,
-    ):
-        if _parse_time(str(manifest.get("observed_at") or "")) > latest_time:
-            continue
-        table_refs = dict(manifest.get("table_refs") or {})
-        if not (
-            table_refs.get("fact_gpu_price_index")
-            or table_refs.get("fact_benchmark_values")
-        ):
-            continue
-        manifests.append(manifest)
-    manifests.sort(key=lambda row: str(row.get("observed_at") or ""))
-    manifests = manifests[-max(1, int(limit)) :]
-
-    merged: dict[tuple[str, str], dict[str, Any]] = {}
-    for manifest in manifests:
-        table_refs = dict(manifest.get("table_refs") or {})
-        table_ref = table_refs.get("fact_gpu_price_index") or table_refs.get(
-            "fact_benchmark_values"
-        )
-        for row in read_parquet_rows(str(table_ref)):
-            sanitized = gpu_price_index_history_row(
-                _sanitize_mapping(dict(row)),
-                gold_run_id=str(manifest.get("run_id") or ""),
-                gold_observed_at=str(manifest.get("observed_at") or ""),
-                gold_observed_date=str(manifest.get("observed_date") or ""),
-            )
-            family = str(sanitized.get("benchmark_family_id") or "")
-            if family:
-                merged[(str(manifest.get("run_id") or ""), family)] = sanitized
-    return sorted(
-        merged.values(),
-        key=lambda row: (
-            str(row.get("gold_observed_at") or ""),
-            str(row.get("benchmark_family_id") or ""),
-        ),
-    )
-
-
 def _portable_gold_manifest(
     *,
     source_manifest: dict[str, Any],
@@ -342,22 +273,20 @@ def _portable_gold_manifest(
     table_refs: dict[str, str],
     row_counts: dict[str, int],
 ) -> dict[str, Any]:
-    manifest = transform_contract(
-        {
-            key: value
-            for key, value in source_manifest.items()
-            if key
-            not in {
-                "manifest_ref",
-                "source_manifest_refs",
-                "source_normalized_refs",
-                "source_market_state_refs",
-                "table_refs",
-                "row_counts",
-            }
-        },
-        contract=GOLD_MARKET_CONTRACT,
-    )
+    manifest = {
+        key: value
+        for key, value in source_manifest.items()
+        if key
+        not in {
+            "manifest_ref",
+            "source_manifest_refs",
+            "source_normalized_refs",
+            "source_market_state_refs",
+            "table_refs",
+            "row_counts",
+        }
+    }
+    manifest["contract"] = GOLD_MARKET_CONTRACT
     manifest["table"] = GOLD_MANIFEST_TABLE
     manifest["ref_base"] = "lake_root"
     manifest["provider_scope"] = provider_scope
@@ -523,10 +452,6 @@ def _relative(root: Path, ref: str) -> str:
     return Path(ref).resolve().relative_to(root).as_posix()
 
 
-def _parse_time(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-lake-root", required=True)
@@ -535,13 +460,13 @@ def main() -> None:
     parser.add_argument("--publish-output-root")
     args = parser.parse_args()
     if args.publish_output_root:
-        result = publish_public_lake(
+        result = publish_portable_lake(
             source_lake_root=args.source_lake_root,
             output_root=args.publish_output_root,
             history_limit=args.history_limit,
         )
     else:
-        result = build_public_sample_lake(
+        result = build_portable_lake(
             source_lake_root=args.source_lake_root,
             output_root=args.output_root,
             history_limit=args.history_limit,

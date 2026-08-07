@@ -2,33 +2,28 @@
 
 from __future__ import annotations
 
-from .market_run_manifest import (
-    _dashboard_market_history_ref,
-    _dashboard_market_run_ref,
-    _failed_market_run_payload,
-    _provider_check_status,
-    _provider_error_message,
-    _public_market_run_manifest,
-    write_dashboard_market_run_snapshots,
-    write_market_run_manifest,
-)
-
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from ..contracts import MARKET_RUN_CONTRACT
+from ..portable_lake import publish_portable_lake
 from .coverage import query_frontier_coverage_ref
 from .events import new_run_id
 from .gold import build_gold_market_tables
-from .gold_exports import export_gold_dashboard_snapshot
 from .ingestion import IngestResult
+from .market_run_manifest import (
+    _failed_market_run_payload,
+    _provider_check_status,
+    _provider_error_message,
+    _public_market_history_ref,
+    _public_market_run_ref,
+    write_market_run_manifest,
+    write_public_market_run_snapshots,
+)
 from .provider_registry import ProviderRunContext, enabled_provider_names, get_provider
-from .public_view_gpu import GPU_FAMILIES
-from .public_view_market import market_overview_view
+from .public_exports import export_public_cards
 from .schemas import to_jsonable, utc_now
-from .storage import read_json, write_json
-from ..sample_data import publish_public_lake
 
 
 MARKET_RUN_TABLE = "market_runs"
@@ -52,13 +47,12 @@ class MarketRunResult:
     provider_normalized_refs: dict[str, str | None]
     provider_market_state_refs: dict[str, str | None]
     gold_run_id: str
-    dashboard_export_id: str
     row_counts: dict[str, int]
     checks: dict[str, str]
     data_quality: dict[str, Any]
     provider_results: dict[str, dict[str, Any]]
     gold_manifest_ref: str
-    dashboard_output_refs: dict[str, str]
+    public_output_refs: dict[str, str]
     manifest_ref: str
 
     def to_dict(self) -> dict[str, Any]:
@@ -77,11 +71,10 @@ def run_market_hourly(
     automq_config: dict[str, str] | None = None,
     topic_prefix: str = "gpu",
     run_id: str | None = None,
-    dashboard_limit: int = 100,
     provider_options: Mapping[str, Mapping[str, Any]] | None = None,
     dry_run: bool = False,
 ) -> MarketRunResult:
-    """Run the full market heartbeat: provider ingest, gold build, dashboard export, manifest."""
+    """Run the full market heartbeat: ingest, Gold, public cards, portable lake."""
     market_run_id = run_id or new_run_id("market")
     observed_at = utc_now()
     observed_date = observed_at.date().isoformat()
@@ -227,22 +220,20 @@ def run_market_hourly(
     data_quality["frontier_coverage"] = query_frontier_coverage_ref(
         table_ref=gold_result.table_refs["fact_gpu_listings"],
     )
-    dashboard_export_id = f"dashboard-{market_run_id}"
-    dashboard_export = export_gold_dashboard_snapshot(
+    public_export = export_public_cards(
         lake_root=lake_root,
         output_root=dashboard_output_root,
-        limit=dashboard_limit,
     )
-    dashboard_output_refs = {
-        **dashboard_export["output_refs"],
-        "market_run": _dashboard_market_run_ref(dashboard_output_root),
-        "market_history": _dashboard_market_history_ref(dashboard_output_root),
+    public_output_refs = {
+        **public_export["output_refs"],
+        "market_run": _public_market_run_ref(dashboard_output_root),
+        "market_history": _public_market_history_ref(dashboard_output_root),
     }
-    portable_lake = publish_public_lake(
+    portable_lake = publish_portable_lake(
         source_lake_root=lake_root,
         output_root=f"{dashboard_output_root.rstrip('/')}/lake",
     )
-    dashboard_output_refs["portable_lake"] = portable_lake["index_ref"]
+    public_output_refs["portable_lake"] = portable_lake["index_ref"]
 
     row_counts = {
         "listings": gold_result.row_counts.get("fact_gpu_listings", 0),
@@ -258,9 +249,7 @@ def run_market_hourly(
     checks["gold"] = (
         "ok" if all(value > 0 for value in row_counts.values()) else "warning"
     )
-    checks["dashboard_export"] = (
-        "ok" if dashboard_export.get("output_refs") else "warning"
-    )
+    checks["public_cards"] = "ok" if public_export.get("output_refs") else "warning"
     checks["portable_lake"] = "ok" if portable_lake.get("file_count") else "warning"
     status = "success" if all(value == "ok" for value in checks.values()) else "warning"
 
@@ -295,24 +284,12 @@ def run_market_hourly(
         },
         "gold_run_id": gold_result.run_id,
         "gold_manifest_ref": gold_result.manifest_ref,
-        "dashboard_export_id": dashboard_export_id,
-        "dashboard_output_refs": dashboard_output_refs,
+        "public_output_refs": public_output_refs,
         "row_counts": row_counts,
         "gold_row_counts": gold_result.row_counts,
         "checks": checks,
         "data_quality": data_quality,
     }
-    benchmark_cards = [
-        read_json(dashboard_output_refs[f"gpu_benchmark_{family.lower()}"])
-        for family in GPU_FAMILIES
-    ]
-    write_json(
-        dashboard_output_refs["market_overview"],
-        market_overview_view(
-            manifest=_public_market_run_manifest(payload),
-            benchmark_cards=benchmark_cards,
-        ),
-    )
     manifest_ref = write_market_run_manifest(
         lake_root=lake_root,
         observed_date=observed_date,
@@ -320,7 +297,7 @@ def run_market_hourly(
         payload=payload,
     )
     payload["manifest_ref"] = manifest_ref
-    write_dashboard_market_run_snapshots(
+    write_public_market_run_snapshots(
         lake_root=lake_root,
         output_root=dashboard_output_root,
         latest=payload,
@@ -349,7 +326,6 @@ def run_market_hourly(
             for provider, result in provider_results.items()
         },
         gold_run_id=gold_result.run_id,
-        dashboard_export_id=dashboard_export_id,
         row_counts=row_counts,
         checks=checks,
         data_quality=data_quality,
@@ -357,7 +333,7 @@ def run_market_hourly(
             provider: result.to_dict() for provider, result in provider_results.items()
         },
         gold_manifest_ref=gold_result.manifest_ref,
-        dashboard_output_refs=dashboard_output_refs,
+        public_output_refs=public_output_refs,
         manifest_ref=manifest_ref,
     )
 

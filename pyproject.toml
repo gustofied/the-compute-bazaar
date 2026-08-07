@@ -7,19 +7,13 @@ requires-python = ">=3.13"
 dependencies = [
     "datafusion>=51.0.0",
     "pyarrow>=22.0.0",
+    "typer>=0.21.0,<1.0.0",
 ]
 
 [project.optional-dependencies]
 api = [
     "fastapi>=0.137.1",
     "uvicorn[standard]>=0.49.0",
-]
-bench = [
-    "prime>=0.6.19",
-    "verifiers>=0.2.0",
-]
-ops = [
-    "awscli>=1.45.30",
 ]
 s3 = [
     "boto3>=1.41.0",
@@ -43,5 +37,4 @@ build-backend = "uv_build"
 extend-exclude = [
     "compute-bazaar-bench/evals/reliability-is-blind/dev_tests/fixtures",
     "external",
-    "worktrees",
 ]

@@ -340,26 +340,12 @@ def _format_cents(value: float | None) -> str:
     return f"{value * 100:.2f}c"
 
 
-def _format_seconds(value: float | None) -> str:
-    if value is None:
-        return "pending"
-    if value >= 120:
-        return f"{value / 60:.1f} min"
-    return f"{value:.0f} sec"
-
-
 def _format_axis_usd(value: float) -> str:
     if value == 0:
         return "$0"
     if value < 1:
         return f"${value:.2f}"
     return f"${value:.1f}"
-
-
-def _format_axis_seconds(value: float) -> str:
-    if value >= 120:
-        return f"{value / 60:.0f}m"
-    return f"{value:.0f}s"
 
 
 def _finite_number(value: Any) -> float | None:

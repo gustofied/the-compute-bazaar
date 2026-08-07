@@ -16,7 +16,7 @@ from .evidence import (
     _evidence_summary,
     _parse_timestamp,
     _read_local_json,
-    _validate_prices,
+    _validate_cost_inputs,
     validate_evidence,
 )
 
@@ -31,11 +31,10 @@ from the_compute_bazaar.contracts import SANDBOX_WORKLOAD_GOLD_CONTRACT
 from the_compute_bazaar.prices.datafusion import DataFusionEngine
 from the_compute_bazaar.prices.leases import exclusive_lease
 from the_compute_bazaar.prices.public_view_sandbox import sandbox_workload_view
-from the_compute_bazaar.prices.publications import (
+from the_compute_bazaar.prices.sandbox_publications import (
     publish_sandbox_workload_publication,
 )
 from the_compute_bazaar.prices.storage import (
-    delete_uri,
     read_bytes,
     write_bytes,
     write_json,
@@ -124,7 +123,7 @@ def _build_workload_cost_unlocked(
     prices_payload = _read_local_json(price_path)
     benchmarks_payload = _read_local_json(benchmark_path)
     source_manifest = _read_local_json(source_manifest_path)
-    price_rows = _validate_prices(prices_payload["rows"])
+    price_rows = _validate_cost_inputs(prices_payload["rows"])
 
     workload_manifest_ref = workload_benchmark_manifest_ref or _join(
         output_root,
@@ -350,30 +349,8 @@ def _build_workload_cost_unlocked(
     write_json(_join(output_root, "_manifests/sandbox_cost/latest.json"), manifest)
     write_json(_join(output_root, "gold/manifest.json"), manifest)
 
-    for retired_ref in (
-        "bronze/hourly-price-evidence.json",
-        "bronze/utilization-methodology.json",
-        "silver/sandbox_hourly_prices.parquet",
-        "silver/compute_utilization_metric_definitions.parquet",
-        "gold/sandbox_hourly_price_series.parquet",
-        "gold/sandbox_price_events.parquet",
-        "gold/sandbox_current_rates.parquet",
-        "gold/sandbox_fixed_rate.parquet",
-        "gold/sandbox_gpu_cpu_common_start.parquet",
-        "gold/gpu_vm_sandbox_common_start.parquet",
-        "gold/compute_utilization_public_ladder.parquet",
-        "gold/vm_sandbox_current_comparison.parquet",
-    ):
-        delete_uri(_join(output_root, retired_ref))
-
     public_ref = None
     if dashboard_output_root:
-        for retired_ref in (
-            "sandbox-cost.json",
-            "sandbox/rates.json",
-            "sandbox/relative.json",
-        ):
-            delete_uri(_join(dashboard_output_root, retired_ref))
         public_payload = build_public_payload(
             manifest=manifest,
             workload_batches=workload_batches,

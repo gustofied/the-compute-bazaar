@@ -1,2 +1,1 @@
-"""Analysis tools and artefacts for compute markets."""
-
+"""Compute-market data infrastructure."""

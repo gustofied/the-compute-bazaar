@@ -34,6 +34,11 @@ def gpu_benchmark_view(
         if str(row.get("benchmark_family_id") or "").upper() == family
         and row.get("included") is True
     ]
+    family_constituents = [
+        dict(row)
+        for row in constituents
+        if str(row.get("benchmark_family_id") or "").upper() == family
+    ]
     providers = sorted(
         {
             str(row.get("provider"))
@@ -80,8 +85,12 @@ def gpu_benchmark_view(
             {"label": provider, "role": "included provider floor"}
             for provider in providers
         ],
-        drilldown_ref="benchmark-constituents.json",
-        data={"family_id": family, "current": latest or None},
+        drilldown_ref=f"gpu-benchmark/{family.lower()}.json",
+        data={
+            "family_id": family,
+            "current": latest or None,
+            "constituents": family_constituents,
+        },
         observation_window=observation_window(family_history),
     )
 

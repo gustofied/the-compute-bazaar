@@ -15,7 +15,7 @@ from typing import Any, Mapping
 
 from the_compute_bazaar.contracts import (
     SANDBOX_WORKLOAD_DATASET_CONTRACT,
-    transform_contract,
+    require_contract,
 )
 from the_compute_bazaar.prices.storage import (
     read_json,
@@ -49,10 +49,8 @@ def load_operational_workload_benchmark(
     list[dict[str, Any]],
 ]:
     """Load and validate the latest trusted recurring workload generation."""
-    manifest = transform_contract(
-        manifest,
-        contract=SANDBOX_WORKLOAD_DATASET_CONTRACT,
-    )
+    manifest = dict(manifest)
+    require_contract(manifest, contract=SANDBOX_WORKLOAD_DATASET_CONTRACT)
     if manifest.get("target_shape") != TARGET_SHAPE:
         raise ValueError(
             "Recurring workload manifest has an incompatible machine shape"

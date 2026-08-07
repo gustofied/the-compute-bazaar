@@ -12,8 +12,6 @@ from typing import Any
 from .datafusion import DataFusionEngine
 from .sql_models import PACKAGE_ROOT, SQL_ROOT
 
-PROJECT_ROOT = PACKAGE_ROOT.parents[1]
-DEFAULT_QUERY_CATALOG_DIR = SQL_ROOT
 DEFAULT_QUERY_CATALOG_PATH = SQL_ROOT / "catalog.json"
 DEFAULT_QUERY_LIMIT = 100
 MAX_QUERY_LIMIT = 1000

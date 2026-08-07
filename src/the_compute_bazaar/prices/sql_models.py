@@ -14,10 +14,6 @@ SQL_MODELS_ROOT = SQL_ROOT / "models"
 SQL_QUERIES_ROOT = SQL_ROOT / "queries"
 
 
-def read_sql(relative_path: str) -> str:
-    return read_sql_from(SQL_ROOT, relative_path)
-
-
 def read_sql_from(root: Path, relative_path: str) -> str:
     path = _sql_path(root, relative_path)
     return path.read_text(encoding="utf-8").strip().rstrip(";")

@@ -7,7 +7,6 @@ from typing import Any
 from .datafusion import DataFusionEngine
 from .gold_manifest import (
     is_canonical_market_run_id,
-    list_gold_manifests,
     read_latest_gold_manifest,
 )
 
@@ -49,99 +48,29 @@ def query_gold_gpu_price_index_history(
     *,
     lake_root: str,
     history_limit: int = 24,
-    canonical_market_runs_only: bool = False,
+    manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Read GPU Price Index values stored with retained Gold snapshots."""
-    latest_manifest = read_latest_gold_manifest(lake_root)
-    history_ref = latest_manifest.get("table_refs", {}).get(
-        "fact_gpu_price_index_history"
-    )
-    if history_ref:
-        rows = DataFusionEngine(
-            {"fact_gpu_price_index_history": str(history_ref)}
-        ).query("""
+    manifest = manifest or read_latest_gold_manifest(lake_root)
+    history_ref = manifest["table_refs"]["fact_gpu_price_index_history"]
+    rows = DataFusionEngine({"fact_gpu_price_index_history": str(history_ref)}).query("""
 select *
 from fact_gpu_price_index_history
 order by gold_observed_at, benchmark_family_id
 """)
-        rows = [_current_methodology(row) for row in rows]
-        if canonical_market_runs_only:
-            rows = [
-                row
-                for row in rows
-                if is_canonical_market_run_id(row.get("gold_run_id"))
-            ]
-        selected_runs = list(
-            dict.fromkeys(str(row.get("gold_run_id") or "") for row in rows)
-        )[-max(1, int(history_limit)) :]
-        selected = set(selected_runs)
-        rows = [row for row in rows if str(row.get("gold_run_id") or "") in selected]
-        return {
-            "manifest": latest_manifest,
-            "history_manifest_count": len(selected_runs),
-            "rows": rows,
-        }
-
-    manifests = list_gold_manifests(
-        lake_root,
-        limit=history_limit,
-        canonical_market_runs_only=canonical_market_runs_only,
-    )
-    rows: list[dict[str, Any]] = []
-    included_manifest_count = 0
-
-    for manifest in reversed(manifests):
-        table_ref = manifest.get("table_refs", {}).get("fact_gpu_price_index")
-        if not table_ref:
-            continue
-        try:
-            benchmark_rows = DataFusionEngine(
-                {"fact_gpu_price_index": str(table_ref)}
-            ).query("""
-select
-  benchmark_symbol,
-  benchmark_family_id,
-  benchmark_usd_gpu_hr,
-  floor_usd_gpu_hr,
-  provider_floor_p25_usd_gpu_hr,
-  provider_floor_p75_usd_gpu_hr,
-  offer_count,
-  included_offer_count,
-  provider_count,
-  latest_observed_at,
-  methodology_version as methodology
-from fact_gpu_price_index
-order by benchmark_family_id
-""")
-        except Exception as exc:
-            raise RuntimeError(
-                "Cannot read benchmark history table for Gold run "
-                f"{manifest.get('run_id') or '<unknown>'}"
-            ) from exc
-
-        if not benchmark_rows:
-            continue
-        included_manifest_count += 1
-
-        for row in benchmark_rows:
-            rows.append(
-                {
-                    **row,
-                    "gold_run_id": manifest.get("run_id"),
-                    "gold_observed_at": manifest.get("observed_at"),
-                    "gold_observed_date": manifest.get("observed_date"),
-                }
-            )
-
-    rows.sort(
-        key=lambda row: (
-            str(row.get("gold_observed_at") or ""),
-            str(row.get("benchmark_family_id") or ""),
-        )
-    )
+    rows = [
+        _current_methodology(row)
+        for row in rows
+        if is_canonical_market_run_id(row.get("gold_run_id"))
+    ]
+    selected_runs = list(
+        dict.fromkeys(str(row.get("gold_run_id") or "") for row in rows)
+    )[-max(1, int(history_limit)) :]
+    selected = set(selected_runs)
+    rows = [row for row in rows if str(row.get("gold_run_id") or "") in selected]
     return {
-        "manifest": latest_manifest,
-        "history_manifest_count": included_manifest_count,
+        "manifest": manifest,
+        "history_manifest_count": len(selected_runs),
         "rows": rows,
     }
 
@@ -163,12 +92,7 @@ def query_gold_gpu_availability(
 
     filters: list[str] = []
     if gpu_model:
-        model = gpu_model.upper()
-        filters.append(
-            "(upper(resource_type) = "
-            f"{_sql_literal(model)} or upper(resource_type) like "
-            f"concat({_sql_literal(model)}, '_%'))"
-        )
+        filters.append(_gpu_selector("resource_type", gpu_model))
     if measurement_kind:
         filters.append(f"measurement_kind = {_sql_literal(measurement_kind)}")
     where = f"where {' and '.join(filters)}" if filters else ""
@@ -203,8 +127,9 @@ def query_gold_gpu_price_index_constituents(
     lake_root: str,
     benchmark_family_id: str | None = None,
     limit: int | None = None,
+    manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
+    manifest = manifest or read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"].get("fact_gpu_price_index_constituents")
     if not table_ref:
         return {"manifest": manifest, "rows": []}
@@ -235,7 +160,7 @@ def query_gold_provider_comparison(
     table_ref = manifest["table_refs"]["fact_gpu_listings"]
     filters = ["source_availability_status in ('available', 'published_rate')"]
     if gpu_model:
-        filters.append(f"gpu_model = {_sql_literal(gpu_model)}")
+        filters.append(_gpu_selector("gpu_model", gpu_model))
     where = f"where {' and '.join(filters)}"
     sql = f"""
 select
@@ -270,7 +195,7 @@ def query_gold_listings(
     table_ref = manifest["table_refs"]["fact_gpu_listings"]
     filters = ["source_availability_status in ('available', 'published_rate')"]
     if gpu_model:
-        filters.append(f"gpu_model = {_sql_literal(gpu_model)}")
+        filters.append(_gpu_selector("gpu_model", gpu_model))
     if provider:
         filters.append(f"provider = {_sql_literal(provider)}")
     where = f"where {' and '.join(filters)}"
@@ -305,60 +230,6 @@ order by price_usd_gpu_hr asc, price_usd_instance_hr asc
         _with_limit(sql, limit)
     )
     return {"manifest": manifest, "rows": rows}
-
-
-def query_gold_market_state(
-    *, lake_root: str, limit: int | None = None
-) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
-    table_ref = manifest["table_refs"]["fact_compute_market_state"]
-    rows = DataFusionEngine({"fact_compute_market_state": table_ref}).query(
-        _with_limit(
-            """
-select *
-from fact_compute_market_state
-order by
-  case measurement_kind
-    when 'rental_occupancy' then 0
-    when 'availability_pressure' then 1
-    else 2
-  end,
-  provider,
-  resource_type,
-  source_connector
-""",
-            limit,
-        ),
-    )
-    return {"manifest": manifest, "rows": rows}
-
-
-def query_gold_market_state_history(
-    *,
-    lake_root: str,
-) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
-    table_ref = manifest.get("table_refs", {}).get("fact_compute_market_state_history")
-    if not table_ref:
-        table_ref = manifest.get("table_refs", {}).get("fact_compute_market_state")
-    if not table_ref:
-        return {"manifest": manifest, "history_manifest_count": 0, "rows": []}
-    rows = DataFusionEngine(
-        {"fact_compute_market_state_history": str(table_ref)}
-    ).query("""
-select *
-from fact_compute_market_state_history
-where measurement_kind in ('rental_occupancy', 'availability_pressure')
-order by gold_observed_at, measurement_kind, provider, resource_type, source_connector
-""")
-    run_ids = {
-        str(row.get("gold_run_id") or "") for row in rows if row.get("gold_run_id")
-    }
-    return {
-        "manifest": manifest,
-        "history_manifest_count": len(run_ids),
-        "rows": rows,
-    }
 
 
 def query_gold_prime_frontier_offer_market(
@@ -480,6 +351,16 @@ order by gpu_family_id, price_usd_gpu_hr asc, provider, gpu_count
 
 def _sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def _gpu_selector(column: str, value: str) -> str:
+    """Match an exact GPU model or all variants in its product family."""
+    model = value.strip().upper()
+    literal = _sql_literal(model)
+    return (
+        f"(upper({column}) = {literal} "
+        f"or upper({column}) like concat({literal}, '_%'))"
+    )
 
 
 def _current_methodology(row: dict[str, Any]) -> dict[str, Any]:

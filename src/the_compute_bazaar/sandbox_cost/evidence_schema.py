@@ -84,7 +84,7 @@ RATE_METERING = {
     },
 }
 
-PRICE_FIELDS = {
+COST_INPUT_FIELDS = {
     "series_order",
     "point_order",
     "series_id",

@@ -41,7 +41,7 @@ from .evidence import (
     TARGET_SHAPE,
     WORKLOAD_COST_INPUTS,
     _read_local_json,
-    _validate_prices,
+    _validate_cost_inputs,
     write_source_capture,
 )
 from the_compute_bazaar.prices.storage import (
@@ -98,7 +98,7 @@ def refresh_benchmark_sources(
         runs.append(run)
 
     price_payload = _read_local_json(WORKLOAD_COST_INPUTS)
-    prices = _validate_prices(price_payload["rows"])
+    prices = _validate_cost_inputs(price_payload["rows"])
     extracted = extract_benchmark_evidence(
         runs=runs,
         prices=prices,

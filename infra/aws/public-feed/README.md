@@ -6,7 +6,8 @@ This Terraform stack serves files from the private S3 prefix
 
 It configures CloudFront, S3 read access, CORS, security headers, the TLS
 certificate, and extensionless publication URLs. It does not expose `raw/` or
-`lake/`.
+the private market lake. The public `lake/` route is a sanitized copy written
+under `dashboard/compute-bazaar/`.
 
 ## Setup
 

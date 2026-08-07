@@ -15,7 +15,6 @@ def prime_frontier_view(
     methodology: str,
     source: Mapping[str, Any],
     measurement_notes: list[str],
-    execution_data: Mapping[str, Any],
 ) -> dict[str, Any]:
     family = str(product.get("family_id") or "").upper()
     current = product.get("current")
@@ -44,7 +43,6 @@ def prime_frontier_view(
             "id": methodology,
             "scope": current_row.get("reference_scope"),
             "notes": list(measurement_notes),
-            "execution_data": dict(execution_data),
         },
         headline={
             "label": f"Prime {family} offer reference",
@@ -64,7 +62,7 @@ def prime_frontier_view(
             "observation_count": len(history),
         },
         sources=[dict(source), *source_rows],
-        drilldown_ref="prime-frontier-offer-market.json",
+        drilldown_ref=f"prime-frontier/{family.lower()}.json",
         data={key: item for key, item in dict(product).items() if key != "history"},
         observation_window=observation_window(history),
     )

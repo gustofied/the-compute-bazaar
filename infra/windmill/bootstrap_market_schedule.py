@@ -64,7 +64,6 @@ def main() -> None:
         action="store_true",
         help="Wait for the one-off run and include its result",
     )
-    parser.add_argument("--dashboard-limit", type=int, default=100)
     args = parser.parse_args()
 
     if not args.token:
@@ -96,10 +95,7 @@ def main() -> None:
             "and writes a market run manifest."
         ),
     )
-    run_args = schedule_args(
-        folder,
-        dashboard_limit=args.dashboard_limit,
-    )
+    run_args = schedule_args(folder)
     client.upsert_schedule(
         path=schedule_path,
         script_path=script_path,
@@ -227,11 +223,7 @@ def required_variables(folder: str) -> list[dict[str, Any]]:
     return variables
 
 
-def schedule_args(
-    folder: str,
-    *,
-    dashboard_limit: int,
-) -> dict[str, Any]:
+def schedule_args(folder: str) -> dict[str, Any]:
     args: dict[str, Any] = {
         "provider_credentials_json": (f"$var:f/{folder}/provider_credentials_json"),
         "raw_root": f"$var:f/{folder}/raw_root",
@@ -245,7 +237,6 @@ def schedule_args(
         "kafka_password": f"$var:f/{folder}/kafka_password",
         "aws_region": os.getenv("AWS_REGION", "eu-west-3"),
         "topic_prefix": "gpu",
-        "dashboard_limit": dashboard_limit,
         "dry_run": False,
     }
     return args

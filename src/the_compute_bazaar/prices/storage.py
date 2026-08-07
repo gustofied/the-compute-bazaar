@@ -99,7 +99,9 @@ def list_refs(uri_prefix: str, *, suffix: str = "") -> list[str]:
                 )
                 refs.append(f"s3://{parsed.netloc}/{relative.as_posix()}")
             return sorted(refs)
-        if mirrored_prefix and os.getenv("COMPUTE_BAZAAR_S3_MIRROR_STRICT", "").lower() in {"1", "true", "yes"}:
+        if mirrored_prefix and os.getenv(
+            "COMPUTE_BAZAAR_S3_MIRROR_STRICT", ""
+        ).lower() in {"1", "true", "yes"}:
             return []
         parsed = urlparse(uri_prefix.rstrip("/") + "/")
         client = _s3_client()
@@ -131,15 +133,6 @@ def list_refs(uri_prefix: str, *, suffix: str = "") -> list[str]:
     return sorted(refs)
 
 
-def write_jsonl(uri: str, rows: Iterable[Any]) -> str:
-    payload = b"\n".join(
-        json.dumps(to_jsonable(row), sort_keys=True).encode("utf-8") for row in rows
-    )
-    if payload:
-        payload += b"\n"
-    return write_bytes(uri, payload, content_type="application/x-ndjson")
-
-
 def write_bytes(
     uri: str,
     data: bytes,
@@ -163,18 +156,6 @@ def write_bytes(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     return str(path)
-
-
-def delete_uri(uri: str) -> None:
-    """Delete one retired local or S3 publication if it exists."""
-    if uri.startswith("s3://"):
-        parsed = urlparse(uri)
-        _s3_client().delete_object(
-            Bucket=parsed.netloc,
-            Key=parsed.path.lstrip("/"),
-        )
-        return
-    Path(uri).unlink(missing_ok=True)
 
 
 def read_bytes(uri: str) -> bytes:
@@ -219,7 +200,9 @@ def write_parquet_rows(uri: str, rows: Iterable[Mapping[str, Any]]) -> str:
         import pyarrow as pa
         import pyarrow.parquet as pq
     except ImportError as exc:
-        raise RuntimeError("Writing Parquet requires the project dependencies: uv sync") from exc
+        raise RuntimeError(
+            "Writing Parquet requires the project dependencies: uv sync"
+        ) from exc
 
     table = pa.Table.from_pylist(materialized)
     if uri.startswith("s3://"):
@@ -250,7 +233,9 @@ def read_parquet_rows(uri: str) -> list[dict[str, Any]]:
     try:
         import pyarrow.parquet as pq
     except ImportError as exc:
-        raise RuntimeError("Reading Parquet requires the project dependencies: uv sync") from exc
+        raise RuntimeError(
+            "Reading Parquet requires the project dependencies: uv sync"
+        ) from exc
 
     uri = resolve_read_uri(uri)
     if uri.startswith("s3://"):
@@ -305,10 +290,6 @@ def table_partition(
         parts.append(f"provider={provider}")
     parts.extend([f"run_id={run_id}", filename])
     return "/".join(parts)
-
-
-def rows_from_dicts(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    return [dict(row) for row in rows]
 
 
 def _normalize_parquet_value(value: Any) -> Any:

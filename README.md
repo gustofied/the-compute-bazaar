@@ -14,8 +14,8 @@ compute-bazaar data status
 compute-bazaar price-index
 ```
 
-`compute-bazaar` prints tables in a terminal. Use `--format json` for scripts and
-agents.
+`compute-bazaar` prints tables in a terminal. Use
+`compute-bazaar --format json COMMAND` for programs.
 
 Download the latest sanitized Silver and Gold lake:
 
@@ -41,3 +41,13 @@ and `compute-bazaar describe gold.fact_gpu_price_index`.
 Use another local or S3-backed lake with `--lake-root PATH`, or set
 `COMPUTE_BAZAAR_LAKE_ROOT`. Direct S3 access requires `uv sync --extra s3`;
 the public sync above does not need AWS credentials.
+
+## API
+
+```bash
+uv sync --extra api
+compute-bazaar api
+```
+
+FastAPI is the optional typed interface. Public typed operations are supported;
+scratch SQL stays operator-only unless explicitly enabled and authenticated.

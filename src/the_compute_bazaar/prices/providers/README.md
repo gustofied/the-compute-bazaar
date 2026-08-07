@@ -13,7 +13,6 @@ To add a source:
    `prices/ingestion.py` owns Bronze/Silver persistence, manifests, and Kafka.
 3. Register it once in `prices/provider_registry.py` with its source kind,
    observation kind, credentials, and any default fetch options.
-4. Add a hermetic normalization example to `tests/test_core.py`.
 
 The hourly runner and Windmill schedule must not contain provider-specific
 branches. Credentials are passed to Windmill as one secret JSON map assembled

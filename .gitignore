@@ -6,7 +6,6 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .vscode/
-/worktrees/
 build/
 dist/
 *.egg-info/

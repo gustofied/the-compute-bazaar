@@ -1,33 +1,8 @@
-"""Public-safe benchmark and market-state series projections."""
+"""Public-safe benchmark series projections."""
 
 from __future__ import annotations
 
 from typing import Any
-
-from .gold_manifest import is_canonical_market_run_id
-from .storage import read_json
-
-
-PUBLIC_MARKET_STATE_HISTORY_RESOURCES = {
-    "ALL_GPU",
-    "ALL_CPU",
-    "ALL_MEMORY",
-    "ALL_STORAGE",
-    "ALL_EPHEMERAL_STORAGE",
-    "ALL_PERSISTENT_STORAGE",
-}
-
-
-def is_public_market_state_history_row(row: dict[str, Any]) -> bool:
-    if row.get("aggregation_eligible") is False:
-        return False
-    measurement_kind = row.get("measurement_kind")
-    if measurement_kind == "rental_occupancy":
-        return row.get("resource_type") in PUBLIC_MARKET_STATE_HISTORY_RESOURCES
-    return (
-        measurement_kind == "availability_pressure"
-        and row.get("resource_market") == "gpu"
-    )
 
 
 def public_benchmark_value(row: dict[str, Any]) -> dict[str, Any]:
@@ -101,118 +76,6 @@ def has_benchmark_value(row: dict[str, Any]) -> bool:
         return False
 
 
-def merge_benchmark_history(
-    existing_rows: Any,
-    current_rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    merged: dict[tuple[str, str], dict[str, Any]] = {}
-    candidates = [
-        row
-        for row in (existing_rows if isinstance(existing_rows, list) else [])
-        if isinstance(row, dict)
-    ]
-    candidates.extend(current_rows)
-    for row in candidates:
-        row = _with_methodology(dict(row), row)
-        if not row.get("methodology"):
-            continue
-        if not has_benchmark_value(row):
-            continue
-        run_id = str(row.get("gold_run_id") or "")
-        if run_id and not is_canonical_market_run_id(run_id):
-            continue
-        observed_at = str(row.get("gold_observed_at") or "")
-        family = str(row.get("benchmark_family_id") or "")
-        if observed_at and family:
-            merged[(run_id or observed_at, family)] = row
-    return sorted(
-        merged.values(),
-        key=lambda row: (
-            str(row.get("gold_observed_at") or ""),
-            str(row.get("benchmark_family_id") or ""),
-        ),
-    )
-
-
-def read_benchmark_history(ref: str) -> list[dict[str, Any]]:
-    payload = _read_optional_json(ref)
-    rows = payload.get("rows", []) if isinstance(payload, dict) else []
-    return [_with_methodology(dict(row), row) for row in rows if isinstance(row, dict)]
-
-
-def public_market_state_row(row: dict[str, Any]) -> dict[str, Any]:
-    return _with_methodology(
-        _select(
-            row,
-            "observation_id",
-            "observed_at",
-            "resource_market",
-            "resource_type",
-            "provider",
-            "source_connector",
-            "source_role",
-            "measurement_kind",
-            "measurement_scope",
-            "unit",
-            "total_units",
-            "rented_units",
-            "available_units",
-            "pending_units",
-            "rented_share",
-            "available_share",
-            "stock_status",
-            "count_precision",
-            "numerator_definition",
-            "denominator_definition",
-            "aggregation_eligible",
-            "aggregation_exclusion_reason",
-            "source_url",
-            "notes",
-            "calculated_at",
-            "gold_run_id",
-            "gold_observed_at",
-            "gold_observed_date",
-        ),
-        row,
-    )
-
-
-def merge_market_state_history(
-    existing_rows: Any,
-    current_rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    merged: dict[tuple[str, str], dict[str, Any]] = {}
-    candidates = [
-        row
-        for row in (existing_rows if isinstance(existing_rows, list) else [])
-        if isinstance(row, dict) and is_public_market_state_history_row(row)
-    ]
-    candidates.extend(current_rows)
-    for row in candidates:
-        row = _with_methodology(dict(row), row)
-        observation_id = str(row.get("observation_id") or "")
-        observed_at = str(row.get("gold_observed_at") or row.get("observed_at") or "")
-        run_id = str(row.get("gold_run_id") or "")
-        if observation_id and observed_at:
-            merged[(run_id or observed_at, observation_id)] = row
-    return sorted(
-        merged.values(),
-        key=lambda row: (
-            str(row.get("gold_observed_at") or row.get("observed_at") or ""),
-            str(row.get("measurement_kind") or ""),
-            str(row.get("provider") or ""),
-            str(row.get("resource_type") or ""),
-            str(row.get("source_connector") or ""),
-        ),
-    )
-
-
-def read_market_state_history(ref: str) -> list[dict[str, Any]]:
-    payload = _read_optional_json(ref)
-    rows = payload.get("history_rows", []) if isinstance(payload, dict) else []
-    return [_with_methodology(dict(row), row) for row in rows if isinstance(row, dict)]
-
-
 def public_benchmark_constituent(row: dict[str, Any]) -> dict[str, Any]:
     return _with_methodology(
         _select(
@@ -266,15 +129,3 @@ def _with_methodology(
         "methodology_version"
     )
     return projected
-
-
-def _read_optional_json(ref: str) -> Any:
-    try:
-        return read_json(ref)
-    except FileNotFoundError:
-        return {}
-    except Exception as exc:
-        error = getattr(exc, "response", {}).get("Error", {})
-        if str(error.get("Code") or "") in {"404", "NoSuchKey", "NotFound"}:
-            return {}
-        raise

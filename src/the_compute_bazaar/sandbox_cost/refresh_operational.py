@@ -48,7 +48,7 @@ def _publish_operational_benchmark(
     phase_rows: list[dict[str, Any]],
     run_metadata: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Publish a trusted benchmark dataset generation for the hourly gold build."""
+    """Publish a trusted benchmark dataset generation for the weekly Gold build."""
     batches = _validate_batches(batch_rows, prices)
     replicates = _validate_replicates(replicate_rows, prices, batches)
     phases = _validate_phases(phase_rows, replicates)

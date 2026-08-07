@@ -6,19 +6,7 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
 
-from the_compute_bazaar.prices.storage import read_json, read_optional_json
-
 from .evidence import _parse_timestamp
-
-
-def read_latest_sandbox_manifest(output_root: str) -> dict[str, Any]:
-    """Read the latest complete sandbox generation pointer."""
-    latest = read_optional_json(
-        _join(output_root, "_manifests/sandbox_cost/latest.json")
-    )
-    if latest:
-        return latest
-    return dict(read_json(_join(output_root, "gold/manifest.json")))
 
 
 def check_public_payload_freshness(
@@ -76,7 +64,3 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
-
-
-def _join(root: str, suffix: str) -> str:
-    return f"{root.rstrip('/')}/{suffix.lstrip('/')}"

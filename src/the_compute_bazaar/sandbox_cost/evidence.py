@@ -6,7 +6,7 @@ from .evidence_schema import (
     BATCH_FIELDS,
     BENCHMARK_EVIDENCE,
     PHASE_FIELDS,
-    PRICE_FIELDS,
+    COST_INPUT_FIELDS,
     RATE_METERING,
     REPLICATE_FIELDS,
     RUNTIME_PRICE_SERIES,
@@ -59,7 +59,7 @@ def validate_evidence(
         source_manifest_path,
     )
 
-    prices = _validate_prices(prices_payload.get("rows"))
+    prices = _validate_cost_inputs(prices_payload.get("rows"))
     batches = _validate_batches(benchmarks_payload.get("batch_rows"), prices)
     replicates = _validate_replicates(
         benchmarks_payload.get("replicate_rows"),
@@ -123,20 +123,20 @@ def _evidence_summary(
     }
 
 
-def _validate_prices(raw_rows: Any) -> list[dict[str, Any]]:
+def _validate_cost_inputs(raw_rows: Any) -> list[dict[str, Any]]:
     if not isinstance(raw_rows, list) or not raw_rows:
-        raise ValueError("Hourly-price evidence must contain a non-empty rows list")
+        raise ValueError("Workload cost inputs must contain a non-empty rows list")
     rows: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
     for position, raw in enumerate(raw_rows):
-        row = _strict_row(raw, PRICE_FIELDS, f"hourly price row {position}")
-        _parse_date(row["observed_date"], f"hourly price row {position}")
+        row = _strict_row(raw, COST_INPUT_FIELDS, f"workload cost input {position}")
+        _parse_date(row["observed_date"], f"workload cost input {position}")
         key = (row["series_id"], row["observed_date"], row["source_url"])
         if key in seen:
-            raise ValueError(f"Duplicate hourly-price observation: {key}")
+            raise ValueError(f"Duplicate workload cost input: {key}")
         seen.add(key)
         if not str(row["source_url"]).startswith(("https://", "http://")):
-            raise ValueError(f"Missing source URL for hourly-price observation {key}")
+            raise ValueError(f"Missing source URL for workload cost input {key}")
         expected = Decimal(str(row["processor_quantity"])) * Decimal(
             str(row["processor_rate_usd_per_unit_hour"])
         ) + Decimal(str(row["memory_gib"])) * Decimal(
@@ -145,7 +145,7 @@ def _validate_prices(raw_rows: Any) -> list[dict[str, Any]]:
         observed = Decimal(str(row["price_usd_per_hour"]))
         if abs(expected - observed) > Decimal("0.000001"):
             raise ValueError(
-                f"Bad hourly-price formula for {row['series_id']} on "
+                f"Bad workload cost input for {row['series_id']} on "
                 f"{row['observed_date']}: expected {expected}, found {observed}"
             )
         try:

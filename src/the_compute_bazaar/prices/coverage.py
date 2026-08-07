@@ -5,35 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from .datafusion import DataFusionEngine
-from .gold_manifest import read_latest_gold_manifest
 
 
 FRONTIER_COVERAGE_TARGET = 50
 FRONTIER_FAMILIES = ("H100", "H200", "B200", "B300")
-
-
-def query_frontier_coverage(
-    *,
-    lake_root: str,
-    target: int = FRONTIER_COVERAGE_TARGET,
-    capacity_target: int = FRONTIER_COVERAGE_TARGET,
-    observation_target: int = FRONTIER_COVERAGE_TARGET,
-) -> dict[str, Any]:
-    manifest = read_latest_gold_manifest(lake_root)
-    table_ref = str(manifest["table_refs"]["fact_gpu_listings"])
-    rows = query_frontier_coverage_ref(
-        table_ref=table_ref,
-        target=target,
-        capacity_target=capacity_target,
-        observation_target=observation_target,
-    )
-    return {
-        "manifest": manifest,
-        "target_live_offer_count": target,
-        "target_live_gpu_capacity": capacity_target,
-        "target_current_observation_count": observation_target,
-        "rows": rows,
-    }
 
 
 def query_frontier_coverage_ref(

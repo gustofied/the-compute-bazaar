@@ -21,27 +21,6 @@ SANDBOX_WORKLOAD_DATASET_CONTRACT = "sandbox_workload_dataset"
 SANDBOX_WORKLOAD_POLL_CONTRACT = "sandbox_workload_poll"
 SANDBOX_WORKLOAD_GOLD_CONTRACT = "sandbox_workload_cost_gold"
 
-_RETIRED_CONTRACT_KEYS = {
-    "schema_version",
-    "manifest_version",
-    "route_schema_version",
-}
-
-
-def transform_contract(
-    payload: Mapping[str, Any],
-    *,
-    contract: str,
-) -> dict[str, Any]:
-    """Project retained metadata into the one current contract."""
-    transformed = {
-        key: value
-        for key, value in payload.items()
-        if key not in _RETIRED_CONTRACT_KEYS
-    }
-    transformed["contract"] = contract
-    return transformed
-
 
 def require_contract(payload: Mapping[str, Any], *, contract: str) -> None:
     if payload.get("contract") != contract:

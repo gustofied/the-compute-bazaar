@@ -1,4 +1,4 @@
-"""Shared read-only query service over the latest manifested Gold tables."""
+"""Shared read-only query service over the latest market run."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ PUBLIC_MANIFEST_FIELDS = (
 
 
 class MarketQueryService:
-    """Run bounded DataFusion queries against one latest-Gold snapshot at a time."""
+    """Run bounded DataFusion queries against one market run at a time."""
 
     def __init__(self, *, lake_root: str, cache_size: int = DEFAULT_CACHE_SIZE) -> None:
         self.lake_root = lake_root.rstrip("/")
@@ -132,7 +132,6 @@ class MarketQueryService:
                 result = query_gold_gpu_price_index_history(
                     lake_root=self.lake_root,
                     history_limit=selected_limit,
-                    canonical_market_runs_only=True,
                 )
             else:
                 result = query_gold_gpu_price_index(

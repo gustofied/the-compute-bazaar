@@ -1,4 +1,4 @@
-"""Evidence-backed sandbox rate and software-workload benchmark."""
+"""Measured StarSling workload costs."""
 
 from .evidence import validate_evidence
 from .pipeline import build_sandbox_cost

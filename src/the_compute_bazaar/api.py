@@ -1,8 +1,7 @@
-"""Bounded FastAPI interface to the Compute Bazaar Gold query layer."""
+"""Read-only FastAPI interface to Compute Bazaar market data."""
 
 from __future__ import annotations
 
-import argparse
 import hmac
 import os
 from threading import BoundedSemaphore
@@ -47,7 +46,7 @@ def create_app(
     scratch_query_slot = BoundedSemaphore(value=1)
     app = FastAPI(
         title="Compute Bazaar Query API",
-        description="Read-only DataFusion queries over the latest complete Gold run.",
+        description="DataFusion queries over the latest complete market run.",
     )
     app.state.query_service = service
     app.state.data_source = selected_lake
@@ -179,37 +178,4 @@ def _require_bearer_token(value: str | None, *, expected: str) -> None:
         raise HTTPException(status_code=401, detail="Invalid API token")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Serve read-only Compute Bazaar Gold queries"
-    )
-    parser.add_argument(
-        "--lake-root",
-        default=None,
-    )
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8766)
-    parser.add_argument(
-        "--enable-scratch-sql",
-        action="store_true",
-        help="Expose the bounded read-only SQL workbench endpoint",
-    )
-    args = parser.parse_args()
-
-    import uvicorn
-
-    uvicorn.run(
-        create_app(
-            lake_root=args.lake_root,
-            enable_scratch_sql=args.enable_scratch_sql,
-        ),
-        host=args.host,
-        port=args.port,
-    )
-
-
 app = create_app()
-
-
-if __name__ == "__main__":
-    main()

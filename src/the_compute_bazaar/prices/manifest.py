@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..contracts import GPU_OFFERS_RUN_CONTRACT, transform_contract
+from ..contracts import GPU_OFFERS_RUN_CONTRACT, require_contract
 from .schemas import utc_now
 from .storage import read_json, write_json
 
@@ -121,10 +121,8 @@ def write_run_manifest(
 
 
 def read_latest_manifest(lake_root: str, *, provider: str = "vast") -> dict[str, Any]:
-    manifest = transform_contract(
-        dict(read_json(latest_manifest_ref(lake_root, provider=provider))),
-        contract=GPU_OFFERS_RUN_CONTRACT,
-    )
+    manifest = dict(read_json(latest_manifest_ref(lake_root, provider=provider)))
+    require_contract(manifest, contract=GPU_OFFERS_RUN_CONTRACT)
     if manifest.get("ref_base") != "lake_root":
         return manifest
     if "://" in lake_root:

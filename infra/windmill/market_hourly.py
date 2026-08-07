@@ -34,7 +34,6 @@ def main(
     providers: str | None = None,
     required_providers: str | None = None,
     minimum_successful_providers: int = 1,
-    dashboard_limit: int = 100,
     dry_run: bool = False,
     run_id: str | None = None,
 ) -> dict[str, object]:
@@ -81,7 +80,6 @@ def main(
             automq_config=kafka_config,
             topic_prefix=topic_prefix,
             run_id=run_id,
-            dashboard_limit=dashboard_limit,
             dry_run=dry_run,
         )
     return result.to_dict()

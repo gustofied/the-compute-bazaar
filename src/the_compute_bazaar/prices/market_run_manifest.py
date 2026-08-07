@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..contracts import MARKET_RUN_CONTRACT, transform_contract
+from ..contracts import MARKET_RUN_CONTRACT, require_contract
 from .ingestion import IngestResult
 from .storage import list_refs, read_json, write_json
 
@@ -70,7 +70,6 @@ def _failed_market_run_payload(
             for provider, result in provider_results.items()
         },
         "gold_run_id": None,
-        "dashboard_export_id": None,
         "row_counts": {},
         "checks": checks,
         "data_quality": data_quality,
@@ -78,10 +77,7 @@ def _failed_market_run_payload(
 
 
 def read_latest_market_run(lake_root: str) -> dict[str, Any]:
-    return transform_contract(
-        dict(read_json(latest_market_run_ref(lake_root))),
-        contract=MARKET_RUN_CONTRACT,
-    )
+    return _read_market_run_manifest(latest_market_run_ref(lake_root))
 
 
 def list_market_runs(lake_root: str, *, limit: int = 24) -> list[dict[str, Any]]:
@@ -94,10 +90,7 @@ def list_market_runs(lake_root: str, *, limit: int = 24) -> list[dict[str, Any]]
     manifests: list[dict[str, Any]] = []
     for ref in refs:
         try:
-            manifest = transform_contract(
-                dict(read_json(ref)),
-                contract=MARKET_RUN_CONTRACT,
-            )
+            manifest = _read_market_run_manifest(ref)
         except Exception as exc:
             raise RuntimeError(
                 f"Cannot read market-run history manifest: {ref}"
@@ -108,7 +101,13 @@ def list_market_runs(lake_root: str, *, limit: int = 24) -> list[dict[str, Any]]
     return manifests[:requested_limit]
 
 
-def write_dashboard_market_run_snapshots(
+def _read_market_run_manifest(ref: str) -> dict[str, Any]:
+    manifest = dict(read_json(ref))
+    require_contract(manifest, contract=MARKET_RUN_CONTRACT)
+    return manifest
+
+
+def write_public_market_run_snapshots(
     *,
     lake_root: str,
     output_root: str,
@@ -124,8 +123,8 @@ def write_dashboard_market_run_snapshots(
         history = [_public_market_run_manifest(latest_manifest)]
 
     output_refs = {
-        "market_run": _dashboard_market_run_ref(output_root),
-        "market_history": _dashboard_market_history_ref(output_root),
+        "market_run": _public_market_run_ref(output_root),
+        "market_history": _public_market_history_ref(output_root),
     }
     write_json(output_refs["market_run"], _public_market_run_manifest(latest_manifest))
     write_json(
@@ -174,11 +173,11 @@ def _provider_error_message(exc: Exception) -> str:
     return message[:500] or type(exc).__name__
 
 
-def _dashboard_market_run_ref(output_root: str) -> str:
+def _public_market_run_ref(output_root: str) -> str:
     return "/".join([output_root.rstrip("/"), "market-run.json"])
 
 
-def _dashboard_market_history_ref(output_root: str) -> str:
+def _public_market_history_ref(output_root: str) -> str:
     return "/".join([output_root.rstrip("/"), "market-history.json"])
 
 
@@ -195,7 +194,6 @@ def _public_market_run_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "failed_providers": payload.get("failed_providers"),
         "provider_runs": payload.get("provider_runs"),
         "gold_run_id": payload.get("gold_run_id"),
-        "dashboard_export_id": payload.get("dashboard_export_id"),
         "row_counts": payload.get("row_counts"),
         "checks": payload.get("checks"),
         "data_quality": _without_private_refs(payload.get("data_quality")),
