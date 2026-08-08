@@ -18,6 +18,7 @@ from client import (
     load_local_env,
     read_token_file,
 )
+
 DEFAULT_CRON = "0 30 6 * * 1"
 
 
@@ -159,7 +160,9 @@ def required_variables(
     lake_root = os.getenv("COMPUTE_BAZAAR_LAKE_ROOT")
     dashboard_output_root = os.getenv("COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT")
     if not lake_root:
-        raise SystemExit("Missing required environment variable: COMPUTE_BAZAAR_LAKE_ROOT")
+        raise SystemExit(
+            "Missing required environment variable: COMPUTE_BAZAAR_LAKE_ROOT"
+        )
     if not dashboard_output_root:
         raise SystemExit(
             "Missing required environment variable: "
@@ -194,9 +197,7 @@ def schedule_args(
     aws_region: str,
 ) -> dict[str, Any]:
     return {
-        "source_repository": (
-            f"$var:f/{folder}/sandbox_benchmark_source_repository"
-        ),
+        "source_repository": (f"$var:f/{folder}/sandbox_benchmark_source_repository"),
         "source_ref": source_ref,
         "lake_root": f"$var:f/{folder}/lake_root",
         "dashboard_output_root": f"$var:f/{folder}/dashboard_output_root",
@@ -209,5 +210,8 @@ if __name__ == "__main__":
         main()
     except HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
-        print(f"Windmill API error {error.code}: {body}", file=sys.stderr)
+        print(
+            f"Windmill API error {error.code} at {error.url}: {body}",
+            file=sys.stderr,
+        )
         raise SystemExit(1) from error

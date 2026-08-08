@@ -14,12 +14,19 @@ import typer
 from .cli_output import render_table_payload, supports_auto_table
 from .data_root import LakeSelection, resolve_lake_root
 from .prices.schemas import to_jsonable
+from .terminal.lifecycle import DEFAULT_EVALUATION_ROOT
 
 
 class OutputFormat(str, Enum):
     AUTO = "auto"
     TABLE = "table"
     JSON = "json"
+
+
+class ChartType(str, Enum):
+    TABLE = "table"
+    LINE = "line"
+    BAR = "bar"
 
 
 @dataclass(frozen=True)
@@ -29,7 +36,7 @@ class CLIState:
 
 
 app = typer.Typer(
-    help="Query and operate the Compute Bazaar market-data lake.",
+    help="Query the Compute Bazaar data catalog.",
     no_args_is_help=True,
     add_completion=False,
     pretty_exceptions_show_locals=False,
@@ -53,7 +60,7 @@ def configure(
         typer.Option("--format", help="Output format."),
     ] = OutputFormat.AUTO,
 ) -> None:
-    """Query and operate the Compute Bazaar market-data lake."""
+    """Query the Compute Bazaar data catalog."""
     ctx.obj = CLIState(
         lake=resolve_lake_root(lake_root),
         output_format=output_format,
@@ -115,26 +122,50 @@ def catalog(ctx: typer.Context) -> None:
 
 @app.command()
 def tables(ctx: typer.Context) -> None:
-    """List Silver and Gold tables."""
-    _emit(ctx, _market_catalog(ctx).tables(), command="tables")
+    """List Silver and Gold DataFusion tables."""
+    _emit(ctx, _catalog(ctx).tables(), command="tables")
 
 
 @app.command()
 def describe(ctx: typer.Context, table: Annotated[str, typer.Argument()]) -> None:
-    """Describe one Silver or Gold table."""
-    _emit(ctx, _market_catalog(ctx).describe(table), command="describe")
+    """Describe one DataFusion table."""
+    _emit(ctx, _catalog(ctx).describe(table), command="describe")
 
 
 @app.command("query")
 def saved_query(
     ctx: typer.Context,
     query_id: Annotated[str, typer.Argument()],
-    limit: Annotated[int, typer.Option()] = 100,
+    limit: Annotated[
+        int | None,
+        typer.Option(help="Override the saved query row limit."),
+    ] = None,
+    terminal: Annotated[
+        bool,
+        typer.Option("--terminal", help="Open this result in the Terminal."),
+    ] = False,
+    port: Annotated[int, typer.Option(min=1, max=65535)] = 8767,
 ) -> None:
     """Run one saved DataFusion query."""
+    from .prices.query_catalog import get_catalog_query
+
+    try:
+        query = get_catalog_query(query_id)
+    except KeyError as exc:
+        raise typer.BadParameter(str(exc).strip("'")) from exc
+    selected_limit = _limit(limit if limit is not None else query.default_limit)
+    if terminal:
+        _launch_native_terminal(
+            ctx,
+            port=port,
+            initial_query=query_id,
+            initial_limit=selected_limit,
+            evaluation_root=DEFAULT_EVALUATION_ROOT,
+        )
+        return
     _emit(
         ctx,
-        _service(ctx).saved_query(query_id=query_id, limit=_limit(limit)),
+        _service(ctx).saved_query(query_id=query_id, limit=selected_limit),
         command="query",
     )
 
@@ -148,13 +179,49 @@ def sql(
         typer.Option("--file", help="Read SQL from a file."),
     ] = None,
     limit: Annotated[int, typer.Option()] = 100,
+    terminal: Annotated[
+        bool,
+        typer.Option("--terminal", help="Open this result in the Terminal."),
+    ] = False,
+    chart: Annotated[
+        ChartType | None,
+        typer.Option(help="Initial UI view: table, line, or bar."),
+    ] = None,
+    x: Annotated[
+        str | None,
+        typer.Option("--x", help="Chart x-axis column."),
+    ] = None,
+    series: Annotated[
+        str | None,
+        typer.Option(help="Optional chart series column."),
+    ] = None,
+    y: Annotated[
+        str | None,
+        typer.Option("--y", help="Chart value column."),
+    ] = None,
+    port: Annotated[int, typer.Option(min=1, max=65535)] = 8767,
 ) -> None:
-    """Run bounded read-only SQL over Silver and Gold."""
+    """Run bounded read-only SQL over the local catalog."""
+    selected_sql = _read_sql(statement=statement, sql_file=sql_file)
+    selected_limit = _limit(limit)
+    perspective = _perspective_config(chart=chart, x=x, series=series, y=y)
+    if perspective and not terminal:
+        raise typer.BadParameter("--chart requires --terminal")
+    if terminal:
+        _launch_native_terminal(
+            ctx,
+            port=port,
+            initial_sql=selected_sql,
+            initial_limit=selected_limit,
+            initial_perspective=perspective,
+            evaluation_root=DEFAULT_EVALUATION_ROOT,
+        )
+        return
     _emit(
         ctx,
-        _market_catalog(ctx).query(
-            _read_sql(statement=statement, sql_file=sql_file),
-            limit=_limit(limit),
+        _catalog(ctx).query(
+            selected_sql,
+            limit=selected_limit,
         ),
         command="sql",
     )
@@ -287,6 +354,201 @@ def serve_api(
     )
 
 
+@app.command("terminal")
+def serve_terminal(
+    ctx: typer.Context,
+    port: Annotated[int, typer.Option(min=1, max=65535)] = 8767,
+    view: Annotated[
+        str | None,
+        typer.Option(help="Open a named view."),
+    ] = None,
+    evaluation_root: Annotated[
+        Path,
+        typer.Option(help="Local normalized evaluation reports."),
+    ] = DEFAULT_EVALUATION_ROOT,
+    open_browser: Annotated[
+        bool,
+        typer.Option(
+            "--open/--no-open",
+            help="Open a browser when using --foreground.",
+        ),
+    ] = False,
+    foreground: Annotated[
+        bool,
+        typer.Option("--foreground", help="Keep the server attached and show logs."),
+    ] = False,
+    stop: Annotated[
+        bool,
+        typer.Option("--stop", help="Stop the Terminal."),
+    ] = False,
+    initial_query: Annotated[
+        str | None,
+        typer.Option("--initial-query", hidden=True),
+    ] = None,
+    initial_sql: Annotated[
+        str | None,
+        typer.Option("--initial-sql", hidden=True),
+    ] = None,
+    initial_limit: Annotated[
+        int,
+        typer.Option("--initial-limit", hidden=True),
+    ] = 500,
+    initial_perspective_json: Annotated[
+        str | None,
+        typer.Option("--initial-perspective", hidden=True),
+    ] = None,
+) -> None:
+    """Open the Compute Bazaar Terminal."""
+    if stop:
+        _stop_terminal()
+        return
+    if view:
+        from .terminal.views import get_terminal_view
+
+        try:
+            get_terminal_view(view)
+        except KeyError as exc:
+            raise typer.BadParameter(str(exc).strip("'")) from exc
+    initial_perspective = _decode_perspective(initial_perspective_json)
+    if foreground:
+        _run_terminal(
+            ctx,
+            port=port,
+            open_browser=open_browser,
+            initial_view=view,
+            initial_query=initial_query,
+            initial_sql=initial_sql,
+            initial_limit=_limit(initial_limit),
+            initial_perspective=initial_perspective,
+            evaluation_root=evaluation_root,
+        )
+        return
+    _launch_native_terminal(
+        ctx,
+        port=port,
+        initial_view=view,
+        initial_query=initial_query,
+        initial_sql=initial_sql,
+        initial_limit=_limit(initial_limit),
+        initial_perspective=initial_perspective,
+        evaluation_root=evaluation_root,
+    )
+
+
+def _launch_native_terminal(
+    ctx: typer.Context,
+    *,
+    port: int,
+    initial_view: str | None = None,
+    initial_query: str | None = None,
+    initial_sql: str | None = None,
+    initial_limit: int = 500,
+    initial_perspective: dict[str, Any] | None = None,
+    evaluation_root: Path,
+) -> None:
+    from .terminal.lifecycle import TerminalLifecycleError, launch_terminal
+
+    state = _state(ctx)
+    _require_lake(state.lake)
+    try:
+        message = launch_terminal(
+            lake_root=state.lake.root,
+            port=port,
+            initial_view=initial_view,
+            initial_query=initial_query,
+            initial_sql=initial_sql,
+            initial_limit=initial_limit,
+            initial_perspective=initial_perspective,
+            evaluation_root=evaluation_root,
+        )
+    except TerminalLifecycleError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(message)
+
+
+def _stop_terminal() -> None:
+    from .terminal.lifecycle import TerminalLifecycleError, stop_terminal
+
+    try:
+        message = stop_terminal()
+    except TerminalLifecycleError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(message)
+
+
+def _run_terminal(
+    ctx: typer.Context,
+    *,
+    port: int,
+    open_browser: bool,
+    initial_view: str | None = None,
+    initial_query: str | None = None,
+    initial_sql: str | None = None,
+    initial_limit: int = 500,
+    initial_perspective: dict[str, Any] | None = None,
+    evaluation_root: Path = DEFAULT_EVALUATION_ROOT,
+) -> None:
+    from .terminal.lifecycle import TerminalLifecycleError, run_terminal
+
+    state = _state(ctx)
+    _require_lake(state.lake)
+    try:
+        run_terminal(
+            lake_root=state.lake.root,
+            port=port,
+            open_browser=open_browser,
+            initial_view=initial_view,
+            initial_query=initial_query,
+            initial_sql=initial_sql,
+            initial_limit=initial_limit,
+            initial_perspective=initial_perspective,
+            evaluation_root=evaluation_root,
+            announce=typer.echo,
+        )
+    except TerminalLifecycleError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _decode_perspective(value: str | None) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter("Invalid initial Perspective configuration") from exc
+    if not isinstance(payload, dict):
+        raise typer.BadParameter("Initial Perspective configuration must be an object")
+    return payload
+
+
+def _perspective_config(
+    *,
+    chart: ChartType | None,
+    x: str | None,
+    series: str | None,
+    y: str | None,
+) -> dict[str, Any] | None:
+    if chart is None:
+        if any((x, series, y)):
+            raise typer.BadParameter("--x, --series, and --y require --chart")
+        return None
+    if chart is ChartType.TABLE:
+        if any((x, series, y)):
+            raise typer.BadParameter("Table views do not use --x, --series, or --y")
+        return {"plugin": "Datagrid", "settings": False}
+    if not x or not y:
+        raise typer.BadParameter("Line and bar charts require --x and --y")
+    config: dict[str, Any] = {
+        "plugin": "Y Line" if chart is ChartType.LINE else "Y Bar",
+        "group_by": [x],
+        "columns": [y],
+        "settings": False,
+    }
+    if series:
+        config["split_by"] = [series]
+    return config
+
+
 @sandbox_app.command("build")
 def sandbox_build(
     ctx: typer.Context,
@@ -397,12 +659,12 @@ def _service(ctx: typer.Context) -> Any:
     return MarketQueryService(lake_root=state.lake.root)
 
 
-def _market_catalog(ctx: typer.Context) -> Any:
-    from .prices.market_catalog import MarketDataCatalog
+def _catalog(ctx: typer.Context) -> Any:
+    from .data_catalog import ComputeBazaarCatalog
 
     state = _state(ctx)
     _require_lake(state.lake)
-    return MarketDataCatalog(lake_root=state.lake.root)
+    return ComputeBazaarCatalog(lake_root=state.lake.root)
 
 
 def _require_lake(lake: LakeSelection) -> None:
@@ -426,7 +688,9 @@ def _read_sql(*, statement: str | None, sql_file: Path | None) -> str:
     if statement:
         return statement
     if sys.stdin.isatty():
-        raise typer.BadParameter("SQL is required through an argument, --file, or stdin")
+        raise typer.BadParameter(
+            "SQL is required through an argument, --file, or stdin"
+        )
     return sys.stdin.read()
 
 

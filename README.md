@@ -44,5 +44,39 @@ uv sync --extra api
 compute-bazaar api
 ```
 
-FastAPI is the optional typed interface. Public typed operations are supported;
-scratch SQL stays operator-only unless explicitly enabled and authenticated.
+FastAPI exposes optional typed reads. Scratch SQL remains local and
+operator-only.
+
+## Terminal
+
+```bash
+uv sync --extra api
+pnpm --dir terminal install
+compute-bazaar terminal
+compute-bazaar terminal --stop
+compute-bazaar query gpu_price_index_history --terminal
+compute-bazaar sql "select * from gold.fact_gpu_price_index" --terminal
+```
+
+`compute-bazaar terminal` opens a main menu:
+
+- **Data** opens the DataFusion and Perspective workspace for Silver and Gold.
+- **Eval** opens the full private evaluation viewer for tasks, jobs, trials, and notes.
+- **Trade** is visible but locked until the execution system exists.
+
+From a source checkout, the command opens the native Compute Bazaar Terminal
+and returns the shell prompt. An installed package opens the same localhost
+Terminal in the browser. Use `compute-bazaar terminal --foreground --open` for
+browser development.
+Press `Cmd+K` in any workspace to run read-only SQL or commands such as `data`,
+`eval`, `tables`, `view gpu-index-history`, and `describe gold.fact_gpu_price_index`.
+
+Custom SQL can open directly as a chart:
+
+```bash
+compute-bazaar sql "select observed_at, gpu, price_usd_gpu_hr from gold.fact_gpu_price_index_history" --terminal --chart line --x observed_at --series gpu --y price_usd_gpu_hr
+```
+
+DataFusion runs every Data query and Perspective renders the Arrow result.
+Personal views keep their SQL and layout in the browser. Evaluation reports
+remain in their purpose-built viewer. The server listens on localhost only.

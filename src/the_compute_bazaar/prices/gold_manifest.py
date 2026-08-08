@@ -78,6 +78,12 @@ def _resolve_lake_relative_refs(
 
 def _resolve_ref(root: Path, ref: Any) -> str:
     value = str(ref)
-    if "://" in value or Path(value).is_absolute():
-        return value
-    return str(root / value)
+    path = Path(value)
+    if "://" in value or path.is_absolute():
+        raise ValueError("lake-relative manifests must use relative paths")
+    resolved = (root / path).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"Lake reference escapes its root: {value}") from exc
+    return str(resolved)

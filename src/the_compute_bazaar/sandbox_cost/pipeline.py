@@ -273,9 +273,9 @@ def _build_workload_cost_unlocked(
     }
     input_hash = _content_hash(
         {
-            "cost_inputs": prices_payload,
-            "benchmarks": benchmarks_payload,
-            "source_manifest": source_manifest,
+            "cost_inputs": _identity_payload(prices_payload),
+            "benchmarks": _identity_payload(benchmarks_payload),
+            "source_manifest": _identity_payload(source_manifest),
             "target_shape": TARGET_SHAPE,
             "numeric_decimal_places": NUMERIC_DECIMAL_PLACES,
             "query_hashes": query_hashes,
@@ -411,6 +411,11 @@ def _join(root: str, suffix: str) -> str:
 def _content_hash(*values: Any) -> str:
     payload = json.dumps(values, sort_keys=True, separators=(",", ":"), default=str)
     return _sha256_text(payload)
+
+
+def _identity_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Exclude observation metadata that does not change product content."""
+    return {key: value for key, value in payload.items() if key != "retrieved_at"}
 
 
 def _canonicalize_numeric_rows(

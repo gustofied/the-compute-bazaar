@@ -65,7 +65,7 @@ def sync_public_lake(
             + "\n",
             encoding="utf-8",
         )
-        read_latest_gold_manifest(str(staging))
+        _validate_generation(staging, index=index)
 
         if backup.exists():
             shutil.rmtree(backup)
@@ -97,9 +97,10 @@ def sync_public_lake(
 def inspect_lake(*, root: str, kind: str, label: str) -> dict[str, Any]:
     """Describe the local lake selected by the CLI without making a network call."""
     path = None if "://" in root else Path(root)
-    if path is not None and not (
-        path / "_manifests" / "gold_market" / "latest.json"
-    ).is_file():
+    if (
+        path is not None
+        and not (path / "_manifests" / "gold_market" / "latest.json").is_file()
+    ):
         result = {
             "status": "missing",
             "kind": kind,
@@ -138,7 +139,43 @@ def inspect_lake(*, root: str, kind: str, label: str) -> dict[str, Any]:
 def _download(url: str) -> bytes:
     request = Request(url, headers={"User-Agent": "compute-bazaar-data-sync"})
     with urlopen(request, timeout=60) as response:
-        return response.read(MAX_FILE_BYTES + 1)
+        payload = response.read(MAX_FILE_BYTES + 1)
+    if len(payload) > MAX_FILE_BYTES:
+        raise RuntimeError(f"Portable lake file exceeds the download budget: {url}")
+    return payload
+
+
+def _validate_generation(staging: Path, *, index: dict[str, Any]) -> None:
+    required_paths = {
+        "portable.json",
+        "_manifests/gold_market/latest.json",
+    }
+    indexed_paths = {str(item["path"]) for item in index["files"]}
+    missing = sorted(required_paths - indexed_paths)
+    if missing:
+        raise RuntimeError(
+            f"Portable lake inventory is missing required file: {missing[0]}"
+        )
+
+    manifest = read_latest_gold_manifest(str(staging))
+    portable = _read_mapping(staging / "portable.json")
+    require_contract(portable, contract=PORTABLE_LAKE_CONTRACT)
+
+    run_ids = {
+        str(index.get("run_id") or ""),
+        str(portable.get("run_id") or ""),
+        str(manifest.get("run_id") or ""),
+    }
+    if "" in run_ids or len(run_ids) != 1:
+        raise RuntimeError("Portable lake generation contains mixed run identities")
+
+    index_providers = [str(value) for value in index.get("provider_scope") or []]
+    portable_providers = [str(value) for value in portable.get("provider_scope") or []]
+    manifest_providers = [str(value) for value in manifest.get("provider_scope") or []]
+    if not index_providers or not (
+        index_providers == portable_providers == manifest_providers
+    ):
+        raise RuntimeError("Portable lake generation contains mixed provider scopes")
 
 
 def _validated_index(payload: bytes) -> dict[str, Any]:

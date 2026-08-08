@@ -14,9 +14,7 @@ from ..schemas import GpuOffer
 from .http import retrying_session
 
 
-DEFAULT_CLOUD_GPU_PRICES_API_URL = (
-    "https://cloudgpuprices.com/api/v1/offerings"
-)
+DEFAULT_CLOUD_GPU_PRICES_API_URL = "https://cloudgpuprices.com/api/v1/offerings"
 DEFAULT_FRONTIER_GPU_SLUGS = ("h100", "h200", "b200", "b300")
 FRONTIER_GPU_DETAILS = {
     "h100": ("NVIDIA H100", 80.0),
@@ -141,8 +139,7 @@ def normalize_external_offerings(
             continue
         gpu_name, vram_gb = gpu_details
         source_vram_gb = _float_or_none(
-            hardware.get("gpu_memory_per_device_gb")
-            or hardware.get("gpu_memory_gb")
+            hardware.get("gpu_memory_per_device_gb") or hardware.get("gpu_memory_gb")
         )
         gpu_count = _int_or_none(hardware.get("gpu_count"))
         if gpu_count is None or gpu_count <= 0:
@@ -185,21 +182,17 @@ def normalize_external_offerings(
             if not variant_id or price_usd_hr is None or price_usd_hr <= 0:
                 continue
 
-            purchase_option = str(
-                variant.get("purchase_option") or ""
-            ).strip().lower()
-            interruption_policy = str(
-                variant.get("interruption_policy") or ""
-            ).strip().lower()
+            purchase_option = str(variant.get("purchase_option") or "").strip().lower()
+            interruption_policy = (
+                str(variant.get("interruption_policy") or "").strip().lower()
+            )
             region = _mapping(variant.get("region"))
             region_code = _string_or_none(variant.get("region_code"))
             normalized.append(
                 GpuOffer(
                     provider=provider,
                     source_connector="cloud_gpu_prices",
-                    source_offer_id=(
-                        f"cloud_gpu_prices:{offering_id}:{variant_id}"
-                    ),
+                    source_offer_id=(f"cloud_gpu_prices:{offering_id}:{variant_id}"),
                     observed_at=observed_at,
                     gpu_raw_name=gpu_name,
                     gpu_model=gpu_model,
@@ -235,16 +228,10 @@ def normalize_external_offerings(
                         "interruption_policy": interruption_policy,
                         "pricing_structure": comparison.get("pricing_structure"),
                         "reason_codes": comparison.get("reason_codes"),
-                        "billing_increment_ms": variant.get(
-                            "billing_increment_ms"
-                        ),
-                        "minimum_billable_ms": variant.get(
-                            "minimum_billable_ms"
-                        ),
+                        "billing_increment_ms": variant.get("billing_increment_ms"),
+                        "minimum_billable_ms": variant.get("minimum_billable_ms"),
                         "billable_states": variant.get("billable_states"),
-                        "price_basis": (
-                            "external_aggregator_comparable_instance_hour"
-                        ),
+                        "price_basis": ("external_aggregator_comparable_instance_hour"),
                         "capacity_basis": None,
                         "benchmark_eligible": False,
                     },
@@ -255,9 +242,8 @@ def normalize_external_offerings(
 
 
 def _extract_offerings(payload: Any) -> list[dict[str, Any]]:
-    if (
-        not isinstance(payload, Mapping)
-        or not isinstance(payload.get("offerings"), list)
+    if not isinstance(payload, Mapping) or not isinstance(
+        payload.get("offerings"), list
     ):
         return []
     return [
@@ -276,11 +262,7 @@ def _next_cursor(payload: Any) -> str | None:
 
 def _provider_id(value: str) -> str:
     normalized = (
-        value.strip()
-        .lower()
-        .replace(".", "_")
-        .replace("-", "_")
-        .replace(" ", "_")
+        value.strip().lower().replace(".", "_").replace("-", "_").replace(" ", "_")
     ).strip("_")
     return PROVIDER_ALIASES.get(normalized, normalized)
 

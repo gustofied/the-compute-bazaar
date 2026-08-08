@@ -132,8 +132,8 @@ def normalize_availability(
         price = _float_or_none(prices.get("onDemand"))
         if price is None or price <= 0:
             continue
-        required_resource_price, resource_components = (
-            _minimum_required_resource_price(entry)
+        required_resource_price, resource_components = _minimum_required_resource_price(
+            entry
         )
         minimum_executable_price = price + required_resource_price
         if gpu_count > 1:

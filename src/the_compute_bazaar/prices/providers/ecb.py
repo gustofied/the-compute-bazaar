@@ -45,7 +45,9 @@ def fetch_latest_eur_usd_rate(
     try:
         rate = float(row.get("OBS_VALUE") or "")
     except (TypeError, ValueError) as exc:
-        raise ValueError("ECB EUR/USD response was missing a valid latest rate") from exc
+        raise ValueError(
+            "ECB EUR/USD response was missing a valid latest rate"
+        ) from exc
     if rate <= 0 or not observed_date:
         raise ValueError("ECB EUR/USD response was missing a valid latest rate")
     return EcbRateFetch(

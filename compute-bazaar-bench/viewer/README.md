@@ -23,13 +23,11 @@ A job can provide either:
 `notes.json` is written locally by the viewer. Raw Harbor jobs, protected truth,
 and verifier behavior remain outside the viewer contract.
 
-## Run
+## Open
 
 ```bash
-uv run python compute-bazaar-bench/viewer/app.py \
-  compute-bazaar-bench/jobs/reports \
-  --port 8084
+compute-bazaar terminal
 ```
 
-The server only accepts localhost bindings because reports may contain private
-diagnostics.
+Choose **Eval** from the terminal menu. The terminal only binds to localhost
+because reports may contain private diagnostics.

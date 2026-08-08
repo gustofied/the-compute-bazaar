@@ -25,15 +25,12 @@ uv run python compute-bazaar-bench/evals/reliability-is-blind/evaluator/protocol
 ## View
 
 ```bash
-uv run python compute-bazaar-bench/viewer/app.py \
-  compute-bazaar-bench/jobs/reports \
-  --port 8084
+compute-bazaar terminal
 ```
 
-Normalized viewer reports are stored under
-`compute-bazaar-bench/jobs/reports/<task>/runs/<job>/`. The Reliability Is
-Blind presenter maps its protocol analysis into the generic viewer contract;
-other evaluations can use their own presenter or write `view.json` directly.
+Normalized reports are stored under
+`compute-bazaar-bench/jobs/reports/<task>/runs/<job>/`. Choose **Eval** in the
+terminal to open the full task, job, agent, trial, note, and diagnostic viewer.
 
 The generated analysis contains private seed strata and hidden supplier
-diagnostics. Bind the viewer only to localhost and do not publish those files.
+diagnostics. The Terminal binds to localhost; do not publish those files.

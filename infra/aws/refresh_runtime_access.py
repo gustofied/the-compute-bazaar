@@ -26,9 +26,17 @@ def main() -> None:
         default=os.getenv("COMPUTE_BAZAAR_RUNTIME_SECURITY_GROUP_ID"),
         help="Security group that guards SSH access to the dev runtime host.",
     )
-    parser.add_argument("--region", default=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or DEFAULT_REGION)
+    parser.add_argument(
+        "--region",
+        default=os.getenv("AWS_REGION")
+        or os.getenv("AWS_DEFAULT_REGION")
+        or DEFAULT_REGION,
+    )
     parser.add_argument("--profile", default=os.getenv("AWS_PROFILE"))
-    parser.add_argument("--ports", default=os.getenv("COMPUTE_BAZAAR_RUNTIME_ACCESS_PORTS", DEFAULT_PORTS))
+    parser.add_argument(
+        "--ports",
+        default=os.getenv("COMPUTE_BAZAAR_RUNTIME_ACCESS_PORTS", DEFAULT_PORTS),
+    )
     parser.add_argument("--ip-url", default="https://checkip.amazonaws.com")
     parser.add_argument(
         "--prune-stale",
@@ -61,7 +69,14 @@ def main() -> None:
         existing = _ipv4_ranges_for_port(security_group, port)
         existing_cidrs = {row["cidr"] for row in existing}
         if current_cidr not in existing_cidrs:
-            changes.append({"action": "authorize", "port": port, "cidr": current_cidr, "description": description})
+            changes.append(
+                {
+                    "action": "authorize",
+                    "port": port,
+                    "cidr": current_cidr,
+                    "description": description,
+                }
+            )
             if not args.dry_run:
                 _authorize(ec2, args.security_group_id, port, current_cidr, description)
 
@@ -71,11 +86,19 @@ def main() -> None:
                     continue
                 if not row["cidr"].endswith("/32"):
                     continue
-                if not str(row.get("description") or "").startswith(MANAGED_DESCRIPTION_PREFIX):
+                if not str(row.get("description") or "").startswith(
+                    MANAGED_DESCRIPTION_PREFIX
+                ):
                     continue
                 changes.append({"action": "revoke", "port": port, **row})
                 if not args.dry_run:
-                    _revoke(ec2, args.security_group_id, port, row["cidr"], row.get("description"))
+                    _revoke(
+                        ec2,
+                        args.security_group_id,
+                        port,
+                        row["cidr"],
+                        row.get("description"),
+                    )
 
     print(
         json.dumps(
@@ -122,7 +145,9 @@ def _describe_security_group(ec2: Any, group_id: str) -> dict[str, Any]:
     return dict(groups[0])
 
 
-def _ipv4_ranges_for_port(security_group: dict[str, Any], port: int) -> list[dict[str, str | None]]:
+def _ipv4_ranges_for_port(
+    security_group: dict[str, Any], port: int
+) -> list[dict[str, str | None]]:
     rows: list[dict[str, str | None]] = []
     for permission in security_group.get("IpPermissions", []):
         if permission.get("IpProtocol") != "tcp":
@@ -132,7 +157,9 @@ def _ipv4_ranges_for_port(security_group: dict[str, Any], port: int) -> list[dic
         for ip_range in permission.get("IpRanges", []):
             cidr = ip_range.get("CidrIp")
             if cidr:
-                rows.append({"cidr": str(cidr), "description": ip_range.get("Description")})
+                rows.append(
+                    {"cidr": str(cidr), "description": ip_range.get("Description")}
+                )
     return rows
 
 
@@ -154,7 +181,9 @@ def _authorize(ec2: Any, group_id: str, port: int, cidr: str, description: str) 
             raise
 
 
-def _revoke(ec2: Any, group_id: str, port: int, cidr: str, description: str | None) -> None:
+def _revoke(
+    ec2: Any, group_id: str, port: int, cidr: str, description: str | None
+) -> None:
     ip_range: dict[str, str] = {"CidrIp": cidr}
     if description:
         ip_range["Description"] = description

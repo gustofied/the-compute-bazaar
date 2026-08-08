@@ -182,9 +182,7 @@ def normalize_gpu_products(
                     "fx_observed_date": fx_observed_date,
                     "price_basis": "scaleway_current_on_demand_instance_hour",
                     "capacity_basis": (
-                        "zone_type_deployability_lower_bound"
-                        if is_deployable
-                        else None
+                        "zone_type_deployability_lower_bound" if is_deployable else None
                     ),
                     "vcpu_count": product.get("vcpu_count"),
                     "ram_bytes": product.get("ram_bytes"),

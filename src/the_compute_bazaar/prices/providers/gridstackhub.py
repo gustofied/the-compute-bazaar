@@ -196,11 +196,7 @@ def _latest_unique_rows(
 
 def _provider_id(value: str) -> str:
     normalized = (
-        value.strip()
-        .lower()
-        .replace(".", "_")
-        .replace("-", "_")
-        .replace(" ", "_")
+        value.strip().lower().replace(".", "_").replace("-", "_").replace(" ", "_")
     )
     return PROVIDER_ALIASES.get(normalized, normalized).strip("_")
 

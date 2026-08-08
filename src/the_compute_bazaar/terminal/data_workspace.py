@@ -1,0 +1,259 @@
+"""DataFusion and Perspective workspace for the Compute Bazaar Terminal."""
+
+from __future__ import annotations
+
+import hashlib
+import re
+from pathlib import Path
+from threading import BoundedSemaphore, Lock
+from time import perf_counter
+from typing import Any
+
+import pyarrow as pa
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, Field
+
+from ..data_catalog import ComputeBazaarCatalog
+from ..prices.gold_manifest import read_latest_gold_manifest
+from ..prices.query_catalog import MAX_QUERY_LIMIT, load_query_catalog
+from .views import TERMINAL_VIEWS
+
+
+MAX_SQL_LENGTH = 10_000
+
+
+class DataQuery(BaseModel):
+    sql: str = Field(min_length=1, max_length=MAX_SQL_LENGTH)
+    limit: int = Field(default=500, ge=1, le=MAX_QUERY_LIMIT)
+
+
+class CatalogStore:
+    """Keep one DataFusion catalog per immutable lake generation."""
+
+    def __init__(self, lake_root: str) -> None:
+        self._lake_root = lake_root
+        self._lock = Lock()
+        self._catalog = ComputeBazaarCatalog(lake_root=lake_root)
+
+    def current(self) -> ComputeBazaarCatalog:
+        manifest = read_latest_gold_manifest(self._lake_root)
+        run_id = manifest.get("run_id")
+        with self._lock:
+            if run_id != self._catalog.manifest.get("run_id"):
+                self._catalog = ComputeBazaarCatalog(
+                    lake_root=self._lake_root,
+                    manifest=manifest,
+                )
+            return self._catalog
+
+
+class DataWorkspace:
+    def __init__(
+        self,
+        *,
+        lake_root: str,
+        asset_root: Path,
+        initial_view: str | None = None,
+        initial_query: str | None = None,
+        initial_sql: str | None = None,
+        initial_limit: int = 500,
+        initial_perspective: dict[str, Any] | None = None,
+    ) -> None:
+        self.catalogs = CatalogStore(lake_root)
+        self.asset_root = asset_root
+        self.initial_view = initial_view
+        self.initial_query = initial_query
+        self.initial_sql = initial_sql
+        self.initial_limit = initial_limit
+        self.initial_perspective = initial_perspective
+        self._query_slot = BoundedSemaphore(value=1)
+
+    def status(self) -> dict[str, Any]:
+        tables = self.catalogs.current().tables()
+        return {
+            "available": True,
+            "href": "/data",
+            "run": tables["run"],
+            "table_count": len(tables["tables"]),
+        }
+
+    def register(self, app: FastAPI) -> None:
+        @app.get("/data", include_in_schema=False)
+        def data() -> FileResponse:
+            return FileResponse(self.asset_root / "index.html")
+
+        @app.get("/api/data/session")
+        def session() -> dict[str, Any]:
+            catalog = self.catalogs.current()
+            table_payload = catalog.tables()
+            queries = []
+            for query in load_query_catalog():
+                entry = query.catalog_entry(catalog.manifest)
+                entry["sql"] = _qualified_gold_sql(query.sql, query.tables)
+                queries.append(entry)
+            queries_by_id = {query["query_id"]: query for query in queries}
+            table_refs = {
+                f"{table['layer']}.{table['table_name']}"
+                for table in table_payload["tables"]
+            }
+            views = []
+            for blueprint in TERMINAL_VIEWS:
+                entry = blueprint.as_dict()
+                query = queries_by_id.get(blueprint.query_id or "")
+                if query:
+                    entry["available"] = bool(query["available"])
+                    entry["sql"] = query["sql"]
+                    entry["default_limit"] = query["default_limit"]
+                else:
+                    entry["available"] = bool(
+                        blueprint.sql
+                        and all(table in table_refs for table in blueprint.tables)
+                    )
+                views.append(entry)
+            return {
+                "contract": "compute-bazaar.data.session.v1",
+                "run": table_payload["run"],
+                "tables": table_payload["tables"],
+                "queries": queries,
+                "views": views,
+                "launch": _launch_payload(
+                    initial_view=self.initial_view,
+                    initial_query=self.initial_query,
+                    initial_sql=self.initial_sql,
+                    initial_limit=self.initial_limit,
+                    initial_perspective=self.initial_perspective,
+                ),
+                "limits": {"default": 500, "maximum": MAX_QUERY_LIMIT},
+            }
+
+        @app.get("/api/data/tables/{layer}/{table_name}")
+        def describe_table(layer: str, table_name: str) -> dict[str, Any]:
+            catalog = self.catalogs.current()
+            try:
+                return catalog.describe(f"{layer}.{table_name}")
+            except (KeyError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=404,
+                    detail=str(exc).strip("'"),
+                ) from exc
+
+        @app.post("/api/data/query")
+        def query(request: DataQuery) -> Response:
+            if not self._query_slot.acquire(blocking=False):
+                raise HTTPException(
+                    status_code=429,
+                    detail="A query is already running",
+                )
+            started = perf_counter()
+            try:
+                catalog = self.catalogs.current()
+                table, selected_limit = catalog.query_arrow(
+                    request.sql,
+                    limit=request.limit,
+                )
+                payload = _arrow_stream(table)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except (FileNotFoundError, RuntimeError) as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Data is unavailable",
+                ) from exc
+            finally:
+                self._query_slot.release()
+
+            elapsed_ms = round((perf_counter() - started) * 1000, 1)
+            run = _run_identity(catalog)
+            return Response(
+                content=payload,
+                media_type="application/vnd.apache.arrow.stream",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Compute-Bazaar-Run-Id": str(run.get("run_id") or ""),
+                    "X-Compute-Bazaar-Observed-At": str(run.get("observed_at") or ""),
+                    "X-Compute-Bazaar-Row-Count": str(table.num_rows),
+                    "X-Compute-Bazaar-Query-Limit": str(selected_limit),
+                    "X-Compute-Bazaar-Elapsed-Ms": str(elapsed_ms),
+                    "X-Compute-Bazaar-Query-Hash": hashlib.sha256(
+                        request.sql.encode("utf-8")
+                    ).hexdigest()[:12],
+                },
+            )
+
+
+def _launch_payload(
+    *,
+    initial_view: str | None,
+    initial_query: str | None,
+    initial_sql: str | None,
+    initial_limit: int,
+    initial_perspective: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if initial_sql:
+        return {
+            "kind": "sql",
+            "sql": initial_sql,
+            "limit": initial_limit,
+            "perspective": initial_perspective,
+        }
+    if initial_query:
+        return {
+            "kind": "query",
+            "query_id": initial_query,
+            "limit": initial_limit,
+        }
+    if initial_view:
+        return {"kind": "view", "view_id": initial_view}
+    return None
+
+
+def _run_identity(catalog: ComputeBazaarCatalog) -> dict[str, Any]:
+    return {
+        "run_id": catalog.manifest.get("run_id"),
+        "observed_at": catalog.manifest.get("observed_at"),
+    }
+
+
+def _arrow_stream(table: pa.Table) -> bytes:
+    table = _perspective_compatible(table)
+    sink = pa.BufferOutputStream()
+    with pa.ipc.new_stream(sink, table.schema) as writer:
+        writer.write_table(table)
+    return sink.getvalue().to_pybytes()
+
+
+def _perspective_compatible(table: pa.Table) -> pa.Table:
+    """Use stable Arrow scalar types at the browser transport boundary."""
+    columns: list[pa.ChunkedArray] = []
+    fields: list[pa.Field] = []
+    for field, column in zip(table.schema, table.columns, strict=True):
+        target_type = field.type
+        if pa.types.is_string_view(target_type):
+            target_type = pa.string()
+        elif pa.types.is_binary_view(target_type):
+            target_type = pa.binary()
+        columns.append(
+            column.cast(target_type) if target_type != field.type else column
+        )
+        fields.append(
+            pa.field(
+                field.name,
+                target_type,
+                nullable=field.nullable,
+                metadata=field.metadata,
+            )
+        )
+    schema = pa.schema(fields, metadata=table.schema.metadata)
+    return pa.Table.from_arrays(columns, schema=schema)
+
+
+def _qualified_gold_sql(sql: str, tables: tuple[str, ...]) -> str:
+    statement = sql
+    for table_name in sorted(tables, key=len, reverse=True):
+        statement = re.sub(
+            rf"(?<![A-Za-z0-9_.]){re.escape(table_name)}(?![A-Za-z0-9_])",
+            f"gold.{table_name}",
+            statement,
+        )
+    return statement

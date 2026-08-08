@@ -52,6 +52,7 @@ SCRATCH_TABLE_ALLOWLIST = {
     "dim_providers",
     "dim_sources",
     "fact_gpu_price_index",
+    "fact_gpu_price_index_history",
     "fact_gpu_price_index_constituents",
     "fact_compute_market_state",
     "fact_compute_market_state_history",

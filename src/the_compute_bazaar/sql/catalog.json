@@ -10,6 +10,14 @@
       "default_limit": 20
     },
     {
+      "query_id": "gpu_price_index_history",
+      "title": "GPU Price Index History",
+      "description": "Daily medians of retained hourly frontier GPU index values.",
+      "tables": ["fact_gpu_price_index_history"],
+      "sql_path": "queries/gpu_price_index_history.sql",
+      "default_limit": 500
+    },
+    {
       "query_id": "gpu_price_index_constituents",
       "title": "GPU Price Index Constituents",
       "description": "Rows included in or excluded from each index value.",
@@ -40,6 +48,14 @@
       "tables": ["fact_gpu_availability"],
       "sql_path": "queries/gpu_availability.sql",
       "default_limit": 200
+    },
+    {
+      "query_id": "akash_gpu_occupancy",
+      "title": "Akash GPU Occupancy",
+      "description": "Observed rented and available Akash GPU capacity.",
+      "tables": ["fact_gpu_availability_history"],
+      "sql_path": "queries/akash_gpu_occupancy.sql",
+      "default_limit": 500
     },
     {
       "query_id": "prime_offer_history",

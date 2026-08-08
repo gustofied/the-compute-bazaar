@@ -69,7 +69,9 @@ class OvhCloudClient:
                 "catalog_id": (
                     payload.get("catalogId") if isinstance(payload, Mapping) else None
                 ),
-                "locale": payload.get("locale") if isinstance(payload, Mapping) else None,
+                "locale": payload.get("locale")
+                if isinstance(payload, Mapping)
+                else None,
                 "gpu_plan_count": len(plans),
                 "plans": plans,
                 "fx": {
@@ -172,8 +174,7 @@ def _extract_gpu_instance_plans(payload: Any) -> list[dict[str, Any]]:
             or item.get("pricingType") != "consumption"
             or commercial.get("brick") != "gpu"
             or not _mapping(technical.get("gpu"))
-            or str(_mapping(technical.get("os")).get("family") or "").lower()
-            != "linux"
+            or str(_mapping(technical.get("os")).get("family") or "").lower() != "linux"
             or plan_code in seen
         ):
             continue

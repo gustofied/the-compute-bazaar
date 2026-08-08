@@ -99,9 +99,7 @@ def sample_presentation() -> JobPresentation:
             ),
             links=[TaskLink(label="Harbor task", href="https://example.com/task")],
             launch=LaunchSpec(
-                package_path=(
-                    "compute-bazaar-bench/evals/reliability-is-blind/task"
-                ),
+                package_path=("compute-bazaar-bench/evals/reliability-is-blind/task"),
                 task_id="reliability-is-blind",
             ),
         ),
@@ -576,7 +574,7 @@ class ReliabilityIsBlindAnalysisTests(unittest.TestCase):
         html = _index_html(sample_presentation())
         self.assertIn("data-compute-embroidery", html)
         self.assertIn("compute-brand-word compute", html)
-        self.assertIn('href="/">Tasks</a> /', html)
+        self.assertIn('href="/eval/">Tasks</a> /', html)
         self.assertIn("/ Job", html)
         self.assertNotIn("compute-brand-panel", html)
 

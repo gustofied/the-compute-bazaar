@@ -12,6 +12,11 @@ dist/
 .env
 .secrets/
 data/
+terminal/node_modules/
+terminal/src-tauri/target/
+terminal/src-tauri/gen/schemas/
+!terminal/dist/
+!terminal/dist/index.html
 
 
 .terraform/
@@ -28,6 +33,7 @@ tfplan
 *.xlsx
 !assets/compute-bazaar-wordmark.png
 !compute-bazaar-bench/evals/**/environment/matter/*.csv
+!terminal/src-tauri/icons/icon.png
 
 
 /AGENTS.md

@@ -275,7 +275,9 @@ def _compute_bazaar_mark() -> str:
 def _layout(title: str, body: str) -> str:
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{escape(title)}</title><style>{STYLE}</style></head><body><main class="shell">{body}</main>
+<title>{escape(title)}</title><style>{STYLE}</style><link rel="stylesheet" href="/terminal-assets/command.css"></head>
+<body data-terminal-workspace="eval"><main class="shell">{body}</main>
+<script type="module" src="/terminal-assets/command.js"></script>
 <script type="module">import {{ setupComputeTitleEmbroidery }} from "/assets/compute-title/compute-title-embroidery.js"; setupComputeTitleEmbroidery();</script></body></html>"""
 
 
@@ -461,7 +463,7 @@ document.getElementById('open-launch').addEventListener('click',()=>launchDialog
 document.getElementById('close-launch').addEventListener('click',()=>launchDialog.close());
 document.getElementById('copy-command').addEventListener('click',async()=>{{await navigator.clipboard.writeText(document.getElementById('launch-command').textContent);document.getElementById('copy-state').textContent='Copied';}});
 </script>"""
-    return f"""<section class="task-hero"><div><div class="eyebrow"><a class="info" href="/">Tasks</a> / {escape(task.domain)}</div><h1>{escape(task.name)}</h1>{description}{disclosures}</div><div class="task-actions">{launcher}{links}</div></section>{dialog}"""
+    return f"""<section class="task-hero"><div><div class="eyebrow"><a class="info" href="/eval/">Tasks</a> / {escape(task.domain)}</div><h1>{escape(task.name)}</h1>{description}{disclosures}</div><div class="task-actions">{launcher}{links}</div></section>{dialog}"""
 
 
 def _runs_html(task: TaskInfo, runs: Sequence[dict[str, Any]]) -> str:
@@ -555,7 +557,7 @@ def _index_html(
         metrics.insert(0, presentation.primary_score)
     metric_cards = "".join(_metric_html(metric) for metric in metrics)
     body = f"""
-<header><div class="header-identity">{_compute_bazaar_mark()}<div class="page-heading"><div class="eyebrow"><a class="info" href="/">Tasks</a> / <a class="info" href="/evals/{escape(task.slug)}">{escape(task.name)}</a> / Job</div><h1>{escape(job_id)}</h1></div></div></header>
+<header><div class="header-identity">{_compute_bazaar_mark()}<div class="page-heading"><div class="eyebrow"><a class="info" href="/eval/">Tasks</a> / <a class="info" href="/evals/{escape(task.slug)}">{escape(task.name)}</a> / Job</div><h1>{escape(job_id)}</h1></div></div></header>
 <section class="note-editor"><div class="section-head"><h2>Note</h2><span class="muted">{escape(note["updated_at"])}</span></div>
 <textarea id="job-note" maxlength="2000" aria-label="Job note" placeholder="Add context, caveats, or interpretation for this job">{escape(note["text"])}</textarea>
 <div class="note-actions"><button id="save-note" type="button">Save note</button><span class="muted" id="note-state"></span></div></section>
@@ -578,7 +580,7 @@ def _trial_html(trial: TrialPresentation, presentation: JobPresentation) -> str:
         for section in trial.sections
     )
     task = presentation.task
-    body = f"""<a class="back" href="/evals/{escape(task.slug)}/jobs/{escape(presentation.job_id)}">← {escape(presentation.job_id)}</a><header><div class="header-identity">{_compute_bazaar_mark()}<div class="page-heading"><div class="eyebrow"><a class="info" href="/">Tasks</a> / <a class="info" href="/evals/{escape(task.slug)}">{escape(task.name)}</a> / Trial</div><h1>{escape(trial.title)}</h1></div></div></header><div class="detail-grid">{details}</div>{sections}"""
+    body = f"""<a class="back" href="/evals/{escape(task.slug)}/jobs/{escape(presentation.job_id)}">← {escape(presentation.job_id)}</a><header><div class="header-identity">{_compute_bazaar_mark()}<div class="page-heading"><div class="eyebrow"><a class="info" href="/eval/">Tasks</a> / <a class="info" href="/evals/{escape(task.slug)}">{escape(task.name)}</a> / Trial</div><h1>{escape(trial.title)}</h1></div></div></header><div class="detail-grid">{details}</div>{sections}"""
     return _layout(trial.title, body)
 
 

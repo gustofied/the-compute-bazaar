@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Compute Bazaar Data</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath fill='%2391aecb' d='M1 1h5v5H1z'/%3E%3Cpath fill='%23b7d07b' d='M8 1h5v5H8z'/%3E%3Cpath fill='%23efede4' d='M1 8h5v5H1z'/%3E%3Cpath fill='%23f3c888' d='M8 8h5v5H8z'/%3E%3C/svg%3E">
+    <link
+      rel="stylesheet"
+      crossorigin="anonymous"
+      href="https://cdn.jsdelivr.net/npm/@perspective-dev/viewer@4.5.2/dist/css/themes.css"
+    >
+    <link rel="stylesheet" href="/terminal-assets/app.css">
+    <link rel="stylesheet" href="/terminal-assets/command.css">
+  </head>
+  <body data-terminal-workspace="data">
+    <div class="app-shell">
+      <header class="topbar">
+        <button
+          class="catalog-toggle"
+          id="catalog-toggle"
+          type="button"
+          aria-controls="catalog-panel"
+          aria-expanded="false"
+        >
+          Data
+        </button>
+        <a class="brand" href="/" aria-label="Return to Compute Bazaar Terminal">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <span>Compute Bazaar</span>
+          <span class="brand-context">Data</span>
+        </a>
+        <div class="run-state" aria-live="polite">
+          <span class="run-light" id="run-light"></span>
+          <span id="run-label">Opening lake</span>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="catalog-panel" id="catalog-panel" aria-label="Data catalog">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">DataFusion</p>
+              <h1>Data</h1>
+            </div>
+            <button class="mobile-close" id="catalog-close" type="button">Close</button>
+          </div>
+
+          <nav class="catalog-scroll" aria-label="Views, queries, and tables">
+            <section class="catalog-section" aria-labelledby="terminal-view-heading">
+              <button class="section-heading" type="button" aria-expanded="true">
+                <span id="terminal-view-heading">Views</span>
+                <span id="terminal-view-count">0</span>
+              </button>
+              <div class="catalog-list terminal-view-list" id="terminal-view-list"></div>
+            </section>
+
+            <section class="catalog-section" aria-labelledby="view-heading">
+              <button class="section-heading" type="button" aria-expanded="true">
+                <span id="view-heading">My views</span>
+                <span id="view-count">0</span>
+              </button>
+              <div class="catalog-list" id="view-list"></div>
+              <p class="catalog-empty" id="view-empty">Nothing saved in this browser.</p>
+            </section>
+
+            <section class="catalog-section" aria-labelledby="saved-query-heading">
+              <button class="section-heading" type="button" aria-expanded="false">
+                <span id="saved-query-heading">SQL queries</span>
+                <span id="query-count">0</span>
+              </button>
+              <div class="catalog-list" id="query-list"></div>
+            </section>
+
+            <section class="catalog-section" aria-labelledby="gold-heading">
+              <button class="section-heading" type="button" aria-expanded="false">
+                <span id="gold-heading">Gold tables</span>
+                <span id="gold-count">0</span>
+              </button>
+              <div class="catalog-list" id="gold-list"></div>
+            </section>
+
+            <section class="catalog-section" aria-labelledby="silver-heading">
+              <button class="section-heading" type="button" aria-expanded="false">
+                <span id="silver-heading">Silver tables</span>
+                <span id="silver-count">0</span>
+              </button>
+              <div class="catalog-list" id="silver-list"></div>
+            </section>
+
+          </nav>
+
+          <footer class="catalog-footer">
+            <span id="run-id">No run loaded</span>
+            <span id="observed-at"></span>
+          </footer>
+        </aside>
+
+        <button class="catalog-scrim" id="catalog-scrim" type="button" aria-label="Close data catalog"></button>
+
+        <section class="view-workspace" aria-label="Data result viewer">
+          <header class="view-header">
+            <div class="view-copy">
+              <p class="eyebrow" id="view-kind">Data view</p>
+              <h2 id="view-title">Opening catalog</h2>
+              <p id="view-description">Loading the market-data catalog.</p>
+            </div>
+            <div class="view-controls">
+              <dl class="result-meta" aria-live="polite">
+                <div><dt>Rows</dt><dd id="result-rows">—</dd></div>
+                <div><dt>Query</dt><dd id="result-time">—</dd></div>
+                <div><dt>Run</dt><dd id="result-run">—</dd></div>
+              </dl>
+              <div class="view-actions">
+                <button class="text-button" id="sql-toggle" type="button" aria-controls="query-drawer" aria-expanded="false">SQL</button>
+                <button class="text-button" id="save-view" type="button" disabled>Save</button>
+                <button class="text-button" id="viewer-config" type="button" disabled>Configure</button>
+              </div>
+            </div>
+          </header>
+
+          <section class="query-drawer" id="query-drawer" aria-hidden="true">
+            <div class="query-drawer-inner">
+              <div class="query-toolbar">
+                <span>Read-only DataFusion SQL</span>
+                <div>
+                  <label class="limit-control">
+                    <span>Rows</span>
+                    <input id="query-limit" type="number" min="1" max="1000" value="500" inputmode="numeric">
+                  </label>
+                  <button class="run-button" id="run-query" type="button">
+                    <span>Run query</span>
+                    <kbd>⌘↵</kbd>
+                  </button>
+                </div>
+              </div>
+              <label class="visually-hidden" for="sql-editor">SQL statement</label>
+              <textarea
+                id="sql-editor"
+                class="sql-editor"
+                spellcheck="false"
+                autocomplete="off"
+                autocapitalize="off"
+              ></textarea>
+            </div>
+          </section>
+
+          <div class="viewer-stage" id="viewer-stage" aria-busy="true">
+            <div class="viewer-host" id="viewer-host"></div>
+            <div class="viewer-state" id="viewer-state">
+              <span class="state-signal" aria-hidden="true"></span>
+              <p id="viewer-state-title">Starting Perspective</p>
+              <span id="viewer-state-detail">Preparing the Arrow viewer.</span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="save-dialog" id="save-dialog">
+      <form method="dialog" id="save-form">
+        <p class="eyebrow">Local view</p>
+        <h2>Save this view</h2>
+        <p>Keep the SQL and Perspective layout in this browser.</p>
+        <label for="view-name">Name</label>
+        <input id="view-name" name="view-name" maxlength="64" required autocomplete="off">
+        <div class="dialog-actions">
+          <button class="dialog-button" value="cancel" type="button" id="cancel-save">Cancel</button>
+          <button class="dialog-button primary" value="save" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/terminal-assets/command.js"></script>
+    <script type="module" src="/terminal-assets/app.js"></script>
+  </body>
+</html>

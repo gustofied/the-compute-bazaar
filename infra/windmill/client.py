@@ -11,7 +11,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 
-DEFAULT_BASE_URL = "http://127.0.0.1:8081"
+DEFAULT_BASE_URL = "http://127.0.0.1:18081"
 DEFAULT_WORKSPACE = "compute-bazaar"
 DEFAULT_FOLDER = "compute-bazaar"
 DEFAULT_CRON = "0 0 * * * *"
@@ -69,9 +69,7 @@ class WindmillClient:
         }
         if parent_hash:
             body["parent_hash"] = parent_hash
-        self._post(
-            f"/w/{self.workspace}/scripts/create", body, ok_statuses={200, 201}
-        )
+        self._post(f"/w/{self.workspace}/scripts/create", body, ok_statuses={200, 201})
 
     def get_script_hash(self, path: str) -> str | None:
         try:

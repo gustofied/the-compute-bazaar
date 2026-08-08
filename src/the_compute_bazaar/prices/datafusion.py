@@ -62,12 +62,15 @@ class DataFusionEngine:
             self._table_refs.pop(name, None)
 
     def query(self, sql: str) -> list[dict[str, Any]]:
+        return self.query_arrow(sql).to_pylist()
+
+    def query_arrow(self, sql: str) -> Any:
+        """Execute SQL and retain its Arrow schema, including for empty results."""
         if not sql.strip():
             raise ValueError("DataFusion SQL must not be empty")
-        batches = self._context.sql(sql).collect()
-        if not batches:
-            return []
-        return self._arrow.Table.from_batches(batches).to_pylist()
+        frame = self._context.sql(sql)
+        batches = frame.collect()
+        return self._arrow.Table.from_batches(batches, schema=frame.schema())
 
     def create_schema(self, schema_name: str) -> None:
         schema = _validated_table_name(schema_name)

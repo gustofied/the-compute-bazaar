@@ -360,8 +360,7 @@ def _gpu_selector(column: str, value: str) -> str:
     model = value.strip().upper()
     literal = _sql_literal(model)
     return (
-        f"(upper({column}) = {literal} "
-        f"or upper({column}) like concat({literal}, '_%'))"
+        f"(upper({column}) = {literal} or upper({column}) like concat({literal}, '_%'))"
     )
 
 

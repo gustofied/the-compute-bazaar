@@ -87,9 +87,7 @@ def read_latest_market_run(lake_root: str) -> dict[str, Any]:
     return _read_market_run_manifest(latest_market_run_ref(lake_root))
 
 
-def read_market_run_history(
-    lake_root: str, *, limit: int = 24
-) -> MarketRunHistory:
+def read_market_run_history(lake_root: str, *, limit: int = 24) -> MarketRunHistory:
     requested_limit = max(1, int(limit))
     refs = [
         ref
@@ -128,10 +126,7 @@ def write_public_market_run_snapshots(
 ) -> dict[str, str]:
     latest_manifest = latest or read_latest_market_run(lake_root)
     market_history = read_market_run_history(lake_root, limit=limit)
-    history = [
-        _public_market_run_manifest(row)
-        for row in market_history.rows
-    ]
+    history = [_public_market_run_manifest(row) for row in market_history.rows]
     if not history:
         history = [_public_market_run_manifest(latest_manifest)]
 

@@ -20,11 +20,7 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(row, Mapping) and row.get("service_set_complete") is True
     ]
     latest_complete_run = (
-        complete_runs[-1]
-        if complete_runs
-        else run_history[-1]
-        if run_history
-        else {}
+        complete_runs[-1] if complete_runs else run_history[-1] if run_history else {}
     )
     timestamps = [
         {"observed_at": row.get("observed_at") or row.get("observed_date")}
@@ -77,9 +73,7 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
             "source_batch_count": int(workload.get("source_batch_count") or 0),
             "calendar_day_count": int(workload.get("calendar_day_count") or 0),
             "service_count": len(summaries),
-            "latest_replicate_count": int(
-                workload.get("latest_replicate_count") or 0
-            ),
+            "latest_replicate_count": int(workload.get("latest_replicate_count") or 0),
         },
         sources=list(payload.get("sources") or []),
         drilldown_ref="sandbox/workload.json",

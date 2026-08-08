@@ -24,14 +24,16 @@ uv run python infra/aws/refresh_runtime_access.py \
 ssh -i .secrets/compute-bazaar-automq-runtime.pem \
   -o ExitOnForwardFailure=yes \
   -L 8080:127.0.0.1:8080 \
-  -L 8081:127.0.0.1:8081 \
+  -L 18081:127.0.0.1:8081 \
   ec2-user@RUNTIME_HOST
 ```
 
 - AutoMQ: `http://127.0.0.1:8080`
-- Windmill: `http://127.0.0.1:8081`
+- Windmill: `http://127.0.0.1:18081`
 
-Do not open ports 8080 or 8081 in the public security group.
+The different local Windmill port avoids collisions with local development
+services. Do not open the runtime's ports 8080 or 8081 in the public security
+group.
 
 ## Worker image
 
@@ -95,6 +97,13 @@ uv run python infra/windmill/bootstrap_market_schedule.py \
   --run-id market-manual-YYYYMMDD
 ```
 
+Verify freshness and one-run alignment across the market manifest, GPU cards,
+and portable lake with:
+
+```bash
+uv run python infra/aws/check_public_market.py
+```
+
 ## Self-hosted development stack
 
 `self-host/docker-compose.yml` runs Postgres, the Windmill server and worker,
@@ -107,5 +116,5 @@ should use Windmill's sandbox image path and should not run privileged.
 ```bash
 cd /opt/windmill
 sudo docker compose ps
-curl -sS http://127.0.0.1:8081/api/health/status
+curl -sS http://127.0.0.1:18081/api/version
 ```

@@ -1,4 +1,4 @@
-"""Logical Silver and Gold tables over the latest manifested market run."""
+"""One DataFusion catalog for the portable market-data lake."""
 
 from __future__ import annotations
 
@@ -6,24 +6,30 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from .datafusion import DataFusionEngine
-from .gold_manifest import read_latest_gold_manifest
-from .gold_sources import SilverOfferSource, silver_source_select
-from .query_catalog import bounded_query_limit, validate_catalog_sql, with_scratch_limit
-from .silver_contract import (
-    silver_contract,
-    silver_market_state_select,
+from .prices.datafusion import DataFusionEngine
+from .prices.gold_manifest import read_latest_gold_manifest
+from .prices.gold_sources import SilverOfferSource, silver_source_select
+from .prices.query_catalog import (
+    bounded_query_limit,
+    validate_catalog_sql,
+    with_scratch_limit,
 )
+from .prices.silver_contract import silver_contract, silver_market_state_select
 
 
 TABLE_REF_PATTERN = re.compile(r"^(silver|gold)\.([A-Za-z_][A-Za-z0-9_]*)$")
 
 
-class MarketDataCatalog:
-    """Present manifested Parquet objects as stable DataFusion tables."""
+class ComputeBazaarCatalog:
+    """Present the portable lake as stable DataFusion tables."""
 
-    def __init__(self, *, lake_root: str) -> None:
-        self.manifest = read_latest_gold_manifest(lake_root.rstrip("/"))
+    def __init__(
+        self,
+        *,
+        lake_root: str,
+        manifest: dict[str, Any] | None = None,
+    ) -> None:
+        self.manifest = manifest or read_latest_gold_manifest(lake_root.rstrip("/"))
         self.engine = DataFusionEngine()
         self._register_silver()
         self._register_gold()
@@ -37,14 +43,15 @@ where table_schema in ('silver', 'gold')
 order by table_schema, table_name
 """
         )
-        row_counts = dict(self.manifest.get("row_counts") or {})
+        gold_counts = dict(self.manifest.get("row_counts") or {})
         for row in rows:
-            row["row_count"] = (
-                row_counts.get(str(row["table_name"]))
-                if row["layer"] == "gold"
-                else None
-            )
-        return {"run": self._run(), "tables": rows}
+            layer = str(row["layer"])
+            name = str(row["table_name"])
+            row["row_count"] = gold_counts.get(name) if layer == "gold" else None
+        return {
+            "run": self.run(),
+            "tables": rows,
+        }
 
     def describe(self, table_ref: str) -> dict[str, Any]:
         layer, table_name = _parse_table_ref(table_ref)
@@ -59,21 +66,36 @@ order by ordinal_position
         if not rows:
             raise KeyError(f"Unknown catalog table: {table_ref}")
         if layer == "silver":
-            contract = silver_contract(table_name)
-            meanings = {column.name: column.meaning for column in contract or ()}
+            meanings = {
+                column.name: column.meaning
+                for column in silver_contract(table_name) or ()
+            }
             for row in rows:
                 row["meaning"] = meanings.get(str(row["column_name"]))
-        return {"run": self._run(), "table": table_ref, "columns": rows}
+        return {"run": self.run(), "table": table_ref, "columns": rows}
 
     def query(self, sql: str, *, limit: int = 100) -> dict[str, Any]:
-        selected_limit = bounded_query_limit(limit)
-        statement = validate_catalog_sql(sql)
-        rows = self.engine.query(with_scratch_limit(statement, selected_limit))
+        table, selected_limit = self.query_arrow(sql, limit=limit)
+        rows = table.to_pylist()
         return {
-            "run": self._run(),
+            "run": self.run(),
             "limit": selected_limit,
             "row_count": len(rows),
             "rows": rows,
+        }
+
+    def query_arrow(self, sql: str, *, limit: int = 100) -> tuple[Any, int]:
+        """Run one bounded read-only statement and return an Arrow table."""
+        selected_limit = bounded_query_limit(limit)
+        statement = validate_catalog_sql(sql)
+        table = self.engine.query_arrow(with_scratch_limit(statement, selected_limit))
+        return table, selected_limit
+
+    def run(self) -> dict[str, Any]:
+        return {
+            "run_id": self.manifest.get("run_id"),
+            "observed_at": self.manifest.get("observed_at"),
+            "provider_scope": self.manifest.get("provider_scope"),
         }
 
     def _register_silver(self) -> None:
@@ -124,7 +146,9 @@ order by ordinal_position
         self.engine.create_view(
             "silver",
             "gpu_offers",
-            " union all ".join(silver_source_select(source) for source in offer_sources),
+            " union all ".join(
+                silver_source_select(source) for source in offer_sources
+            ),
         )
         if state_refs:
             self.engine.create_view(
@@ -145,10 +169,9 @@ order by ordinal_position
         }
         if not table_refs:
             raise RuntimeError("Latest Gold manifest has no Gold table references")
-        physical_tables = {
-            f"_gold_{table_name}": ref for table_name, ref in table_refs.items()
-        }
-        self.engine.register_tables(physical_tables)
+        self.engine.register_tables(
+            {f"_gold_{table_name}": ref for table_name, ref in table_refs.items()}
+        )
         self.engine.create_schema("gold")
         for table_name in sorted(table_refs):
             self.engine.create_view(
@@ -156,13 +179,6 @@ order by ordinal_position
                 table_name,
                 f"select * from _gold_{table_name}",
             )
-
-    def _run(self) -> dict[str, Any]:
-        return {
-            "run_id": self.manifest.get("run_id"),
-            "observed_at": self.manifest.get("observed_at"),
-            "provider_scope": self.manifest.get("provider_scope"),
-        }
 
 
 def _union_all(
@@ -180,5 +196,5 @@ def _union_all(
 def _parse_table_ref(table_ref: str) -> tuple[str, str]:
     match = TABLE_REF_PATTERN.fullmatch(table_ref.strip())
     if not match:
-        raise ValueError("Table must be named as silver.<table> or gold.<table>")
+        raise ValueError("Table must be named as silver.* or gold.*")
     return match.group(1), match.group(2)

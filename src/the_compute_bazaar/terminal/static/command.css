@@ -1,0 +1,259 @@
+:root {
+  --terminal-command-height: 58px;
+  --terminal-command-bg: #0d1110;
+  --terminal-command-panel: #141917;
+  --terminal-command-line: #303833;
+  --terminal-command-line-strong: #536057;
+  --terminal-command-text: #efede4;
+  --terminal-command-muted: #9fa49e;
+  --terminal-command-quiet: #737c76;
+  --terminal-command-blue: #91aecb;
+  --terminal-command-green: #b7d07b;
+  --terminal-command-danger: #d98770;
+}
+
+body.terminal-command-enabled {
+  padding-bottom: var(--terminal-command-height);
+}
+
+body.terminal-command-enabled .terminal-menu {
+  min-height: calc(100dvh - var(--terminal-command-height));
+}
+
+.terminal-command {
+  position: fixed;
+  z-index: 1000;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--terminal-command-height);
+  border-top: 1px solid var(--terminal-command-line-strong);
+  background: color-mix(in srgb, var(--terminal-command-bg) 94%, transparent);
+  color: var(--terminal-command-text);
+  font-family: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  font-size: 12px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.terminal-command-inner {
+  width: min(1180px, calc(100% - 32px));
+  height: 100%;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.terminal-command-workspace {
+  min-width: 38px;
+  color: var(--terminal-command-blue);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.terminal-command-prompt {
+  color: var(--terminal-command-green);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.terminal-command-input {
+  width: 100%;
+  min-width: 0;
+  max-height: 96px;
+  margin: 0;
+  padding: 8px 0;
+  resize: none;
+  overflow-y: auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--terminal-command-text);
+  caret-color: var(--terminal-command-blue);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.terminal-command-input::placeholder {
+  color: var(--terminal-command-quiet);
+  opacity: 1;
+}
+
+.terminal-command-shortcut,
+.terminal-command-run {
+  flex: 0 0 auto;
+  color: var(--terminal-command-muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.terminal-command-run {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--terminal-command-line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--terminal-command-text);
+  cursor: pointer;
+}
+
+.terminal-command-run:hover {
+  border-color: var(--terminal-command-blue);
+  background: color-mix(in srgb, var(--terminal-command-blue) 10%, transparent);
+}
+
+.terminal-command-run:focus-visible,
+.terminal-command-input:focus-visible,
+.terminal-command-option:focus-visible,
+.terminal-command-close:focus-visible {
+  outline: 2px solid var(--terminal-command-blue);
+  outline-offset: 2px;
+}
+
+.terminal-command-panel {
+  position: absolute;
+  right: max(16px, calc((100% - 1180px) / 2));
+  bottom: calc(100% + 8px);
+  width: min(560px, calc(100% - 32px));
+  max-height: min(420px, calc(100dvh - 96px));
+  overflow: auto;
+  border: 1px solid var(--terminal-command-line-strong);
+  border-radius: 4px;
+  background: var(--terminal-command-panel);
+  box-shadow: 0 22px 70px rgb(0 0 0 / 42%);
+}
+
+.terminal-command-panel[hidden] {
+  display: none;
+}
+
+.terminal-command-panel-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--terminal-command-line);
+  background: var(--terminal-command-panel);
+}
+
+.terminal-command-panel-title {
+  margin: 0;
+  color: var(--terminal-command-muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.terminal-command-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--terminal-command-muted);
+  cursor: pointer;
+}
+
+.terminal-command-panel-body {
+  padding: 6px;
+}
+
+.terminal-command-message {
+  margin: 0;
+  padding: 12px;
+  color: var(--terminal-command-muted);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.terminal-command-panel.error {
+  border-color: color-mix(in srgb, var(--terminal-command-danger) 72%, transparent);
+}
+
+.terminal-command-panel.error .terminal-command-panel-title {
+  color: var(--terminal-command-danger);
+}
+
+.terminal-command-options {
+  display: grid;
+}
+
+.terminal-command-option {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.55fr) minmax(0, 1fr);
+  gap: 16px;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--terminal-command-line);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.terminal-command-option:last-child {
+  border-bottom: 0;
+}
+
+.terminal-command-option:hover,
+.terminal-command-option.active {
+  background: color-mix(in srgb, var(--terminal-command-blue) 9%, transparent);
+}
+
+.terminal-command-option code {
+  overflow: hidden;
+  color: var(--terminal-command-text);
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-command-option span {
+  color: var(--terminal-command-muted);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 620px) {
+  :root {
+    --terminal-command-height: 54px;
+  }
+
+  .terminal-command-inner {
+    width: calc(100% - 20px);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .terminal-command-workspace,
+  .terminal-command-shortcut {
+    display: none;
+  }
+
+  .terminal-command-panel {
+    right: 10px;
+    width: calc(100% - 20px);
+  }
+
+  .terminal-command-option {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-command * {
+    scroll-behavior: auto !important;
+  }
+}

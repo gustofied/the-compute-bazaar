@@ -21,12 +21,14 @@ def main() -> None:
 
     base_url = args.base_url.rstrip("/")
     market_run = _fetch_json(f"{base_url}/market-run.json")
+    portable_lake = _fetch_json(f"{base_url}/lake/portable.json")
     cards = {
         family: _fetch_json(f"{base_url}/gpu-benchmark/{family}.json")
         for family in GPU_FAMILIES
     }
     summary = validate_public_market(
         market_run=market_run,
+        portable_lake=portable_lake,
         cards=cards,
         max_age_hours=args.max_age_hours,
         required_providers=set(args.require_provider),
@@ -38,6 +40,7 @@ def main() -> None:
 def validate_public_market(
     *,
     market_run: dict[str, Any],
+    portable_lake: dict[str, Any],
     cards: dict[str, dict[str, Any]],
     max_age_hours: float,
     required_providers: set[str],
@@ -54,16 +57,31 @@ def validate_public_market(
     if market_run.get("status") != "success":
         raise RuntimeError(f"Public market run status is {market_run.get('status')!r}")
 
+    market_run_id = str(market_run.get("market_run_id") or "")
+    gold_run_id = str(market_run.get("gold_run_id") or "")
+    if not market_run_id or gold_run_id != f"gold-{market_run_id}":
+        raise RuntimeError("Public market and Gold run IDs do not align")
+    if portable_lake.get("run_id") != gold_run_id:
+        raise RuntimeError("Portable lake does not match the current Gold run")
+    if portable_lake.get("history_mode") != "complete":
+        raise RuntimeError("Portable lake does not contain complete Gold history")
+
     providers = set(market_run.get("successful_providers") or [])
     failed = set(market_run.get("failed_providers") or [])
     missing = required_providers - providers
     forbidden = forbidden_providers & providers
     if failed:
-        raise RuntimeError(f"Public market run has failed providers: {', '.join(sorted(failed))}")
+        raise RuntimeError(
+            f"Public market run has failed providers: {', '.join(sorted(failed))}"
+        )
     if missing:
-        raise RuntimeError(f"Public market run is missing providers: {', '.join(sorted(missing))}")
+        raise RuntimeError(
+            f"Public market run is missing providers: {', '.join(sorted(missing))}"
+        )
     if forbidden:
-        raise RuntimeError(f"Retired providers are still public: {', '.join(sorted(forbidden))}")
+        raise RuntimeError(
+            f"Retired providers are still public: {', '.join(sorted(forbidden))}"
+        )
 
     for family, card in cards.items():
         card_time = _timestamp(card.get("as_of"), field=f"{family}.as_of")
@@ -74,10 +92,21 @@ def validate_public_market(
                 f"limit is {max_age_hours:.2f}"
             )
         if card.get("status") not in {"live", "observed", "success"}:
-            raise RuntimeError(f"{family.upper()} card status is {card.get('status')!r}")
+            raise RuntimeError(
+                f"{family.upper()} card status is {card.get('status')!r}"
+            )
+        card_manifest = card.get("manifest")
+        if not isinstance(card_manifest, dict):
+            raise RuntimeError(f"{family.upper()} card is missing its Gold manifest")
+        if card_manifest.get("run_id") != gold_run_id:
+            raise RuntimeError(
+                f"{family.upper()} card does not match the current Gold run"
+            )
 
     return {
-        "market_run_id": market_run.get("market_run_id"),
+        "market_run_id": market_run_id,
+        "gold_run_id": gold_run_id,
+        "portable_lake_run_id": portable_lake.get("run_id"),
         "observed_at": observed_at.isoformat(),
         "age_hours": round(age_hours, 3),
         "provider_count": len(providers),

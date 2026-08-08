@@ -224,6 +224,7 @@ def _copy_latest_gold(
         row_counts[str(table_name)] = len(rows)
     return table_refs, row_counts
 
+
 def _portable_gold_manifest(
     *,
     source_manifest: dict[str, Any],

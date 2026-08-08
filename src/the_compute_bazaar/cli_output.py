@@ -112,7 +112,9 @@ def _columns_for(command: str, rows: list[Mapping[str, Any]]) -> tuple[Column, .
     return tuple((key.upper(), key, 28) for key in keys[:8])
 
 
-def _render_rows(rows: list[Mapping[str, Any]], columns: tuple[Column, ...]) -> list[str]:
+def _render_rows(
+    rows: list[Mapping[str, Any]], columns: tuple[Column, ...]
+) -> list[str]:
     if not rows:
         return ["No rows."]
     if not columns:
@@ -130,8 +132,7 @@ def _render_rows(rows: list[Mapping[str, Any]], columns: tuple[Column, ...]) -> 
         for index, (label, _, maximum) in enumerate(columns)
     ]
     header = "  ".join(
-        _fit(label, widths[index])
-        for index, (label, _, _) in enumerate(columns)
+        _fit(label, widths[index]) for index, (label, _, _) in enumerate(columns)
     )
     rule = "  ".join("-" * width for width in widths)
     body = [

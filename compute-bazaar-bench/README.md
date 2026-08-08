@@ -27,14 +27,24 @@ compute-bazaar-bench/
 |-- evals/
 |   |-- reliability-is-blind/
 |   `-- transactions/
-|-- viewer/
+|-- viewer/                       private evaluation viewer
 `-- jobs/                         local only
     |-- raw/                      Harbor jobs
-    `-- reports/                  normalized viewer reports
+    `-- reports/                  normalized evaluation reports
 ```
 
 Task source and benchmark metadata are versioned. Generated jobs, reports, and
 private evaluator material remain local.
+
+Open the terminal and choose **Eval**:
+
+```bash
+compute-bazaar terminal
+```
+
+Eval keeps the full task, job, agent, trial, note, and diagnostic presentation.
+It is separate from the DataFusion and Perspective **Data** workspace, but runs
+inside the same localhost terminal process.
 
 ## Evaluations
 
