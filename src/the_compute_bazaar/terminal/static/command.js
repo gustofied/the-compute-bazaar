@@ -1,20 +1,47 @@
+import { FitAddon } from "@xterm/addon-fit";
+import { Terminal } from "@xterm/xterm";
+import "@xterm/xterm/css/xterm.css";
+
 const HISTORY_KEY = "compute-bazaar.terminal.command-history.v1";
 const PENDING_KEY = "compute-bazaar.terminal.pending-command.v1";
 const MAX_HISTORY = 50;
 
 const workspace = document.body.dataset.terminalWorkspace || inferWorkspace();
+const nativeLaunchToken = takeNativeLaunchToken();
+const nativeBootstrap = establishNativeSession(nativeLaunchToken);
 const state = {
   commands: [],
   history: loadHistory(),
   historyIndex: -1,
   draft: "",
   status: null,
+  shell: {
+    socket: null,
+    terminal: null,
+    fit: null,
+    resizeObserver: null,
+    connectPromise: null,
+  },
 };
 
 const root = document.createElement("section");
 root.className = "terminal-command";
 root.setAttribute("aria-label", "Terminal command");
 root.innerHTML = `
+  <section class="terminal-shell" hidden aria-label="Local shell">
+    <header class="terminal-shell-head">
+      <div class="terminal-shell-identity">
+        <span class="terminal-shell-status">Shell</span>
+        <code class="terminal-shell-cwd">repository root</code>
+      </div>
+      <div class="terminal-shell-actions">
+        <button type="button" data-shell-action="interrupt">Interrupt</button>
+        <button type="button" data-shell-action="clear">Clear</button>
+        <button type="button" data-shell-action="close">Close</button>
+      </div>
+    </header>
+    <div class="terminal-shell-stage"></div>
+  </section>
   <div class="terminal-command-panel" hidden>
     <div class="terminal-command-panel-head">
       <p class="terminal-command-panel-title">Terminal</p>
@@ -49,7 +76,33 @@ const elements = {
   panelTitle: root.querySelector(".terminal-command-panel-title"),
   panelBody: root.querySelector(".terminal-command-panel-body"),
   close: root.querySelector(".terminal-command-close"),
+  shell: root.querySelector(".terminal-shell"),
+  shellStage: root.querySelector(".terminal-shell-stage"),
+  shellStatus: root.querySelector(".terminal-shell-status"),
+  shellCwd: root.querySelector(".terminal-shell-cwd"),
 };
+
+function takeNativeLaunchToken() {
+  const url = new URL(window.location.href);
+  const fragment = new URLSearchParams(url.hash.replace(/^#/, ""));
+  const supplied = fragment.get("session") || url.searchParams.get("session");
+  if (supplied) {
+    url.searchParams.delete("session");
+    fragment.delete("session");
+    const hash = fragment.size ? `#${fragment}` : "";
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${hash}`);
+  }
+  return supplied;
+}
+
+async function establishNativeSession(token) {
+  if (!token) return;
+  const response = await fetch("/api/terminal/session", {
+    method: "POST",
+    headers: { "X-Compute-Bazaar-Session": token },
+  });
+  if (!response.ok) throw new Error("Native Terminal session was rejected");
+}
 
 function inferWorkspace() {
   if (window.location.pathname.startsWith("/data")) return "data";
@@ -151,15 +204,20 @@ function commandSuggestions(value) {
 }
 
 async function loadTerminal({ refresh = false } = {}) {
+  await nativeBootstrap.catch(() => {});
   if (state.status && !refresh) return state.status;
   const response = await fetch("/api/terminal", { cache: "no-store" });
   if (!response.ok) throw new Error("Terminal status is unavailable");
   state.status = await response.json();
   state.commands = Array.isArray(state.status.commands) ? state.status.commands : [];
+  if (state.status.shell?.authorized) {
+    elements.input.placeholder = "SQL, command, or shell · try help";
+  }
   return state.status;
 }
 
 async function resolveCommand(command) {
+  await nativeBootstrap.catch(() => {});
   const response = await fetch("/api/terminal/command", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -170,6 +228,146 @@ async function resolveCommand(command) {
     throw new Error(payload.detail || "Command service is unavailable");
   }
   return response.json();
+}
+
+function ensureShellTerminal() {
+  if (state.shell.terminal) return state.shell.terminal;
+  const terminal = new Terminal({
+    allowProposedApi: false,
+    convertEol: true,
+    cursorBlink: true,
+    cursorStyle: "bar",
+    fontFamily: '"SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace',
+    fontSize: 12,
+    lineHeight: 1.35,
+    scrollback: 10_000,
+    theme: {
+      background: "#0d1110",
+      foreground: "#efede4",
+      cursor: "#91aecb",
+      cursorAccent: "#0d1110",
+      selectionBackground: "#91aecb55",
+      black: "#0d1110",
+      red: "#d98770",
+      green: "#b7d07b",
+      yellow: "#f3c888",
+      blue: "#91aecb",
+      magenta: "#bd7bd0",
+      cyan: "#73bfc1",
+      white: "#efede4",
+      brightBlack: "#737c76",
+      brightRed: "#e59a85",
+      brightGreen: "#c8df93",
+      brightYellow: "#f6d6a2",
+      brightBlue: "#abc3da",
+      brightMagenta: "#cf96dd",
+      brightCyan: "#91d2d4",
+      brightWhite: "#ffffff",
+    },
+  });
+  const fit = new FitAddon();
+  terminal.loadAddon(fit);
+  terminal.open(elements.shellStage);
+  terminal.onData((data) => sendShell({ type: "input", data }));
+  terminal.onResize(({ cols, rows }) => {
+    sendShell({ type: "resize", columns: cols, rows });
+  });
+  const resizeObserver = new ResizeObserver(() => fitShell());
+  resizeObserver.observe(elements.shellStage);
+  state.shell.terminal = terminal;
+  state.shell.fit = fit;
+  state.shell.resizeObserver = resizeObserver;
+  return terminal;
+}
+
+function fitShell() {
+  if (!state.shell.fit || elements.shell.hidden) return;
+  requestAnimationFrame(() => {
+    try {
+      state.shell.fit.fit();
+    } catch {
+      // The drawer may have closed between measurement and animation frame.
+    }
+  });
+}
+
+function shellSocketUrl() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/api/terminal/shell`;
+}
+
+async function connectShell() {
+  const status = await loadTerminal({ refresh: true });
+  if (!status.shell?.authorized) {
+    throw new Error("Shell requires the native Terminal");
+  }
+  if (state.shell.socket?.readyState === WebSocket.OPEN) {
+    return state.shell.socket;
+  }
+  if (state.shell.connectPromise) return state.shell.connectPromise;
+  state.shell.connectPromise = new Promise((resolve, reject) => {
+    const socket = new WebSocket(shellSocketUrl());
+    state.shell.socket = socket;
+    socket.addEventListener("open", () => {
+      state.shell.connectPromise = null;
+      resolve(socket);
+    }, { once: true });
+    socket.addEventListener("message", (event) => {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (message.type === "snapshot") renderShellSnapshot(message);
+      if (message.type === "error") showMessage("Shell", message.message, { error: true });
+    });
+    socket.addEventListener("close", () => {
+      state.shell.socket = null;
+      state.shell.connectPromise = null;
+      elements.shellStatus.textContent = "Shell disconnected";
+    });
+    socket.addEventListener("error", () => {
+      reject(new Error("Shell connection failed"));
+    }, { once: true });
+  });
+  return state.shell.connectPromise;
+}
+
+function sendShell(message) {
+  const socket = state.shell.socket;
+  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+}
+
+function renderShellSnapshot(snapshot) {
+  const terminal = ensureShellTerminal();
+  if (snapshot.reset) terminal.reset();
+  if (snapshot.output) terminal.write(snapshot.output);
+  elements.shellStatus.textContent = snapshot.active ? "Shell" : "Shell exited";
+  elements.shellCwd.textContent = snapshot.cwd || "repository root";
+}
+
+async function openShell(command) {
+  ensureShellTerminal();
+  elements.shell.hidden = false;
+  root.classList.add("shell-open");
+  closePanel();
+  fitShell();
+  const socket = await connectShell();
+  state.shell.fit?.fit();
+  socket.send(JSON.stringify({
+    type: "run",
+    command,
+    columns: state.shell.terminal?.cols || 120,
+    rows: state.shell.terminal?.rows || 32,
+  }));
+  state.shell.terminal?.focus();
+}
+
+function closeShell() {
+  elements.shell.hidden = true;
+  root.classList.remove("shell-open");
+  elements.input.focus();
 }
 
 function savePendingAction(action) {
@@ -232,6 +430,9 @@ async function execute(action) {
     case "status":
       await showStatus();
       return;
+    case "shell":
+      await openShell(action.command);
+      return;
     case "error":
       showMessage("Command not understood", action.message, { error: true });
       return;
@@ -246,6 +447,10 @@ async function submit() {
   if (!raw) {
     await loadTerminal();
     showOptions("Terminal commands", state.commands);
+    return;
+  }
+  if (["reload", "refresh"].includes(normalizedInput(raw))) {
+    window.location.reload();
     return;
   }
   saveHistory(raw);
@@ -271,6 +476,21 @@ elements.form.addEventListener("submit", (event) => {
 });
 
 elements.close.addEventListener("click", closePanel);
+
+elements.shell.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-shell-action]");
+  if (!button) return;
+  const action = button.dataset.shellAction;
+  if (action === "close") {
+    closeShell();
+    return;
+  }
+  if (action === "interrupt") sendShell({ type: "interrupt" });
+  if (action === "clear") {
+    state.shell.terminal?.reset();
+    sendShell({ type: "clear" });
+  }
+});
 
 elements.input.addEventListener("input", () => {
   resizeInput();
@@ -302,11 +522,17 @@ elements.input.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r") {
+    event.preventDefault();
+    window.location.reload();
+    return;
+  }
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
     event.preventDefault();
     elements.input.focus();
     elements.input.select();
   }
+  if (event.key === "Escape" && !elements.shell.hidden) closeShell();
 });
 
 void loadTerminal().catch(() => {});

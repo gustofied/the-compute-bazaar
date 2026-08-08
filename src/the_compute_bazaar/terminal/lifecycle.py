@@ -84,6 +84,7 @@ def launch_terminal(
     log_path = STATE_ROOT / "terminal.log"
     ready_path = STATE_ROOT / "ready.json"
     ready_path.unlink(missing_ok=True)
+    selected_port = _available_port(port)
     environment = os.environ.copy()
     cargo_bin = Path.home() / ".cargo" / "bin"
     environment["PATH"] = os.pathsep.join((str(cargo_bin), environment.get("PATH", "")))
@@ -93,7 +94,7 @@ def launch_terminal(
             "COMPUTE_BAZAAR_LAKE_ROOT": lake_root,
             "COMPUTE_BAZAAR_PROJECT_ROOT": str(project_root),
             "COMPUTE_BAZAAR_EVALUATION_ROOT": str(evaluation_root.resolve()),
-            "COMPUTE_BAZAAR_TERMINAL_PORT": str(port),
+            "COMPUTE_BAZAAR_TERMINAL_PORT": str(selected_port),
             "COMPUTE_BAZAAR_TERMINAL_READY_FILE": str(ready_path),
             "COMPUTE_BAZAAR_TERMINAL_INITIAL_LIMIT": str(initial_limit),
         }

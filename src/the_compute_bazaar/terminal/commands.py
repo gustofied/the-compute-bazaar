@@ -83,6 +83,11 @@ class SqlAction(_Action):
     limit: int
 
 
+class ShellAction(_Action):
+    kind: Literal["shell"] = "shell"
+    command: str
+
+
 class ErrorAction(_Action):
     kind: Literal["error"] = "error"
     message: str
@@ -102,6 +107,7 @@ TerminalAction: TypeAlias = Annotated[
     | TableAction
     | DescribeAction
     | SqlAction
+    | ShellAction
     | ErrorAction,
     Field(discriminator="kind"),
 ]
@@ -310,7 +316,7 @@ def command_catalog() -> list[dict[str, str]]:
     return [command.as_dict() for command in COMMANDS]
 
 
-def resolve_command(raw: str) -> TerminalAction:
+def resolve_command(raw: str, *, shell_fallback: bool = False) -> TerminalAction:
     command = raw.strip().removeprefix("/").strip()
     if not command:
         return _error("Enter a command or read-only SQL.")
@@ -320,6 +326,8 @@ def resolve_command(raw: str) -> TerminalAction:
     verb, _, argument = command.partition(" ")
     definition = COMMAND_BY_NAME.get(verb.lower())
     if definition is None:
+        if shell_fallback:
+            return ShellAction(command=command)
         return _error(f"Unknown command: {verb}. Try help.")
     return definition.handler(argument.strip())
 

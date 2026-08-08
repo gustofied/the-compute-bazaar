@@ -6,13 +6,20 @@
     <meta name="color-scheme" content="dark">
     <title>Compute Bazaar Data</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath fill='%2391aecb' d='M1 1h5v5H1z'/%3E%3Cpath fill='%23b7d07b' d='M8 1h5v5H8z'/%3E%3Cpath fill='%23efede4' d='M1 8h5v5H1z'/%3E%3Cpath fill='%23f3c888' d='M8 8h5v5H8z'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="/terminal-assets/perspective/app.css">
-    <link rel="stylesheet" href="/terminal-assets/app.css">
-    <link rel="stylesheet" href="/terminal-assets/command.css">
+    <link rel="stylesheet" href="/terminal-assets/perspective/app.css?v=20260808-1">
+    <link rel="stylesheet" href="/terminal-assets/app.css?v=20260808-1">
+    <link rel="stylesheet" href="/terminal-assets/command.css?v=20260808-2">
+    <link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2">
   </head>
   <body data-terminal-workspace="data">
     <div class="app-shell">
       <header class="topbar">
+        <a class="workspace-wordmark" href="/" aria-label="The Compute Bazaar">
+          <img src="/terminal-wordmark.png?v=20260808-1" alt="The Compute Bazaar">
+        </a>
+      </header>
+
+      <main class="workspace">
         <button
           class="catalog-toggle"
           id="catalog-toggle"
@@ -22,18 +29,6 @@
         >
           Data
         </button>
-        <a class="brand" href="/" aria-label="Return to Compute Bazaar Terminal">
-          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-          <span>Compute Bazaar</span>
-          <span class="brand-context">Data</span>
-        </a>
-        <div class="run-state" aria-live="polite">
-          <span class="run-light" id="run-light"></span>
-          <span id="run-label">Opening lake</span>
-        </div>
-      </header>
-
-      <main class="workspace">
         <aside class="catalog-panel" id="catalog-panel" aria-label="Data catalog">
           <div class="panel-heading">
             <div>
@@ -177,7 +172,7 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/terminal-assets/command.js"></script>
-    <script type="module" src="/terminal-assets/perspective/app.js"></script>
+    <script type="module" src="/terminal-assets/perspective/command.js?v=20260808-2"></script>
+    <script type="module" src="/terminal-assets/perspective/app.js?v=20260808-1"></script>
   </body>
 </html>

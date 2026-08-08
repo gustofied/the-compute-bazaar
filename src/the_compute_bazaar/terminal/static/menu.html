@@ -4,69 +4,30 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <meta name="description" content="Local entry point for Compute Bazaar data and evaluations.">
+    <meta name="description" content="Compute Bazaar Terminal">
     <title>Compute Bazaar Terminal</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath fill='%2391aecb' d='M1 1h5v5H1z'/%3E%3Cpath fill='%23b7d07b' d='M8 1h5v5H8z'/%3E%3Cpath fill='%23efede4' d='M1 8h5v5H1z'/%3E%3Cpath fill='%23f3c888' d='M8 8h5v5H8z'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="/terminal-assets/menu.css">
-    <link rel="stylesheet" href="/terminal-assets/command.css">
+    <link rel="stylesheet" href="/terminal-assets/menu.css?v=20260808-1">
+    <link rel="stylesheet" href="/terminal-assets/command.css?v=20260808-2">
+    <link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2">
   </head>
   <body data-terminal-workspace="terminal">
     <main class="terminal-menu">
-      <header class="menu-header">
-        <div class="brand" aria-label="Compute Bazaar Terminal">
-          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-          <span>Compute Bazaar</span>
-          <span class="brand-context">Terminal</span>
-        </div>
-        <div class="run-state" aria-live="polite">
-          <span class="run-light" id="run-light"></span>
-          <span id="run-label">Opening systems</span>
-        </div>
-      </header>
+      <div class="menu-launcher">
+        <img
+          class="compute-wordmark"
+          src="/terminal-wordmark.png?v=20260808-1"
+          alt="The Compute Bazaar"
+        >
 
-      <section class="menu-body" aria-labelledby="menu-title">
-        <div class="menu-copy">
-          <p class="eyebrow">Main menu</p>
-          <h1 id="menu-title">Choose a workspace</h1>
-          <p>Data, Eval, and future Trade stay separate inside one terminal.</p>
-        </div>
-
-        <nav class="destination-list" aria-label="Terminal workspaces">
-          <a class="destination data" href="/data">
-            <span class="destination-index">01</span>
-            <span class="destination-copy">
-              <span class="destination-name">Data</span>
-              <span class="destination-description">Query Silver and Gold with DataFusion. Shape the result in Perspective.</span>
-            </span>
-            <span class="destination-state">Enter <span aria-hidden="true">&#8599;</span></span>
-          </a>
-
-          <a class="destination eval" id="eval-destination" href="/eval/">
-            <span class="destination-index">02</span>
-            <span class="destination-copy">
-              <span class="destination-name">Eval</span>
-              <span class="destination-description">Inspect tasks, jobs, agents, trials, notes, and evaluator evidence.</span>
-            </span>
-            <span class="destination-state" id="eval-state">Enter <span aria-hidden="true">&#8599;</span></span>
-          </a>
-
-          <div class="destination trade locked" aria-disabled="true">
-            <span class="destination-index">03</span>
-            <span class="destination-copy">
-              <span class="destination-name">Trade</span>
-              <span class="destination-description">Orders, contracts, settlement, and execution.</span>
-            </span>
-            <span class="destination-state">Locked</span>
-          </div>
+        <nav class="workspace-switcher" aria-label="Terminal workspaces">
+          <a class="workspace-button data" href="/data">Data</a>
+          <a class="workspace-button eval" id="eval-destination" href="/eval/">Eval</a>
+          <span class="workspace-button trade locked" aria-disabled="true">Trade</span>
         </nav>
-      </section>
-
-      <footer class="menu-footer">
-        <span>Local only</span>
-        <span id="menu-detail">DataFusion / Perspective / Harbor</span>
-      </footer>
+      </div>
     </main>
-    <script type="module" src="/terminal-assets/menu.js"></script>
-    <script type="module" src="/terminal-assets/command.js"></script>
+    <script type="module" src="/terminal-assets/menu.js?v=20260808-1"></script>
+    <script type="module" src="/terminal-assets/perspective/command.js?v=20260808-2"></script>
   </body>
 </html>

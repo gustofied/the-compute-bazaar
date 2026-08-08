@@ -47,6 +47,7 @@ STYLE = """
   --amber: #f3c888;
   --red: #dc8d78;
   --blue: #91aecb;
+  --topbar-height: 52px;
 }
 * { box-sizing: border-box; }
 body {
@@ -58,15 +59,15 @@ body {
   letter-spacing: 0;
 }
 a { color: inherit; text-decoration: none; }
+.topbar { height: var(--topbar-height); display: flex; align-items: center; min-width: 0; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel-deep); }
 .shell { width: min(1480px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 56px; }
-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
-.header-identity { display: flex; align-items: flex-start; gap: 20px; min-width: 0; }
+.page-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
 .compute-brand {
   display: block;
   flex: none;
   position: relative;
-  width: 190px;
-  height: 58px;
+  width: 150px;
+  height: 46px;
   overflow: visible;
   color: #142027;
   font-family: ui-sans-serif, system-ui, sans-serif;
@@ -74,9 +75,9 @@ header { display: flex; justify-content: space-between; gap: 24px; align-items: 
 }
 .compute-brand-fallback { position: absolute; inset: 0; transition: opacity 160ms ease; }
 .compute-brand-word { position: absolute; font-weight: 700; line-height: 1; letter-spacing: 0; }
-.compute-brand-word.the { left: 5px; top: 8px; color: #b7d07b; font-size: 16px; transform: rotate(-4deg); }
-.compute-brand-word.compute { left: 49px; top: 7px; color: #91aecb; font-size: 18px; transform: rotate(1deg); }
-.compute-brand-word.bazaar { left: 62px; bottom: 4px; color: #f3c888; font-size: 17px; transform: rotate(-2deg); }
+.compute-brand-word.the { left: 4px; top: 6px; color: #b7d07b; font-size: 13px; transform: rotate(-4deg); }
+.compute-brand-word.compute { left: 39px; top: 6px; color: #91aecb; font-size: 15px; transform: rotate(1deg); }
+.compute-brand-word.bazaar { right: 27px; bottom: 3px; color: #f3c888; font-size: 14px; transform: rotate(-2deg); }
 .compute-brand[data-embroidery-ready="true"] .compute-brand-fallback { opacity: 0; }
 .compute-brand canvas { z-index: 1; }
 @media (prefers-reduced-motion: reduce) {
@@ -240,10 +241,9 @@ pre { overflow: auto; background: var(--panel-deep); border: 1px solid var(--lin
 }
 @media (max-width: 640px) {
   .shell { width: min(100% - 20px, 1480px); padding-top: 18px; }
-  header, .section-head { flex-direction: column; }
+  .topbar { padding-inline: 9px; }
+  .page-header, .section-head { flex-direction: column; }
   .section-head { align-items: flex-start; }
-  .header-identity { flex-direction: column; gap: 16px; }
-  .compute-brand { width: 190px; height: 58px; }
   .status { max-width: 100%; white-space: normal; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-grid { grid-template-columns: 1fr; }
@@ -282,9 +282,9 @@ def _layout(title: str, body: str, base_path: str) -> str:
     )
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{escape(title)}</title><style>{STYLE}</style><link rel="stylesheet" href="/terminal-assets/command.css"></head>
-<body data-terminal-workspace="eval"><main class="shell">{body}</main>
-<script type="module" src="/terminal-assets/command.js"></script>
+<title>{escape(title)}</title><style>{STYLE}</style><link rel="stylesheet" href="/terminal-assets/command.css?v=20260808-2"><link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2"></head>
+<body data-terminal-workspace="eval"><header class="topbar">{_compute_bazaar_mark()}</header><main class="shell">{body}</main>
+<script type="module" src="/terminal-assets/perspective/command.js?v=20260808-2"></script>
 <script type="module">import {{ setupComputeTitleEmbroidery }} from "{embroidery}"; setupComputeTitleEmbroidery();</script></body></html>"""
 
 
@@ -404,8 +404,7 @@ def _evals_html(evaluations: Sequence[dict[str, Any]], base_path: str = "") -> s
 </a>"""
         for item in evaluations
     )
-    body = f"""<header><div class="header-identity">{_compute_bazaar_mark()}</div></header>
-<section><div class="section-head"><h2>Tasks</h2></div><div class="eval-list">{rows}</div></section>"""
+    body = f"""<section><div class="section-head"><h2>Tasks</h2></div><div class="eval-list">{rows}</div></section>"""
     return _layout("Tasks", body, base_path)
 
 
@@ -494,7 +493,7 @@ def _runs_html(
         if not rows
         else f'<div class="eval-list">{rows}</div>'
     )
-    body = f"""<header><div class="header-identity">{_compute_bazaar_mark()}</div></header>{_task_hero_html(task, base_path)}
+    body = f"""{_task_hero_html(task, base_path)}
 <section class="section"><div class="section-head"><h2>Jobs</h2></div>{empty}</section>"""
     return _layout(task.name, body, base_path)
 
@@ -582,7 +581,7 @@ def _index_html(
         base_path, f"/api/evals/{escape(task.slug)}/jobs/{escape(job_id)}/note"
     )
     body = f"""
-<header><div class="header-identity">{_compute_bazaar_mark()}<div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Job</div><h1>{escape(job_id)}</h1></div></div></header>
+<header class="page-header"><div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Job</div><h1>{escape(job_id)}</h1></div></header>
 <section class="note-editor"><div class="section-head"><h2>Note</h2><span class="muted">{escape(note["updated_at"])}</span></div>
 <textarea id="job-note" maxlength="2000" aria-label="Job note" placeholder="Add context, caveats, or interpretation for this job">{escape(note["text"])}</textarea>
 <div class="note-actions"><button id="save-note" type="button">Save note</button><span class="muted" id="note-state"></span></div></section>
@@ -613,7 +612,7 @@ def _trial_html(
         base_path,
         f"/evals/{escape(task.slug)}/jobs/{escape(presentation.job_id)}",
     )
-    body = f"""<a class="back" href="{job_url}">← {escape(presentation.job_id)}</a><header><div class="header-identity">{_compute_bazaar_mark()}<div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Trial</div><h1>{escape(trial.title)}</h1></div></div></header><div class="detail-grid">{details}</div>{sections}"""
+    body = f"""<a class="back" href="{job_url}">← {escape(presentation.job_id)}</a><header class="page-header"><div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Trial</div><h1>{escape(trial.title)}</h1></div></header><div class="detail-grid">{details}</div>{sections}"""
     return _layout(trial.title, body, base_path)
 
 

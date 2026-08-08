@@ -76,74 +76,27 @@ a:focus-visible {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 18px;
   min-width: 0;
   padding: 0 18px;
   border-bottom: 1px solid var(--line);
   background: var(--panel-deep);
 }
 
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-  color: var(--text);
+.workspace-wordmark {
+  display: block;
+  flex: none;
+  width: 165px;
+  height: 52px;
   text-decoration: none;
-  text-transform: uppercase;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0;
-  white-space: nowrap;
 }
 
-.brand-context {
-  padding-left: 9px;
-  border-left: 1px solid var(--line-strong);
-  color: var(--muted);
-  font-weight: 450;
+.workspace-wordmark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left center;
 }
-
-.brand-mark {
-  display: grid;
-  grid-template-columns: repeat(2, 5px);
-  grid-template-rows: repeat(2, 5px);
-  gap: 2px;
-  width: 12px;
-  height: 12px;
-}
-
-.brand-mark i:nth-child(1) { background: var(--blue); }
-.brand-mark i:nth-child(2) { background: var(--green); }
-.brand-mark i:nth-child(3) { background: var(--text); }
-.brand-mark i:nth-child(4) { background: var(--sand); }
-
-.run-state {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 10px;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
-.run-state span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.run-light {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  background: var(--sand);
-}
-
-.run-light.ready { background: var(--green); }
-.run-light.error { background: var(--danger); }
 
 .catalog-toggle,
 .mobile-close {
@@ -803,18 +756,18 @@ perspective-viewer {
 }
 
 @media (max-width: 820px) {
-  .topbar {
-    gap: 10px;
-  }
-
   .catalog-toggle,
   .mobile-close {
     display: inline-flex;
     align-items: center;
   }
 
-  .brand-context {
-    display: none;
+  .catalog-toggle {
+    position: fixed;
+    z-index: 7;
+    top: calc(var(--topbar-height) + 10px);
+    left: 10px;
+    background: var(--panel-deep);
   }
 
   .workspace {
@@ -868,10 +821,6 @@ perspective-viewer {
 @media (max-width: 560px) {
   .topbar {
     padding-inline: 9px;
-  }
-
-  .run-state {
-    max-width: 104px;
   }
 
   .view-header {

@@ -31,8 +31,6 @@ const elements = {
   viewCount: document.querySelector("#view-count"),
   modelList: document.querySelector("#model-list"),
   modelCount: document.querySelector("#model-count"),
-  runLabel: document.querySelector("#run-label"),
-  runLight: document.querySelector("#run-light"),
   runId: document.querySelector("#run-id"),
   observedAt: document.querySelector("#observed-at"),
   viewKind: document.querySelector("#view-kind"),
@@ -157,7 +155,6 @@ function setViewCopy(kind, title, description) {
 }
 
 async function startPerspective() {
-  elements.runLabel.textContent = "Starting Perspective";
   await Promise.all([
     perspective.init_server(fetch(SERVER_WASM)),
     perspectiveViewer.init_client(fetch(CLIENT_WASM)),
@@ -169,7 +166,6 @@ async function startPerspective() {
   elements.viewer.setAttribute("theme", "Pro Dark");
   elements.viewerHost.append(elements.viewer);
   elements.viewerConfig.disabled = false;
-  elements.runLabel.textContent = "Starting Arrow engine";
   state.perspective = perspective;
   state.worker = await state.perspective.worker();
 }
@@ -769,20 +765,15 @@ async function initialize() {
     renderTableList(state.session.tables, "silver");
 
     const run = state.session.run || {};
-    elements.runLight.classList.add("ready");
-    elements.runLabel.textContent = `${state.session.tables.length} tables / ${shortRunId(run.run_id)}`;
     elements.runId.textContent = run.run_id || "Unknown run";
     elements.runId.title = run.run_id || "";
     elements.observedAt.textContent = formatObservedAt(run.observed_at);
     await startPerspective();
-    elements.runLabel.textContent = `${state.session.tables.length} tables / ${shortRunId(run.run_id)}`;
     const pendingAction = window.ComputeBazaarTerminal?.takePendingAction();
     if (pendingAction) await handleTerminalAction(pendingAction);
     else await openInitialSource();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    elements.runLight.classList.add("error");
-    elements.runLabel.textContent = "Lake unavailable";
     setViewerState("Terminal unavailable", message, { error: true });
   }
 }

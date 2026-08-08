@@ -10,6 +10,7 @@ use std::{
 };
 
 use tauri::{WebviewUrl, WebviewWindowBuilder};
+use uuid::Uuid;
 
 type BoxError = Box<dyn std::error::Error>;
 
@@ -29,7 +30,7 @@ fn terminal_port() -> Result<u16, BoxError> {
     })
 }
 
-fn start_backend(port: u16) -> Result<Child, BoxError> {
+fn start_backend(port: u16, native_token: &str) -> Result<Child, BoxError> {
     let python = required_env("COMPUTE_BAZAAR_PYTHON")?;
     let lake_root = required_env("COMPUTE_BAZAAR_LAKE_ROOT")?;
     let project_root = required_env("COMPUTE_BAZAAR_PROJECT_ROOT")?;
@@ -54,6 +55,7 @@ fn start_backend(port: u16) -> Result<Child, BoxError> {
             "--initial-limit",
             &initial_limit,
         ])
+        .env("COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN", native_token)
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
@@ -155,12 +157,14 @@ fn main() {
             ]
             .iter()
             .any(|key| env::var_os(key).is_some());
+            let launch = Uuid::new_v4().simple().to_string();
+            let session = Uuid::new_v4().simple().to_string();
             let window_url = if has_initial_state {
-                format!("{base_url}/data")
+                format!("{base_url}/data?launch={launch}#session={session}")
             } else {
-                base_url.clone()
+                format!("{base_url}/?launch={launch}#session={session}")
             };
-            let mut child = start_backend(port)?;
+            let mut child = start_backend(port, &session)?;
             if let Err(error) = wait_for_backend(&mut child, port) {
                 let _ = child.kill();
                 return Err(error);
@@ -169,16 +173,23 @@ fn main() {
                 std::io::Error::other("cannot retain terminal backend process")
             })? = Some(child);
             publish_ready(&base_url)?;
-            WebviewWindowBuilder::new(
-                app,
-                "main",
-                WebviewUrl::External(window_url.parse()?),
-            )
-            .title("Compute Bazaar Terminal")
-            .inner_size(1440.0, 900.0)
-            .min_inner_size(960.0, 640.0)
-            .center()
-            .build()?;
+            let (window_width, window_height) = app
+                .primary_monitor()?
+                .map(|monitor| {
+                    let scale = monitor.scale_factor();
+                    let work_area = monitor.work_area();
+                    (
+                        (f64::from(work_area.size.width) / scale * 0.8).max(800.0),
+                        (f64::from(work_area.size.height) / scale * 0.8).max(560.0),
+                    )
+                })
+                .unwrap_or((1152.0, 720.0));
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(window_url.parse()?))
+                .title("Compute Bazaar Terminal")
+                .inner_size(window_width, window_height)
+                .min_inner_size(800.0, 560.0)
+                .center()
+                .build()?;
             Ok(())
         })
         .build(tauri::generate_context!())

@@ -9,7 +9,7 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": "default-src 'self' http://127.0.0.1:*; connect-src 'self' http://127.0.0.1:* blob:; font-src 'self' http://127.0.0.1:* data:; img-src 'self' http://127.0.0.1:* data:; object-src 'none'; script-src 'self' http://127.0.0.1:* blob: 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' http://127.0.0.1:* 'unsafe-inline'; worker-src 'self' http://127.0.0.1:* blob:"
+      "csp": "default-src 'self' http://127.0.0.1:*; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* blob:; font-src 'self' http://127.0.0.1:* data:; img-src 'self' http://127.0.0.1:* data:; object-src 'none'; script-src 'self' http://127.0.0.1:* blob: 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' http://127.0.0.1:* 'unsafe-inline'; worker-src 'self' http://127.0.0.1:* blob:"
     }
   },
   "bundle": {
