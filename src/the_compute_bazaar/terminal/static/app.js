@@ -1,11 +1,11 @@
-const VIEW_STORAGE_KEY = "compute-bazaar.terminal.views.v1";
-const PERSPECTIVE_VERSION = "4.5.2";
-const PERSPECTIVE_ASSETS = {
-  viewer: `https://cdn.jsdelivr.net/npm/@perspective-dev/viewer@${PERSPECTIVE_VERSION}/dist/cdn/perspective-viewer.js`,
-  datagrid: `https://cdn.jsdelivr.net/npm/@perspective-dev/viewer-datagrid@${PERSPECTIVE_VERSION}/dist/cdn/perspective-viewer-datagrid.js`,
-  charts: `https://cdn.jsdelivr.net/npm/@perspective-dev/viewer-charts@${PERSPECTIVE_VERSION}/dist/cdn/perspective-viewer-charts.js`,
-  client: `https://cdn.jsdelivr.net/npm/@perspective-dev/client@${PERSPECTIVE_VERSION}/dist/cdn/perspective.js`,
-};
+import perspective from "@perspective-dev/client";
+import SERVER_WASM from "@perspective-dev/server/dist/wasm/perspective-server.wasm?url";
+import perspectiveViewer from "@perspective-dev/viewer";
+import CLIENT_WASM from "@perspective-dev/viewer/dist/wasm/perspective-viewer.wasm?url";
+import "@perspective-dev/viewer/dist/css/themes.css";
+import "@perspective-dev/viewer-charts";
+import "@perspective-dev/viewer-datagrid";
+
 const REQUIRED_PERSPECTIVE_PLUGINS = [
   { name: "Datagrid", tag: "perspective-viewer-datagrid" },
   { name: "Y Bar", tag: "perspective-viewer-charts-y-bar" },
@@ -29,6 +29,8 @@ const elements = {
   viewList: document.querySelector("#view-list"),
   viewEmpty: document.querySelector("#view-empty"),
   viewCount: document.querySelector("#view-count"),
+  modelList: document.querySelector("#model-list"),
+  modelCount: document.querySelector("#model-count"),
   runLabel: document.querySelector("#run-label"),
   runLight: document.querySelector("#run-light"),
   runId: document.querySelector("#run-id"),
@@ -155,15 +157,11 @@ function setViewCopy(kind, title, description) {
 }
 
 async function startPerspective() {
-  const stages = [
-    ["Loading Perspective", PERSPECTIVE_ASSETS.viewer],
-    ["Loading table viewer", PERSPECTIVE_ASSETS.datagrid],
-    ["Loading chart viewer", PERSPECTIVE_ASSETS.charts],
-  ];
-  for (const [label, url] of stages) {
-    elements.runLabel.textContent = label;
-    await import(url);
-  }
+  elements.runLabel.textContent = "Starting Perspective";
+  await Promise.all([
+    perspective.init_server(fetch(SERVER_WASM)),
+    perspectiveViewer.init_client(fetch(CLIENT_WASM)),
+  ]);
   await customElements.whenDefined("perspective-viewer");
   await waitForPerspectivePlugins(REQUIRED_PERSPECTIVE_PLUGINS);
   elements.viewer = document.createElement("perspective-viewer");
@@ -172,8 +170,7 @@ async function startPerspective() {
   elements.viewerHost.append(elements.viewer);
   elements.viewerConfig.disabled = false;
   elements.runLabel.textContent = "Starting Arrow engine";
-  const module = await import(PERSPECTIVE_ASSETS.client);
-  state.perspective = module.default;
+  state.perspective = perspective;
   state.worker = await state.perspective.worker();
 }
 
@@ -202,7 +199,7 @@ function perspectivePluginName(plugin) {
 }
 
 function validateSession(payload) {
-  const arrays = ["tables", "queries", "views"];
+  const arrays = ["tables", "queries", "views", "models", "blueprints"];
   const valid = payload?.contract === "compute-bazaar.data.session.v1"
     && arrays.every((key) => Array.isArray(payload[key]));
   if (!valid) {
@@ -277,31 +274,36 @@ function renderTableList(tables, layer) {
   }).join("");
 }
 
-function loadSavedViews() {
-  try {
-    const payload = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) || "[]");
-    return Array.isArray(payload) ? payload : [];
-  } catch {
-    return [];
-  }
-}
-
-function persistSavedViews(views) {
-  localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify(views));
-}
-
-function renderSavedViews() {
-  const views = loadSavedViews();
-  elements.viewCount.textContent = String(views.length);
-  elements.viewEmpty.hidden = views.length > 0;
-  elements.viewList.innerHTML = views.map((view) => `
-    <div class="catalog-item" data-source-key="saved:${escapeHtml(view.id)}">
-      <button class="catalog-item-copy saved-view-load" type="button" data-saved-view-id="${escapeHtml(view.id)}">
-        <strong>${escapeHtml(view.name)}</strong>
-        <small>${escapeHtml(shortRunId(view.runId))}</small>
+function renderAnalyses(blueprints) {
+  elements.viewCount.textContent = String(blueprints.length);
+  elements.viewEmpty.hidden = blueprints.length > 0;
+  elements.viewList.innerHTML = blueprints.map((blueprint) => `
+    <div class="catalog-item" data-source-key="blueprint:${escapeHtml(blueprint.blueprint_id)}">
+      <button class="catalog-item-copy saved-view-load" type="button" data-blueprint-id="${escapeHtml(blueprint.blueprint_id)}" ${blueprint.available ? "" : "disabled"}>
+        <strong>${escapeHtml(blueprint.title)}</strong>
+        <small>${escapeHtml(blueprint.model_id)}</small>
       </button>
-      <button class="delete-view" type="button" data-delete-view="${escapeHtml(view.id)}" aria-label="Delete ${escapeHtml(view.name)}">Delete</button>
+      <button class="delete-view" type="button" data-delete-analysis="${escapeHtml(blueprint.blueprint_id)}" aria-label="Delete ${escapeHtml(blueprint.title)}">Delete</button>
     </div>
+  `).join("");
+}
+
+function renderModels(models) {
+  elements.modelCount.textContent = String(models.length);
+  elements.modelList.innerHTML = models.map((model) => `
+    <button
+      class="catalog-item"
+      type="button"
+      data-model-id="${escapeHtml(model.model_id)}"
+      data-source-key="model:${escapeHtml(model.model_id)}"
+      ${model.available ? "" : "disabled"}
+    >
+      <span class="catalog-item-copy">
+        <strong>${escapeHtml(model.title)}</strong>
+        <small>${escapeHtml(model.description || model.model_id)}</small>
+      </span>
+      <span class="item-count">SQL</span>
+    </button>
   `).join("");
 }
 
@@ -360,46 +362,77 @@ async function selectScratch(sql, limit, perspective = null) {
   });
 }
 
-async function saveCurrentView(name) {
+async function saveCurrentAnalysis(name) {
   const config = stripTransientConfig(await elements.viewer.save());
-  const views = loadSavedViews();
-  const view = {
-    id: crypto.randomUUID(),
-    name,
-    description: elements.viewDescription.textContent,
-    sql: elements.editor.value.trim(),
-    limit: Number(elements.limit.value),
-    config,
-    createdAt: new Date().toISOString(),
-    runId: state.session?.run?.run_id || null,
-  };
-  views.unshift(view);
-  persistSavedViews(views.slice(0, 30));
-  renderSavedViews();
-  setActiveSource(`saved:${view.id}`);
+  const activeBlueprintId = state.activeSource?.startsWith("blueprint:")
+    ? state.activeSource.slice("blueprint:".length)
+    : null;
+  const activeBlueprint = state.session.blueprints.find(
+    (candidate) => candidate.blueprint_id === activeBlueprintId,
+  );
+  const activeModelId = activeBlueprint?.model_id
+    || (state.activeSource?.startsWith("model:")
+      ? state.activeSource.slice("model:".length)
+      : null);
+  const response = await fetch("/api/data/analyses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: name,
+      model_id: activeModelId,
+      blueprint_id: activeBlueprintId,
+      description: elements.viewDescription.textContent,
+      sql: elements.editor.value.trim(),
+      limit: Number(elements.limit.value),
+      perspective: config,
+    }),
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  const saved = await response.json();
+  await refreshSessionArtifacts();
+  setActiveSource(`blueprint:${saved.blueprint.blueprint_id}`);
   showToast(`Saved ${name}`);
 }
 
-async function loadSavedView(id) {
-  const view = loadSavedViews().find((candidate) => candidate.id === id);
-  if (!view) return;
-  setViewCopy("My view", view.name, view.description || `Saved ${formatObservedAt(view.createdAt)}.`);
-  elements.editor.value = view.sql;
-  state.sourceSql = view.sql.trim();
-  elements.limit.value = view.limit;
-  setActiveSource(`saved:${view.id}`);
+async function selectBlueprint(blueprint) {
+  setViewCopy("Analysis", blueprint.title, blueprint.description || blueprint.model_id);
+  elements.editor.value = blueprint.sql;
+  state.sourceSql = blueprint.sql.trim();
+  elements.limit.value = blueprint.default_limit;
+  setActiveSource(`blueprint:${blueprint.blueprint_id}`);
   setSqlOpen(false);
   closeCatalogOnMobile();
-  await runCurrentQuery({ restoreConfig: view.config, preserveView: false });
+  await runCurrentQuery({ restoreConfig: blueprint.perspective, preserveView: false });
 }
 
-function deleteSavedView(id) {
-  const views = loadSavedViews();
-  const view = views.find((candidate) => candidate.id === id);
-  persistSavedViews(views.filter((candidate) => candidate.id !== id));
-  renderSavedViews();
-  if (state.activeSource === `saved:${id}`) setActiveSource(null);
-  showToast(view ? `Deleted ${view.name}` : "Deleted view");
+async function selectModel(model) {
+  setViewCopy("SQL model", model.title, model.description || model.model_id);
+  elements.editor.value = model.sql;
+  state.sourceSql = model.sql.trim();
+  elements.limit.value = model.default_limit;
+  setActiveSource(`model:${model.model_id}`);
+  setSqlOpen(false);
+  closeCatalogOnMobile();
+  await runCurrentQuery({ restoreConfig: { plugin: "Datagrid", settings: false }, preserveView: false });
+}
+
+async function deleteAnalysis(id) {
+  const blueprint = state.session.blueprints.find((candidate) => candidate.blueprint_id === id);
+  const response = await fetch(`/api/data/blueprints/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(await responseError(response));
+  await refreshSessionArtifacts();
+  if (state.activeSource === `blueprint:${id}`) setActiveSource(null);
+  showToast(blueprint ? `Deleted ${blueprint.title}` : "Deleted analysis");
+}
+
+async function refreshSessionArtifacts() {
+  const response = await fetch("/api/data/session", { cache: "no-store" });
+  if (!response.ok) throw new Error("Could not refresh analysis artifacts");
+  const next = validateSession(await response.json());
+  state.session.models = next.models;
+  state.session.blueprints = next.blueprints;
+  renderAnalyses(state.session.blueprints);
+  renderModels(state.session.models);
 }
 
 async function responseError(response) {
@@ -528,9 +561,14 @@ async function openInitialSource() {
 }
 
 function catalogSection(name) {
-  const ids = name === "tables"
-    ? ["gold-heading", "silver-heading"]
-    : [name === "queries" ? "saved-query-heading" : "terminal-view-heading"];
+  const sectionIds = {
+    tables: ["gold-heading", "silver-heading"],
+    queries: ["saved-query-heading"],
+    views: ["terminal-view-heading"],
+    models: ["model-heading"],
+    blueprints: ["view-heading"],
+  };
+  const ids = sectionIds[name] || [];
   ids.forEach((id) => {
     const heading = document.querySelector(`#${id}`)?.closest(".section-heading");
     if (heading) heading.setAttribute("aria-expanded", "true");
@@ -573,6 +611,22 @@ async function handleTerminalAction(action) {
         );
         if (!query) throw new Error(`Unknown query: ${action.query_id}`);
         await selectQuery(query, action.limit || query.default_limit);
+        return;
+      }
+      case "model": {
+        const model = state.session.models.find(
+          (candidate) => candidate.model_id.toLowerCase() === String(action.model_id).toLowerCase() && candidate.available,
+        );
+        if (!model) throw new Error(`Unknown model: ${action.model_id}`);
+        await selectModel(model);
+        return;
+      }
+      case "blueprint": {
+        const blueprint = state.session.blueprints.find(
+          (candidate) => candidate.blueprint_id.toLowerCase() === String(action.blueprint_id).toLowerCase() && candidate.available,
+        );
+        if (!blueprint) throw new Error(`Unknown blueprint: ${action.blueprint_id}`);
+        await selectBlueprint(blueprint);
         return;
       }
       case "table": {
@@ -647,13 +701,28 @@ function bindEvents() {
   elements.silverList.addEventListener("click", tableHandler);
 
   elements.viewList.addEventListener("click", (event) => {
-    const deleteButton = event.target.closest("[data-delete-view]");
+    const deleteButton = event.target.closest("[data-delete-analysis]");
     if (deleteButton) {
-      deleteSavedView(deleteButton.dataset.deleteView);
+      void deleteAnalysis(deleteButton.dataset.deleteAnalysis).catch((error) => {
+        showToast(error instanceof Error ? error.message : String(error));
+      });
       return;
     }
-    const loadButton = event.target.closest("[data-saved-view-id]");
-    if (loadButton) void loadSavedView(loadButton.dataset.savedViewId);
+    const loadButton = event.target.closest("[data-blueprint-id]");
+    if (!loadButton) return;
+    const blueprint = state.session.blueprints.find(
+      (candidate) => candidate.blueprint_id === loadButton.dataset.blueprintId,
+    );
+    if (blueprint) void selectBlueprint(blueprint);
+  });
+
+  elements.modelList.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-model-id]");
+    if (!item) return;
+    const model = state.session.models.find(
+      (candidate) => candidate.model_id === item.dataset.modelId,
+    );
+    if (model) void selectModel(model);
   });
 
   elements.run.addEventListener("click", () => void runCurrentQuery());
@@ -676,7 +745,9 @@ function bindEvents() {
     const name = elements.viewName.value.trim();
     if (!name) return;
     elements.saveDialog.close();
-    void saveCurrentView(name);
+    void saveCurrentAnalysis(name).catch((error) => {
+      showToast(error instanceof Error ? error.message : String(error));
+    });
   });
   elements.saveDialog.addEventListener("click", (event) => {
     if (event.target === elements.saveDialog) elements.saveDialog.close();
@@ -686,12 +757,13 @@ function bindEvents() {
 async function initialize() {
   bindEvents();
   setSqlOpen(false);
-  renderSavedViews();
   try {
     const sessionResponse = await fetch("/api/data/session", { cache: "no-store" });
     if (!sessionResponse.ok) throw new Error("Could not open the local data catalog");
     state.session = validateSession(await sessionResponse.json());
     renderViews(state.session.views);
+    renderAnalyses(state.session.blueprints);
+    renderModels(state.session.models);
     renderQueryList(state.session.queries, state.session.views);
     renderTableList(state.session.tables, "gold");
     renderTableList(state.session.tables, "silver");

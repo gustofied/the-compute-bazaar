@@ -27,7 +27,7 @@ class EvalWorkspace:
             sys.path.insert(0, root_text)
         module = importlib.import_module("viewer.app")
         return cls(
-            app=module.create_app(evaluation_root),
+            app=module.create_app(evaluation_root, base_path="/eval"),
             first_url=_first_evaluation_url(evaluation_root),
         )
 
@@ -45,7 +45,6 @@ class EvalWorkspace:
         if not self.available or self.app is None:
             return
         shell.mount("/eval", self.app, name="evaluation-workspace")
-        shell.mount("/", self.app, name="evaluation-assets")
 
 
 def _first_evaluation_url(evaluation_root: Path) -> str | None:
@@ -55,5 +54,5 @@ def _first_evaluation_url(evaluation_root: Path) -> str | None:
                 (run_dir / "protocol.json").is_file()
                 and (run_dir / "trials.json").is_file()
             ):
-                return f"/evals/{run_dir.parent.parent.name}"
+                return f"/eval/evals/{run_dir.parent.parent.name}"
     return None

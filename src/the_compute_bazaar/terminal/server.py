@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -21,6 +21,24 @@ from .eval_workspace import EvalWorkspace
 
 
 ASSET_ROOT = Path(__file__).with_name("static")
+STRICT_CSP = "; ".join(
+    (
+        "default-src 'self'",
+        "base-uri 'none'",
+        "connect-src 'self' blob:",
+        "font-src 'self' data:",
+        "frame-ancestors 'none'",
+        "img-src 'self' data:",
+        "object-src 'none'",
+        "script-src 'self' blob: 'wasm-unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",
+        "worker-src 'self' blob:",
+    )
+)
+EVAL_CSP = STRICT_CSP.replace(
+    "script-src 'self' blob: 'wasm-unsafe-eval'",
+    "script-src 'self' blob: 'unsafe-inline' 'wasm-unsafe-eval'",
+)
 
 
 def create_terminal_app(
@@ -53,6 +71,17 @@ def create_terminal_app(
     )
     app.state.data_workspace = data_workspace
     app.state.eval_workspace = eval_workspace
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next: Any) -> Response:
+        response = await call_next(request)
+        response.headers["Content-Security-Policy"] = (
+            EVAL_CSP if request.url.path.startswith("/eval") else STRICT_CSP
+        )
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        return response
 
     app.mount(
         "/terminal-assets",

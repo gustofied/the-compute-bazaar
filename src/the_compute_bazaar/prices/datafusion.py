@@ -20,7 +20,7 @@ class DataFusionEngine:
     def __init__(self, tables: Mapping[str, str] | None = None) -> None:
         try:
             import pyarrow as pa
-            from datafusion import SessionConfig, SessionContext
+            from datafusion import SQLOptions, SessionConfig, SessionContext
         except ImportError as exc:
             raise RuntimeError(
                 "DataFusion queries require the project dependencies: uv sync"
@@ -31,6 +31,12 @@ class DataFusionEngine:
         )
         self._arrow = pa
         self._context = SessionContext(config)
+        self._read_only_options = (
+            SQLOptions()
+            .with_allow_ddl(False)
+            .with_allow_dml(False)
+            .with_allow_statements(False)
+        )
         self._registered_buckets: set[str] = set()
         self._table_refs: dict[str, str] = {}
         if tables:
@@ -61,16 +67,22 @@ class DataFusionEngine:
             self._context.deregister_table(name)
             self._table_refs.pop(name, None)
 
-    def query(self, sql: str) -> list[dict[str, Any]]:
-        return self.query_arrow(sql).to_pylist()
+    def query(self, sql: str, *, limit: int | None = None) -> list[dict[str, Any]]:
+        return self.query_arrow(sql, limit=limit).to_pylist()
 
-    def query_arrow(self, sql: str) -> Any:
-        """Execute SQL and retain its Arrow schema, including for empty results."""
+    def query_arrow(self, sql: str, *, limit: int | None = None) -> Any:
+        """Execute bounded read-only SQL and retain its Arrow schema."""
         if not sql.strip():
             raise ValueError("DataFusion SQL must not be empty")
-        frame = self._context.sql(sql)
+        if limit is not None and limit < 1:
+            raise ValueError("DataFusion query limit must be positive")
+        frame = self._context.sql(sql, options=self._read_only_options)
+        if limit is not None:
+            frame = frame.limit(limit)
         batches = frame.collect()
-        return self._arrow.Table.from_batches(batches, schema=frame.schema())
+        if not batches:
+            return self._arrow.Table.from_batches([], schema=frame.schema())
+        return self._arrow.Table.from_batches(batches)
 
     def create_schema(self, schema_name: str) -> None:
         schema = _validated_table_name(schema_name)

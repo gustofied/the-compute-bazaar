@@ -6,11 +6,7 @@
     <meta name="color-scheme" content="dark">
     <title>Compute Bazaar Data</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath fill='%2391aecb' d='M1 1h5v5H1z'/%3E%3Cpath fill='%23b7d07b' d='M8 1h5v5H8z'/%3E%3Cpath fill='%23efede4' d='M1 8h5v5H1z'/%3E%3Cpath fill='%23f3c888' d='M8 8h5v5H8z'/%3E%3C/svg%3E">
-    <link
-      rel="stylesheet"
-      crossorigin="anonymous"
-      href="https://cdn.jsdelivr.net/npm/@perspective-dev/viewer@4.5.2/dist/css/themes.css"
-    >
+    <link rel="stylesheet" href="/terminal-assets/perspective/app.css">
     <link rel="stylesheet" href="/terminal-assets/app.css">
     <link rel="stylesheet" href="/terminal-assets/command.css">
   </head>
@@ -58,11 +54,19 @@
 
             <section class="catalog-section" aria-labelledby="view-heading">
               <button class="section-heading" type="button" aria-expanded="true">
-                <span id="view-heading">My views</span>
+                <span id="view-heading">Analyses</span>
                 <span id="view-count">0</span>
               </button>
               <div class="catalog-list" id="view-list"></div>
-              <p class="catalog-empty" id="view-empty">Nothing saved in this browser.</p>
+              <p class="catalog-empty" id="view-empty">No analysis blueprints saved.</p>
+            </section>
+
+            <section class="catalog-section" aria-labelledby="model-heading">
+              <button class="section-heading" type="button" aria-expanded="false">
+                <span id="model-heading">SQL models</span>
+                <span id="model-count">0</span>
+              </button>
+              <div class="catalog-list" id="model-list"></div>
             </section>
 
             <section class="catalog-section" aria-labelledby="saved-query-heading">
@@ -160,9 +164,9 @@
 
     <dialog class="save-dialog" id="save-dialog">
       <form method="dialog" id="save-form">
-        <p class="eyebrow">Local view</p>
-        <h2>Save this view</h2>
-        <p>Keep the SQL and Perspective layout in this browser.</p>
+        <p class="eyebrow">Analysis</p>
+        <h2>Save analysis</h2>
+        <p>Write the SQL model and current Perspective view to the repository.</p>
         <label for="view-name">Name</label>
         <input id="view-name" name="view-name" maxlength="64" required autocomplete="off">
         <div class="dialog-actions">
@@ -174,6 +178,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script type="module" src="/terminal-assets/command.js"></script>
-    <script type="module" src="/terminal-assets/app.js"></script>
+    <script type="module" src="/terminal-assets/perspective/app.js"></script>
   </body>
 </html>

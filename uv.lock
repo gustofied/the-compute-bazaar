@@ -862,6 +862,7 @@ source = { editable = "." }
 dependencies = [
     { name = "datafusion" },
     { name = "pyarrow" },
+    { name = "pydantic" },
     { name = "typer" },
 ]
 
@@ -891,6 +892,7 @@ requires-dist = [
     { name = "matplotlib", marker = "extra == 'worker'", specifier = ">=3.10.8" },
     { name = "pillow", marker = "extra == 'worker'", specifier = ">=12.0.0" },
     { name = "pyarrow", specifier = ">=22.0.0" },
+    { name = "pydantic", specifier = ">=2.12.0,<3.0.0" },
     { name = "requests", marker = "extra == 'worker'", specifier = ">=2.33.1" },
     { name = "typer", specifier = ">=0.21.0,<1.0.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.49.0" },

@@ -44,8 +44,12 @@ app = typer.Typer(
 )
 data_app = typer.Typer(help="Inspect or update the local public lake.")
 sandbox_app = typer.Typer(help="Maintain StarSling workload costs.")
+model_app = typer.Typer(help="Save and run reusable DataFusion SQL models.")
+blueprint_app = typer.Typer(help="Save and open Perspective views of SQL models.")
 app.add_typer(data_app, name="data")
 app.add_typer(sandbox_app, name="sandbox")
+app.add_typer(model_app, name="model")
+app.add_typer(blueprint_app, name="blueprint")
 
 
 @app.callback()
@@ -217,14 +221,237 @@ def sql(
             evaluation_root=DEFAULT_EVALUATION_ROOT,
         )
         return
+    try:
+        result = _catalog(ctx).query(selected_sql, limit=selected_limit)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from None
+    _emit(ctx, result, command="sql")
+
+
+@model_app.command("list")
+def model_list(ctx: typer.Context) -> None:
+    """List repo-backed analysis models."""
+    from .analysis_store import model_payload
+
+    rows = []
+    for model in _analysis_store().list_models():
+        payload = model_payload(model)
+        payload.pop("sql", None)
+        rows.append(payload)
     _emit(
         ctx,
-        _catalog(ctx).query(
-            selected_sql,
-            limit=selected_limit,
-        ),
+        {"analysis_root": str(_analysis_store().root), "models": rows},
+        command="model",
+        include_source=False,
+    )
+
+
+@model_app.command("show")
+def model_show(ctx: typer.Context, model_id: Annotated[str, typer.Argument()]) -> None:
+    """Show one analysis model and its SQL."""
+    from .analysis_store import model_payload
+
+    try:
+        model = _analysis_store().load_model(model_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        ctx,
+        model_payload(model),
+        command="model",
+        include_source=False,
+    )
+
+
+@model_app.command("save")
+def model_save(
+    ctx: typer.Context,
+    model_id: Annotated[str, typer.Argument()],
+    sql_file: Annotated[
+        Path | None,
+        typer.Option("--file", help="Read model SQL from a file; otherwise stdin."),
+    ] = None,
+    title: Annotated[str | None, typer.Option()] = None,
+    description: Annotated[str, typer.Option()] = "",
+    limit: Annotated[int, typer.Option()] = 500,
+) -> None:
+    """Save a read-only SQL model in analyses/models."""
+    from .analysis_store import model_payload
+
+    statement = _read_sql(statement=None, sql_file=sql_file)
+    try:
+        _catalog(ctx).query_arrow(statement, limit=1)
+        model = _analysis_store().save_model(
+            model_id=model_id,
+            title=title or model_id.replace("-", " ").title(),
+            description=description,
+            sql=statement,
+            default_limit=_limit(limit),
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        ctx,
+        model_payload(model),
+        command="model",
+        include_source=False,
+    )
+
+
+@model_app.command("run")
+def model_run(
+    ctx: typer.Context,
+    model_id: Annotated[str, typer.Argument()],
+    limit: Annotated[int | None, typer.Option()] = None,
+    blueprint: Annotated[
+        str | None,
+        typer.Option(help="Perspective blueprint to use with --terminal."),
+    ] = None,
+    terminal: Annotated[bool, typer.Option("--terminal")] = False,
+    port: Annotated[int, typer.Option(min=1, max=65535)] = 8767,
+) -> None:
+    """Run a saved model headlessly or open it in the Terminal."""
+    store = _analysis_store()
+    try:
+        model = store.load_model(model_id)
+        layout = store.load_blueprint(blueprint) if blueprint else None
+    except (FileNotFoundError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if layout and layout.model_id != model.model_id:
+        raise typer.BadParameter(
+            f"Blueprint {layout.blueprint_id} uses model {layout.model_id}"
+        )
+    selected_limit = _limit(limit or model.default_limit)
+    if terminal:
+        _launch_native_terminal(
+            ctx,
+            port=port,
+            initial_sql=model.sql,
+            initial_limit=selected_limit,
+            initial_perspective=layout.perspective if layout else None,
+            evaluation_root=DEFAULT_EVALUATION_ROOT,
+        )
+        return
+    _emit(
+        ctx,
+        _catalog(ctx).query(model.sql, limit=selected_limit),
         command="sql",
     )
+
+
+@model_app.command("delete")
+def model_delete(model_id: Annotated[str, typer.Argument()]) -> None:
+    """Delete a model that has no blueprints."""
+    try:
+        _analysis_store().delete_model(model_id)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(f"Deleted model {model_id}.")
+
+
+@blueprint_app.command("list")
+def blueprint_list(ctx: typer.Context) -> None:
+    """List repo-backed Perspective blueprints."""
+    from .analysis_store import blueprint_payload
+
+    _emit(
+        ctx,
+        {
+            "analysis_root": str(_analysis_store().root),
+            "blueprints": [
+                blueprint_payload(blueprint)
+                for blueprint in _analysis_store().list_blueprints()
+            ],
+        },
+        command="blueprint",
+        include_source=False,
+    )
+
+
+@blueprint_app.command("show")
+def blueprint_show(
+    ctx: typer.Context,
+    blueprint_id: Annotated[str, typer.Argument()],
+) -> None:
+    """Show one blueprint and its linked model."""
+    from .analysis_store import blueprint_payload
+
+    try:
+        blueprint = _analysis_store().load_blueprint(blueprint_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        ctx,
+        blueprint_payload(blueprint),
+        command="blueprint",
+        include_source=False,
+    )
+
+
+@blueprint_app.command("save")
+def blueprint_save(
+    ctx: typer.Context,
+    blueprint_id: Annotated[str, typer.Argument()],
+    model_id: Annotated[str, typer.Option("--model")],
+    config: Annotated[Path, typer.Option("--config", help="Perspective JSON file.")],
+    title: Annotated[str | None, typer.Option()] = None,
+    description: Annotated[str, typer.Option()] = "",
+) -> None:
+    """Attach a Perspective layout to a saved model."""
+    from .analysis_store import blueprint_payload
+
+    try:
+        perspective = json.loads(config.read_text(encoding="utf-8"))
+        if not isinstance(perspective, dict):
+            raise ValueError("Perspective config must be a JSON object")
+        blueprint = _analysis_store().save_blueprint(
+            blueprint_id=blueprint_id,
+            model_id=model_id,
+            title=title or blueprint_id.replace("-", " ").title(),
+            description=description,
+            perspective=perspective,
+        )
+    except (FileNotFoundError, json.JSONDecodeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        ctx,
+        blueprint_payload(blueprint),
+        command="blueprint",
+        include_source=False,
+    )
+
+
+@blueprint_app.command("open")
+def blueprint_open(
+    ctx: typer.Context,
+    blueprint_id: Annotated[str, typer.Argument()],
+    port: Annotated[int, typer.Option(min=1, max=65535)] = 8767,
+) -> None:
+    """Open a saved model and blueprint in the Terminal."""
+    store = _analysis_store()
+    try:
+        blueprint = store.load_blueprint(blueprint_id)
+        model = store.load_model(blueprint.model_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _launch_native_terminal(
+        ctx,
+        port=port,
+        initial_sql=model.sql,
+        initial_limit=model.default_limit,
+        initial_perspective=blueprint.perspective,
+        evaluation_root=DEFAULT_EVALUATION_ROOT,
+    )
+
+
+@blueprint_app.command("delete")
+def blueprint_delete(blueprint_id: Annotated[str, typer.Argument()]) -> None:
+    """Delete one Perspective blueprint."""
+    try:
+        _analysis_store().delete_blueprint(blueprint_id)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(f"Deleted blueprint {blueprint_id}.")
 
 
 @app.command("price-index")
@@ -665,6 +892,12 @@ def _catalog(ctx: typer.Context) -> Any:
     state = _state(ctx)
     _require_lake(state.lake)
     return ComputeBazaarCatalog(lake_root=state.lake.root)
+
+
+def _analysis_store() -> Any:
+    from .analysis_store import AnalysisStore
+
+    return AnalysisStore()
 
 
 def _require_lake(lake: LakeSelection) -> None:

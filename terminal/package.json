@@ -3,9 +3,18 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "build": "vite build --config vite.config.mjs",
     "tauri": "tauri"
   },
+  "dependencies": {
+    "@perspective-dev/client": "4.5.2",
+    "@perspective-dev/server": "4.5.2",
+    "@perspective-dev/viewer": "4.5.2",
+    "@perspective-dev/viewer-charts": "4.5.2",
+    "@perspective-dev/viewer-datagrid": "4.5.2"
+  },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.8.5"
+    "@tauri-apps/cli": "^2.8.5",
+    "vite": "^7.0.0"
   }
 }

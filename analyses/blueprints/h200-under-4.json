@@ -1,0 +1,18 @@
+{
+  "blueprint_id": "h200-under-4",
+  "created_at": "2026-08-08T00:00:00Z",
+  "description": "Lowest visible H200 price and sub-$4 availability through time.",
+  "model_id": "h200-under-4",
+  "perspective": {
+    "columns": [
+      "lowest_price_usd_gpu_hr"
+    ],
+    "group_by": [
+      "observed_at"
+    ],
+    "plugin": "Y Line",
+    "settings": false
+  },
+  "title": "H200 below $4",
+  "updated_at": "2026-08-08T00:00:00Z"
+}

@@ -1,15 +1,18 @@
 ARG WINDMILL_BASE_IMAGE=ghcr.io/windmill-labs/windmill@sha256:b21a570fd5245b294a578fad19828bb8da00e4d5f6b46e039889d7564a07b89c
 FROM ${WINDMILL_BASE_IMAGE}
 
+ARG COMPUTE_BAZAAR_REVISION=unknown
+LABEL org.opencontainers.image.revision=${COMPUTE_BAZAAR_REVISION}
+
 WORKDIR /opt/compute-bazaar
 
 ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python
+ENV UV_PROJECT_ENVIRONMENT=/opt/compute-bazaar/.venv
 
 COPY README.md pyproject.toml uv.lock ./
 COPY src ./src
 
 RUN uv python install 3.13 \
-    && uv venv /opt/compute-bazaar/.venv --python 3.13 \
-    && uv pip install --python /opt/compute-bazaar/.venv/bin/python --no-cache '.[worker]'
+    && uv sync --frozen --no-dev --extra worker --no-editable --python 3.13
 
 ENV PYTHON_PATH=/opt/compute-bazaar/.venv/bin/python

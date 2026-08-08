@@ -11,9 +11,11 @@ Column = tuple[str, str, int]
 
 TABLE_TITLES = {
     "availability": "GPU AVAILABILITY",
+    "blueprint": "VIEW BLUEPRINTS",
     "data": "MARKET DATA",
     "describe": "TABLE COLUMNS",
     "listings": "GPU LISTINGS",
+    "model": "ANALYSIS MODELS",
     "price-index": "GPU PRICE INDEX",
     "providers": "PROVIDER COMPARISON",
     "query": "QUERY RESULT",
@@ -22,11 +24,26 @@ TABLE_TITLES = {
 }
 
 TABLE_ROWS = {
+    "blueprint": "blueprints",
     "describe": "columns",
+    "model": "models",
     "tables": "tables",
 }
 
 TABLE_COLUMNS: dict[str, tuple[Column, ...]] = {
+    "model": (
+        ("MODEL", "model_id", 28),
+        ("TITLE", "title", 32),
+        ("TABLES", "tables", 52),
+        ("ROWS", "default_limit", 8),
+        ("UPDATED", "updated_at", 20),
+    ),
+    "blueprint": (
+        ("BLUEPRINT", "blueprint_id", 28),
+        ("MODEL", "model_id", 28),
+        ("TITLE", "title", 32),
+        ("UPDATED", "updated_at", 20),
+    ),
     "price-index": (
         ("GPU", "benchmark_family_id", 8),
         ("INDEX", "benchmark_usd_gpu_hr", 12),

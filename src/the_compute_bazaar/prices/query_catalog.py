@@ -16,22 +16,6 @@ DEFAULT_QUERY_CATALOG_PATH = SQL_ROOT / "catalog.json"
 DEFAULT_QUERY_LIMIT = 100
 MAX_QUERY_LIMIT = 1000
 SCRATCH_QUERY_ID = "scratch_sql"
-READ_ONLY_SQL_PREFIXES = {"select", "with"}
-FORBIDDEN_SCRATCH_SQL_TOKENS = {
-    "alter",
-    "attach",
-    "copy",
-    "create",
-    "delete",
-    "detach",
-    "drop",
-    "insert",
-    "load",
-    "replace",
-    "truncate",
-    "update",
-    "vacuum",
-}
 FORBIDDEN_SCRATCH_SQL_FUNCTIONS = {
     "read_csv",
     "read_json",
@@ -156,7 +140,7 @@ def run_catalog_query(
         limit if limit is not None else query.default_limit
     )
     table_refs = table_refs_for_catalog_query(manifest, query)
-    rows = DataFusionEngine(table_refs).query(with_limit(query.sql, selected_limit))
+    rows = DataFusionEngine(table_refs).query(query.sql, limit=selected_limit)
     return {
         "query": query.catalog_entry(manifest),
         "limit": selected_limit,
@@ -176,9 +160,7 @@ def run_scratch_query(
         limit if limit is not None else DEFAULT_QUERY_LIMIT
     )
     table_refs = scratch_table_refs(manifest)
-    rows = DataFusionEngine(table_refs).query(
-        with_scratch_limit(cleaned_sql, selected_limit)
-    )
+    rows = DataFusionEngine(table_refs).query(cleaned_sql, limit=selected_limit)
     return {
         "query": scratch_query_entry(manifest, cleaned_sql),
         "limit": selected_limit,
@@ -230,71 +212,24 @@ def table_refs_for_catalog_query(
     return {table: str(manifest_refs[table]) for table in query.tables}
 
 
-def with_limit(sql: str, limit: int) -> str:
-    return f"{sql.strip().rstrip(';')}\nlimit {limit}"
-
-
-def with_scratch_limit(sql: str, limit: int) -> str:
-    statement = sql.strip().rstrip(";")
-    masked = _mask_sql_string_literals(statement)
-    limit_match = re.search(r"\blimit\s+(\d+)\s*$", masked, flags=re.IGNORECASE)
-    if not limit_match:
-        return f"{statement}\nlimit {limit}"
-
-    requested_limit = int(limit_match.group(1))
-    clamped_limit = min(requested_limit, limit)
-    return f"{statement[: limit_match.start()].rstrip()}\nlimit {clamped_limit}"
-
-
 def validate_scratch_sql(sql: str) -> str:
-    return _validate_read_only_sql(
-        sql,
-        forbidden_identifiers=FORBIDDEN_SCRATCH_SQL_IDENTIFIERS,
+    statement = validate_catalog_sql(sql)
+    token_source = _mask_sql_string_literals(_strip_sql_comments(statement).lower())
+    tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", token_source))
+    blocked = sorted(
+        tokens & (FORBIDDEN_SCRATCH_SQL_FUNCTIONS | FORBIDDEN_SCRATCH_SQL_IDENTIFIERS)
     )
+    if blocked:
+        raise ValueError(
+            f"Scratch SQL cannot access external or private evidence: {blocked[0]}"
+        )
+    return statement
 
 
 def validate_catalog_sql(sql: str) -> str:
-    return _validate_read_only_sql(sql, forbidden_identifiers=set())
-
-
-def _validate_read_only_sql(
-    sql: str,
-    *,
-    forbidden_identifiers: set[str],
-) -> str:
-    cleaned = _strip_sql_comments(sql).strip()
-    if not cleaned:
+    statement = sql.strip()
+    if not statement:
         raise ValueError("Scratch SQL is empty")
-
-    statements = [
-        statement.strip() for statement in cleaned.split(";") if statement.strip()
-    ]
-    if len(statements) != 1:
-        raise ValueError("Scratch SQL must contain exactly one read-only statement")
-
-    statement = statements[0].rstrip(";").strip()
-    first_token_match = re.match(r"[A-Za-z_][A-Za-z0-9_]*", statement)
-    first_token = first_token_match.group(0).lower() if first_token_match else ""
-    if first_token not in READ_ONLY_SQL_PREFIXES:
-        raise ValueError("Scratch SQL must start with SELECT or WITH")
-
-    token_source = _mask_sql_string_literals(statement.lower())
-    tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", token_source))
-    forbidden_tokens = sorted(tokens & FORBIDDEN_SCRATCH_SQL_TOKENS)
-    if forbidden_tokens:
-        raise ValueError(
-            f"Scratch SQL is read-only; forbidden token: {forbidden_tokens[0]}"
-        )
-    forbidden_functions = sorted(tokens & FORBIDDEN_SCRATCH_SQL_FUNCTIONS)
-    if forbidden_functions:
-        raise ValueError(
-            f"Scratch SQL cannot read external files or object paths: {forbidden_functions[0]}"
-        )
-    blocked_identifiers = sorted(tokens & forbidden_identifiers)
-    if blocked_identifiers:
-        raise ValueError(
-            f"Scratch SQL cannot read private evidence fields: {blocked_identifiers[0]}"
-        )
     return statement
 
 

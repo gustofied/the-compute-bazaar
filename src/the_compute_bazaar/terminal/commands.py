@@ -3,90 +3,307 @@
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass
-from typing import Literal
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Annotated, Literal, TypeAlias
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..prices.query_catalog import MAX_QUERY_LIMIT
-
-
-CommandKind = Literal[
-    "help",
-    "clear",
-    "navigate",
-    "locked",
-    "status",
-    "catalog",
-    "view",
-    "query",
-    "table",
-    "describe",
-    "sql",
-    "error",
-]
-
-
-@dataclass(frozen=True)
-class TerminalCommand:
-    command: str
-    description: str
-    workspace: Literal["terminal", "data", "eval", "trade"] = "terminal"
-
-    def as_dict(self) -> dict[str, str]:
-        return asdict(self)
 
 
 class TerminalCommandRequest(BaseModel):
     command: str = Field(min_length=1, max_length=10_000)
 
 
-class TerminalAction(BaseModel):
-    kind: CommandKind
-    href: str | None = None
-    section: str | None = None
-    view_id: str | None = None
-    query_id: str | None = None
-    table_ref: str | None = None
-    sql: str | None = None
-    limit: int | None = None
-    message: str | None = None
+class _Action(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class HelpAction(_Action):
+    kind: Literal["help"] = "help"
+
+
+class ClearAction(_Action):
+    kind: Literal["clear"] = "clear"
+
+
+class NavigateAction(_Action):
+    kind: Literal["navigate"] = "navigate"
+    href: str
+
+
+class LockedAction(_Action):
+    kind: Literal["locked"] = "locked"
+
+
+class StatusAction(_Action):
+    kind: Literal["status"] = "status"
+
+
+class CatalogAction(_Action):
+    kind: Literal["catalog"] = "catalog"
+    section: Literal["tables", "queries", "views", "models", "blueprints"]
+
+
+class ViewAction(_Action):
+    kind: Literal["view"] = "view"
+    view_id: str
+
+
+class QueryAction(_Action):
+    kind: Literal["query"] = "query"
+    query_id: str
+    limit: int
+
+
+class ModelAction(_Action):
+    kind: Literal["model"] = "model"
+    model_id: str
+
+
+class BlueprintAction(_Action):
+    kind: Literal["blueprint"] = "blueprint"
+    blueprint_id: str
+
+
+class TableAction(_Action):
+    kind: Literal["table"] = "table"
+    table_ref: str
+
+
+class DescribeAction(_Action):
+    kind: Literal["describe"] = "describe"
+    table_ref: str
+
+
+class SqlAction(_Action):
+    kind: Literal["sql"] = "sql"
+    sql: str
+    limit: int
+
+
+class ErrorAction(_Action):
+    kind: Literal["error"] = "error"
+    message: str
+
+
+TerminalAction: TypeAlias = Annotated[
+    HelpAction
+    | ClearAction
+    | NavigateAction
+    | LockedAction
+    | StatusAction
+    | CatalogAction
+    | ViewAction
+    | QueryAction
+    | ModelAction
+    | BlueprintAction
+    | TableAction
+    | DescribeAction
+    | SqlAction
+    | ErrorAction,
+    Field(discriminator="kind"),
+]
+
+CommandHandler: TypeAlias = Callable[[str], TerminalAction]
+
+
+@dataclass(frozen=True)
+class TerminalCommand:
+    name: str
+    syntax: str
+    description: str
+    handler: CommandHandler
+    workspace: Literal["terminal", "data", "eval", "trade"] = "terminal"
+    aliases: tuple[str, ...] = ()
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "command": self.syntax,
+            "description": self.description,
+            "workspace": self.workspace,
+        }
+
+
+def _no_argument(action: TerminalAction) -> CommandHandler:
+    def handler(_: str) -> TerminalAction:
+        return action
+
+    return handler
+
+
+def _view(argument: str) -> TerminalAction:
+    return ViewAction(view_id=argument) if argument else _error("Use view <view_id>.")
+
+
+def _query(argument: str) -> TerminalAction:
+    limit, query_id = _parse_limit(argument)
+    return (
+        QueryAction(query_id=query_id, limit=limit)
+        if query_id
+        else _error("Use query <query_id>.")
+    )
+
+
+def _model(argument: str) -> TerminalAction:
+    return ModelAction(model_id=argument) if argument else _error("Use model <id>.")
+
+
+def _blueprint(argument: str) -> TerminalAction:
+    return (
+        BlueprintAction(blueprint_id=argument)
+        if argument
+        else _error("Use blueprint <id>.")
+    )
+
+
+def _table(argument: str) -> TerminalAction:
+    return (
+        TableAction(table_ref=argument)
+        if argument
+        else _error("Use table silver.<name> or table gold.<name>.")
+    )
+
+
+def _describe(argument: str) -> TerminalAction:
+    return (
+        DescribeAction(table_ref=argument)
+        if argument
+        else _error("Use describe silver.<name> or describe gold.<name>.")
+    )
+
+
+def _sql(argument: str) -> TerminalAction:
+    limit, statement = _parse_limit(argument)
+    statement = _strip_outer_quotes(statement)
+    return (
+        SqlAction(sql=statement, limit=limit)
+        if statement
+        else _error("Use sql <read-only statement>.")
+    )
 
 
 COMMANDS = (
-    TerminalCommand("data", "Open the Data workspace."),
-    TerminalCommand("eval", "Open the Eval workspace."),
-    TerminalCommand("home", "Return to the Terminal menu."),
-    TerminalCommand("status", "Show the active lake run and workspaces."),
-    TerminalCommand("tables", "Open the Silver and Gold catalog.", "data"),
-    TerminalCommand("views", "Open curated market views.", "data"),
-    TerminalCommand("queries", "Open saved SQL queries.", "data"),
     TerminalCommand(
-        "view gpu-index-history",
-        "Open a curated Perspective view.",
+        "help",
+        "help",
+        "Show Terminal commands.",
+        _no_argument(HelpAction()),
+        aliases=("?",),
+    ),
+    TerminalCommand(
+        "home",
+        "home",
+        "Return to the Terminal menu.",
+        _no_argument(NavigateAction(href="/")),
+        aliases=("menu", "terminal"),
+    ),
+    TerminalCommand(
+        "data",
+        "data",
+        "Open the Data workspace.",
+        _no_argument(NavigateAction(href="/data")),
+    ),
+    TerminalCommand(
+        "eval",
+        "eval",
+        "Open the Eval workspace.",
+        _no_argument(NavigateAction(href="/eval/")),
+        aliases=("evals",),
+    ),
+    TerminalCommand(
+        "trade",
+        "trade",
+        "Show the future Trade workspace.",
+        _no_argument(LockedAction()),
+    ),
+    TerminalCommand(
+        "status", "status", "Show the active lake run.", _no_argument(StatusAction())
+    ),
+    TerminalCommand(
+        "clear", "clear", "Clear the command dock.", _no_argument(ClearAction())
+    ),
+    TerminalCommand(
+        "tables",
+        "tables",
+        "Open the Silver and Gold catalog.",
+        _no_argument(CatalogAction(section="tables")),
+        "data",
+        ("catalog",),
+    ),
+    TerminalCommand(
+        "views",
+        "views",
+        "Open curated market views.",
+        _no_argument(CatalogAction(section="views")),
         "data",
     ),
     TerminalCommand(
-        "query gpu_price_index_history",
+        "queries",
+        "queries",
+        "Open saved SQL queries.",
+        _no_argument(CatalogAction(section="queries")),
+        "data",
+    ),
+    TerminalCommand(
+        "models",
+        "models",
+        "Open reusable SQL models.",
+        _no_argument(CatalogAction(section="models")),
+        "data",
+    ),
+    TerminalCommand(
+        "blueprints",
+        "blueprints",
+        "Open saved analysis views.",
+        _no_argument(CatalogAction(section="blueprints")),
+        "data",
+        ("analyses",),
+    ),
+    TerminalCommand(
+        "view", "view <view_id>", "Open a Perspective view.", _view, "data"
+    ),
+    TerminalCommand(
+        "query",
+        "query <query_id> [--limit N]",
         "Run a saved DataFusion query.",
+        _query,
         "data",
     ),
+    TerminalCommand("model", "model <id>", "Run a reusable SQL model.", _model, "data"),
     TerminalCommand(
-        "table gold.fact_gpu_price_index",
-        "Inspect a Silver or Gold table.",
+        "blueprint",
+        "blueprint <id>",
+        "Open a model with its Perspective layout.",
+        _blueprint,
         "data",
+        ("analysis",),
     ),
     TerminalCommand(
-        "describe gold.fact_gpu_price_index",
+        "table",
+        "table <silver|gold>.<name>",
+        "Inspect a catalog table.",
+        _table,
+        "data",
+        ("open",),
+    ),
+    TerminalCommand(
+        "describe",
+        "describe <silver|gold>.<name>",
         "Inspect a table schema.",
+        _describe,
         "data",
+        ("schema",),
     ),
     TerminalCommand(
-        "select * from gold.fact_gpu_price_index",
-        "Run bounded read-only SQL.",
-        "data",
+        "sql", "sql [--limit N] <statement>", "Run bounded read-only SQL.", _sql, "data"
     ),
 )
+
+COMMAND_BY_NAME = {
+    alias: command for command in COMMANDS for alias in (command.name, *command.aliases)
+}
 
 
 def command_catalog() -> list[dict[str, str]]:
@@ -94,79 +311,17 @@ def command_catalog() -> list[dict[str, str]]:
 
 
 def resolve_command(raw: str) -> TerminalAction:
-    command = _strip_cli_prefix(raw)
+    command = raw.strip().removeprefix("/").strip()
     if not command:
         return _error("Enter a command or read-only SQL.")
-    if re.match(r"^(select|with)\b", command, flags=re.IGNORECASE):
-        return TerminalAction(kind="sql", sql=command, limit=500)
+    if re.match(r"^(select|with|values)\b", command, flags=re.IGNORECASE):
+        return SqlAction(sql=command, limit=500)
 
-    match = re.match(r"^(\S+)(?:\s+([\s\S]*))?$", command)
-    verb = (match.group(1) if match else "").lower()
-    argument = (match.group(2) if match and match.group(2) else "").strip()
-
-    if verb in {"?", "help"}:
-        return TerminalAction(kind="help")
-    if verb in {"home", "menu", "terminal"}:
-        return TerminalAction(kind="navigate", href="/")
-    if verb == "data":
-        return TerminalAction(kind="navigate", href="/data")
-    if verb in {"eval", "evals"}:
-        return TerminalAction(kind="navigate", href="/eval")
-    if verb == "trade":
-        return TerminalAction(kind="locked")
-    if verb == "status":
-        return TerminalAction(kind="status")
-    if verb == "clear":
-        return TerminalAction(kind="clear")
-    if verb in {"tables", "catalog"}:
-        return TerminalAction(kind="catalog", section="tables")
-    if verb == "queries":
-        return TerminalAction(kind="catalog", section="queries")
-    if verb == "views":
-        return TerminalAction(kind="catalog", section="views")
-    if verb == "view":
-        return (
-            TerminalAction(kind="view", view_id=argument)
-            if argument
-            else _error("Use view <view_id>.")
-        )
-    if verb == "query":
-        limit, query_id = _parse_limit(argument)
-        return (
-            TerminalAction(kind="query", query_id=query_id, limit=limit)
-            if query_id
-            else _error("Use query <query_id>.")
-        )
-    if verb in {"table", "open"}:
-        return (
-            TerminalAction(kind="table", table_ref=argument)
-            if argument
-            else _error("Use table silver.<name> or table gold.<name>.")
-        )
-    if verb in {"describe", "schema"}:
-        return (
-            TerminalAction(kind="describe", table_ref=argument)
-            if argument
-            else _error("Use describe silver.<name> or describe gold.<name>.")
-        )
-    if verb == "sql":
-        limit, statement = _parse_limit(argument)
-        statement = _strip_outer_quotes(statement)
-        if re.match(r"^(select|with)\b", statement, flags=re.IGNORECASE):
-            return TerminalAction(kind="sql", sql=statement, limit=limit)
-        return _error("SQL must start with SELECT or WITH.")
-    return _error(f"Unknown command: {verb}. Try help.")
-
-
-def _strip_cli_prefix(value: str) -> str:
-    command = value.strip()
-    command = re.sub(
-        r"^compute-bazaar(?:\s+terminal)?(?:\s+|$)",
-        "",
-        command,
-        flags=re.IGNORECASE,
-    )
-    return command.removeprefix("/").strip()
+    verb, _, argument = command.partition(" ")
+    definition = COMMAND_BY_NAME.get(verb.lower())
+    if definition is None:
+        return _error(f"Unknown command: {verb}. Try help.")
+    return definition.handler(argument.strip())
 
 
 def _strip_outer_quotes(value: str) -> str:
@@ -177,12 +332,18 @@ def _strip_outer_quotes(value: str) -> str:
 
 
 def _parse_limit(value: str, fallback: int = 500) -> tuple[int, str]:
-    match = re.match(r"^--limit\s+(\d+)\s+([\s\S]+)$", value, flags=re.IGNORECASE)
-    if not match:
-        return fallback, value
-    limit = max(1, min(MAX_QUERY_LIMIT, int(match.group(1))))
-    return limit, match.group(2).strip()
+    leading = re.match(r"^--limit\s+(\d+)\s+([\s\S]+)$", value, flags=re.IGNORECASE)
+    trailing = re.match(r"^([\s\S]+?)\s+--limit\s+(\d+)$", value, flags=re.IGNORECASE)
+    if leading:
+        return _bounded_limit(leading.group(1)), leading.group(2).strip()
+    if trailing:
+        return _bounded_limit(trailing.group(2)), trailing.group(1).strip()
+    return fallback, value.strip()
 
 
-def _error(message: str) -> TerminalAction:
-    return TerminalAction(kind="error", message=message)
+def _bounded_limit(value: str) -> int:
+    return max(1, min(MAX_QUERY_LIMIT, int(value)))
+
+
+def _error(message: str) -> ErrorAction:
+    return ErrorAction(message=message)

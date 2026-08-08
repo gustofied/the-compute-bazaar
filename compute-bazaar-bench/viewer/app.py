@@ -272,13 +272,20 @@ def _compute_bazaar_mark() -> str:
 <span class="compute-brand-fallback" aria-hidden="true"><span class="compute-brand-word the">THE</span><span class="compute-brand-word compute">COMPUTE</span><span class="compute-brand-word bazaar">BAZAAR</span></span></a>"""
 
 
-def _layout(title: str, body: str) -> str:
+def _viewer_path(base_path: str, path: str) -> str:
+    return f"{base_path}{path}" if base_path else path
+
+
+def _layout(title: str, body: str, base_path: str) -> str:
+    embroidery = _viewer_path(
+        base_path, "/assets/compute-title/compute-title-embroidery.js"
+    )
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)}</title><style>{STYLE}</style><link rel="stylesheet" href="/terminal-assets/command.css"></head>
 <body data-terminal-workspace="eval"><main class="shell">{body}</main>
 <script type="module" src="/terminal-assets/command.js"></script>
-<script type="module">import {{ setupComputeTitleEmbroidery }} from "/assets/compute-title/compute-title-embroidery.js"; setupComputeTitleEmbroidery();</script></body></html>"""
+<script type="module">import {{ setupComputeTitleEmbroidery }} from "{embroidery}"; setupComputeTitleEmbroidery();</script></body></html>"""
 
 
 def _discover_run_paths(source: Path) -> dict[str, dict[str, Path]]:
@@ -386,9 +393,9 @@ def _evaluation_summary(
     }
 
 
-def _evals_html(evaluations: Sequence[dict[str, Any]]) -> str:
+def _evals_html(evaluations: Sequence[dict[str, Any]], base_path: str = "") -> str:
     rows = "".join(
-        f"""<a class="eval-row" href="/evals/{escape(item["slug"])}">
+        f"""<a class="eval-row" href="{_viewer_path(base_path, f"/evals/{escape(item['slug'])}")}">
 <div><span class="eval-cell-label">Task</span><div class="eval-name">{escape(item["name"])}</div></div>
 <div><span class="eval-cell-label">Domain</span>{escape(item["domain"])}</div>
 <div><span class="eval-cell-label">Jobs</span>{item["jobs"]}</div>
@@ -399,10 +406,10 @@ def _evals_html(evaluations: Sequence[dict[str, Any]]) -> str:
     )
     body = f"""<header><div class="header-identity">{_compute_bazaar_mark()}</div></header>
 <section><div class="section-head"><h2>Tasks</h2></div><div class="eval-list">{rows}</div></section>"""
-    return _layout("Tasks", body)
+    return _layout("Tasks", body, base_path)
 
 
-def _task_hero_html(task: TaskInfo) -> str:
+def _task_hero_html(task: TaskInfo, base_path: str) -> str:
     description = (
         f'<p class="task-description">{escape(task.description)}</p>'
         if task.description
@@ -463,12 +470,17 @@ document.getElementById('open-launch').addEventListener('click',()=>launchDialog
 document.getElementById('close-launch').addEventListener('click',()=>launchDialog.close());
 document.getElementById('copy-command').addEventListener('click',async()=>{{await navigator.clipboard.writeText(document.getElementById('launch-command').textContent);document.getElementById('copy-state').textContent='Copied';}});
 </script>"""
-    return f"""<section class="task-hero"><div><div class="eyebrow"><a class="info" href="/eval/">Tasks</a> / {escape(task.domain)}</div><h1>{escape(task.name)}</h1>{description}{disclosures}</div><div class="task-actions">{launcher}{links}</div></section>{dialog}"""
+    tasks_url = _viewer_path(base_path, "/")
+    return f"""<section class="task-hero"><div><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / {escape(task.domain)}</div><h1>{escape(task.name)}</h1>{description}{disclosures}</div><div class="task-actions">{launcher}{links}</div></section>{dialog}"""
 
 
-def _runs_html(task: TaskInfo, runs: Sequence[dict[str, Any]]) -> str:
+def _runs_html(
+    task: TaskInfo,
+    runs: Sequence[dict[str, Any]],
+    base_path: str = "",
+) -> str:
     rows = "".join(
-        f"""<a class="eval-row" href="/evals/{escape(task.slug)}/jobs/{escape(run["run_id"])}">
+        f"""<a class="eval-row" href="{_viewer_path(base_path, f"/evals/{escape(task.slug)}/jobs/{escape(run['run_id'])}")}">
 <div><span class="eval-cell-label">Job</span><div class="eval-name">{escape(run["run_id"])}</div></div>
 <div title="{escape(run["score"].hint if run["score"] else "")}"><span class="eval-cell-label">{escape(run["score"].label if run["score"] else "Score")}</span>{escape(run["score"].value if run["score"] else "—")}</div>
 <div><span class="eval-cell-label">Agents</span>{run["agents"]}</div>
@@ -482,9 +494,9 @@ def _runs_html(task: TaskInfo, runs: Sequence[dict[str, Any]]) -> str:
         if not rows
         else f'<div class="eval-list">{rows}</div>'
     )
-    body = f"""<header><div class="header-identity">{_compute_bazaar_mark()}</div></header>{_task_hero_html(task)}
+    body = f"""<header><div class="header-identity">{_compute_bazaar_mark()}</div></header>{_task_hero_html(task, base_path)}
 <section class="section"><div class="section-head"><h2>Jobs</h2></div>{empty}</section>"""
-    return _layout(task.name, body)
+    return _layout(task.name, body, base_path)
 
 
 def _metric_html(metric: Metric) -> str:
@@ -492,7 +504,13 @@ def _metric_html(metric: Metric) -> str:
     return f"""<div class="metric {metric.tone}"{title}><div class="metric-label">{escape(metric.label)}</div><div class="metric-value">{escape(metric.value)}</div></div>"""
 
 
-def _table_html(table: DataTable, eval_slug: str, job_id: str, table_id: str) -> str:
+def _table_html(
+    table: DataTable,
+    eval_slug: str,
+    job_id: str,
+    table_id: str,
+    base_path: str,
+) -> str:
     if not table.columns:
         return ""
     headers = "".join(
@@ -507,9 +525,10 @@ def _table_html(table: DataTable, eval_slug: str, job_id: str, table_id: str) ->
             value = cell.value if cell else "—"
             content = escape(value)
             if cell and cell.href:
-                href = (
+                href = _viewer_path(
+                    base_path,
                     f"/evals/{escape(eval_slug)}/jobs/{escape(job_id)}/trials/"
-                    f"{escape(cell.href)}"
+                    f"{escape(cell.href)}",
                 )
                 content = f'<a class="info" href="{href}">{content}</a>'
             if cell and cell.tone != "neutral":
@@ -536,6 +555,7 @@ def _table_html(table: DataTable, eval_slug: str, job_id: str, table_id: str) ->
 def _index_html(
     presentation: JobPresentation,
     note: dict[str, str] | None = None,
+    base_path: str = "",
 ) -> str:
     note = note or {"text": "", "updated_at": ""}
     task = presentation.task
@@ -556,21 +576,28 @@ def _index_html(
     if presentation.primary_score:
         metrics.insert(0, presentation.primary_score)
     metric_cards = "".join(_metric_html(metric) for metric in metrics)
+    tasks_url = _viewer_path(base_path, "/")
+    eval_url = _viewer_path(base_path, f"/evals/{escape(task.slug)}")
+    note_url = _viewer_path(
+        base_path, f"/api/evals/{escape(task.slug)}/jobs/{escape(job_id)}/note"
+    )
     body = f"""
-<header><div class="header-identity">{_compute_bazaar_mark()}<div class="page-heading"><div class="eyebrow"><a class="info" href="/eval/">Tasks</a> / <a class="info" href="/evals/{escape(task.slug)}">{escape(task.name)}</a> / Job</div><h1>{escape(job_id)}</h1></div></div></header>
+<header><div class="header-identity">{_compute_bazaar_mark()}<div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Job</div><h1>{escape(job_id)}</h1></div></div></header>
 <section class="note-editor"><div class="section-head"><h2>Note</h2><span class="muted">{escape(note["updated_at"])}</span></div>
 <textarea id="job-note" maxlength="2000" aria-label="Job note" placeholder="Add context, caveats, or interpretation for this job">{escape(note["text"])}</textarea>
 <div class="note-actions"><button id="save-note" type="button">Save note</button><span class="muted" id="note-state"></span></div></section>
 {notices}<section class="metrics">{metric_cards}</section>
-{_table_html(presentation.agent_table, task.slug, job_id, "agents")}
-{_table_html(presentation.trial_table, task.slug, job_id, "trials")}
+{_table_html(presentation.agent_table, task.slug, job_id, "agents", base_path)}
+{_table_html(presentation.trial_table, task.slug, job_id, "trials", base_path)}
 <script>
-const save=document.getElementById('save-note');const state=document.getElementById('note-state');save.addEventListener('click',async()=>{{save.disabled=true;state.textContent='Saving…';try{{const response=await fetch('/api/evals/{escape(task.slug)}/jobs/{escape(job_id)}/note',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify({{text:document.getElementById('job-note').value}})}});if(!response.ok)throw new Error('Save failed');state.textContent='Saved';}}catch(error){{state.textContent=error.message;}}finally{{save.disabled=false;}}}});
+const save=document.getElementById('save-note');const state=document.getElementById('note-state');save.addEventListener('click',async()=>{{save.disabled=true;state.textContent='Saving…';try{{const response=await fetch('{note_url}',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify({{text:document.getElementById('job-note').value}})}});if(!response.ok)throw new Error('Save failed');state.textContent='Saved';}}catch(error){{state.textContent=error.message;}}finally{{save.disabled=false;}}}});
 </script>"""
-    return _layout(job_id, body)
+    return _layout(job_id, body, base_path)
 
 
-def _trial_html(trial: TrialPresentation, presentation: JobPresentation) -> str:
+def _trial_html(
+    trial: TrialPresentation, presentation: JobPresentation, base_path: str
+) -> str:
     details = "".join(
         f'<div class="detail {metric.tone}" title="{escape(metric.hint)}"><div class="detail-key">{escape(metric.label)}</div><div>{escape(metric.value)}</div></div>'
         for metric in trial.summary
@@ -580,11 +607,18 @@ def _trial_html(trial: TrialPresentation, presentation: JobPresentation) -> str:
         for section in trial.sections
     )
     task = presentation.task
-    body = f"""<a class="back" href="/evals/{escape(task.slug)}/jobs/{escape(presentation.job_id)}">← {escape(presentation.job_id)}</a><header><div class="header-identity">{_compute_bazaar_mark()}<div class="page-heading"><div class="eyebrow"><a class="info" href="/eval/">Tasks</a> / <a class="info" href="/evals/{escape(task.slug)}">{escape(task.name)}</a> / Trial</div><h1>{escape(trial.title)}</h1></div></div></header><div class="detail-grid">{details}</div>{sections}"""
-    return _layout(trial.title, body)
+    tasks_url = _viewer_path(base_path, "/")
+    eval_url = _viewer_path(base_path, f"/evals/{escape(task.slug)}")
+    job_url = _viewer_path(
+        base_path,
+        f"/evals/{escape(task.slug)}/jobs/{escape(presentation.job_id)}",
+    )
+    body = f"""<a class="back" href="{job_url}">← {escape(presentation.job_id)}</a><header><div class="header-identity">{_compute_bazaar_mark()}<div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Trial</div><h1>{escape(trial.title)}</h1></div></div></header><div class="detail-grid">{details}</div>{sections}"""
+    return _layout(trial.title, body, base_path)
 
 
-def create_app(results_source: Path) -> FastAPI:
+def create_app(results_source: Path, *, base_path: str = "") -> FastAPI:
+    base_path = f"/{base_path.strip('/')}" if base_path.strip("/") else ""
     run_paths = _discover_run_paths(results_source)
     app = FastAPI(title="Compute Bazaar Evals", docs_url=None, redoc_url=None)
     app.mount("/assets", StaticFiles(directory=ASSET_ROOT), name="assets")
@@ -638,17 +672,19 @@ def create_app(results_source: Path) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
-        return _evals_html(evaluation_summaries())
+        return _evals_html(evaluation_summaries(), base_path)
 
     @app.get("/evals/{eval_slug}", response_class=HTMLResponse)
     def evaluation(eval_slug: str) -> str:
         latest = presentation(eval_slug, latest_run_id(eval_slug))
-        return _runs_html(latest.task, run_summaries(eval_slug))
+        return _runs_html(latest.task, run_summaries(eval_slug), base_path)
 
     @app.get("/evals/{eval_slug}/jobs/{run_id}", response_class=HTMLResponse)
     def job_detail(eval_slug: str, run_id: str) -> str:
         return _index_html(
-            presentation(eval_slug, run_id), _read_note(run_path(eval_slug, run_id))
+            presentation(eval_slug, run_id),
+            _read_note(run_path(eval_slug, run_id)),
+            base_path,
         )
 
     @app.get(
@@ -660,7 +696,7 @@ def create_app(results_source: Path) -> FastAPI:
         match = job.trials.get(trial_name)
         if match is None:
             raise HTTPException(status_code=404, detail="trial not found")
-        return _trial_html(match, job)
+        return _trial_html(match, job, base_path)
 
     @app.get("/api/evals")
     def evals_api() -> list[dict[str, Any]]:

@@ -42,6 +42,7 @@ Build from the repository root:
 ```bash
 docker build \
   -f infra/windmill/self-host/Dockerfile.worker \
+  --build-arg COMPUTE_BAZAAR_REVISION=$(git rev-parse HEAD) \
   -t compute-bazaar-windmill-worker:YYYY-MM-DD-description \
   .
 ```

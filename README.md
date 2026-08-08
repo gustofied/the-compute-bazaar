@@ -33,6 +33,20 @@ The main tables are `silver.gpu_offers`, `gold.fact_gpu_price_index`, and
 `gold.fact_gpu_availability`. Inspect the catalog with `compute-bazaar tables`
 and `compute-bazaar describe gold.fact_gpu_price_index`.
 
+## Analyses
+
+Reusable read-only SQL models live in `analyses/models`; Perspective blueprints
+in `analyses/blueprints` reference those models.
+
+```bash
+compute-bazaar model list
+compute-bazaar model run h200-under-4
+compute-bazaar blueprint open h200-under-4
+```
+
+Save a model from a SQL file with `compute-bazaar model save ID --file query.sql`.
+The Terminal Save action writes both the model and its current blueprint.
+
 Use another local or S3-backed lake with `--lake-root PATH`, or set
 `COMPUTE_BAZAAR_LAKE_ROOT`. Direct S3 access requires `uv sync --extra s3`;
 the public sync above does not need AWS credentials.
@@ -64,9 +78,8 @@ compute-bazaar sql "select * from gold.fact_gpu_price_index" --terminal
 - **Eval** opens the full private evaluation viewer for tasks, jobs, trials, and notes.
 - **Trade** is visible but locked until the execution system exists.
 
-From a source checkout, the command opens the native Compute Bazaar Terminal
-and returns the shell prompt. An installed package opens the same localhost
-Terminal in the browser. Use `compute-bazaar terminal --foreground --open` for
+The command starts the local backend, opens the repo-owned Tauri window, and
+returns the shell prompt. Use `compute-bazaar terminal --foreground --open` for
 browser development.
 Press `Cmd+K` in any workspace to run read-only SQL or commands such as `data`,
 `eval`, `tables`, `view gpu-index-history`, and `describe gold.fact_gpu_price_index`.
@@ -78,5 +91,5 @@ compute-bazaar sql "select observed_at, gpu, price_usd_gpu_hr from gold.fact_gpu
 ```
 
 DataFusion runs every Data query and Perspective renders the Arrow result.
-Personal views keep their SQL and layout in the browser. Evaluation reports
-remain in their purpose-built viewer. The server listens on localhost only.
+Saved analyses keep SQL and layout as reviewable repository files. Evaluation
+reports remain in their purpose-built viewer. The server listens on localhost only.

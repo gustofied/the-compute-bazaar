@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
+from ..analysis_store import AnalysisStore, blueprint_payload, model_payload
 from ..data_catalog import ComputeBazaarCatalog
 from ..prices.gold_manifest import read_latest_gold_manifest
 from ..prices.query_catalog import MAX_QUERY_LIMIT, load_query_catalog
@@ -26,6 +27,16 @@ MAX_SQL_LENGTH = 10_000
 class DataQuery(BaseModel):
     sql: str = Field(min_length=1, max_length=MAX_SQL_LENGTH)
     limit: int = Field(default=500, ge=1, le=MAX_QUERY_LIMIT)
+
+
+class AnalysisSave(BaseModel):
+    title: str = Field(min_length=1, max_length=96)
+    description: str = Field(default="", max_length=500)
+    sql: str = Field(min_length=1, max_length=MAX_SQL_LENGTH)
+    limit: int = Field(default=500, ge=1, le=MAX_QUERY_LIMIT)
+    perspective: dict[str, Any]
+    model_id: str | None = None
+    blueprint_id: str | None = None
 
 
 class CatalogStore:
@@ -67,6 +78,7 @@ class DataWorkspace:
         self.initial_sql = initial_sql
         self.initial_limit = initial_limit
         self.initial_perspective = initial_perspective
+        self.analyses = AnalysisStore()
         self._query_slot = BoundedSemaphore(value=1)
 
     def status(self) -> dict[str, Any]:
@@ -97,6 +109,24 @@ class DataWorkspace:
                 f"{table['layer']}.{table['table_name']}"
                 for table in table_payload["tables"]
             }
+            models = []
+            models_by_id = {}
+            for model in self.analyses.list_models():
+                entry = model_payload(model)
+                missing = sorted(set(model.tables) - table_refs)
+                entry["available"] = not missing
+                entry["missing_tables"] = missing
+                models.append(entry)
+                models_by_id[model.model_id] = entry
+            blueprints = []
+            for blueprint in self.analyses.list_blueprints():
+                entry = blueprint_payload(blueprint)
+                model = models_by_id[blueprint.model_id]
+                entry["available"] = model["available"]
+                entry["missing_tables"] = model["missing_tables"]
+                entry["sql"] = model["sql"]
+                entry["default_limit"] = model["default_limit"]
+                blueprints.append(entry)
             views = []
             for blueprint in TERMINAL_VIEWS:
                 entry = blueprint.as_dict()
@@ -117,6 +147,8 @@ class DataWorkspace:
                 "tables": table_payload["tables"],
                 "queries": queries,
                 "views": views,
+                "models": models,
+                "blueprints": blueprints,
                 "launch": _launch_payload(
                     initial_view=self.initial_view,
                     initial_query=self.initial_query,
@@ -126,6 +158,35 @@ class DataWorkspace:
                 ),
                 "limits": {"default": 500, "maximum": MAX_QUERY_LIMIT},
             }
+
+        @app.post("/api/data/analyses")
+        def save_analysis(request: AnalysisSave) -> dict[str, Any]:
+            catalog = self.catalogs.current()
+            try:
+                catalog.query_arrow(request.sql, limit=1)
+                model, blueprint = self.analyses.save_analysis(
+                    title=request.title,
+                    description=request.description,
+                    sql=request.sql,
+                    default_limit=request.limit,
+                    perspective=request.perspective,
+                    model_id=request.model_id,
+                    blueprint_id=request.blueprint_id,
+                )
+            except (FileNotFoundError, ValueError) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return {
+                "model": model_payload(model),
+                "blueprint": blueprint_payload(blueprint),
+            }
+
+        @app.delete("/api/data/blueprints/{blueprint_id}", status_code=204)
+        def delete_blueprint(blueprint_id: str) -> Response:
+            try:
+                self.analyses.delete_blueprint(blueprint_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return Response(status_code=204)
 
         @app.get("/api/data/tables/{layer}/{table_name}")
         def describe_table(layer: str, table_name: str) -> dict[str, Any]:

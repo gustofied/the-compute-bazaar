@@ -137,7 +137,6 @@ function showOptions(title, options) {
 function normalizedInput(value) {
   return value
     .trim()
-    .replace(/^compute-bazaar(?:\s+terminal)?(?:\s+|$)/i, "")
     .replace(/^\//, "")
     .trim()
     .toLowerCase();

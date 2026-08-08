@@ -12,7 +12,6 @@ from .prices.gold_sources import SilverOfferSource, silver_source_select
 from .prices.query_catalog import (
     bounded_query_limit,
     validate_catalog_sql,
-    with_scratch_limit,
 )
 from .prices.silver_contract import silver_contract, silver_market_state_select
 
@@ -88,7 +87,7 @@ order by ordinal_position
         """Run one bounded read-only statement and return an Arrow table."""
         selected_limit = bounded_query_limit(limit)
         statement = validate_catalog_sql(sql)
-        table = self.engine.query_arrow(with_scratch_limit(statement, selected_limit))
+        table = self.engine.query_arrow(statement, limit=selected_limit)
         return table, selected_limit
 
     def run(self) -> dict[str, Any]:
