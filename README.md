@@ -23,20 +23,6 @@ analysis or inspect the underlying files directly, such as contracts, deals, or
 whatever else needs source evidence. This matters because compute markets are
 not just quantitative, but qualitative too.
 
-`Windmill` orchestrates the hourly provider runs.
-
-`AutoMQ` carries the live observations as a Kafka-compatible event stream.
-
-`S3` stores raw Bronze evidence, normalized Silver data, and Gold market models.
-
-`CloudFront` serves the sanitized public lake through `bazaar.adamsioud.com`.
-
-`DataFusion` runs SQL directly over the Parquet lake using Apache Arrow.
-
-`Perspective` turns Arrow query results into interactive tables and charts.
-
-`CLI / Terminal` give humans and machines access to the same query engine.
-
 ## Setup
 
 Install the project and sync the hourly updated public market lake.
