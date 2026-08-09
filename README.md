@@ -54,7 +54,7 @@ compute-bazaar describe silver.gpu_offers
 compute-bazaar describe gold.fact_gpu_price_index
 ```
 
-Run a market command or write SQL directly.
+Run a built-in market query or write SQL directly.
 
 ```bash
 compute-bazaar availability --gpu-model H100 --history --limit 20
