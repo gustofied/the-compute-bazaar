@@ -2,9 +2,11 @@
   <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440">
 </p>
 
-### The ultimate tool for analysing compute markets
+<h3 align="center">The Compute Bazaar</h3>
 
-[Terminal](#terminal) • Data • Eval • Fleet • Trade
+<p align="center">
+  <a href="#terminal">Terminal</a> • Data • Eval • Fleet • Trade
+</p>
 
 My vision is to build The Compute Bazaar as much for humans as for
 machine-to-machine work.
