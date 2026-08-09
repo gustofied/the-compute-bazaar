@@ -2,6 +2,17 @@
   <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440">
 </p>
 
+## Architecture
+
+Windmill runs hourly ingestion and publishes live observations to AutoMQ. S3
+stores Bronze evidence, normalized Silver offers, and Gold market models.
+DataFusion queries the lake; the CLI and Terminal expose the same query engine,
+while Perspective renders results.
+
+The lake remains object storage, so agents can use SQL for analysis or inspect
+the underlying files directly, including provider evidence today and contracts
+or deals later.
+
 ## Setup
 
 Install the project and sync the hourly updated public market lake.
@@ -24,9 +35,9 @@ compute-bazaar availability --gpu-model H100 --history --limit 20
 compute-bazaar sql "select provider, gpu_model, price_usd_gpu_hr from silver.gpu_offers order by price_usd_gpu_hr limit 20"
 ```
 
-The main tables are `silver.gpu_offers`, `gold.fact_gpu_price_index`, and
-`gold.fact_gpu_availability`. Inspect the catalog with `compute-bazaar tables`
-and `compute-bazaar describe gold.fact_gpu_price_index`.
+The lake contains normalized offers, GPU price indexes, and availability
+history. Browse it with `compute-bazaar tables` and inspect any table with
+`compute-bazaar describe TABLE`.
 
 ## Analyses
 
