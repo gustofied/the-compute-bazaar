@@ -9,24 +9,19 @@ The benchmark brings together two complementary styles of environments:
 Using [Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark) gives this family of evaluations methodological grounding. Instead of inventing benchmark tasks from scratch, we start with task forms that already represent real professional work and test whether they transfer meaningfully into compute transactions.
 
 [Epilogue](https://epilogue.inc/) and
-[ComputeDesk](https://www.compute-desk.com/) motivate the broader
-[transactions](evals/transactions/README.md) domain. The first three evaluations
-focus on three pieces of professional work within it: normalizing a buyer
-mandate, planning the population of a capacity data room, and comparing a
-capacity agreement against its term sheet.
+[ComputeDesk](https://www.compute-desk.com/) motivate the broader transaction
+domain.
 
-Their synthetic matters use intake forms, messages, technical requirements,
-diligence requests, evidence registers, precedent data-room indexes, term
-sheets, draft agreements, and review checklists. Each task contains controlled
-conflicts, omissions, or deviations and produces a reviewable deliverable graded
-against explicit criteria.
+[**transactions**](evals/transactions/README.md) evaluates professional work
+that moves an OTC or reserved-compute transaction from initial intent toward
+executable paper.
 
 ### Game-Like Environments
 
 Game-like environments place agents inside changing compute-market processes,
 including compute procurement, brokerage, matching, and negotiation. They are
 more alive and interactive than closed professional-work evaluations, and their
-stateful structure makes them more adaptable for repeated rollouts and training.
+stateful structure makes them more adaptable for training.
 The first implemented environment is
 [`reliability-is-blind`](evals/reliability-is-blind/README.md).
 
@@ -60,9 +55,6 @@ inside the same localhost terminal process.
 ## Evaluations
 
 ### [transactions](evals/transactions/README.md)
-
-`transactions` evaluates professional work that moves an OTC or
-reserved-compute transaction from initial intent toward executable paper.
 
 Its first three planned tasks move through intake, diligence, and contracting:
 
