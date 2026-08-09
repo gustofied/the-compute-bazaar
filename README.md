@@ -90,9 +90,9 @@ compute-bazaar terminal
 ```
 
 The Terminal opens with Data, Eval, and Trade. Data is where DataFusion queries
-Silver and Gold market data and Perspective turns the results into tables and
-charts. Eval contains agent evaluation tasks, jobs, and trials powered by
-Harbor. Trade is in the works.
+market data and [Perspective](https://perspective-dev.github.io) turns the
+results into tables and charts. Eval contains agent evaluation tasks, jobs, and
+trials powered by Harbor. Trade is in the works.
 
 Data can open a saved query or custom SQL as an interactive table or chart.
 `--terminal` sends the result to the running Terminal without reopening it.
@@ -101,8 +101,13 @@ Data can open a saved query or custom SQL as an interactive table or chart.
 compute-bazaar query gpu_price_index_history --terminal
 
 compute-bazaar sql "
-select observed_at, gpu, price_usd_gpu_hr
+select
+  gold_observed_at as observed_at,
+  benchmark_family_id as gpu,
+  benchmark_usd_gpu_hr as price_usd_gpu_hr
 from gold.fact_gpu_price_index_history
+where benchmark_family_id in ('H100', 'H200', 'B200', 'B300')
+order by observed_at, gpu
 " --terminal --chart line --x observed_at --series gpu --y price_usd_gpu_hr
 ```
 
