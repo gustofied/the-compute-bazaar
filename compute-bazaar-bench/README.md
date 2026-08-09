@@ -2,15 +2,17 @@
 
 A benchmark for agents working in compute markets.
 
+> hey, i mix eval/evaluation/task/env, they are the same thing btw
+
 The benchmark brings together two complementary styles of environments:
 
 ### Harvey-Style Professional Work
 
 Using [Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark) gives this family of evaluations methodological grounding. Instead of inventing benchmark tasks from scratch, we start with task forms that already represent real professional work and test whether they transfer meaningfully into compute transactions.
 
-[Epilogue](https://epilogue.inc/) and
-[ComputeDesk](https://www.compute-desk.com/) motivate the broader transaction
-domain.
+The deals and commentary from [Epilogue](https://epilogue.inc/) and
+[ComputeDesk](https://www.compute-desk.com/) around compute desks and deal flow
+motivate the work here, especially their interest in involving agents.
 
 [**transactions**](evals/transactions/README.md) evaluates professional work
 that moves an OTC or reserved-compute transaction from initial intent toward
@@ -25,7 +27,10 @@ stateful structure makes them more adaptable for training.
 The first implemented environment is
 [`reliability-is-blind`](evals/reliability-is-blind/README.md).
 
-## Structure
+## Setup
+
+For the most part, the benchmark follows Harbor's task and evaluation
+methodology.
 
 ```text
 compute-bazaar-bench/
@@ -33,24 +38,21 @@ compute-bazaar-bench/
 |-- evals/
 |   |-- reliability-is-blind/
 |   `-- transactions/
-|-- viewer/                       private evaluation viewer
-`-- jobs/                         local only
-    |-- raw/                      Harbor jobs
-    `-- reports/                  normalized evaluation reports
+|-- viewer/
+`-- jobs/
+    |-- raw/
+    `-- reports/
 ```
 
-Task source and benchmark metadata are versioned. Generated jobs, reports, and
-private evaluator material remain local.
-
-Open the terminal and choose **Eval**:
+Open the terminal:
 
 ```bash
+uv sync --extra terminal
+pnpm --dir terminal install
+source .venv/bin/activate
+compute-bazaar data sync
 compute-bazaar terminal
 ```
-
-Eval keeps the full task, job, agent, trial, note, and diagnostic presentation.
-It is separate from the DataFusion and Perspective **Data** workspace, but runs
-inside the same localhost terminal process.
 
 ## Evaluations
 
