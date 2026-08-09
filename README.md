@@ -85,16 +85,6 @@ Use another local or S3-backed lake with `--lake-root PATH`, or set
 `COMPUTE_BAZAAR_LAKE_ROOT`. Direct S3 access requires `uv sync --extra s3`;
 the public sync above does not need AWS credentials.
 
-## API
-
-```bash
-uv sync --extra api
-compute-bazaar api
-```
-
-FastAPI exposes optional typed reads. Scratch SQL remains local and
-operator-only.
-
 ## Terminal
 
 ```bash
