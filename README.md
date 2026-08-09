@@ -4,14 +4,14 @@
 
 ## Architecture
 
-Windmill runs hourly ingestion and publishes live observations to AutoMQ. S3
-stores Bronze evidence, normalized Silver offers, and Gold market models.
-DataFusion queries the lake; the CLI and Terminal expose the same query engine,
-while Perspective renders results.
+Windmill runs hourly ingestion and publishes these live observations through
+AutoMQ. S3 stores the Bronze evidence, normalized Silver offers, and Gold market
+models. DataFusion queries this lake; the CLI and Terminal expose the same query
+engine, while Perspective renders the results.
 
-The lake remains object storage, so agents can use SQL for analysis or inspect
-the underlying files directly, including provider evidence today and contracts
-or deals later.
+The lake is object storage. Agents can use SQL for analysis or inspect the
+underlying files directly, such as contracts, deals, or whatever else needs
+source evidence.
 
 ## Setup
 
