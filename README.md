@@ -2,10 +2,6 @@
   <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440">
 </p>
 
-<p align="center">
-  <img src="assets/compute-bazaar-terminal.png" alt="The Compute Bazaar Terminal" width="80%">
-</p>
-
 My vision is for The Compute Bazaar to become the ultimate tool for analysing
 compute markets, built as much for humans as for machine-to-machine work.
 
@@ -49,6 +45,10 @@ while `price-index` prints one example market view.
 `compute-bazaar --format json COMMAND` for machine-readable output.
 
 ## Terminal
+
+<p align="center">
+  <img src="assets/compute-bazaar-terminal.png" alt="The Compute Bazaar Terminal" width="80%">
+</p>
 
 The Terminal is where we look at data, evaluate agents, and eventually place
 trades.
