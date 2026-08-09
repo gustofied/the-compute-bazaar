@@ -23,6 +23,8 @@ analysis or inspect the underlying files directly, such as contracts, deals, or
 whatever else needs source evidence. This matters because compute markets are
 not just quantitative, but qualitative too.
 
+More detail: [Architecture](docs/architecture.md).
+
 ## Setup
 
 Install the project and sync the hourly updated public market lake.
@@ -76,12 +78,12 @@ limit 20
 The Terminal is where we look at data, evaluate agents, and eventually place
 trades.
 
-Let's start with Data, and how The Compute Bazaar enables creative analysis
-that can be stored, reused, shared, and used by agents. It works both ways:
-people can make analyses for agents, and agents can make analyses for people or
-other agents to use later. The same saved analysis can also run inside a
-pipeline, for example as a recurring market analysis whenever a new hourly
-observation arrives. The Compute Bazaar is extensible.
+Let's start with Data, and how The Compute Bazaar enables market models and
+views that can be stored, reused, shared, and used by agents. It works both
+ways: people can make models for agents, and agents can make models and views
+for people or other agents to use later. A model can also run inside a pipeline,
+for example whenever a new hourly observation arrives. The Compute Bazaar is
+extensible.
 
 ```bash
 uv sync --extra terminal
@@ -110,10 +112,9 @@ order by observed_at, gpu
 " --terminal --chart line --x observed_at --series gpu --y price_usd_gpu_hr
 ```
 
-A saved analysis has two parts: a model contains reusable DataFusion SQL, and a
-blueprint describes how Perspective displays the result. Terminal Save writes
-both under `analyses/`, where they can be rerun, shared, reviewed, or used by
-agents.
+A market model contains reusable DataFusion SQL. Its view describes how
+Perspective displays the result. Terminal Save writes both under `analyses/`,
+where they can be rerun, shared, reviewed, or used by agents.
 
 ```bash
 compute-bazaar model list
@@ -122,8 +123,8 @@ compute-bazaar blueprint open h200-under-4
 ```
 
 For anyone who wants to read the market, whether a quant, a broker, or someone
-looking in from the outside, being able to curate your own models and views is
-useful. The Compute Bazaar gives you that: write a query, save the model and
+looking in from the outside, being able to curate your own market models and
+views is useful. The Compute Bazaar gives you that: write the model, save its
 view, and run it again as new data comes in.
 
 Press `Cmd+K` inside the Terminal to run SQL, inspect tables, or move between
