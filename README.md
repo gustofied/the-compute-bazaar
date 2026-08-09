@@ -44,31 +44,7 @@ while `price-index` prints one example market view.
 `compute-bazaar` prints tables by default. Use
 `compute-bazaar --format json COMMAND` for machine-readable output.
 
-## Terminal
-
-<p align="center">
-  <img src="assets/compute-bazaar-terminal.png" alt="The Compute Bazaar Terminal" width="80%">
-</p>
-
-The Terminal is where we look at data, evaluate agents, and eventually place
-trades.
-
-Let's start with Data, and how The Compute Bazaar enables creative analysis
-that can be stored, reused, shared, and used by agents. It works both ways:
-people can make analyses for agents, and agents can make analyses for people or
-other agents to use later. The same saved analysis can also run inside a
-pipeline, for example as a recurring market analysis whenever a new hourly
-observation arrives. The Compute Bazaar is extensible.
-
-```bash
-uv sync --extra api
-pnpm --dir terminal install
-compute-bazaar terminal
-```
-
-The Terminal opens with Data, Eval, and Trade. Data is the DataFusion and
-Perspective workspace for Silver and Gold. Eval contains evaluation tasks,
-jobs, and trials. Trade is locked until the execution system exists.
+## Query
 
 Start by listing the DataFusion catalog and inspecting a table.
 
@@ -90,6 +66,32 @@ order by price_usd_gpu_hr
 limit 20
 "
 ```
+
+## Terminal
+
+<p align="center">
+  <img src="assets/compute-bazaar-terminal.png" alt="The Compute Bazaar Terminal" width="80%">
+</p>
+
+The Terminal is where we look at data, evaluate agents, and eventually place
+trades.
+
+Let's start with Data, and how The Compute Bazaar enables creative analysis
+that can be stored, reused, shared, and used by agents. It works both ways:
+people can make analyses for agents, and agents can make analyses for people or
+other agents to use later. The same saved analysis can also run inside a
+pipeline, for example as a recurring market analysis whenever a new hourly
+observation arrives. The Compute Bazaar is extensible.
+
+```bash
+uv sync --extra terminal
+pnpm --dir terminal install
+compute-bazaar terminal
+```
+
+The Terminal opens with Data, Eval, and Trade. Data is the DataFusion and
+Perspective workspace for Silver and Gold. Eval contains evaluation tasks,
+jobs, and trials. Trade is locked until the execution system exists.
 
 Open a saved query in the Terminal or send custom SQL directly into a chart.
 

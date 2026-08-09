@@ -569,7 +569,7 @@ def serve_api(
 
         from .api import create_app
     except ImportError as exc:
-        raise typer.BadParameter("The API requires: uv sync --extra api") from exc
+        raise typer.BadParameter("The API requires: uv sync --extra terminal") from exc
 
     uvicorn.run(
         create_app(
