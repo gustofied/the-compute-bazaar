@@ -89,11 +89,12 @@ pnpm --dir terminal install
 compute-bazaar terminal
 ```
 
-The Terminal opens with Data, Eval, and Trade. Data is the DataFusion and
-Perspective workspace for Silver and Gold. Eval contains evaluation tasks,
-jobs, and trials. Trade is locked until the execution system exists.
+The Terminal opens with Data, Eval, and Trade. Data is where DataFusion queries
+Silver and Gold market data and Perspective turns the results into tables and
+charts. Eval contains agent evaluation tasks, jobs, and trials powered by
+Harbor. Trade is in the works.
 
-Open a saved query in the Terminal or send custom SQL directly into a chart.
+Data can open a saved query or custom SQL as an interactive table or chart.
 
 ```bash
 compute-bazaar query gpu_price_index_history --terminal
