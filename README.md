@@ -4,14 +4,21 @@
 
 ## Architecture
 
-Windmill runs hourly ingestion and publishes these live observations through
-AutoMQ. S3 stores the Bronze evidence, normalized Silver offers, and Gold market
-models. DataFusion queries this lake; the CLI and Terminal expose the same query
-engine, while Perspective renders the results.
+To orchestrate everything I use Windmill, which runs hourly ingestion and
+publishes the live data through AutoMQ, a Kafka-compatible event stream. I use
+S3 for storage: a Bronze layer for raw data, a Silver layer for normalized data
+ready for analysis, and Gold models for things such as GPU price indexes and
+availability.
 
-The lake is object storage. Agents can use SQL for analysis or inspect the
-underlying files directly, such as contracts, deals, or whatever else needs
-source evidence.
+This data can be queried with DataFusion, an SQL query engine built on Apache
+Arrow. Perspective also accepts Arrow data, so I am currently exploring it to
+visualize the query results. All of this can be used through the CLI and
+Terminal.
+
+The idea behind the lake being object storage is that agents can use SQL for
+analysis or inspect the underlying files directly, such as contracts, deals, or
+whatever else needs source evidence. This matters because compute markets are
+not just quantitative, but qualitative too.
 
 ## Setup
 
