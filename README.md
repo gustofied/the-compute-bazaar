@@ -46,14 +46,30 @@ while `price-index` prints one example market view.
 
 ## Query
 
+Start by listing the DataFusion catalog and inspecting a table.
+
 ```bash
-compute-bazaar availability --gpu-model H100 --history --limit 20
-compute-bazaar sql "select provider, gpu_model, price_usd_gpu_hr from silver.gpu_offers order by price_usd_gpu_hr limit 20"
+compute-bazaar tables
+compute-bazaar describe silver.gpu_offers
+compute-bazaar describe gold.fact_gpu_price_index
 ```
 
-The lake contains normalized offers, GPU price indexes, and availability
-history. Browse it with `compute-bazaar tables` and inspect any table with
-`compute-bazaar describe TABLE`.
+Run a market command or write SQL directly.
+
+```bash
+compute-bazaar availability --gpu-model H100 --history --limit 20
+
+compute-bazaar sql "
+select provider, gpu_model, price_usd_gpu_hr
+from silver.gpu_offers
+order by price_usd_gpu_hr
+limit 20
+"
+```
+
+Silver contains normalized market observations. Gold contains price indexes,
+availability, and other market models. Table names include their layer:
+`silver.TABLE` or `gold.TABLE`.
 
 ## Analyses
 
