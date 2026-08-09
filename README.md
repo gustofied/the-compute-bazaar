@@ -121,6 +121,11 @@ compute-bazaar model run h200-under-4
 compute-bazaar blueprint open h200-under-4
 ```
 
+For anyone who wants to read the market, whether a quant, a broker, or someone
+looking in from the outside, being able to curate your own models and views is
+useful. The Compute Bazaar gives you that: write a query, save the model and
+view, and run it again as new data comes in.
+
 Press `Cmd+K` inside the Terminal to run SQL, inspect tables, or move between
 Data and Eval. Stop the Terminal with:
 
