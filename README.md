@@ -4,8 +4,7 @@
 
 ## Setup
 
-Install the project and download the public market lake. No cloud credentials
-are needed.
+Install the project and sync the hourly updated public market lake.
 
 ```bash
 uv sync
@@ -15,12 +14,8 @@ compute-bazaar data status
 compute-bazaar price-index
 ```
 
-`compute-bazaar` prints tables in a terminal. Use
-`compute-bazaar --format json COMMAND` for programs.
-
-The CLI verifies and caches the latest sanitized Silver tables and complete
-published Gold history for local DataFusion queries. Later runs use that copy.
-Set `COMPUTE_BAZAAR_DATA_HOME` to choose its cache location.
+`compute-bazaar` prints tables by default. Use
+`compute-bazaar --format json COMMAND` for machine-readable output.
 
 ## Query
 

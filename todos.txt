@@ -1,0 +1,6 @@
+CLI output format
+
+Add COMPUTE_BAZAAR_FORMAT with this precedence:
+1. --format flag
+2. COMPUTE_BAZAAR_FORMAT environment variable
+3. table default
