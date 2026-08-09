@@ -1,5 +1,7 @@
 # compute-bazaar-bench
 
+[Harbor dataset](https://hub.harborframework.com/datasets/gustofied/compute-bazaar-bench)
+
 A benchmark for agents working in compute markets.
 
 > hey, i mix eval/evaluation/task/env, they are the same thing btw
@@ -67,7 +69,7 @@ You can also run Harbor directly from any shell.
 
 ### [transactions](evals/transactions/README.md)
 
-Its first three planned tasks move through intake, diligence, and contracting:
+Its first three tasks move through intake, diligence, and contracting:
 
 ```text
 messy intent -> organized evidence process -> controlled transaction paper
