@@ -2,6 +2,10 @@
   <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440">
 </p>
 
+<p align="center">
+  <img src="assets/compute-bazaar-terminal.png" alt="The Compute Bazaar Terminal" width="80%">
+</p>
+
 My vision is for The Compute Bazaar to become the ultimate tool for analysing
 compute markets, built as much for humans as for machine-to-machine work.
 
