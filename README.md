@@ -44,7 +44,27 @@ while `price-index` prints one example market view.
 `compute-bazaar` prints tables by default. Use
 `compute-bazaar --format json COMMAND` for machine-readable output.
 
-## Query
+## Terminal
+
+The Terminal is where we look at data, evaluate agents, and eventually place
+trades.
+
+Let's start with Data, and how The Compute Bazaar enables creative analysis
+that can be stored, reused, shared, and used by agents. It works both ways:
+people can make analyses for agents, and agents can make analyses for people or
+other agents to use later. The same saved analysis can also run inside a
+pipeline, for example as a recurring market analysis whenever a new hourly
+observation arrives. The Compute Bazaar is extensible.
+
+```bash
+uv sync --extra api
+pnpm --dir terminal install
+compute-bazaar terminal
+```
+
+The Terminal opens with Data, Eval, and Trade. Data is the DataFusion and
+Perspective workspace for Silver and Gold. Eval contains evaluation tasks,
+jobs, and trials. Trade is locked until the execution system exists.
 
 Start by listing the DataFusion catalog and inspecting a table.
 
@@ -67,53 +87,30 @@ limit 20
 "
 ```
 
-## Analyses
+Open a saved query in the Terminal or send custom SQL directly into a chart.
 
-Reusable read-only SQL models live in `analyses/models`; Perspective blueprints
-in `analyses/blueprints` reference those models.
+```bash
+compute-bazaar query gpu_price_index_history --terminal
+
+compute-bazaar sql "
+select observed_at, gpu, price_usd_gpu_hr
+from gold.fact_gpu_price_index_history
+" --terminal --chart line --x observed_at --series gpu --y price_usd_gpu_hr
+```
+
+When an analysis is worth keeping, save its SQL as a model and its Perspective
+layout as a blueprint. Both remain normal repository files under `analyses/`.
+The Terminal Save action writes them together.
 
 ```bash
 compute-bazaar model list
-compute-bazaar model run h200-under-4
+compute-bazaar model run h200-under-4 --terminal
 compute-bazaar blueprint open h200-under-4
 ```
 
-Save a model from a SQL file with `compute-bazaar model save ID --file query.sql`.
-The Terminal Save action writes both the model and its current blueprint.
-
-Use another local or S3-backed lake with `--lake-root PATH`, or set
-`COMPUTE_BAZAAR_LAKE_ROOT`. Direct S3 access requires `uv sync --extra s3`;
-the public sync above does not need AWS credentials.
-
-## Terminal
+Press `Cmd+K` inside the Terminal to run SQL, inspect tables, or move between
+Data and Eval. Stop the Terminal with:
 
 ```bash
-uv sync --extra api
-pnpm --dir terminal install
-compute-bazaar terminal
 compute-bazaar terminal --stop
-compute-bazaar query gpu_price_index_history --terminal
-compute-bazaar sql "select * from gold.fact_gpu_price_index" --terminal
 ```
-
-`compute-bazaar terminal` opens a main menu:
-
-- **Data** opens the DataFusion and Perspective workspace for Silver and Gold.
-- **Eval** opens the full private evaluation viewer for tasks, jobs, trials, and notes.
-- **Trade** is visible but locked until the execution system exists.
-
-The command starts the local backend, opens the repo-owned Tauri window, and
-returns the shell prompt. Use `compute-bazaar terminal --foreground --open` for
-browser development.
-Press `Cmd+K` in any workspace to run read-only SQL or commands such as `data`,
-`eval`, `tables`, `view gpu-index-history`, and `describe gold.fact_gpu_price_index`.
-
-Custom SQL can open directly as a chart:
-
-```bash
-compute-bazaar sql "select observed_at, gpu, price_usd_gpu_hr from gold.fact_gpu_price_index_history" --terminal --chart line --x observed_at --series gpu --y price_usd_gpu_hr
-```
-
-DataFusion runs every Data query and Perspective renders the Arrow result.
-Saved analyses keep SQL and layout as reviewable repository files. Evaluation
-reports remain in their purpose-built viewer. The server listens on localhost only.
