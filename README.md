@@ -2,8 +2,12 @@
   <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440">
 </p>
 
-My vision is for The Compute Bazaar to become the ultimate tool for analysing
-compute markets, built as much for humans as for machine-to-machine work.
+### The ultimate tool for analysing compute markets
+
+[Terminal](#terminal) • Data • Eval • Fleet • Trade
+
+My vision is to build The Compute Bazaar as much for humans as for
+machine-to-machine work.
 
 ## Architecture
 
