@@ -95,7 +95,6 @@ results into tables and charts. Eval contains agent evaluation tasks, jobs, and
 trials powered by Harbor. Trade is in the works.
 
 Data can open a saved query or custom SQL as an interactive table or chart.
-`--terminal` sends the result to the running Terminal without reopening it.
 
 ```bash
 compute-bazaar query gpu_price_index_history --terminal
@@ -111,13 +110,14 @@ order by observed_at, gpu
 " --terminal --chart line --x observed_at --series gpu --y price_usd_gpu_hr
 ```
 
-When an analysis is worth keeping, save its SQL as a model and its Perspective
-layout as a blueprint. Both remain normal repository files under `analyses/`.
-The Terminal Save action writes them together.
+A saved analysis has two parts: a model contains reusable DataFusion SQL, and a
+blueprint describes how Perspective displays the result. Terminal Save writes
+both under `analyses/`, where they can be rerun, shared, reviewed, or used by
+agents.
 
 ```bash
 compute-bazaar model list
-compute-bazaar model run h200-under-4 --terminal
+compute-bazaar model run h200-under-4
 compute-bazaar blueprint open h200-under-4
 ```
 
