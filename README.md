@@ -67,10 +67,6 @@ limit 20
 "
 ```
 
-Silver contains normalized market observations. Gold contains price indexes,
-availability, and other market models. Table names include their layer:
-`silver.TABLE` or `gold.TABLE`.
-
 ## Analyses
 
 Reusable read-only SQL models live in `analyses/models`; Perspective blueprints
