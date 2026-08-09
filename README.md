@@ -2,13 +2,16 @@
   <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440">
 </p>
 
+My vision is for The Compute Bazaar to become the ultimate tool for analysing
+compute markets, built as much for humans as for machine-to-machine work.
+
 ## Architecture
 
-To orchestrate everything I use Windmill, which runs hourly ingestion and
-publishes the live data through AutoMQ, a Kafka-compatible event stream. I use
-S3 for storage: a Bronze layer for raw data, a Silver layer for normalized data
-ready for analysis, and Gold models for things such as GPU price indexes and
-availability.
+I use Windmill to orchestrate the hourly data pipeline. It runs ingestion every
+hour and publishes the live data through AutoMQ, a Kafka-compatible event
+stream. I use S3 for storage: a Bronze layer for raw data, a Silver layer for
+normalized data ready for analysis, and Gold models for things such as GPU price
+indexes and availability.
 
 This data can be queried with DataFusion, an SQL query engine built on Apache
 Arrow. Perspective also accepts Arrow data, so I am currently exploring it to
@@ -25,6 +28,8 @@ not just quantitative, but qualitative too.
 Install the project and sync the hourly updated public market lake.
 
 ```bash
+git clone https://github.com/gustofied/the-compute-bazaar.git
+cd the-compute-bazaar
 uv sync
 source .venv/bin/activate
 compute-bazaar data sync
