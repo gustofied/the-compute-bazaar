@@ -23,17 +23,6 @@ analyze      -> draft                      -> review
 The initial tasks are methodological adaptations, not legal tasks with a few
 nouns replaced. Each one should preserve the source task's document roles,
 instruction shape, deliverable, planted-issue structure, and rubric granularity
-while introducing an original synthetic compute matter.
-
-The source tasks should be pulled from
-[Harvey LAB](https://github.com/harveyai/harvey-labs) at a pinned commit. The
-[Harbor conversion](https://hub.harborframework.com/datasets/punitarani/harvey-labs/latest)
-is the packaging and RewardKit reference. Upstream changes should be adopted
-deliberately through versioned updates rather than synchronized automatically.
-
-## Later Direction
-
-These tasks freeze one transaction at three useful points. Later environments
-can make the same deal state interactive: counterparties reply, terms move,
-evidence arrives, inventory changes, and the agent must decide whether to ask,
-update, escalate, negotiate, pause, or walk away.
+while introducing an original synthetic compute matter. This synthetic matter
+is inspired by the likes of ComputeDesk and Epilogue, as well as my reading and
+understanding of compute deals.
