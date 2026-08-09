@@ -6,22 +6,22 @@ The benchmark brings together two complementary styles of environments:
 
 ### Harvey-Style Professional Work
 
-The benchmark takes methodological inspiration from
-[Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark).
-Rather than inventing arbitrary benchmark forms, it starts from tasks that
-already represent real professional work and tests whether those forms transfer
-meaningfully into compute markets.
+Using
+[Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark)
+gives this track methodological grounding. Instead of inventing benchmark tasks
+from scratch, we start with task forms that already represent real professional
+work and test whether they transfer meaningfully into compute transactions.
 
-The market motivation comes from the opaque deal flow around
-[Epilogue](https://epilogue.inc/),
-[ComputeDesk](https://www.compute-desk.com/), and
-[live compute inventory](https://www.computedesk.live/): bespoke opportunities,
-fragmented communications, technical and commercial diligence, and controlling
-terms that must survive a transaction's movement from conversation to paper.
+[Epilogue](https://epilogue.inc/) and
+[ComputeDesk](https://www.compute-desk.com/) motivate the transaction domain:
+private buyer mandates, supplier offers, technical evidence, diligence
+requests, term sheets, and capacity agreements assembled across messages,
+spreadsheets, and data rooms.
+[Live compute inventory](https://www.computedesk.live/) is one input into those
+transactions.
 
-This gives `compute-bazaar-bench` a recognizable methodological lineage while
-leaving the compute documents, risks, calculations, and professional standards
-to be developed from the domain itself.
+For the benchmark, these materials become closed synthetic matters with planted
+conflicts, missing evidence, reviewable deliverables, and explicit rubrics.
 
 ### Game-Like Environments
 
