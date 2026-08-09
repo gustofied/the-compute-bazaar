@@ -1,10 +1,6 @@
 <p align="center">
-  <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440">
-</p>
-
-<h3 align="center">The Compute Bazaar</h3>
-
-<p align="center">
+  <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440"><br>
+  <strong>The Compute Bazaar</strong><br>
   <a href="#terminal">Terminal</a> • Data • Eval • Fleet • Trade
 </p>
 
