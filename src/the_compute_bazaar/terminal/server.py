@@ -7,11 +7,13 @@ import os
 import secrets
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from .commands import (
     TerminalAction,
@@ -25,7 +27,9 @@ from .shell import TerminalShell, TerminalShellError
 
 
 ASSET_ROOT = Path(__file__).with_name("static")
-WORDMARK_PATH = Path(__file__).resolve().parents[3] / "assets" / "compute-bazaar-wordmark.png"
+WORDMARK_PATH = (
+    Path(__file__).resolve().parents[3] / "assets" / "compute-bazaar-wordmark.png"
+)
 STRICT_CSP = "; ".join(
     (
         "default-src 'self'",
@@ -45,6 +49,31 @@ EVAL_CSP = STRICT_CSP.replace(
     "script-src 'self' blob: 'unsafe-inline' 'wasm-unsafe-eval'",
 )
 NATIVE_SESSION_COOKIE = "compute_bazaar_terminal_session"
+
+
+class TerminalOpenRequest(BaseModel):
+    action: TerminalAction
+
+
+class TerminalLaunchMailbox:
+    """Retain the latest local CLI handoff for the open Terminal window."""
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._latest: dict[str, Any] | None = None
+
+    def publish(self, action: TerminalAction) -> dict[str, Any]:
+        launch = {
+            "launch_id": secrets.token_urlsafe(12),
+            "action": action.model_dump(exclude_none=True),
+        }
+        with self._lock:
+            self._latest = launch
+        return launch
+
+    def latest(self) -> dict[str, Any] | None:
+        with self._lock:
+            return dict(self._latest) if self._latest else None
 
 
 def create_terminal_app(
@@ -69,11 +98,11 @@ def create_terminal_app(
     )
     eval_workspace = EvalWorkspace.load(evaluation_root)
     native_token = os.getenv("COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN")
+    control_token = os.getenv("COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN")
     native_session = secrets.token_urlsafe(32) if native_token else None
-    project_root = Path(
-        os.getenv("COMPUTE_BAZAAR_PROJECT_ROOT", Path.cwd())
-    ).resolve()
+    project_root = Path(os.getenv("COMPUTE_BAZAAR_PROJECT_ROOT", Path.cwd())).resolve()
     shell = TerminalShell(cwd=project_root) if native_token else None
+    launch_mailbox = TerminalLaunchMailbox()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -92,6 +121,7 @@ def create_terminal_app(
     app.state.data_workspace = data_workspace
     app.state.eval_workspace = eval_workspace
     app.state.shell = shell
+    app.state.launch_mailbox = launch_mailbox
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next: Any) -> Response:
@@ -159,7 +189,9 @@ def create_terminal_app(
         if not _same_http_origin(request) or not _valid_native_session(
             request.headers.get("x-compute-bazaar-session"), native_token
         ):
-            raise HTTPException(status_code=403, detail="Native Terminal session required")
+            raise HTTPException(
+                status_code=403, detail="Native Terminal session required"
+            )
         response = Response(status_code=204)
         assert native_session is not None
         response.set_cookie(
@@ -187,6 +219,29 @@ def create_terminal_app(
                 native_session,
             ),
         )
+
+    @app.get("/api/terminal/open")
+    def pending_open() -> dict[str, Any]:
+        return {
+            "contract": "compute-bazaar.terminal.open.v1",
+            "launch": launch_mailbox.latest(),
+        }
+
+    @app.post("/api/terminal/open", status_code=202)
+    def open_in_terminal(
+        payload: TerminalOpenRequest,
+        request: Request,
+    ) -> dict[str, Any]:
+        if not _valid_native_session(
+            request.headers.get("x-compute-bazaar-control"), control_token
+        ):
+            raise HTTPException(status_code=403, detail="Terminal control rejected")
+        if payload.action.kind not in {"query", "view", "sql"}:
+            raise HTTPException(status_code=400, detail="Unsupported Terminal launch")
+        return {
+            "contract": "compute-bazaar.terminal.open.v1",
+            "launch": launch_mailbox.publish(payload.action),
+        }
 
     @app.websocket("/api/terminal/shell")
     async def terminal_shell(websocket: WebSocket) -> None:
@@ -227,11 +282,7 @@ def create_terminal_app(
 
 
 def _valid_native_session(candidate: str | None, expected: str | None) -> bool:
-    return bool(
-        candidate
-        and expected
-        and secrets.compare_digest(candidate, expected)
-    )
+    return bool(candidate and expected and secrets.compare_digest(candidate, expected))
 
 
 def _same_origin(websocket: WebSocket) -> bool:

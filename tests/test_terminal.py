@@ -11,6 +11,7 @@ from the_compute_bazaar.terminal.commands import (
     SqlAction,
     resolve_command,
 )
+from the_compute_bazaar.terminal.server import TerminalLaunchMailbox
 from the_compute_bazaar.terminal.shell import TerminalShell
 
 
@@ -30,6 +31,20 @@ class TerminalCommandTest(unittest.TestCase):
         )
 
         self.assertIsInstance(action, SqlAction)
+
+    def test_runtime_launch_mailbox_retains_one_typed_action(self) -> None:
+        mailbox = TerminalLaunchMailbox()
+        action = SqlAction(
+            sql="select * from gold.fact_gpu_price_index",
+            limit=20,
+            perspective={"plugin": "Y Line"},
+        )
+
+        published = mailbox.publish(action)
+
+        self.assertEqual(mailbox.latest(), published)
+        self.assertEqual(published["action"]["kind"], "sql")
+        self.assertEqual(published["action"]["perspective"], {"plugin": "Y Line"})
 
 
 class TerminalShellTest(unittest.TestCase):

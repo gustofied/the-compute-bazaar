@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated, Literal, TypeAlias
+from typing import Annotated, Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -81,6 +81,7 @@ class SqlAction(_Action):
     kind: Literal["sql"] = "sql"
     sql: str
     limit: int
+    perspective: dict[str, Any] | None = None
 
 
 class ShellAction(_Action):

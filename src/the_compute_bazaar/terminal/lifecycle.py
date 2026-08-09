@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import signal
 import subprocess
 import sys
@@ -14,7 +15,7 @@ from pathlib import Path
 from socket import AF_INET, SOCK_STREAM, socket
 from typing import Any
 from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 
 DEFAULT_EVALUATION_ROOT = Path("compute-bazaar-bench/jobs/reports")
@@ -43,15 +44,22 @@ def launch_terminal(
     """Open the native Terminal, falling back to its browser surface."""
     _terminal_runtime()
     existing = _read_state()
-    has_initial_state = any(
-        (initial_view, initial_query, initial_sql, initial_perspective)
+    launch_action = _launch_action(
+        initial_view=initial_view,
+        initial_query=initial_query,
+        initial_sql=initial_sql,
+        initial_limit=initial_limit,
+        initial_perspective=initial_perspective,
     )
     if existing and existing.get("mode") == "native":
         native_pid = existing.get("native_pid")
         native_healthy = _process_alive(native_pid) and bool(
             _terminal_health(existing.get("url"))
         )
-        if native_healthy and not has_initial_state:
+        if native_healthy:
+            if launch_action:
+                _open_in_existing_terminal(existing, launch_action)
+                return "Opened in the running Compute Bazaar Terminal."
             return "Compute Bazaar Terminal is already open."
         _terminate_process_group(existing.get("pid"))
         deadline = time.monotonic() + 5
@@ -85,6 +93,7 @@ def launch_terminal(
     ready_path = STATE_ROOT / "ready.json"
     ready_path.unlink(missing_ok=True)
     selected_port = _available_port(port)
+    control_token = secrets.token_urlsafe(32)
     environment = os.environ.copy()
     cargo_bin = Path.home() / ".cargo" / "bin"
     environment["PATH"] = os.pathsep.join((str(cargo_bin), environment.get("PATH", "")))
@@ -97,6 +106,7 @@ def launch_terminal(
             "COMPUTE_BAZAAR_TERMINAL_PORT": str(selected_port),
             "COMPUTE_BAZAAR_TERMINAL_READY_FILE": str(ready_path),
             "COMPUTE_BAZAAR_TERMINAL_INITIAL_LIMIT": str(initial_limit),
+            "COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN": control_token,
         }
     )
     if initial_view:
@@ -142,6 +152,7 @@ def launch_terminal(
         native_pid=int(ready["pid"]),
         url=str(ready["url"]),
         log_path=log_path,
+        control_token=control_token,
     )
     return "Compute Bazaar Terminal opened."
 
@@ -251,24 +262,26 @@ def _launch_browser_terminal(
     evaluation_root: Path,
 ) -> str:
     existing = _read_state()
-    has_initial_state = any(
-        (initial_view, initial_query, initial_sql, initial_perspective)
+    launch_action = _launch_action(
+        initial_view=initial_view,
+        initial_query=initial_query,
+        initial_sql=initial_sql,
+        initial_limit=initial_limit,
+        initial_perspective=initial_perspective,
     )
     if existing and _terminal_health(existing.get("url")) == existing.get("pid"):
-        if not has_initial_state:
+        if launch_action:
+            _open_in_existing_terminal(existing, launch_action)
+            return "Opened in the running Compute Bazaar Terminal."
+        else:
             from webbrowser import open as open_url
 
             open_url(str(existing["url"]))
             return f"Compute Bazaar Terminal is already open: {existing['url']}"
-        os.kill(int(existing["pid"]), signal.SIGTERM)
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline and _terminal_health(
-            existing.get("url")
-        ) == existing.get("pid"):
-            time.sleep(0.1)
     _state_path().unlink(missing_ok=True)
 
     selected_port = _available_port(port)
+    control_token = secrets.token_urlsafe(32)
     url = f"http://127.0.0.1:{selected_port}"
     browser_url = (
         f"{url}/data"
@@ -307,9 +320,12 @@ def _launch_browser_terminal(
 
     STATE_ROOT.mkdir(parents=True, exist_ok=True)
     log_path = STATE_ROOT / "terminal.log"
+    environment = os.environ.copy()
+    environment["COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN"] = control_token
     with log_path.open("wb") as output:
         process = subprocess.Popen(
             command,
+            env=environment,
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=subprocess.STDOUT,
@@ -333,6 +349,7 @@ def _launch_browser_terminal(
         native_pid=process.pid,
         url=url,
         log_path=log_path,
+        control_token=control_token,
     )
     from webbrowser import open as open_url
 
@@ -355,6 +372,7 @@ def _write_state(
     native_pid: int,
     url: str,
     log_path: Path,
+    control_token: str,
 ) -> None:
     payload = {
         "mode": mode,
@@ -362,10 +380,69 @@ def _write_state(
         "native_pid": native_pid,
         "url": url,
         "log": str(log_path),
+        "control_token": control_token,
     }
     temporary = _state_path().with_suffix(".tmp")
     temporary.write_text(json.dumps(payload), encoding="utf-8")
+    temporary.chmod(0o600)
     temporary.replace(_state_path())
+
+
+def _launch_action(
+    *,
+    initial_view: str | None,
+    initial_query: str | None,
+    initial_sql: str | None,
+    initial_limit: int,
+    initial_perspective: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if initial_sql:
+        return {
+            "kind": "sql",
+            "sql": initial_sql,
+            "limit": initial_limit,
+            "perspective": initial_perspective,
+        }
+    if initial_query:
+        return {
+            "kind": "query",
+            "query_id": initial_query,
+            "limit": initial_limit,
+        }
+    if initial_view:
+        return {"kind": "view", "view_id": initial_view}
+    return None
+
+
+def _open_in_existing_terminal(
+    state: dict[str, Any],
+    action: dict[str, Any],
+) -> None:
+    url = state.get("url")
+    control_token = state.get("control_token")
+    if not isinstance(url, str) or not isinstance(control_token, str):
+        raise TerminalLifecycleError(
+            "The running Terminal predates local command handoff. Stop and reopen it once."
+        )
+    request = Request(
+        f"{url}/api/terminal/open",
+        data=json.dumps({"action": action}).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "X-Compute-Bazaar-Control": control_token,
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=2) as response:
+            if response.status != 202:
+                raise TerminalLifecycleError(
+                    "The running Terminal rejected the command"
+                )
+    except (OSError, URLError, ValueError) as exc:
+        raise TerminalLifecycleError(
+            "Could not send the command to the running Terminal"
+        ) from exc
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:

@@ -95,6 +95,7 @@ charts. Eval contains agent evaluation tasks, jobs, and trials powered by
 Harbor. Trade is in the works.
 
 Data can open a saved query or custom SQL as an interactive table or chart.
+`--terminal` sends the result to the running Terminal without reopening it.
 
 ```bash
 compute-bazaar query gpu_price_index_history --terminal

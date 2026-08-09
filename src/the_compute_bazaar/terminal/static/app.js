@@ -641,7 +641,7 @@ async function handleTerminalAction(action) {
         return;
       }
       case "sql":
-        await selectScratch(action.sql, action.limit || 500);
+        await selectScratch(action.sql, action.limit || 500, action.perspective);
         return;
       default:
         throw new Error("This command is not available in Data.");

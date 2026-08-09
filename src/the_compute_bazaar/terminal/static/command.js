@@ -4,6 +4,7 @@ import "@xterm/xterm/css/xterm.css";
 
 const HISTORY_KEY = "compute-bazaar.terminal.command-history.v1";
 const PENDING_KEY = "compute-bazaar.terminal.pending-command.v1";
+const OPEN_KEY = "compute-bazaar.terminal.last-open.v1";
 const MAX_HISTORY = 50;
 
 const workspace = document.body.dataset.terminalWorkspace || inferWorkspace();
@@ -15,6 +16,8 @@ const state = {
   historyIndex: -1,
   draft: "",
   status: null,
+  openTimer: null,
+  opening: false,
   shell: {
     socket: null,
     terminal: null,
@@ -442,6 +445,31 @@ async function execute(action) {
   }
 }
 
+async function pollTerminalOpen() {
+  if (state.opening || document.visibilityState === "hidden") return;
+  state.opening = true;
+  try {
+    const response = await fetch("/api/terminal/open", { cache: "no-store" });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const launch = payload.contract === "compute-bazaar.terminal.open.v1" ? payload.launch : null;
+    if (!launch?.launch_id || !launch.action) return;
+    if (localStorage.getItem(OPEN_KEY) === launch.launch_id) return;
+    localStorage.setItem(OPEN_KEY, launch.launch_id);
+    window.focus();
+    await execute(launch.action);
+  } catch {
+    // The local process may be stopping or reloading.
+  } finally {
+    state.opening = false;
+  }
+}
+
+function watchTerminalOpen() {
+  void pollTerminalOpen();
+  state.openTimer = window.setInterval(pollTerminalOpen, 500);
+}
+
 async function submit() {
   const raw = elements.input.value.trim();
   if (!raw) {
@@ -535,7 +563,11 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !elements.shell.hidden) closeShell();
 });
 
-void loadTerminal().catch(() => {});
+void loadTerminal().then(watchTerminalOpen).catch(() => {});
+
+window.addEventListener("pagehide", () => {
+  if (state.openTimer) window.clearInterval(state.openTimer);
+});
 
 window.ComputeBazaarTerminal = {
   takePendingAction,
