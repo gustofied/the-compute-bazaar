@@ -2,6 +2,10 @@
 
 A benchmark for agents working in compute markets.
 
+The benchmark brings together two complementary styles of environments:
+
+### Harvey-Style Professional Work
+
 The benchmark takes methodological inspiration from
 [Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark).
 Rather than inventing arbitrary benchmark forms, it starts from tasks that
@@ -18,6 +22,12 @@ terms that must survive a transaction's movement from conversation to paper.
 This gives `compute-bazaar-bench` a recognizable methodological lineage while
 leaving the compute documents, risks, calculations, and professional standards
 to be developed from the domain itself.
+
+### Game-Like Environments
+
+Game-like environments test how agents behave, adapt, and make decisions as
+market state changes over time. The first implemented environment is
+[`reliability-is-blind`](evals/reliability-is-blind/README.md).
 
 ## Structure
 
