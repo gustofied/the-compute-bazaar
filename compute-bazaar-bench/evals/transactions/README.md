@@ -4,15 +4,6 @@
 reserved-compute transaction from initial intent toward executable paper.
 
 ```text
-compute-bazaar-bench/                 benchmark suite
-`-- evals/
-    `-- transactions/                 domain
-        |-- normalize-buyer-mandate/
-        |-- draft-capacity-data-room-population-plan/
-        `-- compare-capacity-agreement-against-term-sheet/
-```
-
-```text
 messy intent -> organized evidence process -> controlled transaction paper
 analyze      -> draft                      -> review
 ```
