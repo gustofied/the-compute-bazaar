@@ -37,6 +37,21 @@ VISUAL_RENDER_MARKERS = (
     "unoconv",
     "screenshot",
 )
+ARTIFACT_INFRA_MARKERS = (
+    "could not connect to the modal server",
+    "sandbox not found. please start the environment first",
+    "statuscode.unavailable",
+    "connectionerror",
+    "connecterror",
+    "connection reset",
+    "timed out while downloading",
+)
+MISSING_OUTPUT_MARKERS = (
+    "filenotfounderror",
+    "no such file or directory",
+    "source path does not exist",
+    "remote file does not exist",
+)
 
 
 class AnalysisError(RuntimeError):
@@ -137,7 +152,9 @@ def validate_lock(
 
     expected_count = protocol["attempts_per_task"]
     if counts != Counter({name: expected_count for name in tasks}):
-        raise AnalysisError(f"task attempt counts do not match protocol: {dict(counts)}")
+        raise AnalysisError(
+            f"task attempt counts do not match protocol: {dict(counts)}"
+        )
 
 
 def validate_run_record(
@@ -216,6 +233,36 @@ def exact_artifact_ok(manifest: Any, deliverable: str) -> bool:
     return len(matches) == 1 and matches[0].get("status") == "ok"
 
 
+def exact_artifact_status(manifest: Any, deliverable: str) -> str | None:
+    if not isinstance(manifest, list):
+        return None
+    matches = [
+        item
+        for item in manifest
+        if isinstance(item, dict) and item.get("source") == f"/app/{deliverable}"
+    ]
+    if len(matches) != 1:
+        return None
+    value = matches[0].get("status")
+    return value if isinstance(value, str) else None
+
+
+def artifact_failure_has_infrastructure_evidence(trial_dir: Path) -> bool:
+    try:
+        log = (trial_dir / "trial.log").read_text(errors="replace").lower()
+    except FileNotFoundError:
+        return False
+    return any(marker in log for marker in ARTIFACT_INFRA_MARKERS)
+
+
+def artifact_failure_has_missing_output_evidence(trial_dir: Path) -> bool:
+    try:
+        log = (trial_dir / "trial.log").read_text(errors="replace").lower()
+    except FileNotFoundError:
+        return False
+    return any(marker in log for marker in MISSING_OUTPUT_MARKERS)
+
+
 def criteria_from_details(details: dict[str, Any]) -> list[dict[str, Any]]:
     criteria: list[dict[str, Any]] = []
     for dimension, value in details.items():
@@ -231,7 +278,10 @@ def criteria_from_details(details: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def inspect_trajectory(
-    path: Path, deliverable: str, expected_agent: dict[str, Any]
+    path: Path,
+    deliverable: str,
+    expected_agent: dict[str, Any],
+    matter_documents: Iterable[str] = (),
 ) -> dict[str, Any]:
     trajectory = load_object(path)
     agent = trajectory.get("agent") or {}
@@ -248,9 +298,15 @@ def inspect_trajectory(
 
     calls: list[dict[str, Any]] = []
     observations: list[str] = []
+    user_steps = 0
+    agent_steps = 0
     for step in steps:
         if not isinstance(step, dict):
             continue
+        if step.get("source") == "user":
+            user_steps += 1
+        if step.get("source") == "agent":
+            agent_steps += 1
         step_calls = step.get("tool_calls") or []
         if isinstance(step_calls, list):
             calls.extend(call for call in step_calls if isinstance(call, dict))
@@ -262,10 +318,73 @@ def inspect_trajectory(
                 if isinstance(result, dict) and isinstance(result.get("content"), str)
             )
 
-    commands = [
-        str((call.get("arguments") or {}).get("command", "")) for call in calls
-    ]
+    commands = [str((call.get("arguments") or {}).get("command", "")) for call in calls]
     lowered_commands = [command.lower() for command in commands]
+    deliverable_lower = deliverable.lower()
+    call_texts = [
+        json.dumps(call.get("arguments") or {}, sort_keys=True).lower()
+        for call in calls
+    ]
+    matter_document_list = [str(name).lower() for name in matter_documents]
+    opened_documents = sorted(
+        name
+        for name in matter_document_list
+        if any(
+            name in text
+            and (
+                call.get("function_name") == "read"
+                or "document(" in text
+                or "load_workbook(" in text
+                or "open(" in text
+                or "mailparser" in text
+            )
+            for call, text in zip(calls, call_texts)
+        )
+    )
+    output_write_indices = [
+        index
+        for index, (call, text) in enumerate(zip(calls, call_texts))
+        if deliverable_lower in text
+        and (
+            call.get("function_name") in {"write", "edit", "patch"}
+            or ".save(" in text
+            or "libreoffice" in text
+            or "pandoc" in text
+        )
+    ]
+    first_write = output_write_indices[0] if output_write_indices else None
+    validation_indices = [
+        index
+        for index, text in enumerate(call_texts)
+        if first_write is not None
+        and index > first_write
+        and deliverable_lower in text
+        and any(
+            marker in text
+            for marker in (
+                "document(",
+                "test -f",
+                "ls ",
+                "stat ",
+                "file ",
+                "unzip",
+                "render_docx",
+                "libreoffice",
+                "soffice",
+            )
+        )
+    ]
+    first_validation = validation_indices[0] if validation_indices else None
+    revision_after_validation = any(
+        first_validation is not None and index > first_validation
+        for index in output_write_indices
+    )
+    returned_to_sources = any(
+        first_write is not None
+        and index > first_write
+        and any(name in text for name in matter_document_list)
+        for index, text in enumerate(call_texts)
+    )
     output_open_pattern = re.compile(
         rf"document\s*\(\s*(['\"])(?:/app/)?{re.escape(deliverable.lower())}\1"
     )
@@ -285,7 +404,20 @@ def inspect_trajectory(
 
     return {
         "steps": len(steps),
+        "user_steps": user_steps,
+        "agent_steps": agent_steps,
+        "complete_atif": user_steps >= 1 and agent_steps >= 1,
         "tool_calls": dict(sorted(tool_counts.items())),
+        "matter_documents_opened": opened_documents,
+        "matter_document_coverage": (
+            len(opened_documents) / len(matter_document_list)
+            if matter_document_list
+            else None
+        ),
+        "output_write_events": len(output_write_indices),
+        "post_draft_validation": bool(validation_indices),
+        "revision_after_validation": revision_after_validation,
+        "returned_to_sources_after_draft": returned_to_sources,
         "used_python_docx": any(
             "from docx" in command or "import docx" in command
             for command in lowered_commands
@@ -296,7 +428,8 @@ def inspect_trajectory(
             for marker in VISUAL_RENDER_MARKERS
         ),
         "reopened_output": any(
-            output_open_pattern.search(command) is not None for command in lowered_commands
+            output_open_pattern.search(command) is not None
+            for command in lowered_commands
         ),
         "checked_output_exists": any(
             deliverable.lower() in command
@@ -306,7 +439,12 @@ def inspect_trajectory(
         "attempted_package_install": any(
             marker in command
             for command in lowered_commands
-            for marker in ("pip install", "pip3 install", "apt install", "apt-get install")
+            for marker in (
+                "pip install",
+                "pip3 install",
+                "apt install",
+                "apt-get install",
+            )
         ),
         "direct_binary_read": direct_binary_read,
         "error_observations": error_observations,
@@ -314,7 +452,11 @@ def inspect_trajectory(
 
 
 def classify_trial(
-    trial_dir: Path, task: dict[str, Any], expected_agent: dict[str, Any]
+    trial_dir: Path,
+    task: dict[str, Any],
+    expected_agent: dict[str, Any],
+    *,
+    missing_artifact_as_invalid: bool = False,
 ) -> dict[str, Any]:
     record: dict[str, Any] = {
         "trial": trial_dir.name,
@@ -333,13 +475,15 @@ def classify_trial(
     record["duration_seconds"] = seconds(
         result.get("started_at"), result.get("finished_at")
     )
+    agent_execution = result.get("agent_execution") or {}
+    verifier_execution = result.get("verifier") or {}
     record["agent_seconds"] = seconds(
-        result.get("agent_execution", {}).get("started_at"),
-        result.get("agent_execution", {}).get("finished_at"),
+        agent_execution.get("started_at"),
+        agent_execution.get("finished_at"),
     )
     record["verifier_seconds"] = seconds(
-        result.get("verifier", {}).get("started_at"),
-        result.get("verifier", {}).get("finished_at"),
+        verifier_execution.get("started_at"),
+        verifier_execution.get("finished_at"),
     )
 
     agent_info = result.get("agent_info") or {}
@@ -363,9 +507,25 @@ def classify_trial(
         record["infrastructure_error"] = f"artifact manifest error: {exc}"
         return record
     record["artifact_status_ok"] = exact_artifact_ok(manifest, task["deliverable"])
+    record["artifact_status"] = exact_artifact_status(manifest, task["deliverable"])
     if not record["artifact_status_ok"]:
-        record["infrastructure_error"] = "required artifact was not collected with status=ok"
-        return record
+        normal_agent_completion = (result.get("agent_execution") or {}).get(
+            "finished_at"
+        ) is not None and result.get("agent_result") is not None
+        missing_output_evidence = artifact_failure_has_missing_output_evidence(
+            trial_dir
+        )
+        if (
+            not missing_artifact_as_invalid
+            or not normal_agent_completion
+            or not missing_output_evidence
+            or artifact_failure_has_infrastructure_evidence(trial_dir)
+        ):
+            record["infrastructure_error"] = (
+                "required artifact was not collected with status=ok; no conclusive "
+                "agent-missing-output evidence"
+            )
+            return record
 
     verifier_dir = trial_dir / "verifier"
     try:
@@ -396,6 +556,12 @@ def classify_trial(
         record["semantic_score"] = 0.0
         record["criteria"] = []
     else:
+        if not record["artifact_status_ok"]:
+            record["infrastructure_error"] = (
+                "required artifact was not collected with status=ok, but verifier "
+                "did not classify an invalid deliverable"
+            )
+            return record
         criteria = criteria_from_details(details)
         expected_count = int(task["semantic_criteria"])
         if len(criteria) != expected_count:
@@ -406,7 +572,9 @@ def classify_trial(
             return record
         ids = [item.get("id") for item in criteria]
         if len(ids) != len(set(ids)) or any(not isinstance(item, str) for item in ids):
-            record["infrastructure_error"] = "semantic criterion IDs are missing or duplicated"
+            record["infrastructure_error"] = (
+                "semantic criterion IDs are missing or duplicated"
+            )
             return record
         values = [float(item.get("value")) for item in criteria]
         if any(value not in (0.0, 1.0) for value in values):
@@ -434,7 +602,10 @@ def classify_trial(
     record["reported_cost_usd"] = usage.get("cost_usd")
     try:
         record["trajectory"] = inspect_trajectory(
-            trial_dir / "agent" / "trajectory.json", task["deliverable"], expected_agent
+            trial_dir / "agent" / "trajectory.json",
+            task["deliverable"],
+            expected_agent,
+            task.get("matter_documents", ()),
         )
     except AnalysisError as exc:
         record["infrastructure_error"] = str(exc)
@@ -453,7 +624,9 @@ def stats(values: Iterable[float]) -> dict[str, Any]:
     }
 
 
-def aggregate(records: list[dict[str, Any]], tasks: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def aggregate(
+    records: list[dict[str, Any]], tasks: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     by_task: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for record in records:
         by_task[record["task"]].append(record)
@@ -476,9 +649,7 @@ def aggregate(records: list[dict[str, Any]], tasks: dict[str, dict[str, Any]]) -
             "attempted": len(rows),
             "retained": len(retained),
             "infrastructure_errors": len(rows) - len(retained),
-            "valid_docx": sum(
-                not row["agent_invalid_output"] for row in retained
-            ),
+            "valid_docx": sum(not row["agent_invalid_output"] for row in retained),
             "all_pass": sum(row["all_pass"] == 1.0 for row in retained),
             "semantic": semantic_stats,
             "harbor_reward": stats(harbor_values),
@@ -511,9 +682,7 @@ def aggregate(records: list[dict[str, Any]], tasks: dict[str, dict[str, Any]]) -
         ]
         token_totals[key] = sum(value for value in values if isinstance(value, int))
 
-    retained_records = [
-        row for row in records if row["infrastructure_error"] is None
-    ]
+    retained_records = [row for row in records if row["infrastructure_error"] is None]
     tool_calls: Counter[str] = Counter()
     for row in retained_records:
         tool_calls.update(row["trajectory"]["tool_calls"])
@@ -549,11 +718,17 @@ def aggregate(records: list[dict[str, Any]], tasks: dict[str, dict[str, Any]]) -
     return {
         "tasks": task_rows,
         "macro_semantic_mean": mean(macro_values) if macro_values else None,
-        "micro_semantic_rate": total_passes / total_criteria if total_criteria else None,
+        "micro_semantic_rate": total_passes / total_criteria
+        if total_criteria
+        else None,
         "semantic_passes": total_passes,
         "semantic_criteria": total_criteria,
         "strict_all_pass_rate": (
-            sum(row.get("all_pass") == 1.0 for row in records if row["infrastructure_error"] is None)
+            sum(
+                row.get("all_pass") == 1.0
+                for row in records
+                if row["infrastructure_error"] is None
+            )
             / sum(row["infrastructure_error"] is None for row in records)
             if any(row["infrastructure_error"] is None for row in records)
             else None
@@ -563,7 +738,9 @@ def aggregate(records: list[dict[str, Any]], tasks: dict[str, dict[str, Any]]) -
     }
 
 
-def repeated_misses(records: list[dict[str, Any]], minimum: int = 3) -> dict[str, list[dict[str, Any]]]:
+def repeated_misses(
+    records: list[dict[str, Any]], minimum: int = 3
+) -> dict[str, list[dict[str, Any]]]:
     misses: dict[str, Counter[str]] = defaultdict(Counter)
     descriptions: dict[tuple[str, str], str] = {}
     for record in records:
@@ -870,9 +1047,7 @@ def main() -> int:
     )
 
     trial_dirs = sorted(
-        path.parent
-        for path in job_dir.glob("*/result.json")
-        if path.parent != job_dir
+        path.parent for path in job_dir.glob("*/result.json") if path.parent != job_dir
     )
     if len(trial_dirs) != protocol["planned_trials"]:
         raise AnalysisError(

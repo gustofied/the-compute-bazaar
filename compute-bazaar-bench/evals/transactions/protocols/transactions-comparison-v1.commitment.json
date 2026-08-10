@@ -1,0 +1,205 @@
+{
+  "schema_version": "compute-bazaar-bench.transactions.comparison-protocol.v1",
+  "protocol_id": "transactions-comparison-v1",
+  "frozen_at": "2026-08-10T07:34:11Z",
+  "source_git_head": "6f0bcd9268e5f5ed444f8e0fb95a5a2851342d8e",
+  "scope": "Descriptive comparison of five OpenRouter-routed models on three checkpoints from synthetic opportunity CB-2026-041.",
+  "scenario_pack": "CB-2026-041",
+  "methodological_lineage": {
+    "name": "Harvey Legal Agent Benchmark",
+    "source": "https://github.com/harveyai/harvey-labs",
+    "methodology": "Short professional request, closed matter, reviewable artifact, detailed binary criteria, strict all-pass headline, cost and latency reporting, and trajectory analysis."
+  },
+  "catalog": {
+    "source_url": "https://openrouter.ai/api/v1/models",
+    "retrieved_at": "2026-08-10T07:34:11Z",
+    "source_sha256": "ce8154b4ee4ae42f5e14c071847a5acc35c9e89e69a42e84f4b8676d2cd3133e",
+    "selection_path": "openrouter-model-catalog-2026-08-10.json",
+    "selection_sha256": "7d224b9ebf6d59a274e0def0433ab41570928aabe2c0a2ba74c489f99a8b037c"
+  },
+  "tasks": [
+    {
+      "name": "normalize-buyer-mandate",
+      "digest": "sha256:2932b4083612616afa6f3867e0208a546743025424c484342f5fbad889083410",
+      "deliverable": "buyer-mandate-brief.docx",
+      "semantic_criteria": 56,
+      "matter_documents": [
+        "buyer-compute-intake.docx",
+        "procurement-follow-up.eml",
+        "workload-requirements.docx"
+      ]
+    },
+    {
+      "name": "draft-capacity-data-room-population-plan",
+      "digest": "sha256:d5132045ccf8068060fb483e7c70996cc4a61a410230f13238be87569b1fdbe7",
+      "deliverable": "capacity-data-room-population-plan.docx",
+      "semantic_criteria": 53,
+      "matter_documents": [
+        "buyer-capacity-ddrl.docx",
+        "evidence-register.xlsx",
+        "operator-instructions.eml",
+        "precedent-index-data-center.docx",
+        "precedent-index-gpu-capacity.docx",
+        "project-stakeholder-map.docx"
+      ]
+    },
+    {
+      "name": "compare-capacity-agreement-against-term-sheet",
+      "digest": "sha256:370004ab122e5036ecf8f60ac074f609f8d527db216f5500620b6721c83532e6",
+      "deliverable": "capacity-agreement-deviation-report.docx",
+      "semantic_criteria": 62,
+      "matter_documents": [
+        "agreed-capacity-term-sheet.docx",
+        "buyer-risk-checklist.xlsx",
+        "negotiation-summary.eml",
+        "reserved-capacity-agreement.docx"
+      ]
+    }
+  ],
+  "models": [
+    {
+      "key": "deepseek-v4-flash-0731",
+      "display_name": "DeepSeek V4 Flash 0731",
+      "requested_catalog_id": "deepseek/deepseek-v4-flash-0731",
+      "canonical_slug": "deepseek/deepseek-v4-flash-20260731",
+      "agent_model": "openrouter/deepseek/deepseek-v4-flash-20260731:exacto",
+      "canary_job": "transactions-comparison-v1-deepseek-v4-flash-0731-canary-001",
+      "official_job": "transactions-comparison-v1-deepseek-v4-flash-0731-001"
+    },
+    {
+      "key": "gpt-5.6-luna",
+      "display_name": "GPT-5.6 Luna",
+      "requested_catalog_id": "openai/gpt-5.6-luna",
+      "canonical_slug": "openai/gpt-5.6-luna-20260709",
+      "agent_model": "openrouter/openai/gpt-5.6-luna-20260709:exacto",
+      "canary_job": "transactions-comparison-v1-gpt-5.6-luna-canary-001",
+      "official_job": "transactions-comparison-v1-gpt-5.6-luna-001"
+    },
+    {
+      "key": "glm-5.2",
+      "display_name": "GLM 5.2",
+      "requested_catalog_id": "z-ai/glm-5.2",
+      "canonical_slug": "z-ai/glm-5.2-20260616",
+      "agent_model": "openrouter/z-ai/glm-5.2-20260616:exacto",
+      "canary_job": "transactions-comparison-v1-glm-5.2-canary-001",
+      "official_job": "transactions-comparison-v1-glm-5.2-001"
+    },
+    {
+      "key": "claude-sonnet-4.6",
+      "display_name": "Claude Sonnet 4.6",
+      "requested_catalog_id": "anthropic/claude-sonnet-4.6",
+      "canonical_slug": "anthropic/claude-4.6-sonnet-20260217",
+      "agent_model": "openrouter/anthropic/claude-4.6-sonnet-20260217:exacto",
+      "canary_job": "transactions-comparison-v1-claude-sonnet-4.6-canary-001",
+      "official_job": "transactions-comparison-v1-claude-sonnet-4.6-001"
+    },
+    {
+      "key": "mistral-small-2603",
+      "display_name": "Mistral Small 2603",
+      "requested_catalog_id": "mistralai/mistral-small-2603",
+      "canonical_slug": "mistralai/mistral-small-2603",
+      "agent_model": "openrouter/mistralai/mistral-small-2603:exacto",
+      "canary_job": "transactions-comparison-v1-mistral-small-2603-canary-001",
+      "official_job": "transactions-comparison-v1-mistral-small-2603-001"
+    }
+  ],
+  "routing": {
+    "provider": "openrouter",
+    "provider_host": "openrouter.ai",
+    "variant": "exacto",
+    "model_aliases_allowed": false,
+    "model_fallback_allowed": false,
+    "backend_provider_pinned": false,
+    "actual_backend_provider": "Record when exposed by OpenRouter or OpenCode; otherwise report unavailable.",
+    "identity_evidence": "Harbor and ATIF prove the requested OpenCode model string. Unless provider response metadata is retained, they do not prove which backend endpoint OpenRouter selected.",
+    "note": "Exacto fixes the quality-oriented routing policy, not a backend endpoint. Provider selection may vary over time."
+  },
+  "agent": {
+    "name": "opencode",
+    "version": "1.18.11",
+    "sampling_seed_controlled": false,
+    "reasoning_effort_controlled": false,
+    "sampling_parameters": "Native model and OpenRouter defaults."
+  },
+  "harbor": {
+    "version": "0.20.0",
+    "environment": "modal",
+    "modal_vm_runtime": true,
+    "concurrency": 3,
+    "max_retries": 0
+  },
+  "judge": {
+    "model": "openrouter/openai/gpt-5.4",
+    "rewardkit_version": "0.1.7",
+    "semantic_batches_per_trial": 3,
+    "passes_per_criterion": 1,
+    "same_family_risk": "GPT-5.6 Luna is evaluated by a frozen judge from the same provider family."
+  },
+  "canaries": {
+    "attempts_per_task": 1,
+    "planned_trials_per_model": 3,
+    "planned_trials_total": 15,
+    "excluded_from_official_results": true,
+    "acceptance": [
+      "The lock resolves the intended immutable model string.",
+      "Agent execution completes without provider, OpenCode, Harbor, or Modal error.",
+      "The exact required artifact is present once in artifacts/manifest.json with status ok.",
+      "ATIF contains the user instruction and at least one agent step, and identifies the intended model and OpenCode version.",
+      "RewardKit completes with no nested verifier or judge error.",
+      "Agent duration and token telemetry are present; cost telemetry is numeric or explicitly unavailable.",
+      "Semantic success is not required."
+    ],
+    "repair_rule": "Preserve every canary. Repair only same-origin infrastructure or task defects, version the replacement canary, and repeat all affected model-task canaries. Do not tune tasks or prompts to model weaknesses."
+  },
+  "official_run": {
+    "attempts_per_task": 5,
+    "planned_trials_per_model": 15,
+    "planned_trials_total": 75,
+    "one_job_per_model": true,
+    "job_order": [
+      "deepseek-v4-flash-0731",
+      "gpt-5.6-luna",
+      "glm-5.2",
+      "claude-sonnet-4.6",
+      "mistral-small-2603"
+    ],
+    "retry_rule": "No Harbor retries and no selective replacement. Preserve an invalidated model job and, after repair, run a complete versioned 15-trial superseding job or report the model incomplete."
+  },
+  "acceptance": {
+    "infrastructure_failure": "Provider, Modal, Harbor, artifact collection, judge, or verifier failure. Retain in planned and completion counts, but exclude from model performance.",
+    "agent_invalid_output": "Missing or malformed required DOCX after otherwise normal agent execution. Include as semantic score 0 and all_pass 0.",
+    "accepted_trial": "Normal agent execution, exact required artifact collected with status ok, complete ATIF, completed RewardKit grading, and no nested judge or verifier error."
+  },
+  "reporting": {
+    "headline": "Strict all-pass by model and task.",
+    "primary_diagnostic": "Equal-task macro semantic criterion pass rate.",
+    "adjacent": [
+      "Per-task means and all five raw values",
+      "Pooled criterion pass rate as a diagnostic only",
+      "Valid, malformed, and infrastructure counts",
+      "Document craft good, mixed, or poor, never blended into reward",
+      "Agent tokens and reported cost, judge cost, Modal cost, and phase latency",
+      "Machine trajectory audit and evidence-backed behavioral observations",
+      "Command-pattern behavior fields are observed indicators, not proof of intent or reasoning"
+    ],
+    "manual_trace_sample": "For each model-task pair, inspect the official trial with the earliest started_at timestamp, breaking ties by trial ID. Add every invalid, infrastructure failure, and semantic or craft outlier.",
+    "visual_review": {
+      "rubric_path": "transactions-comparison-v1.craft-rubric.json",
+      "rubric_sha256": "10a9c742568ec440d5a6c78db45e84d5db3ef6056b13ccee9f5b8af3a1ee3d81",
+      "procedure": "Render and inspect every collected official DOCX under the frozen opaque-ID procedure before revealing model identity."
+    },
+    "historical_baseline": {
+      "protocol_id": "transactions-v1-mistral-medium",
+      "job": "transactions-v1-mistral-medium-002",
+      "placement": "Adjacent historical direct-provider baseline only; never pooled into the comparison aggregate or ranking."
+    }
+  },
+  "limitations": [
+    "The five attempts measure observed rollout variation, not independent-matter accuracy.",
+    "The three tasks are linked checkpoints from one synthetic matter.",
+    "Sampling is unseeded and inference or reasoning compute is not equalized.",
+    "OpenRouter routing is fixed to Exacto but the backend provider is not pinned.",
+    "GPT-5.4 is an LLM judge, with same-family judge-bias risk for GPT-5.6 Luna.",
+    "Results do not establish statistical significance, general model superiority, or broad compute-market competence."
+  ]
+}
