@@ -7,16 +7,6 @@
 My vision is to build The Compute Bazaar as much for humans as for
 machine-to-machine work.
 
-## Data
-
-The Compute Bazaar Data project builds a live market lake for compute. Hourly
-pipelines collect and normalize public offers, prices, availability, and market
-history into raw, analysis-ready, and modeled datasets.
-
-The data can be queried with SQL through DataFusion or inspected directly as
-source files. Queries and market models can be saved, rerun as new observations
-arrive, displayed in Terminal, or used by agents.
-
 ## Architecture
 
 I use Windmill to orchestrate the hourly data pipeline. It runs ingestion every
@@ -145,3 +135,13 @@ Data and Eval. Stop the Terminal with:
 ```bash
 compute-bazaar terminal --stop
 ```
+
+## Data
+
+The Compute Bazaar Data project builds a live market lake for compute. Hourly
+pipelines collect and normalize public offers, prices, availability, and market
+history into raw, analysis-ready, and modeled datasets.
+
+The data can be queried with SQL through DataFusion or inspected directly as
+source files. Queries and market models can be saved, rerun as new observations
+arrive, displayed in Terminal, or used by agents.
