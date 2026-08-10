@@ -10,12 +10,16 @@ from typing import Any
 Column = tuple[str, str, int]
 
 TABLE_TITLES = {
+    "launch": "LAUNCH PLAN",
     "availability": "GPU AVAILABILITY",
     "blueprint": "VIEW BLUEPRINTS",
     "data": "MARKET DATA",
     "describe": "TABLE COLUMNS",
+    "fleet": "FLEET HOSTS",
+    "fleet-doctor": "FLEET READINESS",
     "listings": "GPU LISTINGS",
     "model": "ANALYSIS MODELS",
+    "offers": "LIVE COMPUTE OFFERS",
     "price-index": "GPU PRICE INDEX",
     "providers": "PROVIDER COMPARISON",
     "query": "QUERY RESULT",
@@ -31,6 +35,37 @@ TABLE_ROWS = {
 }
 
 TABLE_COLUMNS: dict[str, tuple[Column, ...]] = {
+    "fleet": (
+        ("HOST", "host_id", 26),
+        ("PROVIDER", "provider", 10),
+        ("NAME", "name", 24),
+        ("STATE", "state", 14),
+        ("GPU", "gpu_model|gpu_names", 28),
+        ("COUNT", "gpu_count", 7),
+        ("INSTANCE-HR", "price_usd_instance_hr", 14),
+        ("SSH", "ssh_host", 18),
+        ("DRIVER", "driver", 16),
+        ("DISK GB", "disk_free_gb", 10),
+        ("TERMINATES", "terminate_at", 20),
+        ("OBSERVED", "observed_at", 20),
+    ),
+    "fleet-doctor": (
+        ("CHECK", "check", 22),
+        ("STATUS", "status", 10),
+        ("DETAIL", "detail", 72),
+    ),
+    "launch": (
+        ("OFFER", "offer_id", 20),
+        ("PROVIDER", "provider", 10),
+        ("GPU", "gpu_model", 18),
+        ("COUNT", "gpu_count", 7),
+        ("GPU-HR", "price_usd_gpu_hr", 12),
+        ("LOCATION", "location", 24),
+        ("STATE", "status", 24),
+        ("MISSING", "missing", 30),
+        ("AUTH", "credentials_configured", 6),
+        ("OBSERVED", "observed_at", 20),
+    ),
     "model": (
         ("MODEL", "model_id", 28),
         ("TITLE", "title", 32),
@@ -72,6 +107,18 @@ TABLE_COLUMNS: dict[str, tuple[Column, ...]] = {
         ("GPUS", "gpu_count", 6),
         ("REGION", "region", 18),
         ("AVAILABLE", "is_available", 10),
+        ("OBSERVED", "observed_at", 20),
+    ),
+    "offers": (
+        ("OFFER", "offer_id", 20),
+        ("PROVIDER", "provider", 10),
+        ("GPU", "gpu_model", 18),
+        ("COUNT", "gpu_count", 7),
+        ("GPU-HR", "price_usd_gpu_hr", 12),
+        ("INSTANCE-HR", "price_usd_instance_hr", 14),
+        ("CLOUD", "cloud_type", 12),
+        ("LOCATION", "location", 22),
+        ("STOCK", "stock_status", 10),
         ("OBSERVED", "observed_at", 20),
     ),
     "providers": (
@@ -170,6 +217,20 @@ def _context_line(payload: Mapping[str, Any]) -> str:
             parts.append(str(run["run_id"]))
         if run.get("observed_at"):
             parts.append(_format_time(str(run["observed_at"])))
+    providers = payload.get("providers")
+    if isinstance(providers, list):
+        statuses = []
+        for provider in providers:
+            if not isinstance(provider, Mapping) or not provider.get("provider"):
+                continue
+            status = str(provider.get("status") or "unknown").replace("_", " ")
+            count = provider.get("offer_count")
+            suffix = (
+                f" {count}" if status == "ok" and count is not None else f" {status}"
+            )
+            statuses.append(f"{provider['provider']}{suffix}")
+        if statuses:
+            parts.append("; ".join(statuses))
     return " | ".join(parts)
 
 

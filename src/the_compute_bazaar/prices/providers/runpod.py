@@ -30,12 +30,42 @@ query GpuTypes {
   }
 }
 """
+RUNPOD_LIVE_MARKET_QUERY = """
+query LiveGpuMarket {
+  gpuTypes {
+    id
+    displayName
+    memoryInGb
+    secureCloud
+    communityCloud
+    securePrice
+    communityPrice
+  }
+  dataCenters {
+    id
+    name
+    location
+    gpuAvailability {
+      gpuTypeId
+      displayName
+      stockStatus
+    }
+  }
+}
+"""
 
 
 @dataclass(frozen=True)
 class RunpodGpuTypesFetch:
     raw_payload: dict[str, Any]
     gpu_types: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class RunpodLiveMarketFetch:
+    raw_payload: dict[str, Any]
+    gpu_types: list[dict[str, Any]]
+    data_centers: list[dict[str, Any]]
 
 
 class RunpodClient:
@@ -51,21 +81,8 @@ class RunpodClient:
         self.session = session or requests.Session()
 
     def fetch_gpu_types(self) -> RunpodGpuTypesFetch:
-        request_kwargs: dict[str, Any] = {}
-        if self.api_key:
-            request_kwargs["params"] = {"api_key": self.api_key}
-        response = self.session.post(
-            self.graphql_url,
-            json={"query": RUNPOD_GPU_TYPES_QUERY},
-            headers={"Accept": "application/json", "Content-Type": "application/json"},
-            timeout=60,
-            **request_kwargs,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if isinstance(payload, Mapping) and payload.get("errors"):
-            raise RuntimeError(f"RunPod GraphQL returned errors: {payload['errors']}")
-        gpu_types = _extract_gpu_types(payload)
+        payload = self._query(RUNPOD_GPU_TYPES_QUERY)
+        gpu_types = _extract_rows(payload, "gpuTypes")
         return RunpodGpuTypesFetch(
             raw_payload={
                 "query": RUNPOD_GPU_TYPES_QUERY,
@@ -75,6 +92,42 @@ class RunpodClient:
             },
             gpu_types=gpu_types,
         )
+
+    def fetch_live_market(self) -> RunpodLiveMarketFetch:
+        payload = self._query(RUNPOD_LIVE_MARKET_QUERY)
+        gpu_types = _extract_rows(payload, "gpuTypes")
+        data_centers = _extract_rows(payload, "dataCenters")
+        return RunpodLiveMarketFetch(
+            raw_payload={
+                "query": RUNPOD_LIVE_MARKET_QUERY,
+                "payload": payload,
+                "gpu_type_count": len(gpu_types),
+                "data_center_count": len(data_centers),
+            },
+            gpu_types=gpu_types,
+            data_centers=data_centers,
+        )
+
+    def _query(self, query: str) -> dict[str, Any]:
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        try:
+            response = self.session.post(
+                self.graphql_url,
+                json={"query": query},
+                headers=headers,
+                timeout=60,
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise RuntimeError("RunPod API request failed") from exc
+        payload = response.json()
+        if isinstance(payload, Mapping) and payload.get("errors"):
+            raise RuntimeError(f"RunPod GraphQL returned errors: {payload['errors']}")
+        if not isinstance(payload, dict):
+            raise RuntimeError("RunPod GraphQL returned a non-object response")
+        return payload
 
 
 def normalize_gpu_types(
@@ -140,12 +193,16 @@ def normalize_gpu_types(
 
 
 def _extract_gpu_types(payload: Any) -> list[dict[str, Any]]:
+    return _extract_rows(payload, "gpuTypes")
+
+
+def _extract_rows(payload: Any, field: str) -> list[dict[str, Any]]:
     if not isinstance(payload, Mapping):
         return []
     data = payload.get("data")
-    if not isinstance(data, Mapping) or not isinstance(data.get("gpuTypes"), list):
+    if not isinstance(data, Mapping) or not isinstance(data.get(field), list):
         return []
-    return [dict(row) for row in data["gpuTypes"] if isinstance(row, Mapping)]
+    return [dict(row) for row in data[field] if isinstance(row, Mapping)]
 
 
 def _float_or_none(value: Any) -> float | None:

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Compute Bazaar Fleet">
+    <title>Compute Bazaar Fleet</title>
+    <link rel="stylesheet" href="/terminal-assets/fleet.css?v=20260810-6">
+    <link rel="stylesheet" href="/terminal-assets/command.css?v=20260808-2">
+    <link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2">
+  </head>
+  <body data-terminal-workspace="fleet">
+    <div class="fleet-app">
+      <header class="fleet-topbar">
+        <a class="fleet-wordmark" href="/" aria-label="The Compute Bazaar">
+          <img src="/terminal-wordmark.png?v=20260808-1" alt="The Compute Bazaar">
+        </a>
+        <nav aria-label="Terminal workspaces">
+          <a href="/data">Data</a>
+          <a class="active" href="/fleet" aria-current="page">Fleet</a>
+          <a href="/eval/">Eval</a>
+          <span aria-disabled="true">Trade</span>
+        </nav>
+      </header>
+
+      <main class="fleet-shell">
+        <aside class="host-panel">
+          <header>
+            <p class="eyebrow">SSH fleet</p>
+            <h1>Hosts</h1>
+          </header>
+          <div class="host-list" id="host-list"></div>
+          <footer>
+            <span id="host-count">0 hosts</span>
+            <span id="refresh-state">Idle</span>
+          </footer>
+        </aside>
+
+        <section class="fleet-stage" aria-live="polite">
+          <div class="fleet-empty" id="fleet-empty">
+            <p class="eyebrow">No active capacity</p>
+            <h2>Fleet is empty</h2>
+            <p>Launch a machine from Data, then inspect it here.</p>
+          </div>
+
+          <div class="machine-view" id="machine-view" hidden>
+            <header class="machine-header">
+              <div>
+                <p class="eyebrow" id="machine-provider">Provider</p>
+                <h2 id="machine-name">Machine</h2>
+                <p class="machine-subtitle" id="machine-subtitle"></p>
+              </div>
+              <div class="machine-state">
+                <span class="readiness" id="readiness">Checking</span>
+                <span id="termination">—</span>
+              </div>
+            </header>
+
+            <section class="metric-strip" aria-label="GPU telemetry">
+              <article><span>GPU</span><strong id="gpu-util">—</strong><small>utilization</small></article>
+              <article><span>VRAM</span><strong id="gpu-memory">—</strong><small id="gpu-memory-total">used</small></article>
+              <article><span>Temp</span><strong id="gpu-temp">—</strong><small id="gpu-temp-limit">limit</small></article>
+              <article><span>Power</span><strong id="gpu-power">—</strong><small id="gpu-power-limit">limit</small></article>
+            </section>
+
+            <section class="telemetry-panel" aria-labelledby="telemetry-title">
+              <header>
+                <div>
+                  <p class="eyebrow">5s interval</p>
+                  <h3 id="telemetry-title">Telemetry</h3>
+                </div>
+                <div class="legend" aria-label="Chart legend">
+                  <span class="gpu">GPU</span><span class="vram">VRAM</span><span class="cpu">CPU</span>
+                </div>
+              </header>
+              <svg id="telemetry-chart" viewBox="0 0 1000 240" role="img" aria-labelledby="telemetry-title telemetry-description">
+                <desc id="telemetry-description">Recent GPU, VRAM, and CPU utilization percentages.</desc>
+                <g class="chart-grid"><path d="M0 20H1000 M0 120H1000 M0 220H1000"></path></g>
+                <path class="chart-line cpu" id="cpu-line"></path>
+                <path class="chart-line vram" id="vram-line"></path>
+                <path class="chart-line gpu" id="gpu-line"></path>
+              </svg>
+            </section>
+
+            <div class="machine-lower">
+              <section class="resource-panel" aria-labelledby="resources-title">
+                <header><p class="eyebrow">System</p><h3 id="resources-title">Allocation</h3></header>
+                <div class="resource-row">
+                  <div><span>CPU</span><strong id="cpu-value">—</strong></div>
+                  <div class="meter"><span id="cpu-meter"></span></div>
+                </div>
+                <div class="resource-row">
+                  <div><span>Memory</span><strong id="memory-value">—</strong></div>
+                  <div class="meter"><span id="memory-meter"></span></div>
+                </div>
+                <div class="resource-row">
+                  <div><span>Disk</span><strong id="disk-value">—</strong></div>
+                  <div class="meter"><span id="disk-meter"></span></div>
+                </div>
+                <dl class="system-details">
+                  <div><dt>GPU</dt><dd id="gpu-name">—</dd></div>
+                  <div><dt>Driver</dt><dd id="driver">—</dd></div>
+                  <div><dt>PCIe</dt><dd id="pcie">—</dd></div>
+                  <div><dt>OS</dt><dd id="os-name">—</dd></div>
+                  <div><dt>Kernel</dt><dd id="kernel">—</dd></div>
+                </dl>
+              </section>
+
+              <section class="readiness-panel" aria-labelledby="checks-title">
+                <header><p class="eyebrow">Checks</p><h3 id="checks-title">Readiness</h3></header>
+                <div id="check-list" class="check-list"></div>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/terminal-assets/perspective/command.js?v=20260808-2"></script>
+    <script type="module" src="/terminal-assets/fleet.js?v=20260810-2"></script>
+  </body>
+</html>

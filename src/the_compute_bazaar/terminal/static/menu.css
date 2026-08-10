@@ -61,7 +61,7 @@ a {
 
 .workspace-switcher {
   display: grid;
-  grid-template-columns: repeat(3, minmax(132px, 1fr));
+  grid-template-columns: repeat(4, minmax(112px, 1fr));
   gap: 12px;
   width: min(100%, 520px);
 }
@@ -104,6 +104,10 @@ a {
   background: var(--green);
 }
 
+.workspace-button.fleet::before {
+  background: var(--sand);
+}
+
 .workspace-button:hover,
 .workspace-button:focus-visible {
   border-color: var(--blue);
@@ -123,6 +127,12 @@ a {
 .workspace-button.eval:focus-visible {
   border-color: var(--green);
   background: color-mix(in srgb, var(--green) 10%, #141917);
+}
+
+.workspace-button.fleet:hover,
+.workspace-button.fleet:focus-visible {
+  border-color: var(--sand);
+  background: color-mix(in srgb, var(--sand) 10%, #141917);
 }
 
 .workspace-button:active {

@@ -867,11 +867,17 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+live = [
+    { name = "python-dotenv" },
+    { name = "requests" },
+]
 s3 = [
     { name = "boto3" },
 ]
 terminal = [
     { name = "fastapi" },
+    { name = "python-dotenv" },
+    { name = "requests" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 worker = [
@@ -893,11 +899,15 @@ requires-dist = [
     { name = "pillow", marker = "extra == 'worker'", specifier = ">=12.0.0" },
     { name = "pyarrow", specifier = ">=22.0.0" },
     { name = "pydantic", specifier = ">=2.12.0,<3.0.0" },
+    { name = "python-dotenv", marker = "extra == 'live'", specifier = ">=1.2.1" },
+    { name = "python-dotenv", marker = "extra == 'terminal'", specifier = ">=1.2.1" },
+    { name = "requests", marker = "extra == 'live'", specifier = ">=2.33.1" },
+    { name = "requests", marker = "extra == 'terminal'", specifier = ">=2.33.1" },
     { name = "requests", marker = "extra == 'worker'", specifier = ">=2.33.1" },
     { name = "typer", specifier = ">=0.21.0,<1.0.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'terminal'", specifier = ">=0.49.0" },
 ]
-provides-extras = ["terminal", "s3", "worker"]
+provides-extras = ["terminal", "live", "s3", "worker"]
 
 [[package]]
 name = "typer"

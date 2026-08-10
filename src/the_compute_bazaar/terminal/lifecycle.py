@@ -43,6 +43,8 @@ def launch_terminal(
 ) -> str:
     """Open the native Terminal, falling back to its browser surface."""
     _terminal_runtime()
+    project_root = Path(__file__).resolve().parents[3]
+    evaluation_root = _resolve_evaluation_root(evaluation_root, project_root)
     existing = _read_state()
     launch_action = _launch_action(
         initial_view=initial_view,
@@ -70,7 +72,6 @@ def launch_terminal(
         _state_path().unlink(missing_ok=True)
         (STATE_ROOT / "ready.json").unlink(missing_ok=True)
 
-    project_root = Path(__file__).resolve().parents[3]
     terminal_root = project_root / "terminal"
     tauri = terminal_root / "node_modules" / ".bin" / "tauri"
     if not tauri.is_file():
@@ -172,6 +173,8 @@ def run_terminal(
 ) -> None:
     """Run the Terminal server in the foreground."""
     uvicorn, create_terminal_app = _terminal_runtime()
+    project_root = Path(__file__).resolve().parents[3]
+    evaluation_root = _resolve_evaluation_root(evaluation_root, project_root)
     selected_port = _available_port(port)
     url = f"http://127.0.0.1:{selected_port}"
     browser_url = (
@@ -200,6 +203,10 @@ def run_terminal(
         host="127.0.0.1",
         port=selected_port,
     )
+
+
+def _resolve_evaluation_root(path: Path, project_root: Path) -> Path:
+    return path.resolve() if path.is_absolute() else (project_root / path).resolve()
 
 
 def stop_terminal() -> str:

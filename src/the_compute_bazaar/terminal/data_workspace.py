@@ -10,7 +10,7 @@ from time import perf_counter
 from typing import Any
 
 import pyarrow as pa
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
@@ -239,6 +239,95 @@ class DataWorkspace:
                     "X-Compute-Bazaar-Query-Hash": hashlib.sha256(
                         request.sql.encode("utf-8")
                     ).hexdigest()[:12],
+                },
+            )
+
+        @app.get("/api/data/live-offers")
+        def live_offers(
+            provider: str | None = None,
+            gpu_model: str | None = None,
+            offer_id: str | None = None,
+            include_unavailable: bool = False,
+            limit: int = Query(default=100, ge=1, le=MAX_QUERY_LIMIT),
+        ) -> Response:
+            from ..live_offers import LiveOfferError, LiveOfferService
+
+            try:
+                service = LiveOfferService.from_environment()
+                if offer_id:
+                    offer = service.inspect(offer_id)
+                    rows = [offer.row()]
+                    observed_at = offer.observed_at
+                else:
+                    result = service.list_offers(
+                        providers=[provider] if provider else None,
+                        gpu_model=gpu_model,
+                        include_unavailable=include_unavailable,
+                        limit=limit,
+                    )
+                    rows = [offer.row() for offer in result.offers]
+                    observed_at = result.observed_at
+                    if not rows:
+                        failed = [
+                            status.message or status.status
+                            for status in result.providers
+                            if status.status != "ok"
+                        ]
+                        detail = "; ".join(failed) or "No current offers match"
+                        raise LiveOfferError(detail)
+                table = pa.Table.from_pylist(rows)
+                payload = _arrow_stream(table)
+            except LiveOfferError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            return Response(
+                content=payload,
+                media_type="application/vnd.apache.arrow.stream",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Compute-Bazaar-Run-Id": "live-provider-query",
+                    "X-Compute-Bazaar-Observed-At": observed_at.isoformat(),
+                    "X-Compute-Bazaar-Row-Count": str(table.num_rows),
+                    "X-Compute-Bazaar-Elapsed-Ms": "live",
+                },
+            )
+
+        @app.get("/api/data/launch-plan")
+        def launch_plan(
+            offer_id: str,
+            name: str | None = None,
+            image: str | None = None,
+            ssh_key_id: str | None = None,
+            disk_gb: int = Query(default=50, ge=1),
+            volume_gb: int = Query(default=0, ge=0),
+        ) -> Response:
+            from ..live_offers import (
+                LaunchPlanner,
+                LiveOfferError,
+            )
+
+            try:
+                plan = LaunchPlanner.from_environment().plan(
+                    offer_id,
+                    name=name,
+                    image=image,
+                    ssh_key_ids=(ssh_key_id,) if ssh_key_id else (),
+                    disk_gb=disk_gb,
+                    volume_gb=volume_gb,
+                )
+                table = pa.Table.from_pylist([plan.row()])
+                payload = _arrow_stream(table)
+            except (LiveOfferError, ValueError) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return Response(
+                content=payload,
+                media_type="application/vnd.apache.arrow.stream",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Compute-Bazaar-Run-Id": plan.plan_id,
+                    "X-Compute-Bazaar-Observed-At": plan.observed_at.isoformat(),
+                    "X-Compute-Bazaar-Row-Count": "1",
+                    "X-Compute-Bazaar-Elapsed-Ms": "live",
+                    "X-Compute-Bazaar-Submitted": "false",
                 },
             )
 

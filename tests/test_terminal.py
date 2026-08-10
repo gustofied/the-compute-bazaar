@@ -6,16 +6,33 @@ import unittest
 from pathlib import Path
 
 from the_compute_bazaar.terminal.commands import (
+    LaunchPlanAction,
     ErrorAction,
+    LiveOffersAction,
+    NavigateAction,
+    QueryAction,
     ShellAction,
     SqlAction,
     resolve_command,
 )
+from the_compute_bazaar.terminal.lifecycle import _resolve_evaluation_root
 from the_compute_bazaar.terminal.server import TerminalLaunchMailbox
 from the_compute_bazaar.terminal.shell import TerminalShell
 
 
 class TerminalCommandTest(unittest.TestCase):
+    def test_relative_evaluation_root_is_project_relative(self) -> None:
+        project_root = Path("/tmp/project")
+
+        resolved = _resolve_evaluation_root(
+            Path("compute-bazaar-bench/jobs/reports"), project_root
+        )
+
+        self.assertEqual(
+            resolved,
+            Path("/tmp/project/compute-bazaar-bench/jobs/reports").resolve(),
+        )
+
     def test_unknown_commands_require_the_native_shell_boundary(self) -> None:
         command = "harbor run -p task"
 
@@ -31,6 +48,129 @@ class TerminalCommandTest(unittest.TestCase):
         )
 
         self.assertIsInstance(action, SqlAction)
+
+    def test_cli_prefixed_listings_open_as_native_data(self) -> None:
+        action = resolve_command(
+            "compute-bazaar listings --gpu-model H100 --limit 20",
+            shell_fallback=True,
+        )
+
+        self.assertIsInstance(action, SqlAction)
+        assert isinstance(action, SqlAction)
+        self.assertEqual(action.limit, 20)
+        self.assertIn("from gold.fact_gpu_listings", action.sql)
+        self.assertIn("'H100'", action.sql)
+        self.assertEqual(action.perspective, {"plugin": "Datagrid", "settings": False})
+
+    def test_short_market_commands_use_the_same_native_path(self) -> None:
+        short = resolve_command("listings --gpu-model H100 --limit 20")
+        prefixed = resolve_command(
+            "compute-bazaar listings --gpu-model H100 --limit 20"
+        )
+
+        self.assertEqual(short, prefixed)
+
+    def test_live_offers_use_the_native_data_workspace(self) -> None:
+        action = resolve_command(
+            "compute-bazaar offers list --provider runpod --gpu-model H100 --limit 20",
+            shell_fallback=True,
+        )
+
+        self.assertEqual(
+            action,
+            LiveOffersAction(provider="runpod", gpu_model="H100", limit=20),
+        )
+
+    def test_live_offer_inspection_preserves_the_offer_id(self) -> None:
+        action = resolve_command("offers inspect verda:abc123")
+
+        self.assertEqual(action, LiveOffersAction(offer_id="verda:abc123"))
+
+    def test_launch_plan_stays_a_native_non_shell_action(self) -> None:
+        action = resolve_command(
+            "compute-bazaar launch plan runpod:abc123 "
+            "--name gpu-01 --image runpod/pytorch:latest --disk-gb 80",
+            shell_fallback=True,
+        )
+
+        self.assertEqual(
+            action,
+            LaunchPlanAction(
+                offer_id="runpod:abc123",
+                name="gpu-01",
+                image="runpod/pytorch:latest",
+                disk_gb=80,
+            ),
+        )
+
+    def test_launch_plan_accepts_shell_style_line_continuations(self) -> None:
+        action = resolve_command(
+            "launch plan runpod:abc123 \\\n"
+            "  --name gpu-01 \\\n"
+            "  --image runpod/pytorch:latest"
+        )
+
+        self.assertEqual(
+            action,
+            LaunchPlanAction(
+                offer_id="runpod:abc123",
+                name="gpu-01",
+                image="runpod/pytorch:latest",
+            ),
+        )
+
+    def test_launch_plan_requires_the_provider_qualified_offer_id(self) -> None:
+        action = resolve_command("launch plan abc123")
+
+        self.assertIsInstance(action, ErrorAction)
+        assert isinstance(action, ErrorAction)
+        self.assertIn("complete offer ID", action.message)
+
+    def test_terminal_only_cli_flags_are_removed_from_native_queries(self) -> None:
+        action = resolve_command(
+            "compute-bazaar query gpu_price_index_history --terminal --limit 40"
+        )
+
+        self.assertEqual(
+            action,
+            QueryAction(query_id="gpu_price_index_history", limit=40),
+        )
+
+    def test_cli_chart_options_become_a_perspective_layout(self) -> None:
+        action = resolve_command(
+            'compute-bazaar sql "select observed_at, price from gold.example" '
+            "--terminal --chart line --x observed_at --y price"
+        )
+
+        self.assertIsInstance(action, SqlAction)
+        assert isinstance(action, SqlAction)
+        self.assertEqual(action.sql, "select observed_at, price from gold.example")
+        self.assertEqual(
+            action.perspective,
+            {
+                "plugin": "Y Line",
+                "group_by": ["observed_at"],
+                "columns": ["price"],
+                "settings": False,
+            },
+        )
+
+    def test_external_commands_still_use_the_shell(self) -> None:
+        action = resolve_command("harbor run -p task", shell_fallback=True)
+
+        self.assertEqual(action, ShellAction(command="harbor run -p task"))
+
+    def test_fleet_opens_the_workspace_and_operations_use_the_shell(self) -> None:
+        self.assertEqual(resolve_command("fleet"), NavigateAction(href="/fleet"))
+        self.assertEqual(
+            resolve_command("fleet inspect runpod:pod-123", shell_fallback=True),
+            ShellAction(command="compute-bazaar fleet inspect runpod:pod-123"),
+        )
+
+    def test_unknown_prefixed_commands_do_not_recurse_into_the_shell(self) -> None:
+        action = resolve_command("compute-bazaar listngs", shell_fallback=True)
+
+        self.assertIsInstance(action, ErrorAction)
 
     def test_runtime_launch_mailbox_retains_one_typed_action(self) -> None:
         mailbox = TerminalLaunchMailbox()

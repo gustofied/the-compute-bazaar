@@ -46,10 +46,16 @@ data_app = typer.Typer(help="Inspect or update the local public lake.")
 sandbox_app = typer.Typer(help="Maintain StarSling workload costs.")
 model_app = typer.Typer(help="Save and run reusable DataFusion SQL models.")
 blueprint_app = typer.Typer(help="Save and open Perspective views of SQL models.")
+offers_app = typer.Typer(help="Read offers directly from compute providers.")
+launch_app = typer.Typer(help="Plan provider-native compute launches.")
+fleet_app = typer.Typer(help="Inspect and operate provisioned compute.")
 app.add_typer(data_app, name="data")
 app.add_typer(sandbox_app, name="sandbox")
 app.add_typer(model_app, name="model")
 app.add_typer(blueprint_app, name="blueprint")
+app.add_typer(offers_app, name="offers")
+app.add_typer(launch_app, name="launch")
+app.add_typer(fleet_app, name="fleet")
 
 
 @app.callback()
@@ -525,6 +531,273 @@ def listings(
     )
 
 
+@offers_app.command("list")
+def live_offer_list(
+    ctx: typer.Context,
+    provider: Annotated[
+        list[str] | None,
+        typer.Option("--provider", help="Direct provider: runpod or verda."),
+    ] = None,
+    gpu_model: Annotated[
+        str | None,
+        typer.Option(help="GPU family or exact model."),
+    ] = None,
+    include_unavailable: Annotated[
+        bool,
+        typer.Option(help="Include provider products with no live stock."),
+    ] = False,
+    limit: Annotated[int, typer.Option()] = 100,
+) -> None:
+    """Fetch current provider offers without reading the market lake."""
+    try:
+        result = _live_offers().list_offers(
+            providers=provider,
+            gpu_model=gpu_model,
+            include_unavailable=include_unavailable,
+            limit=_limit(limit),
+        )
+    except RuntimeError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if not result.offers:
+        failures = [
+            status.message or status.status
+            for status in result.providers
+            if status.status != "ok"
+        ]
+        if failures:
+            raise typer.BadParameter("; ".join(failures))
+    _emit(
+        ctx,
+        result.payload(),
+        command="offers",
+        include_source=False,
+    )
+
+
+@offers_app.command("inspect")
+def live_offer_inspect(
+    ctx: typer.Context,
+    offer_id: Annotated[str, typer.Argument()],
+) -> None:
+    """Re-fetch and inspect one provider-native offer selection."""
+    try:
+        offer = _live_offers().inspect(offer_id)
+    except RuntimeError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        ctx,
+        {
+            "contract": "compute-bazaar.live-offer.v1",
+            "observed_at": offer.observed_at,
+            "rows": [offer.row()],
+            "selection": offer.selection,
+        },
+        command="offers",
+        include_source=False,
+    )
+
+
+@launch_app.command("plan")
+def launch_plan(
+    ctx: typer.Context,
+    offer_id: Annotated[str, typer.Argument()],
+    name: Annotated[str | None, typer.Option(help="Machine name or hostname.")] = None,
+    image: Annotated[
+        str | None, typer.Option(help="Provider image identifier.")
+    ] = None,
+    ssh_key_id: Annotated[
+        list[str] | None,
+        typer.Option("--ssh-key-id", help="Provider SSH key identifier."),
+    ] = None,
+    disk_gb: Annotated[int, typer.Option(help="Operating-system disk size.")] = 50,
+    volume_gb: Annotated[int, typer.Option(help="RunPod workspace volume size.")] = 0,
+) -> None:
+    """Revalidate an offer and prepare a request without provisioning it."""
+    from .live_offers import LaunchPlanner, LiveOfferError
+
+    try:
+        plan = LaunchPlanner.from_environment().plan(
+            offer_id,
+            name=name,
+            image=image,
+            ssh_key_ids=tuple(ssh_key_id or ()),
+            disk_gb=disk_gb,
+            volume_gb=volume_gb,
+        )
+    except (LiveOfferError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(ctx, plan.payload(), command="launch", include_source=False)
+
+
+@launch_app.command("run")
+def launch_run(
+    ctx: typer.Context,
+    offer_id: Annotated[str, typer.Argument()],
+    name: Annotated[str, typer.Option(help="Machine name.")],
+    image: Annotated[str, typer.Option(help="RunPod container image.")],
+    max_hourly_usd: Annotated[
+        float,
+        typer.Option(help="Refuse the launch above this instance-hour price."),
+    ],
+    runtime_minutes: Annotated[
+        int,
+        typer.Option(help="Provider-side termination deadline, from 5 to 120 minutes."),
+    ] = 30,
+    disk_gb: Annotated[int, typer.Option(help="Container disk size.")] = 50,
+    confirm_spend: Annotated[
+        bool,
+        typer.Option("--confirm-spend", help="Confirm creation of a paid RunPod Pod."),
+    ] = False,
+) -> None:
+    """Revalidate an offer, launch it with a deadline, and register the host."""
+    from .live_offers import (
+        LaunchExecutionError,
+        LaunchPlanner,
+        LiveOfferError,
+        RunpodExecutor,
+    )
+
+    planner = LaunchPlanner.from_environment()
+    try:
+        plan = planner.plan(
+            offer_id,
+            name=name,
+            image=image,
+            disk_gb=disk_gb,
+            volume_gb=0,
+        )
+        receipt = RunpodExecutor(api_key=planner.service.runpod_api_key).execute(
+            plan,
+            runtime_minutes=runtime_minutes,
+            max_hourly_usd=max_hourly_usd,
+            confirm_spend=confirm_spend,
+        )
+    except (LaunchExecutionError, LiveOfferError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(ctx, receipt.payload(), command="launch", include_source=False)
+
+
+@fleet_app.command("hosts")
+def fleet_hosts(ctx: typer.Context) -> None:
+    """List machines known to the private local Fleet registry."""
+    from .fleet import FleetService
+
+    machines = FleetService().hosts()
+    _emit(
+        ctx,
+        {
+            "contract": "compute-bazaar.fleet-hosts.v1",
+            "rows": [machine.row() for machine in machines],
+        },
+        command="fleet",
+        include_source=False,
+    )
+
+
+@fleet_app.command("inspect")
+def fleet_inspect(
+    ctx: typer.Context,
+    host_id: Annotated[str, typer.Argument()],
+) -> None:
+    """Collect read-only system and GPU facts over SSH."""
+    from .fleet import FleetInspectError, FleetService
+
+    try:
+        inspection = FleetService().inspect(host_id)
+    except (FleetInspectError, KeyError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        ctx,
+        {
+            "contract": "compute-bazaar.fleet-inspection.v1",
+            "observed_at": inspection.observed_at,
+            "rows": [inspection.row()],
+            "inspection": inspection.model_dump(mode="json"),
+        },
+        command="fleet",
+        include_source=False,
+    )
+
+
+@fleet_app.command("refresh")
+def fleet_refresh(
+    ctx: typer.Context,
+    host_id: Annotated[str, typer.Argument()],
+) -> None:
+    """Refresh the SSH endpoint of a newly provisioned RunPod host."""
+    from .fleet import FleetRegistry
+    from .live_offers import LaunchExecutionError, LiveOfferService, RunpodExecutor
+
+    registry = FleetRegistry()
+    try:
+        machine = registry.get(host_id)
+        service = LiveOfferService.from_environment()
+        refreshed = RunpodExecutor(
+            api_key=service.runpod_api_key,
+            registry=registry,
+        ).resolve_ssh(machine)
+    except (KeyError, LaunchExecutionError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        ctx,
+        {
+            "contract": "compute-bazaar.fleet-refresh.v1",
+            "rows": [refreshed.row()],
+        },
+        command="fleet",
+        include_source=False,
+    )
+
+
+@fleet_app.command("doctor")
+def fleet_doctor(
+    ctx: typer.Context,
+    host_id: Annotated[str, typer.Argument()],
+) -> None:
+    """Evaluate one machine as workload-ready GPU capacity."""
+    from .fleet import FleetInspectError, FleetService
+
+    try:
+        result = FleetService().doctor(host_id)
+    except (FleetInspectError, KeyError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(ctx, result.payload(), command="fleet-doctor", include_source=False)
+
+
+@fleet_app.command("terminate")
+def fleet_terminate(
+    ctx: typer.Context,
+    host_id: Annotated[str, typer.Argument()],
+    confirm: Annotated[
+        bool,
+        typer.Option("--confirm", help="Confirm permanent provider deletion."),
+    ] = False,
+) -> None:
+    """Delete one RunPod host and mark it terminated locally."""
+    from .fleet import FleetRegistry
+    from .live_offers import LaunchExecutionError, LiveOfferService, RunpodExecutor
+
+    registry = FleetRegistry()
+    try:
+        machine = registry.get(host_id)
+        service = LiveOfferService.from_environment()
+        terminated = RunpodExecutor(
+            api_key=service.runpod_api_key,
+            registry=registry,
+        ).terminate(machine, confirm=confirm)
+    except (KeyError, LaunchExecutionError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        ctx,
+        {
+            "contract": "compute-bazaar.fleet-termination.v1",
+            "rows": [terminated.row()],
+        },
+        command="fleet",
+        include_source=False,
+    )
+
+
 @app.command()
 def providers(
     ctx: typer.Context,
@@ -591,7 +864,7 @@ def serve_terminal(
     ] = None,
     evaluation_root: Annotated[
         Path,
-        typer.Option(help="Local normalized evaluation reports."),
+        typer.Option(help="Local evaluation reports and notes."),
     ] = DEFAULT_EVALUATION_ROOT,
     open_browser: Annotated[
         bool,
@@ -898,6 +1171,12 @@ def _analysis_store() -> Any:
     from .analysis_store import AnalysisStore
 
     return AnalysisStore()
+
+
+def _live_offers() -> Any:
+    from .live_offers import LiveOfferService
+
+    return LiveOfferService.from_environment()
 
 
 def _require_lake(lake: LakeSelection) -> None:

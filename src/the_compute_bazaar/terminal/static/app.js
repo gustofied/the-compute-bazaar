@@ -11,7 +11,6 @@ const REQUIRED_PERSPECTIVE_PLUGINS = [
   { name: "Y Bar", tag: "perspective-viewer-charts-y-bar" },
   { name: "Y Line", tag: "perspective-viewer-charts-y-line" },
 ];
-
 const elements = {
   body: document.body,
   catalogPanel: document.querySelector("#catalog-panel"),
@@ -67,6 +66,7 @@ const state = {
   activeSource: null,
   sourceSql: null,
   hasResult: false,
+  saveable: true,
   running: false,
   sqlOpen: false,
   toastTimer: null,
@@ -130,7 +130,7 @@ function setViewerState(title, detail, { error = false, hidden = false } = {}) {
 function setRunning(running) {
   state.running = running;
   elements.run.disabled = running;
-  elements.save.disabled = running || !state.hasResult;
+  elements.save.disabled = running || !state.hasResult || !state.saveable;
   elements.run.querySelector("span").textContent = running ? "Running" : "Run query";
 }
 
@@ -358,6 +358,100 @@ async function selectScratch(sql, limit, perspective = null) {
   });
 }
 
+async function selectLiveOffers(action) {
+  if (state.running) return;
+  const params = new URLSearchParams({ limit: String(action.limit || 100) });
+  if (action.provider) params.set("provider", action.provider);
+  if (action.gpu_model) params.set("gpu_model", action.gpu_model);
+  if (action.offer_id) params.set("offer_id", action.offer_id);
+  if (action.include_unavailable) params.set("include_unavailable", "true");
+  setViewCopy(
+    "Live provider data",
+    action.offer_id ? "Live offer" : "Live compute offers",
+    "Fetched directly from RunPod and Verda.",
+  );
+  setActiveSource(null);
+  setSqlOpen(false);
+  elements.sqlToggle.disabled = true;
+  state.saveable = false;
+  setRunning(true);
+  setViewerState("Fetching live offers", "Reading the provider APIs now.");
+  try {
+    const response = await fetch(`/api/data/live-offers?${params}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(await responseError(response));
+    const arrow = await response.arrayBuffer();
+    const nextTable = await state.worker.table(arrow);
+    const previousTable = state.table;
+    await elements.viewer.load(nextTable);
+    await elements.viewer.restore({ plugin: "Datagrid", settings: false });
+    await elements.viewer.flush();
+    await elements.viewer.resize();
+    state.table = nextTable;
+    if (previousTable) await previousTable.delete();
+    const rowCount = response.headers.get("X-Compute-Bazaar-Row-Count") || "0";
+    elements.resultRows.textContent = formatCount(rowCount);
+    elements.resultTime.textContent = "live";
+    elements.resultRun.textContent = "provider APIs";
+    elements.resultRun.title = response.headers.get("X-Compute-Bazaar-Observed-At") || "";
+    state.hasResult = true;
+    setViewerState("Ready", `${formatCount(rowCount)} live offers loaded.`, { hidden: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setViewerState("Live offers unavailable", message, { error: true });
+    state.hasResult = false;
+  } finally {
+    setRunning(false);
+  }
+}
+
+async function selectLaunchPlan(action) {
+  if (state.running) return;
+  const params = new URLSearchParams({
+    offer_id: action.offer_id,
+    disk_gb: String(action.disk_gb || 50),
+    volume_gb: String(action.volume_gb || 0),
+  });
+  if (action.name) params.set("name", action.name);
+  if (action.image) params.set("image", action.image);
+  if (action.ssh_key_id) params.set("ssh_key_id", action.ssh_key_id);
+  setViewCopy(
+    "Provider request",
+    "Launch plan",
+    "Revalidated against the provider. Nothing has been created.",
+  );
+  setActiveSource(null);
+  setSqlOpen(false);
+  elements.sqlToggle.disabled = true;
+  state.saveable = false;
+  setRunning(true);
+  setViewerState("Revalidating offer", "Preparing the provider request now.");
+  try {
+    const response = await fetch(`/api/data/launch-plan?${params}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(await responseError(response));
+    const arrow = await response.arrayBuffer();
+    const nextTable = await state.worker.table(arrow);
+    const previousTable = state.table;
+    await elements.viewer.load(nextTable);
+    await elements.viewer.restore({ plugin: "Datagrid", settings: false });
+    await elements.viewer.flush();
+    await elements.viewer.resize();
+    state.table = nextTable;
+    if (previousTable) await previousTable.delete();
+    elements.resultRows.textContent = "1";
+    elements.resultTime.textContent = "live";
+    elements.resultRun.textContent = response.headers.get("X-Compute-Bazaar-Run-Id") || "draft";
+    elements.resultRun.title = response.headers.get("X-Compute-Bazaar-Observed-At") || "";
+    state.hasResult = true;
+    setViewerState("Ready", "Launch plan loaded. No request was submitted.", { hidden: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setViewerState("Launch plan unavailable", message, { error: true });
+    state.hasResult = false;
+  } finally {
+    setRunning(false);
+  }
+}
+
 async function saveCurrentAnalysis(name) {
   const config = stripTransientConfig(await elements.viewer.save());
   const activeBlueprintId = state.activeSource?.startsWith("blueprint:")
@@ -443,6 +537,8 @@ async function responseError(response) {
 async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {}) {
   if (state.running) return;
   const sql = elements.editor.value.trim();
+  state.saveable = true;
+  elements.sqlToggle.disabled = false;
   const limit = Math.max(1, Math.min(1000, Number(elements.limit.value) || 500));
   elements.limit.value = String(limit);
   if (!sql) {
@@ -642,6 +738,12 @@ async function handleTerminalAction(action) {
       }
       case "sql":
         await selectScratch(action.sql, action.limit || 500, action.perspective);
+        return;
+      case "offers":
+        await selectLiveOffers(action);
+        return;
+      case "launch-plan":
+        await selectLaunchPlan(action);
         return;
       default:
         throw new Error("This command is not available in Data.");

@@ -23,6 +23,7 @@ from .commands import (
 )
 from .data_workspace import DataWorkspace
 from .eval_workspace import EvalWorkspace
+from .fleet_workspace import FleetWorkspace
 from .shell import TerminalShell, TerminalShellError
 
 
@@ -97,6 +98,7 @@ def create_terminal_app(
         initial_perspective=initial_perspective,
     )
     eval_workspace = EvalWorkspace.load(evaluation_root)
+    fleet_workspace = FleetWorkspace(asset_root=ASSET_ROOT)
     native_token = os.getenv("COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN")
     control_token = os.getenv("COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN")
     native_session = secrets.token_urlsafe(32) if native_token else None
@@ -120,6 +122,7 @@ def create_terminal_app(
     )
     app.state.data_workspace = data_workspace
     app.state.eval_workspace = eval_workspace
+    app.state.fleet_workspace = fleet_workspace
     app.state.shell = shell
     app.state.launch_mailbox = launch_mailbox
 
@@ -148,7 +151,9 @@ def create_terminal_app(
     @app.get("/eval", include_in_schema=False)
     def evaluations() -> RedirectResponse:
         if not eval_workspace.available:
-            raise HTTPException(status_code=404, detail="No evaluation reports found")
+            raise HTTPException(
+                status_code=404, detail="No evaluation tasks or jobs found"
+            )
         return RedirectResponse("/eval/", status_code=307)
 
     @app.get("/favicon.ico", include_in_schema=False)
@@ -171,6 +176,7 @@ def create_terminal_app(
                     "available": data_status["available"],
                     "href": data_status["href"],
                 },
+                "fleet": fleet_workspace.destination(),
                 "eval": eval_workspace.destination(),
                 "trade": {"available": False, "href": None},
             },
@@ -274,9 +280,11 @@ def create_terminal_app(
             "pid": os.getpid(),
             "run_id": run.get("run_id"),
             "eval_available": eval_workspace.available,
+            "fleet_hosts": len(fleet_workspace.service.hosts()),
         }
 
     data_workspace.register(app)
+    fleet_workspace.register(app)
     eval_workspace.mount(app)
     return app
 

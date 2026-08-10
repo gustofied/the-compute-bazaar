@@ -11,18 +11,34 @@ from .gold_manifest import (
 )
 
 
-def query_gold_gpu_price_index(
+def gpu_price_index_sql(
     *,
-    lake_root: str,
-    limit: int | None = None,
-    manifest: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    manifest = manifest or read_latest_gold_manifest(lake_root)
-    table_ref = manifest["table_refs"].get("fact_gpu_price_index")
-    if not table_ref:
-        return {"manifest": manifest, "rows": []}
-
-    sql = """
+    table_name: str = "fact_gpu_price_index",
+    family: str | None = None,
+    history: bool = False,
+) -> str:
+    filters = (
+        f"where benchmark_family_id = {_sql_literal(family.upper())}"
+        if family
+        else ""
+    )
+    if history:
+        return f"""
+select
+  gold_observed_at,
+  benchmark_family_id,
+  benchmark_usd_gpu_hr,
+  floor_usd_gpu_hr,
+  provider_floor_p25_usd_gpu_hr,
+  provider_floor_p75_usd_gpu_hr,
+  included_offer_count,
+  provider_count,
+  gold_run_id
+from {table_name}
+{filters}
+order by gold_observed_at, benchmark_family_id
+"""
+    return f"""
 select
   benchmark_symbol,
   benchmark_family_id,
@@ -35,9 +51,154 @@ select
   provider_count,
   latest_observed_at,
   methodology_version as methodology
-from fact_gpu_price_index
+from {table_name}
+{filters}
 order by benchmark_family_id
 """
+
+
+def gpu_availability_sql(
+    *,
+    table_name: str,
+    gpu_model: str | None = None,
+    measurement_kind: str | None = None,
+) -> str:
+    filters: list[str] = []
+    if gpu_model:
+        filters.append(_gpu_selector("resource_type", gpu_model))
+    if measurement_kind:
+        filters.append(f"measurement_kind = {_sql_literal(measurement_kind)}")
+    where = f"where {' and '.join(filters)}" if filters else ""
+    return f"""
+select
+  observation_id,
+  observed_at,
+  resource_type,
+  provider,
+  source_connector,
+  measurement_kind,
+  measurement_scope,
+  unit,
+  total_units,
+  rented_units,
+  available_units,
+  rented_share,
+  available_share,
+  stock_status,
+  count_precision,
+  methodology_version as methodology
+from {table_name}
+{where}
+order by observed_at desc, measurement_kind, provider, resource_type
+"""
+
+
+def provider_comparison_sql(
+    *,
+    table_name: str = "fact_gpu_listings",
+    gpu_model: str | None = None,
+) -> str:
+    filters = ["source_availability_status in ('available', 'published_rate')"]
+    if gpu_model:
+        filters.append(_gpu_selector("gpu_model", gpu_model))
+    return f"""
+select
+  gpu_model,
+  provider,
+  min(price_usd_gpu_hr) as floor_usd_gpu_hr,
+  avg(price_usd_gpu_hr) as simple_mean_usd_gpu_hr,
+  min(price_usd_instance_hr) as cheapest_offer_usd_instance_hr,
+  count(*) as listing_count,
+  count(distinct country) as country_count,
+  max(observed_at) as latest_observed_at
+from {table_name}
+where {' and '.join(filters)}
+group by gpu_model, provider
+order by gpu_model, floor_usd_gpu_hr asc
+"""
+
+
+def gpu_listings_sql(
+    *,
+    table_name: str = "fact_gpu_listings",
+    gpu_model: str | None = None,
+    provider: str | None = None,
+) -> str:
+    filters = [
+        "listings.source_availability_status in ('available', 'published_rate')"
+    ]
+    if gpu_model:
+        filters.append(_gpu_selector("listings.gpu_model", gpu_model))
+    if provider:
+        filters.append(f"listings.provider = {_sql_literal(provider)}")
+    return f"""
+select
+  listings.listing_id,
+  listings.provider_id,
+  listings.gpu_model,
+  listings.gpu_product_id,
+  listings.provider,
+  listings.source_connector,
+  listings.price_usd_gpu_hr,
+  listings.price_usd_instance_hr,
+  listings.gpu_count,
+  listings.available_gpu_count_lower_bound,
+  listings.vram_gb,
+  listings.country,
+  listings.region,
+  listings.is_spot,
+  listings.is_secure,
+  listings.is_available,
+  listings.source_availability_status,
+  listings.has_raw_evidence,
+  listings.source_offer_id,
+  listings.source_run_id,
+  listings.observed_at
+from {table_name} listings
+where {' and '.join(filters)}
+order by listings.price_usd_gpu_hr asc, listings.price_usd_instance_hr asc
+"""
+
+
+def prime_offer_history_sql(
+    *,
+    table_name: str = "fact_prime_frontier_offer_reference_history",
+    family: str | None = None,
+) -> str:
+    where = (
+        f"where gpu_family_id = {_sql_literal(family.upper())}" if family else ""
+    )
+    return f"""
+select
+  gold_observed_at,
+  gpu_family_id,
+  reference_usd_gpu_hr,
+  minimum_executable_reference_usd_gpu_hr,
+  best_usd_gpu_hr,
+  provider_floor_p25_usd_gpu_hr,
+  provider_floor_p75_usd_gpu_hr,
+  provider_count,
+  configuration_count,
+  status,
+  gold_run_id
+from {table_name}
+{where}
+order by gold_observed_at, gpu_family_id
+"""
+
+
+def query_gold_gpu_price_index(
+    *,
+    lake_root: str,
+    limit: int | None = None,
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    manifest = manifest or read_latest_gold_manifest(lake_root)
+    table_ref = manifest["table_refs"].get("fact_gpu_price_index")
+    if not table_ref:
+        return {"manifest": manifest, "rows": []}
+
+    sql = gpu_price_index_sql()
     rows = DataFusionEngine({"fact_gpu_price_index": table_ref}).query(
         _with_limit(sql, limit)
     )
@@ -92,34 +253,11 @@ def query_gold_gpu_availability(
     if not table_ref:
         return {"manifest": manifest, "rows": []}
 
-    filters: list[str] = []
-    if gpu_model:
-        filters.append(_gpu_selector("resource_type", gpu_model))
-    if measurement_kind:
-        filters.append(f"measurement_kind = {_sql_literal(measurement_kind)}")
-    where = f"where {' and '.join(filters)}" if filters else ""
-    sql = f"""
-select
-  observation_id,
-  observed_at,
-  resource_type,
-  provider,
-  source_connector,
-  measurement_kind,
-  measurement_scope,
-  unit,
-  total_units,
-  rented_units,
-  available_units,
-  rented_share,
-  available_share,
-  stock_status,
-  count_precision,
-  methodology_version as methodology
-from {table_name}
-{where}
-order by observed_at desc, measurement_kind, provider, resource_type
-"""
+    sql = gpu_availability_sql(
+        table_name=table_name,
+        gpu_model=gpu_model,
+        measurement_kind=measurement_kind,
+    )
     rows = DataFusionEngine({table_name: str(table_ref)}).query(_with_limit(sql, limit))
     return {"manifest": manifest, "rows": rows}
 
@@ -160,25 +298,7 @@ def query_gold_provider_comparison(
 ) -> dict[str, Any]:
     manifest = manifest or read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"]["fact_gpu_listings"]
-    filters = ["source_availability_status in ('available', 'published_rate')"]
-    if gpu_model:
-        filters.append(_gpu_selector("gpu_model", gpu_model))
-    where = f"where {' and '.join(filters)}"
-    sql = f"""
-select
-  gpu_model,
-  provider,
-  min(price_usd_gpu_hr) as floor_usd_gpu_hr,
-  avg(price_usd_gpu_hr) as simple_mean_usd_gpu_hr,
-  min(price_usd_instance_hr) as cheapest_offer_usd_instance_hr,
-  count(*) as listing_count,
-  count(distinct country) as country_count,
-  max(observed_at) as latest_observed_at
-from fact_gpu_listings
-{where}
-group by gpu_model, provider
-order by gpu_model, floor_usd_gpu_hr asc
-"""
+    sql = provider_comparison_sql(gpu_model=gpu_model)
     rows = DataFusionEngine({"fact_gpu_listings": table_ref}).query(
         _with_limit(sql, limit)
     )
@@ -195,39 +315,10 @@ def query_gold_listings(
 ) -> dict[str, Any]:
     manifest = manifest or read_latest_gold_manifest(lake_root)
     table_ref = manifest["table_refs"]["fact_gpu_listings"]
-    filters = ["source_availability_status in ('available', 'published_rate')"]
-    if gpu_model:
-        filters.append(_gpu_selector("gpu_model", gpu_model))
-    if provider:
-        filters.append(f"provider = {_sql_literal(provider)}")
-    where = f"where {' and '.join(filters)}"
-    sql = f"""
-select
-  listing_id,
-  provider_id,
-  gpu_model,
-  gpu_product_id,
-  provider,
-  source_connector,
-  price_usd_gpu_hr,
-  price_usd_instance_hr,
-  gpu_count,
-  available_gpu_count_lower_bound,
-  vram_gb,
-  country,
-  region,
-  is_spot,
-  is_secure,
-  is_available,
-  source_availability_status,
-  has_raw_evidence,
-  source_offer_id,
-  source_run_id,
-  observed_at
-from fact_gpu_listings
-{where}
-order by price_usd_gpu_hr asc, price_usd_instance_hr asc
-"""
+    sql = gpu_listings_sql(
+        gpu_model=gpu_model,
+        provider=provider,
+    )
     rows = DataFusionEngine({"fact_gpu_listings": table_ref}).query(
         _with_limit(sql, limit)
     )

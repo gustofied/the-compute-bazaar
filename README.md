@@ -1,7 +1,7 @@
 <p align="center">
   <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440"><br>
   <strong>The Compute Bazaar</strong><br>
-  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • Eval • Fleet • Trade
+  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#fleet">Fleet</a> • Eval • Trade
 </p>
 
 My vision is to build The Compute Bazaar as much for humans as for
@@ -71,6 +71,18 @@ limit 20
 "
 ```
 
+`listings` reads the synced hourly record. `offers` asks RunPod and Verda for
+what can be selected now.
+
+```bash
+uv sync --extra live
+compute-bazaar offers list --provider runpod --gpu-model H100
+compute-bazaar offers inspect OFFER_ID
+```
+
+RunPod's live catalog is public. Verda live availability uses the OAuth values
+shown in `.env.example`.
+
 ## Terminal
 
 <p align="center">
@@ -93,7 +105,7 @@ pnpm --dir terminal install
 compute-bazaar terminal
 ```
 
-The Terminal opens with Data, Eval, and Trade. Data is where DataFusion queries
+The Terminal opens with Data, Fleet, Eval, and Trade. Data is where DataFusion queries
 market data and [Perspective](https://perspective-dev.github.io) turns the
 results into tables and charts. Eval contains agent evaluation tasks, jobs, and
 trials powered by Harbor. Trade is in the works.
@@ -134,6 +146,33 @@ Data and Eval. Stop the Terminal with:
 
 ```bash
 compute-bazaar terminal --stop
+```
+
+## Fleet
+
+<p align="center">
+  <img src="assets/compute-bazaar-fleet.webp" alt="The Compute Bazaar Fleet watching a live RunPod GPU machine" width="80%">
+</p>
+
+Fleet connects to rented machines over SSH. It checks what arrived, reports
+whether the machine is ready, and monitors its GPU, CPU, memory, disk, power,
+and temperature every five seconds.
+
+```bash
+compute-bazaar offers list --provider runpod
+
+compute-bazaar launch run OFFER_ID \
+  --name HOST \
+  --image runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404 \
+  --max-hourly-usd 0.75 \
+  --runtime-minutes 30 \
+  --confirm-spend
+
+compute-bazaar fleet hosts
+compute-bazaar fleet inspect HOST_ID
+compute-bazaar fleet doctor HOST_ID
+compute-bazaar terminal
+compute-bazaar fleet terminate HOST_ID --confirm
 ```
 
 ## Data
