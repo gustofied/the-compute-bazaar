@@ -33,6 +33,8 @@ tfplan
 *.xlsx
 !assets/compute-bazaar-wordmark.png
 !compute-bazaar-bench/evals/**/environment/matter/*.csv
+!compute-bazaar-bench/evals/transactions/draft-capacity-data-room-population-plan/environment/documents/evidence-register.xlsx
+!compute-bazaar-bench/evals/transactions/compare-capacity-agreement-against-term-sheet/environment/documents/buyer-risk-checklist.xlsx
 !terminal/src-tauri/icons/icon.png
 
 
