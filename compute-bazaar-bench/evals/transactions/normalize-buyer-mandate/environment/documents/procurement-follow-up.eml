@@ -1,0 +1,40 @@
+From: Maya Chen <maya.chen@northstar-models.example>
+To: Eli Navarro <eli@meridian-capacity.example>
+Date: Fri, 07 Aug 2026 16:42:00 -0400
+Subject: CB-2026-041 - corrections to buyer mandate
+Message-ID: <procurement-follow-up@synthetic.compute-bazaar-bench>
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+Eli,
+
+Please use this note where it conflicts with the intake form. We tightened th=
+e mandate after finance and engineering review.
+
+Firm scope is 1,024 B200 SXM GPUs in dedicated eight-GPU HGX nodes. The other=
+ 1,024 is only an expansion option; do not show 2,048 as firm demand.
+
+The ramp we can underwrite is 512 GPUs by January 15, 2027 and the remaining =
+512 by February 1. The firm term is 18 months from first-tranche service, wit=
+h one six-month extension option. The intake's January 1 date and 12-month te=
+rm are stale.
+
+$3.10/GPU-hour is our target, not the absolute ceiling. The hard all-in cap i=
+s $3.35/GPU-hour, excluding taxes. Power or other operating pass-throughs mus=
+t fit inside that cap. We will not prepay more than three months of committed=
+ charges. Please get a separate egress schedule; that is still open.
+
+US East or US Midwest works. Virginia is preferred, not required, but all cus=
+tomer data and the production cluster must remain in the United States. Hourl=
+y renewable matching is useful for reporting but is not a condition to procee=
+d.
+
+No shared or fractional service. We also need to know which legal entity sign=
+s, whether it controls the site and GPUs, what liens sit on the hardware, and=
+ what evidence supports the delivery dates. Engineering's August 4 requiremen=
+ts remain current. The NCCL reference and pass threshold still need to be agr=
+eed.
+
+Thanks,
+Maya

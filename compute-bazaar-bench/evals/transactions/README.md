@@ -18,6 +18,12 @@ analyze      -> draft                      -> review
 > transaction accurately, with evidence, and without losing the deal's
 > controlling terms?
 
+## v1
+
+The first local baseline ran Mistral Medium 3.5 five times on each task:
+`15/15` valid deliverables and a `0.6840` equal-task semantic score. See the
+[results and notes](results/transactions-v1-mistral-medium.md).
+
 ## Adaptation Approach
 
 The initial tasks are methodological adaptations, not legal tasks with a few

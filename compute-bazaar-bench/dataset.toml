@@ -8,3 +8,15 @@ name = "Adam Sioud"
 [[tasks]]
 name = "gustofied/reliability-is-blind"
 digest = "sha256:f8a279f04b4db8dc419e1df3dc58137b24520ea162fe0fde48077868bd4d89a2"
+
+[[tasks]]
+name = "gustofied/normalize-buyer-mandate"
+digest = "sha256:2932b4083612616afa6f3867e0208a546743025424c484342f5fbad889083410"
+
+[[tasks]]
+name = "gustofied/draft-capacity-data-room-population-plan"
+digest = "sha256:d5132045ccf8068060fb483e7c70996cc4a61a410230f13238be87569b1fdbe7"
+
+[[tasks]]
+name = "gustofied/compare-capacity-agreement-against-term-sheet"
+digest = "sha256:370004ab122e5036ecf8f60ac074f609f8d527db216f5500620b6721c83532e6"

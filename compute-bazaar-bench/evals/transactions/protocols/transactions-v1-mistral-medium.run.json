@@ -1,0 +1,25 @@
+{
+  "schema_version": "compute-bazaar-bench.transactions.run-record.v1",
+  "protocol_id": "transactions-v1-mistral-medium",
+  "official_job": "transactions-v1-mistral-medium-002",
+  "excluded_preflight_job": {
+    "name": "transactions-v1-mistral-medium-001",
+    "reason": "Restricted-network Modal DNS failure during environment setup. No agent execution began."
+  },
+  "provenance": {
+    "status": "locally_predeclared",
+    "note": "The dated protocol predates the official Harbor lock and pins the exact task digests, but it and the task packages were not Git-committed before execution."
+  },
+  "sampling": {
+    "controlled_seed": false,
+    "judge_passes_per_submission": 1,
+    "note": "The five attempts per task are unseeded rollouts. Each semantic criterion received one frozen GPT-5.4 judgment across three batches per submission."
+  },
+  "costs": {
+    "agent_inference_usd": null,
+    "judge_usd": null,
+    "modal_compute_usd": null,
+    "judge_calls": 45,
+    "note": "Agent inference, 45 GPT-5.4 judge calls, and Modal compute were not dollar-reconciled."
+  }
+}

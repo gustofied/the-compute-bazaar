@@ -1,0 +1,48 @@
+From: Owen Mercer <owen.mercer@alder-ridge.example>
+To: Tess Ward <tess.ward@alder-ridge.example>
+Cc: Marcus Hale <marcus.hale@alder-ridge.example>,
+ Nadia Hart <nadia@hartvale.example>
+Date: Wed, 12 Aug 2026 09:18:00 -0500
+Subject: Blue Mesa / Northstar - room population instructions
+Message-ID: <operator-instructions@synthetic.compute-bazaar-bench>
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+Tess,
+
+Please build the working population plan against Northstar's request. Phase 1=
+ is August 17 and Phase 2 is August 24. Use both precedents for shape, but th=
+e buyer request controls.
+
+The request is addressed to Alder Ridge Compute LLC. Do not let that hide whe=
+re the rights sit: Campus LLC holds the site and utility documents, and North=
+line holds the GPU purchase documents and operating contracts. Include both a=
+nd flag the scope issue.
+
+For Phase 1, supplier purchase and warranty documents may be redacted for pri=
+ce and unrelated allocations. Unredacted copies should go to the agreed clean=
+ team in Phase 2. Northstar asked for unredacted provenance, so show that con=
+flict and do not assume they will accept the redactions.
+
+Do not release unredacted utility tariff or energy-price schedules until Marc=
+us and I approve the clean-team treatment. Northstar asked for them. Escalate=
+ the mismatch rather than marking the request complete or quietly omitting it.
+
+The general contract threshold is $500,000, but the Blue Mesa site option, No=
+rthSpan carrier agreement, and PolarLoop cooling O&M agreement are operationa=
+lly critical and must be included even if they fall below the threshold. Rout=
+ine board approvals can be shared after review; bid strategy and valuation ma=
+terial should be redacted document by document, not used as a reason to withh=
+old the whole board book.
+
+Create a consent tracker for the site option, utility service agreement, Nort=
+hSpan agreement, PolarLoop agreement, and Crestline equipment credit agreemen=
+t. Prioritize power delivery, site control, hardware title and liens, and the=
+ cooling refresh. Kestrel's commissioning report predates the B200 expansion,=
+ so it is not current evidence for the offered build.
+
+Every line needs an owner, phase, access level, status, and next step. No doc=
+ument dump, and no guessing a missing item into existence.
+
+Owen

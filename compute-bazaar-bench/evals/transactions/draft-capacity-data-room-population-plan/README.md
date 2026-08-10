@@ -1,19 +1,13 @@
 # draft-capacity-data-room-population-plan
 
-**Status:** planned
+Draft the plan for populating a seller-side capacity data room.
 
-**Stage:** diligence
+The matter contains a buyer diligence request, project stakeholder map,
+evidence register, operator instructions, and two precedent indexes. The plan
+must say what belongs in the room, who owns it, when it should arrive, who may
+see it, and where the evidence or instructions conflict.
 
-**Harvey analogue:**
-[Draft sell-side data-room population plan](https://hub.harborframework.com/tasks/punitarani/corporate-ma-draft-data-room-population-plan-scenario-01/latest).
+Output: `capacity-data-room-population-plan.docx`
 
-The source task combines a buyer request list, organization chart,
-material-document inventory, partner instructions, two precedent indexes, and
-a population plan with 53 rubric criteria.
-
-The compute adaptation will use a buyer compute-diligence request list,
-operator and project stakeholder map, existing evidence register, broker or
-operator instructions, and precedent capacity-room indexes. The deliverable
-will be a `capacity-data-room-population-plan.docx` defining folders, owners,
-phases, sensitivities, missing evidence, dependencies, and conflicting
-instructions.
+Adapted from Harvey LAB's [Draft sell-side data-room population
+plan](https://hub.harborframework.com/tasks/punitarani/corporate-ma-draft-data-room-population-plan-scenario-01/latest).
