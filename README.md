@@ -38,6 +38,18 @@ More detail: [Architecture](docs/architecture.md).
 Install the project and sync the hourly updated public market lake.
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/gustofied/the-compute-bazaar/main/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+compute-bazaar terminal
+```
+
+The installer keeps the checkout under `~/.local/share/compute-bazaar` and puts
+the command in `~/.local/bin`. Without Node.js, pnpm, and Rust, the same command
+opens the Terminal in a browser.
+
+For development, clone the repository directly.
+
+```bash
 git clone https://github.com/gustofied/the-compute-bazaar.git
 cd the-compute-bazaar
 uv sync
