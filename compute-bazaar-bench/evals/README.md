@@ -2,5 +2,5 @@
 
 - [`reliability-is-blind`](reliability-is-blind/README.md) is an implemented
   interactive brokerage evaluation.
-- [`transactions`](transactions/README.md) contains professional-work
-  evaluations spanning intake, diligence, and contracting.
+- [`transactions`](transactions/README.md) evaluates agents on compute
+  transaction work across intake, diligence, and contracting.
