@@ -1,14 +1,13 @@
 {
   "schema_version": "compute-bazaar-bench.transactions.release-summary.v1",
   "release_id": "transactions",
-  "protocol_sha256": "46fa6fa6df984686785aeaedb044110514b9a224658a2df2238258ec3a8fe9e2",
   "scenario": "CB-2026-041",
   "rows": [
     {
       "model_key": "deepseek-v4-flash-0731",
       "model": "DeepSeek V4 Flash 0731",
       "job": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
-      "execution_origin": "preserved_output_adjudication",
+      "execution_origin": "original_harbor_output_final_checklist",
       "execution_label": "Original Harbor output, final checklist",
       "planned": 15,
       "completed": 15,
@@ -125,7 +124,7 @@
       "model_key": "gpt-5.6-luna",
       "model": "GPT-5.6 Luna",
       "job": "transactions-comparison-v1-gpt-5.6-luna-001",
-      "execution_origin": "preserved_output_adjudication",
+      "execution_origin": "original_harbor_output_final_checklist",
       "execution_label": "Original Harbor output, final checklist",
       "planned": 15,
       "completed": 15,
@@ -241,7 +240,7 @@
       "model_key": "glm-5.2",
       "model": "GLM 5.2",
       "job": "transactions-comparison-v1-glm-5.2-001",
-      "execution_origin": "preserved_output_adjudication",
+      "execution_origin": "original_harbor_output_final_checklist",
       "execution_label": "Original Harbor output, final checklist",
       "planned": 15,
       "completed": 15,

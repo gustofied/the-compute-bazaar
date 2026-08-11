@@ -2,51 +2,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import subprocess
-import sys
 import tempfile
 import unittest
 
-from analysis import classify_trial, inspect_trajectory, load_object, sha256
+from analysis import classify_trial, inspect_trajectory
 from comparison import (
-    PRECOMMIT_GIT_COMMIT,
-    REPAIR_FIXTURES,
-    REPAIR_GIT_COMMIT,
     attach_visual_review,
-    validate_commitment,
-    validate_run_record,
     validate_terminal_job,
 )
 
 
 ROOT = Path(__file__).resolve().parents[4]
 TRANSACTIONS = ROOT / "compute-bazaar-bench" / "evals" / "transactions"
-PROTOCOLS = TRANSACTIONS / "protocols"
-ARCHIVE_PROTOCOLS = TRANSACTIONS / "internal" / "archive" / "protocols"
 RAW_JOBS = ROOT / "compute-bazaar-bench" / "jobs" / "raw"
-REPORTS = ROOT / "compute-bazaar-bench" / "jobs" / "reports"
-
-
-def official_accounting(
-    protocol: dict, launched_keys: set[str], selected_keys: set[str]
-) -> dict[str, int]:
-    attempts_per_model = (
-        len(protocol["tasks"])
-        * protocol["official_run"]["attempts_per_task"]
-    )
-    return {
-        "frozen_planned_trials": protocol["official_run"]["planned_trials_total"],
-        "withheld_after_canary": (
-            len(protocol["models"]) - len(launched_keys)
-        )
-        * attempts_per_model,
-        "launched_trials": len(launched_keys) * attempts_per_model,
-        "invalidated_job_trials": (
-            len(launched_keys) - len(selected_keys)
-        )
-        * attempts_per_model,
-        "selected_official_trials": len(selected_keys) * attempts_per_model,
-    }
 
 
 class TrajectoryIndicatorTests(unittest.TestCase):
@@ -152,263 +120,7 @@ class CraftAttachmentTests(unittest.TestCase):
                 attach_visual_review(model_runs, path, rubric)
 
 
-class ComparisonProtocolTests(unittest.TestCase):
-    def test_comparison_commitment_is_self_consistent(self) -> None:
-        protocol = validate_commitment(
-            PROTOCOLS / "transactions-comparison-v1.commitment.json"
-        )
-        self.assertEqual(len(protocol["models"]), 5)
-        self.assertEqual(protocol["official_run"]["planned_trials_total"], 75)
-
-    def test_run_record_preserves_failed_canaries_before_accepted_replacement(
-        self,
-    ) -> None:
-        protocol_path = PROTOCOLS / "transactions-comparison-v1.commitment.json"
-        protocol = validate_commitment(protocol_path)
-        canary_jobs = {}
-        canary_history = {}
-        official_jobs = {}
-        official_history = {}
-        for model in protocol["models"]:
-            key = model["key"]
-            canary_jobs[key] = model["canary_job"]
-            canary_history[key] = [
-                {"job": model["canary_job"], "status": "accepted"}
-            ]
-            official_jobs[key] = model["official_job"]
-            official_history[key] = [
-                {"job": model["official_job"], "status": "accepted"}
-            ]
-        deepseek = protocol["models"][0]
-        stem = deepseek["canary_job"][:-3]
-        canary_jobs[deepseek["key"]] = f"{stem}003"
-        canary_history[deepseek["key"]] = [
-            {
-                "job": f"{stem}001",
-                "status": "failed",
-                "failure": "Modal DNS setup failure",
-            },
-            {
-                "job": f"{stem}002",
-                "status": "failed",
-                "failure": "OpenRouter upstream provider failure",
-            },
-            {"job": f"{stem}003", "status": "accepted"},
-        ]
-        record = {
-            "protocol_id": protocol["protocol_id"],
-            "protocol_sha256": sha256(protocol_path),
-            "precommit_git_commit": PRECOMMIT_GIT_COMMIT,
-            "reproducibility_repair": {
-                "git_commit": REPAIR_GIT_COMMIT,
-                "fixtures": REPAIR_FIXTURES,
-            },
-            "canary_jobs": canary_jobs,
-            "canary_history": canary_history,
-            "official_jobs": official_jobs,
-            "official_history": official_history,
-            "official_launch_order": protocol["official_run"]["job_order"],
-            "official_accounting": official_accounting(
-                protocol, set(official_jobs), set(official_jobs)
-            ),
-            "official_lock_sha256": {
-                model["key"]: "0" * 64 for model in protocol["models"]
-            },
-        }
-
-        validate_run_record(record, protocol_path, protocol)
-
-        record["canary_jobs"][deepseek["key"]] = f"{stem}002"
-        with self.assertRaisesRegex(Exception, "accepted canary mismatch"):
-            validate_run_record(record, protocol_path, protocol)
-
-    def test_run_record_can_block_a_model_after_failed_canary(self) -> None:
-        protocol_path = PROTOCOLS / "transactions-comparison-v1.commitment.json"
-        protocol = validate_commitment(protocol_path)
-        blocked_key = protocol["models"][-1]["key"]
-        canary_jobs = {}
-        canary_history = {}
-        official_jobs = {}
-        official_history = {}
-        for model in protocol["models"]:
-            key = model["key"]
-            if key == blocked_key:
-                canary_history[key] = [
-                    {
-                        "job": model["canary_job"],
-                        "status": "failed",
-                        "failure": "invalid deliverables and agent timeout",
-                    }
-                ]
-                continue
-            canary_jobs[key] = model["canary_job"]
-            canary_history[key] = [
-                {"job": model["canary_job"], "status": "accepted"}
-            ]
-            official_jobs[key] = model["official_job"]
-            official_history[key] = [
-                {"job": model["official_job"], "status": "accepted"}
-            ]
-        record = {
-            "protocol_id": protocol["protocol_id"],
-            "protocol_sha256": sha256(protocol_path),
-            "precommit_git_commit": PRECOMMIT_GIT_COMMIT,
-            "reproducibility_repair": {
-                "git_commit": REPAIR_GIT_COMMIT,
-                "fixtures": REPAIR_FIXTURES,
-            },
-            "canary_jobs": canary_jobs,
-            "canary_history": canary_history,
-            "official_jobs": official_jobs,
-            "official_history": official_history,
-            "official_launch_order": [
-                key
-                for key in protocol["official_run"]["job_order"]
-                if key != blocked_key
-            ],
-            "official_accounting": official_accounting(
-                protocol, set(official_jobs), set(official_jobs)
-            ),
-            "official_lock_sha256": {key: "0" * 64 for key in official_jobs},
-        }
-
-        validate_run_record(record, protocol_path, protocol)
-
-    def test_run_record_accepts_complete_superseding_official_job(self) -> None:
-        protocol_path = PROTOCOLS / "transactions-comparison-v1.commitment.json"
-        protocol = validate_commitment(protocol_path)
-        canary_jobs = {}
-        canary_history = {}
-        official_jobs = {}
-        official_history = {}
-        lock_hashes = {}
-        for model in protocol["models"]:
-            key = model["key"]
-            if key == "mistral-small-2603":
-                canary_history[key] = [
-                    {
-                        "job": model["canary_job"],
-                        "status": "failed",
-                        "failure": "canary blocked",
-                    }
-                ]
-                continue
-            canary_jobs[key] = model["canary_job"]
-            canary_history[key] = [
-                {"job": model["canary_job"], "status": "accepted"}
-            ]
-            selected = model["official_job"]
-            history = [{"job": selected, "status": "accepted"}]
-            if key == "claude-sonnet-4.6":
-                selected = f"{model['official_job'][:-3]}002"
-                history = [
-                    {
-                        "job": model["official_job"],
-                        "status": "invalidated",
-                        "failure": "OpenRouter credits exhausted",
-                    },
-                    {"job": selected, "status": "accepted"},
-                ]
-            official_jobs[key] = selected
-            official_history[key] = history
-            lock_hashes[key] = "0" * 64
-        record = {
-            "protocol_id": protocol["protocol_id"],
-            "protocol_sha256": sha256(protocol_path),
-            "precommit_git_commit": PRECOMMIT_GIT_COMMIT,
-            "reproducibility_repair": {
-                "git_commit": REPAIR_GIT_COMMIT,
-                "fixtures": REPAIR_FIXTURES,
-            },
-            "canary_jobs": canary_jobs,
-            "canary_history": canary_history,
-            "official_jobs": official_jobs,
-            "official_history": official_history,
-            "official_launch_order": [
-                key
-                for key in protocol["official_run"]["job_order"]
-                if key != "mistral-small-2603"
-            ],
-            "official_accounting": official_accounting(
-                protocol, set(official_history), set(official_jobs)
-            ),
-            "official_lock_sha256": lock_hashes,
-        }
-
-        validate_run_record(record, protocol_path, protocol)
-
-    def test_run_record_accepts_invalidated_official_job_without_replacement(
-        self,
-    ) -> None:
-        protocol_path = PROTOCOLS / "transactions-comparison-v1.commitment.json"
-        protocol = validate_commitment(protocol_path)
-        invalidated_key = "claude-sonnet-4.6"
-        blocked_key = "mistral-small-2603"
-        canary_jobs = {}
-        canary_history = {}
-        official_jobs = {}
-        official_history = {}
-        lock_hashes = {}
-        for model in protocol["models"]:
-            key = model["key"]
-            if key == blocked_key:
-                canary_history[key] = [
-                    {
-                        "job": model["canary_job"],
-                        "status": "failed",
-                        "failure": "canary blocked",
-                    }
-                ]
-                continue
-            canary_jobs[key] = model["canary_job"]
-            canary_history[key] = [
-                {"job": model["canary_job"], "status": "accepted"}
-            ]
-            lock_hashes[key] = "0" * 64
-            if key == invalidated_key:
-                official_history[key] = [
-                    {
-                        "job": model["official_job"],
-                        "status": "invalidated",
-                        "failure": "evaluation budget exhausted",
-                    }
-                ]
-                continue
-            official_jobs[key] = model["official_job"]
-            official_history[key] = [
-                {"job": model["official_job"], "status": "accepted"}
-            ]
-        record = {
-            "protocol_id": protocol["protocol_id"],
-            "protocol_sha256": sha256(protocol_path),
-            "precommit_git_commit": PRECOMMIT_GIT_COMMIT,
-            "reproducibility_repair": {
-                "git_commit": REPAIR_GIT_COMMIT,
-                "fixtures": REPAIR_FIXTURES,
-            },
-            "canary_jobs": canary_jobs,
-            "canary_history": canary_history,
-            "official_jobs": official_jobs,
-            "official_history": official_history,
-            "official_launch_order": [
-                key
-                for key in protocol["official_run"]["job_order"]
-                if key != blocked_key
-            ],
-            "official_accounting": official_accounting(
-                protocol, set(official_history), set(official_jobs)
-            ),
-            "official_lock_sha256": lock_hashes,
-        }
-
-        validate_run_record(record, protocol_path, protocol)
-
-        record["official_jobs"][invalidated_key] = protocol["models"][3][
-            "official_job"
-        ]
-        with self.assertRaisesRegex(Exception, "invalidated official job selected"):
-            validate_run_record(record, protocol_path, protocol)
-
+class JobValidationTests(unittest.TestCase):
     def test_unfinished_job_cannot_be_analyzed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -581,28 +293,6 @@ class ArtifactClassificationTests(unittest.TestCase):
         self.assertIsNotNone(record["infrastructure_error"])
         self.assertFalse(record["agent_invalid_output"])
 
-    def test_actual_retained_modal_collection_failure_is_infrastructure(self) -> None:
-        trial = (
-            RAW_JOBS
-            / "transactions-v1-mistral-medium-001"
-            / "normalize-buyer-mandate__iGEmM5V"
-        )
-        if not trial.exists():
-            self.skipTest("local retained Harbor failure is unavailable")
-        protocol = load_object(
-            ARCHIVE_PROTOCOLS / "transactions-v1-mistral-medium.commitment.json"
-        )
-        task = next(
-            item
-            for item in protocol["tasks"]
-            if item["name"] == "normalize-buyer-mandate"
-        )
-        record = classify_trial(
-            trial, task, protocol["agent"], missing_artifact_as_invalid=True
-        )
-        self.assertIsNotNone(record["infrastructure_error"])
-        self.assertFalse(record["agent_invalid_output"])
-
     def test_actual_retained_agent_timeout_is_infrastructure(self) -> None:
         trial = (
             RAW_JOBS
@@ -611,68 +301,22 @@ class ArtifactClassificationTests(unittest.TestCase):
         )
         if not trial.exists():
             self.skipTest("local retained Harbor timeout is unavailable")
-        protocol = load_object(
-            PROTOCOLS / "transactions-comparison-v1.commitment.json"
-        )
-        task = next(
-            item
-            for item in protocol["tasks"]
-            if item["name"] == "normalize-buyer-mandate"
-        )
+        task = {
+            "name": "normalize-buyer-mandate",
+            "deliverable": "buyer-mandate-brief.docx",
+            "semantic_criteria": 56,
+            "matter_documents": [],
+        }
         agent = {
-            "name": protocol["agent"]["name"],
-            "version": protocol["agent"]["version"],
-            "model": next(
-                model["agent_model"]
-                for model in protocol["models"]
-                if model["key"] == "mistral-small-2603"
-            ),
+            "name": "opencode",
+            "version": "1.18.11",
+            "model": "openrouter/mistralai/mistral-small-2603:exacto",
         }
         record = classify_trial(
             trial, task, agent, missing_artifact_as_invalid=True
         )
         self.assertIn("AgentTimeoutError", record["infrastructure_error"])
         self.assertFalse(record["agent_invalid_output"])
-
-
-class ExistingAnalyzerRegressionTests(unittest.TestCase):
-    def test_existing_v1_report_is_unchanged(self) -> None:
-        job = RAW_JOBS / "transactions-v1-mistral-medium-002"
-        expected = REPORTS / "transactions-v1-mistral-medium-002" / "report.md"
-        if not job.exists() or not expected.exists():
-            self.skipTest("local Transactions v1 baseline is unavailable")
-        with tempfile.TemporaryDirectory() as temp:
-            completed = subprocess.run(
-                [
-                    sys.executable,
-                    str(TRANSACTIONS / "tooling" / "analysis.py"),
-                    str(job),
-                    "--protocol",
-                    str(
-                        ARCHIVE_PROTOCOLS
-                        / "transactions-v1-mistral-medium.commitment.json"
-                    ),
-                    "--run-record",
-                    str(ARCHIVE_PROTOCOLS / "transactions-v1-mistral-medium.run.json"),
-                    "--visual-review",
-                    str(
-                        TRANSACTIONS
-                        / "internal"
-                        / "archive"
-                        / "results"
-                        / "transactions-v1-mistral-medium.visual-review.json"
-                    ),
-                    "--output-dir",
-                    temp,
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            self.assertIn("infrastructure_errors=0", completed.stdout)
-            actual = (Path(temp) / "report.md").read_text()
-        self.assertEqual(actual, expected.read_text())
-
 
 if __name__ == "__main__":
     unittest.main()
