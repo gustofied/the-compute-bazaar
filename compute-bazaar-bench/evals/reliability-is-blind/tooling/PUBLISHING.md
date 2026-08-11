@@ -5,7 +5,7 @@ Reliability Is Blind is published as the Harbor task
 `gustofied/compute-bazaar-bench`, alongside the other Compute Bazaar tasks.
 
 The umbrella dataset points to task digest
-`sha256:f8a279f04b4db8dc419e1df3dc58137b24520ea162fe0fde48077868bd4d89a2`.
+`sha256:93439e8c2ed656a45bafd86db0b807d26e7f4838a7c00a59928cbaa04f937267`.
 
 ## Public Surface
 
