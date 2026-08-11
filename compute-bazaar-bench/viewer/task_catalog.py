@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 import tomllib
 from typing import Any
@@ -35,7 +36,6 @@ def _load_task(
 ) -> TaskInfo:
     raw = tomllib.loads(config_path.read_text(encoding="utf-8"))
     task_config = _mapping(raw.get("task"))
-    metadata = _mapping(raw.get("metadata"))
     verifier = _mapping(raw.get("verifier"))
     task_root = config_path.parent
 
@@ -49,10 +49,8 @@ def _load_task(
         else ""
     )
 
-    domain = str(metadata.get("domain") or "").strip()
-    tags = [str(tag) for tag in metadata.get("tags", [])]
-    if not domain:
-        domain = "Brokerage game" if "game" in tags else _fallback_domain(task_root)
+    keywords = [str(keyword) for keyword in task_config.get("keywords", [])]
+    domain = _fallback_domain(task_root, keywords)
 
     links = [
         TaskLink(
@@ -70,7 +68,7 @@ def _load_task(
         domain=domain.replace("-", " ").title(),
         description=str(task_config.get("description") or ""),
         instruction=instruction,
-        grader=_grader_info(task_root, metadata, verifier),
+        grader=_grader_info(task_root, verifier),
         links=links,
         launch=LaunchSpec(package_path=package_path, task_id=slug),
     )
@@ -90,15 +88,14 @@ def _read_title(task_root: Path, slug: str) -> str:
     return slug.replace("-", " ").title()
 
 
-def _fallback_domain(task_root: Path) -> str:
-    if task_root.name in {"harbor", "task"}:
-        return task_root.parent.name
+def _fallback_domain(task_root: Path, keywords: list[str]) -> str:
+    if "market-game" in keywords:
+        return "compute-market-games"
     return task_root.parent.name
 
 
 def _grader_info(
     task_root: Path,
-    metadata: dict[str, Any],
     verifier: dict[str, Any],
 ) -> GraderInfo:
     test_script = task_root / "tests" / "test.sh"
@@ -113,12 +110,11 @@ def _grader_info(
             if isinstance(item, dict) and item.get("name")
         ]
 
-    criterion_count = metadata.get("n_criteria")
-    deterministic_count = metadata.get("n_deterministic_criteria")
+    criterion_count, deterministic_count = _criterion_counts(task_root)
     metric_parts = []
-    if isinstance(criterion_count, int):
+    if criterion_count:
         metric_parts.append(f"{criterion_count} semantic criteria")
-    if isinstance(deterministic_count, int):
+    if deterministic_count:
         metric_parts.append(f"{deterministic_count} deterministic check")
 
     separate = verifier.get("environment_mode") == "separate"
@@ -131,6 +127,35 @@ def _grader_info(
             "Separate verifier environment" if separate else "Task verifier environment"
         ),
     )
+
+
+def _criterion_counts(task_root: Path) -> tuple[int, int]:
+    tests_root = task_root / "tests"
+    semantic = 0
+    for path in tests_root.glob("**/quality.toml"):
+        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+        criteria = raw.get("criterion", [])
+        if isinstance(criteria, list):
+            semantic += len(criteria)
+
+    deterministic = 0
+    for path in tests_root.glob("**/checks.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if any(_decorator_name(item) == "criterion" for item in node.decorator_list):
+                deterministic += 1
+    return semantic, deterministic
+
+
+def _decorator_name(node: ast.expr) -> str | None:
+    target = node.func if isinstance(node, ast.Call) else node
+    if isinstance(target, ast.Name):
+        return target.id
+    if isinstance(target, ast.Attribute):
+        return target.attr
+    return None
 
 
 def _mapping(value: Any) -> dict[str, Any]:

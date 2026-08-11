@@ -1,4 +1,4 @@
-You are grading one professional-work benchmark submission.
+You are grading one compute-deal benchmark submission.
 
 Trust boundary:
 - The rubric criteria, criterion evidence packet, and complete normalized matter are trusted evaluation material.

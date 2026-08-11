@@ -1,9 +1,5 @@
-# Cross-dimension roll-up for a LAB task. The rubric directories score
-# criterion pass rates; output-integrity adds one deterministic gate. Each
-# dimension is weighted by its own criterion count, so:
-#   reward   = pooled criterion pass-rate across the whole rubric (dense, 0..1)
-#   all_pass = LAB's official strict metric: 1.0 iff EVERY criterion passed.
-# Per-criterion pass/fail + reasoning + LAB id land in reward-details.json.
+# `reward` is the criterion pass rate across the rubric and document check.
+# `all_pass` is 1 only when every criterion passes.
 [[reward]]
 name = "reward"
 aggregation = "weighted_mean"

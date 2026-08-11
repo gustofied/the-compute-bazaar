@@ -15,16 +15,16 @@ name = "Adam Sioud"
 
 [[tasks]]
 name = "gustofied/reliability-is-blind"
-digest = "sha256:f8a279f04b4db8dc419e1df3dc58137b24520ea162fe0fde48077868bd4d89a2"
+digest = "sha256:93439e8c2ed656a45bafd86db0b807d26e7f4838a7c00a59928cbaa04f937267"
 
 [[tasks]]
 name = "gustofied/normalize-buyer-mandate"
-digest = "sha256:7f8a5ef88434cc1241b621bafbe1581d917f8745d5c226d7a405640e9ea2cf9e"
+digest = "sha256:0fb888a59efd7e8b5ce5fe325075b167b14edcd39e4d676022cfa4e92e2510b5"
 
 [[tasks]]
 name = "gustofied/draft-capacity-data-room-population-plan"
-digest = "sha256:e4c1f352c42ccfd6e5208befbf1daff1febad5dd1f10ed2bdfd5e391dfa820c1"
+digest = "sha256:8d08b39deaf07098458a6749b036f1548a7e693aa6af6db79e299f4b157256b9"
 
 [[tasks]]
 name = "gustofied/compare-capacity-agreement-against-term-sheet"
-digest = "sha256:3a7fe20ecad42948f9579cfe5b1724ef736d6ff9dc521056b7194f0de1ebe0c6"
+digest = "sha256:6685403e099868f01b61900d09ef4edb88afa954677c94a2d4d4a6b7c34dad65"

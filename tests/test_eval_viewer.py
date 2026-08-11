@@ -109,10 +109,6 @@ class TaskCatalogTests(unittest.TestCase):
                     name = "gustofied/sample-task"
                     description = "A task with no jobs yet."
 
-                    [metadata]
-                    domain = "transactions"
-                    n_criteria = 12
-
                     [verifier]
                     environment_mode = "separate"
                     """
@@ -120,10 +116,26 @@ class TaskCatalogTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            rubric = task_root / "tests" / "rubric"
+            rubric.mkdir(parents=True)
+            (rubric / "quality.toml").write_text(
+                "[[criterion]]\nid = 'C-001'\n\n[[criterion]]\nid = 'C-002'\n",
+                encoding="utf-8",
+            )
+            checks = task_root / "tests" / "output-integrity"
+            checks.mkdir(parents=True)
+            (checks / "checks.py").write_text(
+                "@criterion(description='Valid output')\ndef valid_output():\n    return True\n",
+                encoding="utf-8",
+            )
 
             tasks = discover_task_definitions(bench_root)
             self.assertEqual(list(tasks), ["sample-task"])
             self.assertEqual(tasks["sample-task"].domain, "Transactions")
+            self.assertEqual(
+                tasks["sample-task"].grader.metrics,
+                "2 semantic criteria, 1 deterministic check",
+            )
             self.assertEqual(tasks["sample-task"].launch.task_id, "sample-task")
 
             reports = bench_root / "jobs" / "reports"
@@ -1576,9 +1588,6 @@ def _write_task(bench_root: Path, slug: str) -> None:
             [task]
             name = "gustofied/{slug}"
             description = "A sample task."
-
-            [metadata]
-            domain = "transactions"
             """
         ).strip()
         + "\n"

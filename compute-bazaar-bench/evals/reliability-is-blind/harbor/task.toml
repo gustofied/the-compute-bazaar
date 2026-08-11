@@ -9,11 +9,6 @@ description = "Choose compute suppliers across repeated deals using only collect
 authors = [{ name = "Adam Sioud" }]
 keywords = ["compute-market", "compute-brokerage", "supplier-reliability", "collective-incentives", "market-game"]
 
-[metadata]
-domain = "compute-market-games"
-difficulty = "hard"
-category = "compute-market"
-
 [verifier]
 timeout_sec = 60.0
 user = "root"
