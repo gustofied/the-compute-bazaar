@@ -7,6 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from fastapi import HTTPException
+
 from the_compute_bazaar.terminal.commands import (
     LaunchPlanAction,
     ErrorAction,
@@ -19,11 +21,26 @@ from the_compute_bazaar.terminal.commands import (
 )
 from the_compute_bazaar.terminal.eval_workspace import EvalWorkspace
 from the_compute_bazaar.terminal.lifecycle import _resolve_evaluation_root
-from the_compute_bazaar.terminal.server import TerminalLaunchMailbox
+from the_compute_bazaar.terminal.server import (
+    TerminalLaunchMailbox,
+    _validated_external_url,
+)
 from the_compute_bazaar.terminal.shell import TerminalShell
 
 
 class TerminalCommandTest(unittest.TestCase):
+    def test_external_links_are_https_without_embedded_credentials(self) -> None:
+        url = "https://hub.harborframework.com/tasks/gustofied/task/latest"
+
+        self.assertEqual(_validated_external_url(url), url)
+        for invalid in (
+            "http://example.com",
+            "https://user:secret@example.com",
+            "/relative/path",
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(HTTPException):
+                _validated_external_url(invalid)
+
     def test_terminal_stays_available_without_an_eval_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             bench_root = Path(directory)

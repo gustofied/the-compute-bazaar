@@ -6,9 +6,9 @@
     <meta name="color-scheme" content="dark">
     <meta name="description" content="Compute Bazaar Fleet">
     <title>Compute Bazaar Fleet</title>
-    <link rel="stylesheet" href="/terminal-assets/fleet.css?v=20260811-1">
     <link rel="stylesheet" href="/terminal-assets/command.css?v=20260808-2">
     <link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2">
+    <link rel="stylesheet" href="/terminal-assets/fleet.css?v=20260811-3">
   </head>
   <body data-terminal-workspace="fleet">
     <div class="fleet-app">
@@ -44,20 +44,20 @@
 
           <section class="overview-view" id="overview-view" aria-labelledby="overview-title" hidden>
             <header>
-              <h2 id="overview-title">Fleet overview</h2>
+              <h2 id="overview-title">All hosts</h2>
               <span id="overview-state">0 hosts</span>
             </header>
             <div class="overview-table" role="table" aria-label="Fleet host telemetry">
               <div class="overview-row overview-heading" role="row">
-                <span role="columnheader">Host</span>
-                <span role="columnheader">State</span>
-                <span role="columnheader">GPU</span>
-                <span role="columnheader">Load</span>
-                <span role="columnheader">VRAM</span>
-                <span role="columnheader">Temp</span>
-                <span role="columnheader">Power</span>
-                <span role="columnheader">CPU</span>
-                <span role="columnheader">Observed</span>
+                <span class="col-host" role="columnheader">Host</span>
+                <span class="col-state" role="columnheader">State</span>
+                <span class="col-gpu" role="columnheader">GPU</span>
+                <span class="col-load" role="columnheader">Load</span>
+                <span class="col-vram" role="columnheader">VRAM</span>
+                <span class="col-temp" role="columnheader">Temp</span>
+                <span class="col-power" role="columnheader">Power</span>
+                <span class="col-cpu" role="columnheader">CPU</span>
+                <span class="col-observed" role="columnheader">Observed</span>
               </div>
               <div id="overview-rows" class="overview-rows" role="rowgroup"></div>
             </div>
@@ -65,9 +65,10 @@
 
           <div class="machine-view" id="machine-view" hidden>
             <header class="machine-header">
-              <p class="machine-index">Selected host</p>
-              <h2 id="machine-name">Machine</h2>
-              <p class="machine-subtitle" id="machine-subtitle"></p>
+              <div class="machine-identity">
+                <h2 id="machine-name">Machine</h2>
+                <p class="machine-subtitle" id="machine-subtitle"></p>
+              </div>
               <div class="machine-state">
                 <span id="machine-provider">Provider</span>
                 <span class="readiness" id="readiness">Checking</span>
@@ -84,15 +85,15 @@
 
             <section class="telemetry-panel" aria-labelledby="telemetry-title">
               <header>
-                <h3 id="telemetry-title">Load</h3>
+                <h3 id="telemetry-title">Telemetry</h3>
                 <span class="sample-rate">5s</span>
                 <div class="legend" aria-label="Chart legend">
                   <span class="gpu">GPU</span><span class="vram">VRAM</span><span class="cpu">CPU</span>
                 </div>
               </header>
-              <svg id="telemetry-chart" viewBox="0 0 1000 240" role="img" aria-labelledby="telemetry-title telemetry-description">
+              <svg id="telemetry-chart" viewBox="0 0 1000 160" preserveAspectRatio="none" role="img" aria-labelledby="telemetry-title telemetry-description">
                 <desc id="telemetry-description">Recent GPU, VRAM, and CPU utilization percentages.</desc>
-                <g class="chart-grid"><path d="M0 20H1000 M0 120H1000 M0 220H1000"></path></g>
+                <g class="chart-grid"><path d="M0 10H1000 M0 80H1000 M0 150H1000"></path></g>
                 <path class="chart-line cpu" id="cpu-line"></path>
                 <path class="chart-line vram" id="vram-line"></path>
                 <path class="chart-line gpu" id="gpu-line"></path>
@@ -124,18 +125,18 @@
               </section>
 
               <section class="readiness-panel" aria-labelledby="checks-title">
-                <header><h3 id="checks-title">Checks</h3></header>
+                <header><h3 id="checks-title">Checks</h3><span id="check-summary">0 / 0</span></header>
                 <div id="check-list" class="check-list"></div>
               </section>
             </div>
 
-            <section class="activity-panel" aria-label="Workloads and GPU processes">
+            <section class="activity-panel empty" id="activity-panel" aria-label="Jobs and GPU processes">
               <div class="activity-column">
-                <header><h3>Workloads</h3><span id="workload-count">0</span></header>
+                <header><h3>Jobs</h3><span id="workload-count">0</span></header>
                 <div class="activity-list" id="workload-list"></div>
               </div>
               <div class="activity-column">
-                <header><h3>GPU processes</h3><span id="process-count">0</span></header>
+                <header><h3>GPU proc</h3><span id="process-count">0</span></header>
                 <div class="activity-list" id="process-list"></div>
               </div>
             </section>
@@ -144,6 +145,6 @@
       </main>
     </div>
     <script type="module" src="/terminal-assets/perspective/command.js?v=20260808-2"></script>
-    <script type="module" src="/terminal-assets/fleet.js?v=20260811-1"></script>
+    <script type="module" src="/terminal-assets/fleet.js?v=20260811-2"></script>
   </body>
 </html>

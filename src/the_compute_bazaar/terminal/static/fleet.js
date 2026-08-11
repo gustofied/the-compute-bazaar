@@ -32,6 +32,8 @@ const elements = {
   osName: document.querySelector("#os-name"),
   kernel: document.querySelector("#kernel"),
   checks: document.querySelector("#check-list"),
+  checkSummary: document.querySelector("#check-summary"),
+  activityPanel: document.querySelector("#activity-panel"),
   workloadCount: document.querySelector("#workload-count"),
   workloadList: document.querySelector("#workload-list"),
   processCount: document.querySelector("#process-count"),
@@ -124,9 +126,65 @@ function machineGpuLabel(machine, payload = null) {
 function machineSubtitle(machine, payload = null) {
   const parts = [machineGpuLabel(machine, payload)];
   if (Number.isFinite(Number(machine.price_usd_instance_hr))) {
-    parts.push(`$${number(machine.price_usd_instance_hr, 2)} / hr`);
+    parts.push(`$${number(machine.price_usd_instance_hr, 2)}/hr`);
   }
   return parts.join(" · ");
+}
+
+function stateLabel(value) {
+  return {
+    running: "UP",
+    ready: "READY",
+    healthy: "READY",
+    terminated: "OFF",
+    stopped: "OFF",
+    degraded: "WARN",
+    stale: "STALE",
+    fault: "ERR",
+    not_ready: "FAIL",
+    not_verified: "UNCHECKED",
+  }[value] ?? String(value ?? "—").replaceAll("_", " ").toUpperCase();
+}
+
+const checkLabels = {
+  ssh: "SSH",
+  gpu_count: "GPU",
+  gpu_model: "MODEL",
+  driver: "DRIVER",
+  disk: "DISK",
+  gpu_memory: "VRAM",
+  temperature: "TEMP",
+  pcie_link: "PCIE",
+  gpu_execution: "CUDA",
+};
+
+function checkValue(check) {
+  const detail = String(check.detail ?? "—");
+  if (check.check === "ssh") return check.status === "pass" ? "OK" : "ERR";
+  if (check.check === "gpu_execution") return check.status === "pass" ? "OK" : check.status === "fail" ? "ERR" : "—";
+  if (check.check === "gpu_count") {
+    const detected = detail.match(/detected\s+(\d+)/i)?.[1];
+    const expected = detail.match(/expected\s+(\d+)/i)?.[1];
+    return detected ? `${detected}${expected ? ` / ${expected}` : ""}` : detail;
+  }
+  if (check.check === "gpu_model") return detail.replace(/^detected\s+/i, "").replace(/;\s*expected.*$/i, "");
+  if (check.check === "disk") return detail.replace(/\s+free$/i, "");
+  if (check.check === "gpu_memory") {
+    const values = [...detail.matchAll(/:\s*(\d+)\s*MB/gi)].map((match) => Number(match[1]));
+    if (values.length) {
+      const sizes = [...new Set(values.map((value) => (value / 1024).toFixed(0)))];
+      return `${values.length > 1 ? `${values.length} x ` : ""}${sizes.join("/")} GB`;
+    }
+  }
+  if (check.check === "temperature") {
+    const values = [...detail.matchAll(/:\s*(\d+)\s*C/gi)].map((match) => Number(match[1]));
+    if (values.length) return `${Math.max(...values)} C`;
+  }
+  if (check.check === "pcie_link") {
+    const link = detail.match(/Gen\s+(\d+).*?x(\d+)/i);
+    if (link) return `G${link[1]} x${link[2]}`;
+  }
+  return detail;
 }
 
 function activeHosts() {
@@ -153,24 +211,24 @@ async function loadSession() {
 
 function hostReading(host) {
   if (host.state !== "running") {
-    return `<span class="host-reading"><span>Stopped</span><span>—</span></span>`;
+    return `<span class="host-reading"><span>OFF</span><span>—</span></span>`;
   }
   if (!host.ssh_ready) {
-    return `<span class="host-reading"><span>No SSH</span><span>—</span></span>`;
+    return `<span class="host-reading"><span>NO SSH</span><span>—</span></span>`;
   }
   const snapshot = state.snapshots.get(host.host_id);
   const error = state.errors.get(host.host_id);
-  if (error) return `<span class="host-reading"><span>SSH fault</span><span>—</span></span>`;
-  if (!snapshot) return `<span class="host-reading"><span>Waiting</span><span>—</span></span>`;
+  if (error) return `<span class="host-reading"><span>ERR</span><span>—</span></span>`;
+  if (!snapshot) return `<span class="host-reading"><span>WAIT</span><span>—</span></span>`;
   const gpu = gpuSummary(snapshot);
-  const label = snapshot.monitor?.status === "stale" ? "Stale" : `GPU ${number(gpu.utilization)}%`;
+  const label = snapshot.monitor?.status === "stale" ? "STALE" : `GPU ${number(gpu.utilization)}%`;
   return `<span class="host-reading"><span>${label}</span><span>${number(gpu.temperature)}°C</span></span>`;
 }
 
 function renderHosts() {
-  const hosts = orderedHosts();
-  const running = activeHosts().length;
-  elements.hostCount.textContent = `${running}/${hosts.length} running`;
+  const hosts = activeHosts();
+  const total = state.session?.hosts?.length ?? 0;
+  elements.hostCount.textContent = `${hosts.length} UP / ${total}`;
   elements.hostList.innerHTML = hosts.map((host) => {
     const snapshot = state.snapshots.get(host.host_id);
     const failed = state.errors.has(host.host_id);
@@ -178,7 +236,7 @@ function renderHosts() {
     return `
       <button class="host-button ${host.host_id === state.hostId ? "active" : ""} ${failed ? "fault" : ""}" type="button" data-host-id="${escapeHtml(host.host_id)}" ${host.ssh_ready && host.state === "running" ? "" : "disabled"}>
         <span class="host-name">${escapeHtml(host.name)}</span>
-        <span class="host-meta"><span>${escapeHtml(machineGpuLabel(host, snapshot))}</span><span class="host-status">${escapeHtml(status)}</span></span>
+        <span class="host-meta"><span>${escapeHtml(machineGpuLabel(host, snapshot))}</span><span class="host-status">${escapeHtml(stateLabel(status))}</span></span>
         ${hostReading(host)}
       </button>
     `;
@@ -187,10 +245,10 @@ function renderHosts() {
 }
 
 function countdown(machine) {
-  if (!machine.terminate_at) return "No deadline";
+  if (!machine.terminate_at) return "TTL —";
   const remaining = new Date(machine.terminate_at).getTime() - Date.now();
-  if (remaining <= 0) return "Delete due";
-  return `Deletes in ${Math.max(1, Math.ceil(remaining / 60000))}m`;
+  if (remaining <= 0) return "TTL 0m";
+  return `TTL ${Math.max(1, Math.ceil(remaining / 60000))}m`;
 }
 
 function captureSample(payload) {
@@ -212,10 +270,10 @@ function renderSnapshot(payload) {
   elements.empty.hidden = true;
   elements.overview.hidden = true;
   elements.view.hidden = false;
-  elements.provider.textContent = [machine.provider, machine.state, payload.monitor?.status === "stale" ? "stale" : null].filter(Boolean).join(" / ");
+  elements.provider.textContent = [machine.provider, stateLabel(machine.state), payload.monitor?.status === "stale" ? "STALE" : null].filter(Boolean).join(" · ");
   elements.name.textContent = machine.name;
   elements.subtitle.textContent = machineSubtitle(machine, payload);
-  elements.readiness.textContent = readiness.replace("_", " ");
+  elements.readiness.textContent = stateLabel(readiness);
   elements.readiness.className = `readiness ${readiness}`;
   elements.termination.textContent = countdown(machine);
 
@@ -244,10 +302,13 @@ function renderSnapshot(payload) {
     : "—";
   elements.osName.textContent = system.os_name || "—";
   elements.kernel.textContent = system.kernel || "—";
-  elements.checks.innerHTML = checks.map((check) => `
+  const visibleChecks = checks.length ? checks : (payload.health_checks ?? []);
+  const passedChecks = visibleChecks.filter((check) => check.status === "pass").length;
+  elements.checkSummary.textContent = `${passedChecks} / ${visibleChecks.length}`;
+  elements.checks.innerHTML = visibleChecks.map((check) => `
     <div class="check-row ${escapeHtml(check.status)}">
       <span class="check-signal" aria-hidden="true"></span>
-      <div><strong>${escapeHtml(check.check.replaceAll("_", " "))}</strong><small>${escapeHtml(check.detail)}</small></div>
+      <div><strong>${escapeHtml(checkLabels[check.check] ?? check.check.replaceAll("_", " "))}</strong><small title="${escapeHtml(check.detail)}">${escapeHtml(checkValue(check))}</small></div>
     </div>
   `).join("");
   renderActivity(payload);
@@ -257,6 +318,7 @@ function renderSnapshot(payload) {
 function renderActivity(payload) {
   const workloads = payload.workloads ?? [];
   const processes = payload.gpu_processes ?? [];
+  elements.activityPanel.classList.toggle("empty", workloads.length === 0 && processes.length === 0);
   elements.workloadCount.textContent = String(workloads.length);
   elements.processCount.textContent = String(processes.length);
   elements.workloadList.innerHTML = workloads.length
@@ -267,7 +329,7 @@ function renderActivity(payload) {
         <span class="activity-state ${escapeHtml(workload.state)}">${escapeHtml(workload.state)}</span>
       </div>
     `).join("")
-    : '<p class="activity-empty">No workloads</p>';
+    : "";
   elements.processList.innerHTML = processes.length
     ? processes.map((process) => `
       <div class="activity-row">
@@ -276,24 +338,26 @@ function renderActivity(payload) {
         <span>${escapeHtml(process.memory_used_mb ?? "—")} MB</span>
       </div>
     `).join("")
-    : '<p class="activity-empty">No GPU processes</p>';
+    : "";
 }
 
 function renderFailure(host, message) {
   elements.empty.hidden = true;
   elements.overview.hidden = true;
   elements.view.hidden = false;
-  elements.provider.textContent = `${host.provider} / ${host.state}`;
+  elements.provider.textContent = `${host.provider} · ${stateLabel(host.state)}`;
   elements.name.textContent = host.name;
   elements.subtitle.textContent = machineGpuLabel(host);
-  elements.readiness.textContent = "SSH fault";
+  elements.readiness.textContent = "SSH ERR";
   elements.readiness.className = "readiness not_ready";
   elements.termination.textContent = countdown(host);
-  elements.checks.innerHTML = `<div class="check-row fail"><span class="check-signal"></span><div><strong>SSH</strong><small>${escapeHtml(message)}</small></div></div>`;
+  elements.checkSummary.textContent = "0 / 1";
+  elements.checks.innerHTML = `<div class="check-row fail"><span class="check-signal"></span><div><strong>SSH</strong><small title="${escapeHtml(message)}">ERR</small></div></div>`;
   elements.workloadCount.textContent = "0";
   elements.processCount.textContent = "0";
-  elements.workloadList.innerHTML = '<p class="activity-empty">Unavailable</p>';
-  elements.processList.innerHTML = '<p class="activity-empty">Unavailable</p>';
+  elements.activityPanel.classList.add("empty");
+  elements.workloadList.innerHTML = "";
+  elements.processList.innerHTML = "";
 }
 
 function observedTime(payload) {
@@ -313,22 +377,22 @@ function overviewRow(host) {
   const memory = gpu ? `${formatMemory(gpu.memoryUsed)} / ${formatMemory(gpu.memoryTotal)}` : "—";
   return `
     <button class="overview-row ${escapeHtml(status)}" type="button" role="row" data-overview-host="${escapeHtml(host.host_id)}" ${host.ssh_ready && host.state === "running" ? "" : "disabled"}>
-      <span role="cell"><strong>${escapeHtml(host.name)}</strong><small>${escapeHtml(host.provider)}</small></span>
-      <span role="cell" class="overview-status">${escapeHtml(status)}</span>
-      <span role="cell">${escapeHtml(machineGpuLabel(host, payload))}</span>
-      <span role="cell">${gpu ? `${number(gpu.utilization)}%` : "—"}</span>
-      <span role="cell">${memory}</span>
-      <span role="cell">${gpu ? `${number(gpu.temperature)}°C` : "—"}</span>
-      <span role="cell">${gpu ? `${number(gpu.power)} W` : "—"}</span>
-      <span role="cell">${payload ? `${number(payload.system.cpu_utilization_pct, 1)}%` : "—"}</span>
-      <span role="cell">${observedTime(payload)}</span>
+      <span class="col-host" role="cell"><strong>${escapeHtml(host.name)}</strong><small>${escapeHtml(host.provider)}</small></span>
+      <span class="col-state overview-status" role="cell">${escapeHtml(stateLabel(status))}</span>
+      <span class="col-gpu" role="cell">${escapeHtml(machineGpuLabel(host, payload))}</span>
+      <span class="col-load" role="cell">${gpu ? `${number(gpu.utilization)}%` : "—"}</span>
+      <span class="col-vram" role="cell">${memory}</span>
+      <span class="col-temp" role="cell">${gpu ? `${number(gpu.temperature)}°C` : "—"}</span>
+      <span class="col-power" role="cell">${gpu ? `${number(gpu.power)} W` : "—"}</span>
+      <span class="col-cpu" role="cell">${payload ? `${number(payload.system.cpu_utilization_pct, 1)}%` : "—"}</span>
+      <span class="col-observed" role="cell">${observedTime(payload)}</span>
     </button>
   `;
 }
 
 function renderOverview() {
   const hosts = orderedHosts();
-  elements.overviewState.textContent = `${activeHosts().length}/${hosts.length} running`;
+  elements.overviewState.textContent = `${activeHosts().length} UP / ${hosts.length}`;
   elements.overviewRows.innerHTML = hosts.map(overviewRow).join("");
 }
 
@@ -359,7 +423,7 @@ function linePath(samples, key) {
   if (!samples.length) return "";
   return samples.map((sample, index) => {
     const x = samples.length === 1 ? 1000 : (index / (samples.length - 1)) * 1000;
-    const y = 220 - (Math.max(0, Math.min(100, sample[key])) / 100) * 200;
+    const y = 150 - (Math.max(0, Math.min(100, sample[key])) / 100) * 140;
     return `${index ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
   }).join(" ");
 }

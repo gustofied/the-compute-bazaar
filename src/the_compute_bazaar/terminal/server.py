@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 import os
 import secrets
+import webbrowser
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from threading import Lock
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, RedirectResponse, Response
@@ -54,6 +56,10 @@ NATIVE_SESSION_COOKIE = "compute_bazaar_terminal_session"
 
 class TerminalOpenRequest(BaseModel):
     action: TerminalAction
+
+
+class ExternalOpenRequest(BaseModel):
+    url: str
 
 
 class TerminalLaunchMailbox:
@@ -253,6 +259,19 @@ def create_terminal_app(
             "launch": launch_mailbox.publish(payload.action),
         }
 
+    @app.post("/api/terminal/external", status_code=204)
+    def open_external(payload: ExternalOpenRequest, request: Request) -> Response:
+        if not _same_http_origin(request) or not _valid_native_session(
+            request.cookies.get(NATIVE_SESSION_COOKIE), native_session
+        ):
+            raise HTTPException(
+                status_code=403, detail="Native Terminal session required"
+            )
+        url = _validated_external_url(payload.url)
+        if not webbrowser.open(url, new=2):
+            raise HTTPException(status_code=502, detail="Could not open external link")
+        return Response(status_code=204)
+
     @app.websocket("/api/terminal/shell")
     async def terminal_shell(websocket: WebSocket) -> None:
         if shell is None or not _valid_native_session(
@@ -306,6 +325,19 @@ def _same_origin(websocket: WebSocket) -> bool:
 def _same_http_origin(request: Request) -> bool:
     origin = request.headers.get("origin")
     return not origin or origin == str(request.base_url).rstrip("/")
+
+
+def _validated_external_url(value: str) -> str:
+    url = value.strip()
+    parsed = urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise HTTPException(status_code=400, detail="Invalid external link")
+    return url
 
 
 async def _receive_shell_input(
