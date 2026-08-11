@@ -9,7 +9,7 @@ from typing import Any
 
 import requests
 
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -138,9 +138,9 @@ def normalize_retail_prices(
     observed_at: datetime,
     raw_ref: str | None,
     sku_specs: Iterable[Mapping[str, Any]] = AZURE_FRONTIER_SKUS,
-) -> tuple[list[GpuOffer], list[str]]:
+) -> tuple[list[OfferObservation], list[str]]:
     specs_by_sku = {str(spec["arm_sku_name"]): dict(spec) for spec in sku_specs}
-    normalized: list[GpuOffer] = []
+    normalized: list[OfferObservation] = []
     unknown_skus: list[str] = []
 
     for entry in prices:
@@ -181,7 +181,7 @@ def normalize_retail_prices(
         rate_kind = "spot" if is_spot else "ondemand"
 
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider="azure",
                 source_offer_id=":".join(
                     part for part in (arm_sku_name, region, meter_id, rate_kind) if part
@@ -191,7 +191,7 @@ def normalize_retail_prices(
                 gpu_model=gpu_model,
                 gpu_count=gpu_count,
                 vram_gb=float(spec["vram_gb"]),
-                price_usd_hr=price,
+                price_usd_instance_hr=price,
                 currency="USD",
                 country=None,
                 region=region,

@@ -6,23 +6,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..contracts import GPU_OFFERS_RUN_CONTRACT, require_contract
+from ..contracts import OFFER_OBSERVATIONS_RUN_CONTRACT, require_contract
 from .schemas import utc_now
 from .storage import read_json, write_json
 
 
-TABLE_NAME = "gpu_offers"
+TABLE_NAME = "offer_observations"
 
 
 @dataclass(frozen=True)
-class GpuOffersRunManifest:
+class OfferObservationsRunManifest:
     provider: str
     run_id: str
     observed_at: str
     raw_ref: str
     normalized_ref: str | None
     raw_offer_count: int
-    normalized_offer_count: int
+    normalized_observation_count: int
     published_events: int
     unknown_gpu_names: list[str]
     publish_mode: str = "kafka"
@@ -32,7 +32,7 @@ class GpuOffersRunManifest:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "contract": GPU_OFFERS_RUN_CONTRACT,
+            "contract": OFFER_OBSERVATIONS_RUN_CONTRACT,
             "table": TABLE_NAME,
             "provider": self.provider,
             "run_id": self.run_id,
@@ -40,7 +40,7 @@ class GpuOffersRunManifest:
             "raw_ref": self.raw_ref,
             "normalized_ref": self.normalized_ref,
             "raw_offer_count": self.raw_offer_count,
-            "normalized_offer_count": self.normalized_offer_count,
+            "normalized_observation_count": self.normalized_observation_count,
             "published_events": self.published_events,
             "publish_mode": self.publish_mode,
             "unknown_gpu_names": self.unknown_gpu_names,
@@ -86,27 +86,27 @@ def write_run_manifest(
     raw_ref: str,
     normalized_ref: str | None,
     raw_offer_count: int,
-    normalized_offer_count: int,
+    normalized_observation_count: int,
     published_events: int,
     unknown_gpu_names: list[str],
     publish_mode: str = "kafka",
     market_state_ref: str | None = None,
     market_state_observation_count: int = 0,
-) -> GpuOffersRunManifest:
+) -> OfferObservationsRunManifest:
     manifest_ref = run_manifest_ref(
         lake_root,
         provider=provider,
         observed_date=observed_date,
         run_id=run_id,
     )
-    manifest = GpuOffersRunManifest(
+    manifest = OfferObservationsRunManifest(
         provider=provider,
         run_id=run_id,
         observed_at=utc_now().isoformat(),
         raw_ref=raw_ref,
         normalized_ref=normalized_ref,
         raw_offer_count=raw_offer_count,
-        normalized_offer_count=normalized_offer_count,
+        normalized_observation_count=normalized_observation_count,
         published_events=published_events,
         unknown_gpu_names=unknown_gpu_names,
         publish_mode=publish_mode,
@@ -122,7 +122,7 @@ def write_run_manifest(
 
 def read_latest_manifest(lake_root: str, *, provider: str = "vast") -> dict[str, Any]:
     manifest = dict(read_json(latest_manifest_ref(lake_root, provider=provider)))
-    require_contract(manifest, contract=GPU_OFFERS_RUN_CONTRACT)
+    require_contract(manifest, contract=OFFER_OBSERVATIONS_RUN_CONTRACT)
     if manifest.get("ref_base") != "lake_root":
         return manifest
     if "://" in lake_root:

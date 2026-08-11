@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -125,8 +125,8 @@ def normalize_external_offerings(
     *,
     fetched_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in offerings:
@@ -163,7 +163,7 @@ def normalize_external_offerings(
         billing_type = str(pricing.get("billing_type") or "").strip().lower()
         observed_at = _parse_datetime(status.get("last_verified")) or fetched_at
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider=provider,
                 source_connector="getdeploying",
                 source_offer_id=f"getdeploying:{source_offer_id}",
@@ -172,7 +172,7 @@ def normalize_external_offerings(
                 gpu_model=gpu_model,
                 gpu_count=gpu_count,
                 vram_gb=vram_gb,
-                price_usd_hr=hourly_price,
+                price_usd_instance_hr=hourly_price,
                 currency=str(pricing.get("currency") or "USD"),
                 country=_string_or_none(provider_data.get("country")),
                 region=_string_or_none(entry.get("region"))

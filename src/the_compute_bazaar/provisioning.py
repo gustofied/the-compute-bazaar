@@ -1,4 +1,4 @@
-"""Provider-native launch drafts built from revalidated live offers."""
+"""Provider-native launch drafts built from preflight observations."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import LiveOffer, ProviderName
-from .service import LiveOfferService
+from .offers import OfferService
+from .prices.schemas import OfferObservation
 
 
 class LaunchPlan(BaseModel):
@@ -20,7 +20,9 @@ class LaunchPlan(BaseModel):
 
     plan_id: str
     offer_id: str
-    provider: ProviderName
+    offer_observation_id: str
+    offer_batch_id: str
+    provider: str
     operation: Literal["create_pod", "create_instance"]
     endpoint: str
     observed_at: datetime
@@ -40,6 +42,7 @@ class LaunchPlan(BaseModel):
         return {
             "plan_id": self.plan_id,
             "offer_id": self.offer_id,
+            "offer_observation_id": self.offer_observation_id,
             "provider": self.provider,
             "gpu_model": self.gpu_model,
             "gpu_count": self.gpu_count,
@@ -64,12 +67,12 @@ class LaunchPlan(BaseModel):
 
 
 class LaunchPlanner:
-    def __init__(self, service: LiveOfferService) -> None:
+    def __init__(self, service: OfferService) -> None:
         self.service = service
 
     @classmethod
     def from_environment(cls) -> LaunchPlanner:
-        return cls(LiveOfferService.from_environment())
+        return cls(OfferService.from_environment())
 
     def plan(
         self,
@@ -107,7 +110,7 @@ class LaunchPlanner:
 
     def _runpod_plan(
         self,
-        offer: LiveOffer,
+        offer: OfferObservation,
         *,
         name: str | None,
         image: str | None,
@@ -115,11 +118,11 @@ class LaunchPlanner:
         volume_gb: int,
     ) -> LaunchPlan:
         request = {
-            "cloudType": offer.selection["cloudType"],
+            "cloudType": offer.native_selection["cloudType"],
             "computeType": "GPU",
-            "gpuCount": offer.selection["gpuCount"],
-            "gpuTypeIds": offer.selection["gpuTypeIds"],
-            "dataCenterIds": offer.selection["dataCenterIds"],
+            "gpuCount": offer.native_selection["gpuCount"],
+            "gpuTypeIds": offer.native_selection["gpuTypeIds"],
+            "dataCenterIds": offer.native_selection["dataCenterIds"],
             "dataCenterPriority": "availability",
             "containerDiskInGb": disk_gb,
             "volumeInGb": volume_gb,
@@ -151,7 +154,7 @@ class LaunchPlanner:
 
     def _verda_plan(
         self,
-        offer: LiveOffer,
+        offer: OfferObservation,
         *,
         name: str | None,
         image: str | None,
@@ -159,8 +162,8 @@ class LaunchPlanner:
         disk_gb: int,
     ) -> LaunchPlan:
         request: dict[str, Any] = {
-            "instance_type": offer.selection["instance_type"],
-            "location_code": offer.selection["location_code"],
+            "instance_type": offer.native_selection["instance_type"],
+            "location_code": offer.native_selection["location_code"],
             "description": "Compute Bazaar launch",
             "contract": "PAY_AS_YOU_GO",
             "is_spot": False,
@@ -197,7 +200,7 @@ class LaunchPlanner:
 
     @staticmethod
     def _build(
-        offer: LiveOffer,
+        offer: OfferObservation,
         *,
         endpoint: str,
         request: dict[str, Any],
@@ -205,9 +208,11 @@ class LaunchPlanner:
         credentials_configured: bool,
         checks: tuple[str, ...],
     ) -> LaunchPlan:
+        if not offer.observation_id or not offer.batch_id:
+            raise ValueError("Preflight observation has no lineage")
         identity = json.dumps(
             {
-                "offer_id": offer.offer_id,
+                "offer_id": offer.source_offer_id,
                 "observed_at": offer.observed_at.isoformat(),
                 "request": request,
             },
@@ -217,9 +222,11 @@ class LaunchPlanner:
         plan_id = "launch-" + hashlib.sha256(identity.encode()).hexdigest()[:12]
         return LaunchPlan(
             plan_id=plan_id,
-            offer_id=offer.offer_id,
+            offer_id=offer.source_offer_id,
+            offer_observation_id=offer.observation_id,
+            offer_batch_id=offer.batch_id,
             provider=offer.provider,
-            operation=offer.selection["operation"],
+            operation=offer.native_selection["operation"],
             endpoint=endpoint,
             observed_at=offer.observed_at,
             gpu_model=offer.gpu_model,

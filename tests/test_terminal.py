@@ -8,7 +8,7 @@ from pathlib import Path
 from the_compute_bazaar.terminal.commands import (
     LaunchPlanAction,
     ErrorAction,
-    LiveOffersAction,
+    OffersAction,
     NavigateAction,
     QueryAction,
     ShellAction,
@@ -70,7 +70,7 @@ class TerminalCommandTest(unittest.TestCase):
 
         self.assertEqual(short, prefixed)
 
-    def test_live_offers_use_the_native_data_workspace(self) -> None:
+    def test_offers_use_the_native_data_workspace(self) -> None:
         action = resolve_command(
             "compute-bazaar offers list --provider runpod --gpu-model H100 --limit 20",
             shell_fallback=True,
@@ -78,13 +78,13 @@ class TerminalCommandTest(unittest.TestCase):
 
         self.assertEqual(
             action,
-            LiveOffersAction(provider="runpod", gpu_model="H100", limit=20),
+            OffersAction(provider="runpod", gpu_model="H100", limit=20),
         )
 
-    def test_live_offer_inspection_preserves_the_offer_id(self) -> None:
+    def test_offer_inspection_preserves_the_offer_id(self) -> None:
         action = resolve_command("offers inspect verda:abc123")
 
-        self.assertEqual(action, LiveOffersAction(offer_id="verda:abc123"))
+        self.assertEqual(action, OffersAction(offer_id="verda:abc123"))
 
     def test_launch_plan_stays_a_native_non_shell_action(self) -> None:
         action = resolve_command(

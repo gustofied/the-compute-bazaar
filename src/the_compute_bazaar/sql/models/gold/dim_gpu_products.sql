@@ -1,8 +1,9 @@
 with $silver_source_cte,
 products as (
   select *
-  from silver_gpu_offers
+  from silver_offer_observations
   where gpu_model is not null
+    and observation_purpose = 'scheduled'
 )
 select
   gpu_model as gpu_product_id,

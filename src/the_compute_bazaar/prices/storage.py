@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
-from .schemas import GpuOffer, to_jsonable
+from .schemas import OfferObservation, to_jsonable
 
 
 def s3_mirror_path(uri: str, *, require_exists: bool = True) -> Path | None:
@@ -190,8 +190,10 @@ def _s3_client() -> Any:
     return boto3.client("s3", config=config)
 
 
-def write_offers_parquet(uri: str, offers: Iterable[GpuOffer]) -> str:
-    return write_parquet_rows(uri, [offer.to_dict() for offer in offers])
+def write_offer_observations_parquet(
+    uri: str, observations: Iterable[OfferObservation]
+) -> str:
+    return write_parquet_rows(uri, [observation.row() for observation in observations])
 
 
 def write_parquet_rows(uri: str, rows: Iterable[Mapping[str, Any]]) -> str:

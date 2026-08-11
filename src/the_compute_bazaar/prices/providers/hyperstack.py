@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -74,13 +74,13 @@ def normalize_stock(
     pricebook: Iterable[Mapping[str, Any]],
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
+) -> tuple[list[OfferObservation], list[str]]:
     prices = {
         _price_key(entry.get("name")): _float_or_none(entry.get("value"))
         for entry in pricebook
     }
     component_pricing = any((prices.get(name) or 0) > 0 for name in ("CPU", "RAM"))
-    normalized: list[GpuOffer] = []
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for stock in stocks:
@@ -127,7 +127,7 @@ def normalize_stock(
                 else:
                     availability_status = "spot_available" if is_spot else "available"
                 normalized.append(
-                    GpuOffer(
+                    OfferObservation(
                         provider="hyperstack",
                         source_offer_id=f"{region}:{gpu_name}:{gpu_count}x",
                         observed_at=observed_at,
@@ -135,7 +135,7 @@ def normalize_stock(
                         gpu_model=model_id,
                         gpu_count=gpu_count,
                         vram_gb=_vram_from_model(gpu_name),
-                        price_usd_hr=price_per_gpu * gpu_count,
+                        price_usd_instance_hr=price_per_gpu * gpu_count,
                         available_gpu_count=(capacity_lower_bound if index == 0 else 0),
                         country=None,
                         region=region or None,

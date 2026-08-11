@@ -3,12 +3,12 @@
 Every provider follows one path:
 
 ```text
-API response -> raw Bronze capture -> GpuOffer Silver rows -> DataFusion Gold
+API response -> raw Bronze capture -> OfferObservation Silver rows -> DataFusion Gold
 ```
 
 To add a source:
 
-1. Add one module here with a client and a normalizer returning `GpuOffer` rows.
+1. Add one module here with a client and a normalizer returning `OfferObservation` rows.
 2. Add its fetch-and-normalize adapter to the matching `provider_ingestion_*` module.
    `prices/ingestion.py` owns Bronze/Silver persistence, manifests, and Kafka.
 3. Register it once in `prices/provider_registry.py` with its source kind,

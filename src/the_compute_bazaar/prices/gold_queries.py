@@ -18,9 +18,7 @@ def gpu_price_index_sql(
     history: bool = False,
 ) -> str:
     filters = (
-        f"where benchmark_family_id = {_sql_literal(family.upper())}"
-        if family
-        else ""
+        f"where benchmark_family_id = {_sql_literal(family.upper())}" if family else ""
     )
     if history:
         return f"""
@@ -112,7 +110,7 @@ select
   count(distinct country) as country_count,
   max(observed_at) as latest_observed_at
 from {table_name}
-where {' and '.join(filters)}
+where {" and ".join(filters)}
 group by gpu_model, provider
 order by gpu_model, floor_usd_gpu_hr asc
 """
@@ -124,9 +122,7 @@ def gpu_listings_sql(
     gpu_model: str | None = None,
     provider: str | None = None,
 ) -> str:
-    filters = [
-        "listings.source_availability_status in ('available', 'published_rate')"
-    ]
+    filters = ["listings.source_availability_status in ('available', 'published_rate')"]
     if gpu_model:
         filters.append(_gpu_selector("listings.gpu_model", gpu_model))
     if provider:
@@ -155,7 +151,7 @@ select
   listings.source_run_id,
   listings.observed_at
 from {table_name} listings
-where {' and '.join(filters)}
+where {" and ".join(filters)}
 order by listings.price_usd_gpu_hr asc, listings.price_usd_instance_hr asc
 """
 
@@ -165,9 +161,7 @@ def prime_offer_history_sql(
     table_name: str = "fact_prime_frontier_offer_reference_history",
     family: str | None = None,
 ) -> str:
-    where = (
-        f"where gpu_family_id = {_sql_literal(family.upper())}" if family else ""
-    )
+    where = f"where gpu_family_id = {_sql_literal(family.upper())}" if family else ""
     return f"""
 select
   gold_observed_at,

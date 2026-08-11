@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 
 
 DEFAULT_SESTERCE_API_BASE = "https://api.cloud.sesterce.com"
@@ -63,8 +63,8 @@ def normalize_offers(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in offers:
@@ -103,7 +103,7 @@ def normalize_offers(
             region = str(region_entry.get("region") or "")
             country = str(region_entry.get("countryCode") or "") or None
             normalized.append(
-                GpuOffer(
+                OfferObservation(
                     provider="sesterce",
                     source_offer_id=":".join(
                         part
@@ -119,7 +119,7 @@ def normalize_offers(
                     gpu_model=gpu_model,
                     gpu_count=gpu_count,
                     vram_gb=vram_gb,
-                    price_usd_hr=price,
+                    price_usd_instance_hr=price,
                     available_gpu_count=gpu_count,
                     country=country,
                     region=str(region_entry.get("name") or region) or None,

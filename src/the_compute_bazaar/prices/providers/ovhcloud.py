@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .ecb import DEFAULT_ECB_EUR_USD_URL, fetch_latest_eur_usd_rate
 from .http import retrying_session
 
@@ -96,8 +96,8 @@ def normalize_gpu_plans(
     fx_observed_date: str,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for plan in plans:
@@ -128,7 +128,7 @@ def normalize_gpu_plans(
             gpu_model = f"{gpu_model}_x{gpu_count}"
 
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider="ovhcloud",
                 source_connector="ovhcloud",
                 source_offer_id=plan_code,
@@ -137,7 +137,7 @@ def normalize_gpu_plans(
                 gpu_model=gpu_model,
                 gpu_count=gpu_count,
                 vram_gb=vram_gb,
-                price_usd_hr=price_eur_hr * eur_usd_rate,
+                price_usd_instance_hr=price_eur_hr * eur_usd_rate,
                 currency="USD",
                 is_spot=False,
                 availability_status="published_rate",

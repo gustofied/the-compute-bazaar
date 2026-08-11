@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -83,8 +83,8 @@ def normalize_gpu_plans(
     available_regions_by_plan: Mapping[str, list[str]],
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for plan in plans:
@@ -208,9 +208,9 @@ def _offer(
     available_gpu_count: int | None,
     observed_at: datetime,
     raw_ref: str | None,
-) -> GpuOffer:
+) -> OfferObservation:
     billing_mode = "preemptible" if is_spot else "on_demand"
-    return GpuOffer(
+    return OfferObservation(
         provider="vultr",
         source_connector="vultr",
         source_offer_id=f"{plan_id}:{region or 'global'}:{billing_mode}",
@@ -219,7 +219,7 @@ def _offer(
         gpu_model=gpu_model,
         gpu_count=gpu_count,
         vram_gb=vram_gb,
-        price_usd_hr=price,
+        price_usd_instance_hr=price,
         available_gpu_count=available_gpu_count,
         country=None,
         region=region,

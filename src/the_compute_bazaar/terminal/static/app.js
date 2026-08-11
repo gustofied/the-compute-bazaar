@@ -358,7 +358,7 @@ async function selectScratch(sql, limit, perspective = null) {
   });
 }
 
-async function selectLiveOffers(action) {
+async function selectOffers(action) {
   if (state.running) return;
   const params = new URLSearchParams({ limit: String(action.limit || 100) });
   if (action.provider) params.set("provider", action.provider);
@@ -366,8 +366,8 @@ async function selectLiveOffers(action) {
   if (action.offer_id) params.set("offer_id", action.offer_id);
   if (action.include_unavailable) params.set("include_unavailable", "true");
   setViewCopy(
-    "Live provider data",
-    action.offer_id ? "Live offer" : "Live compute offers",
+    "Provider data",
+    action.offer_id ? "Offer" : "Current offers",
     "Fetched directly from RunPod and Verda.",
   );
   setActiveSource(null);
@@ -375,9 +375,9 @@ async function selectLiveOffers(action) {
   elements.sqlToggle.disabled = true;
   state.saveable = false;
   setRunning(true);
-  setViewerState("Fetching live offers", "Reading the provider APIs now.");
+  setViewerState("Fetching offers", "Reading the provider APIs now.");
   try {
-    const response = await fetch(`/api/data/live-offers?${params}`, { cache: "no-store" });
+    const response = await fetch(`/api/data/offers?${params}`, { cache: "no-store" });
     if (!response.ok) throw new Error(await responseError(response));
     const arrow = await response.arrayBuffer();
     const nextTable = await state.worker.table(arrow);
@@ -390,14 +390,14 @@ async function selectLiveOffers(action) {
     if (previousTable) await previousTable.delete();
     const rowCount = response.headers.get("X-Compute-Bazaar-Row-Count") || "0";
     elements.resultRows.textContent = formatCount(rowCount);
-    elements.resultTime.textContent = "live";
-    elements.resultRun.textContent = "provider APIs";
+    elements.resultTime.textContent = `${response.headers.get("X-Compute-Bazaar-Elapsed-Ms") || "-"} ms`;
+    elements.resultRun.textContent = "provider read";
     elements.resultRun.title = response.headers.get("X-Compute-Bazaar-Observed-At") || "";
     state.hasResult = true;
-    setViewerState("Ready", `${formatCount(rowCount)} live offers loaded.`, { hidden: true });
+    setViewerState("Ready", `${formatCount(rowCount)} offers loaded.`, { hidden: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    setViewerState("Live offers unavailable", message, { error: true });
+    setViewerState("Offers unavailable", message, { error: true });
     state.hasResult = false;
   } finally {
     setRunning(false);
@@ -438,7 +438,7 @@ async function selectLaunchPlan(action) {
     state.table = nextTable;
     if (previousTable) await previousTable.delete();
     elements.resultRows.textContent = "1";
-    elements.resultTime.textContent = "live";
+    elements.resultTime.textContent = `${response.headers.get("X-Compute-Bazaar-Elapsed-Ms") || "-"} ms`;
     elements.resultRun.textContent = response.headers.get("X-Compute-Bazaar-Run-Id") || "draft";
     elements.resultRun.title = response.headers.get("X-Compute-Bazaar-Observed-At") || "";
     state.hasResult = true;
@@ -740,7 +740,7 @@ async function handleTerminalAction(action) {
         await selectScratch(action.sql, action.limit || 500, action.perspective);
         return;
       case "offers":
-        await selectLiveOffers(action);
+        await selectOffers(action);
         return;
       case "launch-plan":
         await selectLaunchPlan(action);

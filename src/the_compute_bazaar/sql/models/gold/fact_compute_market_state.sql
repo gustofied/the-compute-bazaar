@@ -5,7 +5,7 @@ listing_depth as (
       'listing-depth:',
       provider,
       ':',
-      coalesce(source_connector, provider),
+      source_connector,
       ':',
       gpu_model,
       ':',
@@ -15,9 +15,9 @@ listing_depth as (
     'gpu' as resource_market,
     gpu_model as resource_type,
     provider,
-    coalesce(source_connector, provider) as source_connector,
+    source_connector,
     case
-      when coalesce(source_connector, provider) <> provider then 'aggregator'
+      when source_connector <> provider then 'aggregator'
       else 'direct'
     end as source_role,
     'listed_offer_depth' as measurement_kind,
@@ -44,7 +44,7 @@ listing_depth as (
       ) as double
     ) / cast(count(*) as double) as available_share,
     cast(null as varchar) as stock_status,
-    'normalized_offer_count' as count_precision,
+    'normalized_observation_count' as count_precision,
     'Normalized listings whose source explicitly asserts availability.' as numerator_definition,
     'All normalized current listings from the same provider connector and GPU product.'
       as denominator_definition,
@@ -59,8 +59,9 @@ listing_depth as (
     min(source_manifest_ref) as source_manifest_ref,
     min(source_normalized_ref) as source_normalized_ref,
     cast(null as varchar) as source_market_state_ref
-  from silver_gpu_offers
-  group by provider, coalesce(source_connector, provider), gpu_model
+  from silver_offer_observations
+  where observation_purpose = 'scheduled'
+  group by provider, source_connector, gpu_model
 ),
 all_state as (
   select * from listing_depth

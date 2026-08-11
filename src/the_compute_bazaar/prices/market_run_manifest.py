@@ -172,7 +172,7 @@ def market_run_manifest_ref(
 
 
 def _provider_check_status(result: IngestResult) -> str:
-    if result.normalized_offer_count <= 0 or result.published_events <= 0:
+    if result.normalized_observation_count <= 0 or result.published_events <= 0:
         return "error"
     return "ok"
 

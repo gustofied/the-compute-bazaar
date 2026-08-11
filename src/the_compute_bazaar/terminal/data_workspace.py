@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from ..analysis_store import AnalysisStore, blueprint_payload, model_payload
 from ..data_catalog import ComputeBazaarCatalog
+from ..operations import OperationalLedger
 from ..prices.gold_manifest import read_latest_gold_manifest
 from ..prices.query_catalog import MAX_QUERY_LIMIT, load_query_catalog
 from .views import TERMINAL_VIEWS
@@ -44,18 +45,29 @@ class CatalogStore:
 
     def __init__(self, lake_root: str) -> None:
         self._lake_root = lake_root
+        self._operations = OperationalLedger()
         self._lock = Lock()
-        self._catalog = ComputeBazaarCatalog(lake_root=lake_root)
+        self._catalog = ComputeBazaarCatalog(
+            lake_root=lake_root,
+            operations=self._operations,
+        )
+        self._operations_version = self._operations.version()
 
     def current(self) -> ComputeBazaarCatalog:
         manifest = read_latest_gold_manifest(self._lake_root)
         run_id = manifest.get("run_id")
+        operations_version = self._operations.version()
         with self._lock:
-            if run_id != self._catalog.manifest.get("run_id"):
+            if (
+                run_id != self._catalog.manifest.get("run_id")
+                or operations_version != self._operations_version
+            ):
                 self._catalog = ComputeBazaarCatalog(
                     lake_root=self._lake_root,
                     manifest=manifest,
+                    operations=self._operations,
                 )
+                self._operations_version = self._operations.version()
             return self._catalog
 
 
@@ -242,22 +254,24 @@ class DataWorkspace:
                 },
             )
 
-        @app.get("/api/data/live-offers")
-        def live_offers(
+        @app.get("/api/data/offers")
+        def offers(
             provider: str | None = None,
             gpu_model: str | None = None,
             offer_id: str | None = None,
             include_unavailable: bool = False,
             limit: int = Query(default=100, ge=1, le=MAX_QUERY_LIMIT),
         ) -> Response:
-            from ..live_offers import LiveOfferError, LiveOfferService
+            from ..offers import OfferService, OfferServiceError, display_row
 
+            started = perf_counter()
             try:
-                service = LiveOfferService.from_environment()
+                service = OfferService.from_environment()
                 if offer_id:
                     offer = service.inspect(offer_id)
-                    rows = [offer.row()]
+                    rows = [display_row(offer)]
                     observed_at = offer.observed_at
+                    batch_id = offer.batch_id or "provider-read"
                 else:
                     result = service.list_offers(
                         providers=[provider] if provider else None,
@@ -265,8 +279,9 @@ class DataWorkspace:
                         include_unavailable=include_unavailable,
                         limit=limit,
                     )
-                    rows = [offer.row() for offer in result.offers]
+                    rows = [display_row(row) for row in result.observations]
                     observed_at = result.observed_at
+                    batch_id = result.batch_id
                     if not rows:
                         failed = [
                             status.message or status.status
@@ -274,20 +289,22 @@ class DataWorkspace:
                             if status.status != "ok"
                         ]
                         detail = "; ".join(failed) or "No current offers match"
-                        raise LiveOfferError(detail)
+                        raise OfferServiceError(detail)
                 table = pa.Table.from_pylist(rows)
                 payload = _arrow_stream(table)
-            except LiveOfferError as exc:
+            except OfferServiceError as exc:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
             return Response(
                 content=payload,
                 media_type="application/vnd.apache.arrow.stream",
                 headers={
                     "Cache-Control": "no-store",
-                    "X-Compute-Bazaar-Run-Id": "live-provider-query",
+                    "X-Compute-Bazaar-Run-Id": batch_id,
                     "X-Compute-Bazaar-Observed-At": observed_at.isoformat(),
                     "X-Compute-Bazaar-Row-Count": str(table.num_rows),
-                    "X-Compute-Bazaar-Elapsed-Ms": "live",
+                    "X-Compute-Bazaar-Elapsed-Ms": str(
+                        round((perf_counter() - started) * 1000, 1)
+                    ),
                 },
             )
 
@@ -300,11 +317,10 @@ class DataWorkspace:
             disk_gb: int = Query(default=50, ge=1),
             volume_gb: int = Query(default=0, ge=0),
         ) -> Response:
-            from ..live_offers import (
-                LaunchPlanner,
-                LiveOfferError,
-            )
+            from ..offers import OfferServiceError
+            from ..provisioning import LaunchPlanner
 
+            started = perf_counter()
             try:
                 plan = LaunchPlanner.from_environment().plan(
                     offer_id,
@@ -316,7 +332,7 @@ class DataWorkspace:
                 )
                 table = pa.Table.from_pylist([plan.row()])
                 payload = _arrow_stream(table)
-            except (LiveOfferError, ValueError) as exc:
+            except (OfferServiceError, ValueError) as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             return Response(
                 content=payload,
@@ -326,7 +342,9 @@ class DataWorkspace:
                     "X-Compute-Bazaar-Run-Id": plan.plan_id,
                     "X-Compute-Bazaar-Observed-At": plan.observed_at.isoformat(),
                     "X-Compute-Bazaar-Row-Count": "1",
-                    "X-Compute-Bazaar-Elapsed-Ms": "live",
+                    "X-Compute-Bazaar-Elapsed-Ms": str(
+                        round((perf_counter() - started) * 1000, 1)
+                    ),
                     "X-Compute-Bazaar-Submitted": "false",
                 },
             )

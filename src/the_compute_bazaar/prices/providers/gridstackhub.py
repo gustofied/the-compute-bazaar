@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -86,8 +86,8 @@ def normalize_reference_prices(
     as_of: str | None,
     fetched_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in _latest_unique_rows(rows):
@@ -125,7 +125,7 @@ def normalize_reference_prices(
         pricing_type = str(entry.get("pricing_type") or "").strip().lower()
         observed_at = _parse_datetime(entry.get("last_updated")) or fetched_at
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider=provider,
                 source_connector="gridstackhub",
                 source_offer_id=f"gridstackhub:{source_offer_id}",
@@ -134,7 +134,7 @@ def normalize_reference_prices(
                 gpu_model=gpu_model,
                 gpu_count=gpu_count,
                 vram_gb=vram_gb,
-                price_usd_hr=hourly_rate,
+                price_usd_instance_hr=hourly_rate,
                 currency="USD",
                 country=None,
                 region=_string_or_none(entry.get("region")),

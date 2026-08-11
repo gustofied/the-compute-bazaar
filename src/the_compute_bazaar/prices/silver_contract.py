@@ -27,169 +27,204 @@ class SilverColumn:
     meaning: str
 
 
-GPU_OFFER_COLUMNS = (
-    SilverColumn("provider", "Utf8", _text("provider"), "Offer provider."),
+OFFER_OBSERVATION_COLUMNS = (
     SilverColumn(
-        "source_offer_id",
+        "observation_id", "Utf8", _text("observation_id"), "Stable row identifier."
+    ),
+    SilverColumn(
+        "batch_id",
         "Utf8",
-        _text("source_offer_id"),
-        "Provider or connector identifier for the observed offer.",
+        _text("batch_id"),
+        "Provider read that produced the row.",
+    ),
+    SilverColumn(
+        "market_run_id",
+        "Utf8",
+        _text("market_run_id"),
+        "Hourly market run, when present.",
+    ),
+    SilverColumn(
+        "observation_purpose",
+        "Utf8",
+        _text("observation_purpose"),
+        "Scheduled, interactive, or preflight.",
+    ),
+    SilverColumn(
+        "observation_resolution",
+        "Utf8",
+        _text("observation_resolution"),
+        "Market summary, deployment option, or exact offer.",
+    ),
+    SilverColumn(
+        "selection_resolution",
+        "Utf8",
+        _text("selection_resolution"),
+        "Provider selection specificity.",
     ),
     SilverColumn(
         "observed_at",
         UTC_TIMESTAMP_DATA_TYPE,
         _utc_timestamp("observed_at"),
-        "UTC time represented by the source observation; collection time when the source supplies no market timestamp.",
+        "UTC observation time.",
     ),
-    SilverColumn(
-        "gpu_raw_name",
-        "Utf8",
-        _text("gpu_raw_name"),
-        "GPU name as reported by the source.",
-    ),
-    SilverColumn(
-        "gpu_model",
-        "Utf8",
-        _text("gpu_model"),
-        "Canonical GPU product and memory variant.",
-    ),
+    SilverColumn("provider", "Utf8", _text("provider"), "Capacity provider."),
     SilverColumn(
         "source_connector",
         "Utf8",
-        _text("coalesce(source_connector, provider)"),
-        "Connector that observed the offer; differs from provider for aggregators.",
+        _text("source_connector"),
+        "Connector that observed the offer.",
     ),
     SilverColumn(
-        "gpu_count",
-        "Int64",
-        "cast(gpu_count as bigint)",
-        "GPU units in the offered machine or configuration.",
+        "source_offer_id",
+        "Utf8",
+        _text("source_offer_id"),
+        "Provider-scoped offer key.",
     ),
+    SilverColumn("gpu_raw_name", "Utf8", _text("gpu_raw_name"), "Source GPU name."),
+    SilverColumn("gpu_model", "Utf8", _text("gpu_model"), "Canonical GPU model."),
+    SilverColumn("gpu_count", "Int64", "cast(gpu_count as bigint)", "GPU count."),
     SilverColumn(
-        "available_gpu_count_lower_bound",
-        "Int64",
-        "cast(available_gpu_count as bigint)",
-        "Nullable row-level lower bound on GPU units reported or demonstrated available; never total fleet capacity.",
-    ),
-    SilverColumn(
-        "vram_gb",
-        "Float64",
-        "cast(vram_gb as double)",
-        "Memory in GiB per GPU, represented with the historical field name.",
+        "vram_gb", "Float64", "cast(vram_gb as double)", "Memory per GPU in GiB."
     ),
     SilverColumn(
         "price_usd_instance_hr",
         "Float64",
-        "cast(price_usd_hr as double)",
-        "Observed USD hourly price for the complete offered machine or configuration.",
+        "cast(price_usd_instance_hr as double)",
+        "USD per offered configuration-hour.",
     ),
     SilverColumn(
         "price_usd_gpu_hr",
         "Float64",
-        "case when cast(gpu_count as bigint) > 0 "
-        "then cast(price_usd_hr as double) / cast(gpu_count as double) "
-        "else cast(null as double) end",
-        "Mechanical instance-hour price divided by GPU count; not a benchmark or transaction price.",
+        "cast(price_usd_gpu_hr as double)",
+        "USD per GPU-hour.",
     ),
+    SilverColumn("currency", "Utf8", _text("currency"), "Normalized currency."),
     SilverColumn(
-        "currency",
-        "Utf8",
-        _text("currency"),
-        "Currency of the normalized price; currently USD.",
-    ),
-    SilverColumn("country", "Utf8", _text("country"), "Source country."),
-    SilverColumn("region", "Utf8", _text("region"), "Source region."),
-    SilverColumn(
-        "is_spot",
-        "Boolean",
-        "cast(is_spot as boolean)",
-        "Whether the source describes the price as spot or interruptible.",
-    ),
-    SilverColumn(
-        "is_secure",
-        "Boolean",
-        "cast(is_secure as boolean)",
-        "Source-reported secure-cloud status when available.",
+        "available_gpu_count_lower_bound",
+        "Int64",
+        "cast(available_gpu_count_lower_bound as bigint)",
+        "Observed lower bound, not total fleet capacity.",
     ),
     SilverColumn(
         "is_available",
         "Boolean",
-        "case "
-        "when lower(arrow_cast(availability_status, 'Utf8')) in "
-        "('available', 'spot_available', 'available_component_rate') then true "
-        "when lower(arrow_cast(availability_status, 'Utf8')) in "
-        "('unavailable', 'spot_unavailable') then false "
-        "else cast(null as boolean) end",
-        "Tri-state availability assertion. Null means the source exposed a price without asserting deployable capacity.",
+        "cast(is_available as boolean)",
+        "Source availability assertion.",
     ),
     SilverColumn(
         "source_availability_status",
         "Utf8",
-        _text("availability_status"),
-        "Normalized source status retained for pricing-basis and eligibility rules.",
+        _text("source_availability_status"),
+        "Normalized source status.",
+    ),
+    SilverColumn(
+        "source_stock_status",
+        "Utf8",
+        _text("source_stock_status"),
+        "Source stock label.",
+    ),
+    SilverColumn("country", "Utf8", _text("country"), "Source country."),
+    SilverColumn("region", "Utf8", _text("region"), "Source region."),
+    SilverColumn(
+        "cloud_type",
+        "Utf8",
+        _text("cloud_type"),
+        "Provider cloud or security class.",
+    ),
+    SilverColumn(
+        "location_ids_json",
+        "Utf8",
+        _text("location_ids_json"),
+        "Eligible provider locations.",
+    ),
+    SilverColumn(
+        "selection_fingerprint",
+        "Utf8",
+        _text("selection_fingerprint"),
+        "Stable provider selection key.",
+    ),
+    SilverColumn(
+        "native_selection_json",
+        "Utf8",
+        _text("native_selection_json"),
+        "Provider-native selection fields.",
+    ),
+    SilverColumn(
+        "query_scope_json",
+        "Utf8",
+        _text("query_scope_json"),
+        "Scope requested from the provider.",
+    ),
+    SilverColumn(
+        "response_complete",
+        "Boolean",
+        "cast(response_complete as boolean)",
+        "Whether the requested provider response completed.",
+    ),
+    SilverColumn(
+        "is_spot", "Boolean", "cast(is_spot as boolean)", "Spot or interruptible price."
+    ),
+    SilverColumn(
+        "is_secure", "Boolean", "cast(is_secure as boolean)", "Source security class."
     ),
     SilverColumn(
         "gpu_socket",
         "Utf8",
         _text("gpu_socket"),
-        "Source-reported GPU interconnect or socket label.",
-    ),
-    SilverColumn(
-        "source_stock_status",
-        "Utf8",
-        _text("stock_status"),
-        "Uninterpreted stock label supplied by the source.",
+        "Source GPU socket or interconnect label.",
     ),
     SilverColumn(
         "price_is_variable",
         "Boolean",
         "cast(price_is_variable as boolean)",
-        "Whether the source says the quoted price can vary.",
+        "Source says the price may vary.",
     ),
     SilverColumn(
         "minimum_executable_price_usd_instance_hr",
         "Float64",
-        "cast(minimum_executable_price_usd_hr as double)",
-        "Minimum instance-hour price after mandatory priced resources, when known.",
+        "cast(minimum_executable_price_usd_instance_hr as double)",
+        "Known minimum executable configuration price.",
     ),
     SilverColumn(
         "required_resource_price_usd_instance_hr",
         "Float64",
-        "cast(required_resource_price_usd_hr as double)",
-        "Mandatory non-GPU resource component of the instance-hour price, when known.",
+        "cast(required_resource_price_usd_instance_hr as double)",
+        "Known mandatory resource price.",
     ),
+    SilverColumn("price_basis", "Utf8", _text("price_basis"), "Source price basis."),
+    SilverColumn("raw_ref", "Utf8", _text("raw_ref"), "Bronze evidence reference."),
     SilverColumn(
-        "price_basis",
-        "Utf8",
-        _text("price_basis"),
-        "Source-specific basis for the observed price when explicitly known.",
+        "raw_hash", "Utf8", _text("raw_hash"), "Hash of the provider response."
     ),
-    SilverColumn(
-        "raw_ref",
-        "Utf8",
-        _text("raw_ref"),
-        "Bronze evidence reference for audit and replay.",
-    ),
-)
-
-GPU_OFFER_LINEAGE_COLUMNS = (
     SilverColumn(
         "source_run_id",
         "Utf8",
-        "",
-        "Ingestion run that produced this provider observation.",
+        _text("source_run_id"),
+        "Ingestion run identifier.",
     ),
     SilverColumn(
         "source_manifest_ref",
         "Utf8",
-        "",
-        "Manifest for the ingestion run that produced this observation.",
+        _text("source_manifest_ref"),
+        "Ingestion manifest reference.",
     ),
     SilverColumn(
         "source_normalized_ref",
         "Utf8",
-        "",
-        "Silver Parquet object containing this observation.",
+        _text("source_normalized_ref"),
+        "Physical Silver object.",
+    ),
+    SilverColumn(
+        "methodology_version",
+        "Utf8",
+        _text("methodology_version"),
+        "Observation methodology.",
+    ),
+    SilverColumn(
+        "schema_version",
+        "Utf8",
+        _text("schema_version"),
+        "Observation schema.",
     ),
 )
 
@@ -331,7 +366,7 @@ MARKET_STATE_COLUMNS = (
 
 
 SILVER_TABLE_CONTRACTS = {
-    "gpu_offers": GPU_OFFER_COLUMNS + GPU_OFFER_LINEAGE_COLUMNS,
+    "offer_observations": OFFER_OBSERVATION_COLUMNS,
     "compute_market_state": MARKET_STATE_COLUMNS,
 }
 
@@ -343,24 +378,8 @@ def select_contract(table_name: str, columns: tuple[SilverColumn, ...]) -> str:
     return f"select\n      {projection}\n    from {table_name}"
 
 
-def silver_offer_select(
-    table_name: str,
-    *,
-    source_run_id: str,
-    source_manifest_ref: str | None,
-    source_normalized_ref: str,
-) -> str:
-    projection = ",\n      ".join(
-        f"{column.expression} as {column.name}" for column in GPU_OFFER_COLUMNS
-    )
-    lineage = ",\n      ".join(
-        (
-            f"{_sql_text(source_run_id)} as source_run_id",
-            f"{_sql_text(source_manifest_ref)} as source_manifest_ref",
-            f"{_sql_text(source_normalized_ref)} as source_normalized_ref",
-        )
-    )
-    return f"select\n      {projection},\n      {lineage}\n    from {table_name}"
+def silver_observation_select(table_name: str) -> str:
+    return select_contract(table_name, OFFER_OBSERVATION_COLUMNS)
 
 
 def silver_market_state_select(table_name: str) -> str:
@@ -369,9 +388,3 @@ def silver_market_state_select(table_name: str) -> str:
 
 def silver_contract(table_name: str) -> tuple[SilverColumn, ...] | None:
     return SILVER_TABLE_CONTRACTS.get(table_name)
-
-
-def _sql_text(value: str | None) -> str:
-    if value is None:
-        return "cast(null as varchar)"
-    return "'" + value.replace("'", "''") + "'"

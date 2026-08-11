@@ -61,6 +61,16 @@ class DataFusionEngine:
             self._context.register_parquet(table_name, parquet_uri)
             self._table_refs[table_name] = parquet_uri
 
+    def register_arrow_table(self, table_name: str, table: Any) -> None:
+        name = _validated_table_name(table_name)
+        if name in self._table_refs:
+            raise ValueError(f"DataFusion table already registered: {name}")
+        batches = table.to_batches()
+        if not batches:
+            batches = [self._arrow.RecordBatch.from_pylist([], schema=table.schema)]
+        self._context.register_record_batches(name, [batches])
+        self._table_refs[name] = "memory://local"
+
     def deregister_tables(self, table_names: Iterable[str]) -> None:
         for table_name in table_names:
             name = _validated_table_name(table_name)

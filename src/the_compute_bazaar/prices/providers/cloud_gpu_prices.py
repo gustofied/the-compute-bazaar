@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -116,8 +116,8 @@ def normalize_external_offerings(
     generated_at: str | None,
     fetched_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for offering in offerings:
@@ -176,10 +176,14 @@ def normalize_external_offerings(
             ):
                 continue
             variant_id = _string_or_none(variant.get("id"))
-            price_usd_hr = _picos_to_usd(
+            price_usd_instance_hr = _picos_to_usd(
                 comparison.get("comparable_hourly_amount_picos")
             )
-            if not variant_id or price_usd_hr is None or price_usd_hr <= 0:
+            if (
+                not variant_id
+                or price_usd_instance_hr is None
+                or price_usd_instance_hr <= 0
+            ):
                 continue
 
             purchase_option = str(variant.get("purchase_option") or "").strip().lower()
@@ -189,7 +193,7 @@ def normalize_external_offerings(
             region = _mapping(variant.get("region"))
             region_code = _string_or_none(variant.get("region_code"))
             normalized.append(
-                GpuOffer(
+                OfferObservation(
                     provider=provider,
                     source_connector="cloud_gpu_prices",
                     source_offer_id=(f"cloud_gpu_prices:{offering_id}:{variant_id}"),
@@ -198,7 +202,7 @@ def normalize_external_offerings(
                     gpu_model=gpu_model,
                     gpu_count=gpu_count,
                     vram_gb=vram_gb,
-                    price_usd_hr=price_usd_hr,
+                    price_usd_instance_hr=price_usd_instance_hr,
                     currency="USD",
                     country=_string_or_none(region.get("country_code")),
                     region=region_code,

@@ -6,6 +6,7 @@ select
   max(observed_at) as latest_observed_at,
   $gold_run_id as gold_run_id,
   $calculated_at as calculated_at
-from silver_gpu_offers
+from silver_offer_observations
+where observation_purpose = 'scheduled'
 group by provider
 order by provider

@@ -11,7 +11,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 
 
 DEFAULT_LIUM_API_BASE = "https://lium.io/api"
@@ -148,8 +148,8 @@ def normalize_executors(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in executors:
@@ -169,7 +169,7 @@ def normalize_executor(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> GpuOffer | None:
+) -> OfferObservation | None:
     gpu_name = _gpu_name(entry)
     if not gpu_name:
         return None
@@ -214,7 +214,7 @@ def normalize_executor(
 
     is_spot = _bool_or_none(_nested(specs, "is_spot"))
     available_gpu_count = _int_or_none(entry.get("available_gpu_count"))
-    return GpuOffer(
+    return OfferObservation(
         provider="lium",
         source_offer_id=source_offer_id,
         observed_at=observed_at,
@@ -222,7 +222,7 @@ def normalize_executor(
         gpu_model=gpu_model,
         gpu_count=gpu_count,
         vram_gb=round(vram_mb / 1024, 2) if vram_mb else None,
-        price_usd_hr=price_per_gpu * gpu_count,
+        price_usd_instance_hr=price_per_gpu * gpu_count,
         available_gpu_count=(
             available_gpu_count
             if available_gpu_count is not None and available_gpu_count > 0

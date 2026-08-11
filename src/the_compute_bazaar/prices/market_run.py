@@ -131,7 +131,7 @@ def run_market_hourly(
         provider_results[provider] = result
         provider_quality = {
             "raw_offer_count": result.raw_offer_count,
-            "normalized_offer_count": result.normalized_offer_count,
+            "normalized_observation_count": result.normalized_observation_count,
             "unknown_gpu_names": result.unknown_gpu_names,
             "operational_status": "ok",
             "normalization_status": ("warning" if result.unknown_gpu_names else "ok"),
@@ -147,7 +147,7 @@ def run_market_hourly(
         for provider in provider_scope
         if provider in provider_results
         and provider_results[provider].normalized_ref
-        and provider_results[provider].normalized_offer_count > 0
+        and provider_results[provider].normalized_observation_count > 0
     ]
     failed_providers = [
         provider for provider in provider_scope if provider not in successful_providers

@@ -532,7 +532,7 @@ def listings(
 
 
 @offers_app.command("list")
-def live_offer_list(
+def offers_list(
     ctx: typer.Context,
     provider: Annotated[
         list[str] | None,
@@ -548,9 +548,9 @@ def live_offer_list(
     ] = False,
     limit: Annotated[int, typer.Option()] = 100,
 ) -> None:
-    """Fetch current provider offers without reading the market lake."""
+    """Read current provider offers and record the observations locally."""
     try:
-        result = _live_offers().list_offers(
+        result = _offers().list_offers(
             providers=provider,
             gpu_model=gpu_model,
             include_unavailable=include_unavailable,
@@ -558,7 +558,7 @@ def live_offer_list(
         )
     except RuntimeError as exc:
         raise typer.BadParameter(str(exc)) from exc
-    if not result.offers:
+    if not result.observations:
         failures = [
             status.message or status.status
             for status in result.providers
@@ -575,22 +575,24 @@ def live_offer_list(
 
 
 @offers_app.command("inspect")
-def live_offer_inspect(
+def offers_inspect(
     ctx: typer.Context,
     offer_id: Annotated[str, typer.Argument()],
 ) -> None:
     """Re-fetch and inspect one provider-native offer selection."""
+    from .offers import display_row
+
     try:
-        offer = _live_offers().inspect(offer_id)
+        offer = _offers().inspect(offer_id)
     except RuntimeError as exc:
         raise typer.BadParameter(str(exc)) from exc
     _emit(
         ctx,
         {
-            "contract": "compute-bazaar.live-offer.v1",
+            "contract": "compute-bazaar.offer-observation",
             "observed_at": offer.observed_at,
-            "rows": [offer.row()],
-            "selection": offer.selection,
+            "rows": [display_row(offer)],
+            "selection": offer.native_selection,
         },
         command="offers",
         include_source=False,
@@ -613,7 +615,8 @@ def launch_plan(
     volume_gb: Annotated[int, typer.Option(help="RunPod workspace volume size.")] = 0,
 ) -> None:
     """Revalidate an offer and prepare a request without provisioning it."""
-    from .live_offers import LaunchPlanner, LiveOfferError
+    from .offers import OfferServiceError
+    from .provisioning import LaunchPlanner
 
     try:
         plan = LaunchPlanner.from_environment().plan(
@@ -624,7 +627,7 @@ def launch_plan(
             disk_gb=disk_gb,
             volume_gb=volume_gb,
         )
-    except (LiveOfferError, ValueError) as exc:
+    except (OfferServiceError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
     _emit(ctx, plan.payload(), command="launch", include_source=False)
 
@@ -650,14 +653,13 @@ def launch_run(
     ] = False,
 ) -> None:
     """Revalidate an offer, launch it with a deadline, and register the host."""
-    from .live_offers import (
-        LaunchExecutionError,
-        LaunchPlanner,
-        LiveOfferError,
-        RunpodExecutor,
-    )
+    from .offers import OfferServiceError
+    from .operations import OperationalLedger
+    from .provider_execution import LaunchExecutionError, RunpodExecutor
+    from .provisioning import LaunchPlanner
 
     planner = LaunchPlanner.from_environment()
+    ledger = OperationalLedger()
     try:
         plan = planner.plan(
             offer_id,
@@ -666,13 +668,16 @@ def launch_run(
             disk_gb=disk_gb,
             volume_gb=0,
         )
-        receipt = RunpodExecutor(api_key=planner.service.runpod_api_key).execute(
+        receipt = RunpodExecutor(
+            api_key=planner.service.runpod_api_key,
+            ledger=ledger,
+        ).execute(
             plan,
             runtime_minutes=runtime_minutes,
             max_hourly_usd=max_hourly_usd,
             confirm_spend=confirm_spend,
         )
-    except (LaunchExecutionError, LiveOfferError, ValueError) as exc:
+    except (LaunchExecutionError, OfferServiceError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
     _emit(ctx, receipt.payload(), command="launch", include_source=False)
 
@@ -682,7 +687,7 @@ def fleet_hosts(ctx: typer.Context) -> None:
     """List machines known to the private local Fleet registry."""
     from .fleet import FleetService
 
-    machines = FleetService().hosts()
+    machines = FleetService.local().hosts()
     _emit(
         ctx,
         {
@@ -703,7 +708,7 @@ def fleet_inspect(
     from .fleet import FleetInspectError, FleetService
 
     try:
-        inspection = FleetService().inspect(host_id)
+        inspection = FleetService.local().inspect(host_id)
     except (FleetInspectError, KeyError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
     _emit(
@@ -726,15 +731,18 @@ def fleet_refresh(
 ) -> None:
     """Refresh the SSH endpoint of a newly provisioned RunPod host."""
     from .fleet import FleetRegistry
-    from .live_offers import LaunchExecutionError, LiveOfferService, RunpodExecutor
+    from .offers import OfferService
+    from .operations import OperationalLedger
+    from .provider_execution import LaunchExecutionError, RunpodExecutor
 
     registry = FleetRegistry()
     try:
         machine = registry.get(host_id)
-        service = LiveOfferService.from_environment()
+        service = OfferService.from_environment()
         refreshed = RunpodExecutor(
             api_key=service.runpod_api_key,
             registry=registry,
+            ledger=OperationalLedger(),
         ).resolve_ssh(machine)
     except (KeyError, LaunchExecutionError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -758,7 +766,7 @@ def fleet_doctor(
     from .fleet import FleetInspectError, FleetService
 
     try:
-        result = FleetService().doctor(host_id)
+        result = FleetService.local().doctor(host_id)
     except (FleetInspectError, KeyError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
     _emit(ctx, result.payload(), command="fleet-doctor", include_source=False)
@@ -775,15 +783,18 @@ def fleet_terminate(
 ) -> None:
     """Delete one RunPod host and mark it terminated locally."""
     from .fleet import FleetRegistry
-    from .live_offers import LaunchExecutionError, LiveOfferService, RunpodExecutor
+    from .offers import OfferService
+    from .operations import OperationalLedger
+    from .provider_execution import LaunchExecutionError, RunpodExecutor
 
     registry = FleetRegistry()
     try:
         machine = registry.get(host_id)
-        service = LiveOfferService.from_environment()
+        service = OfferService.from_environment()
         terminated = RunpodExecutor(
             api_key=service.runpod_api_key,
             registry=registry,
+            ledger=OperationalLedger(),
         ).terminate(machine, confirm=confirm)
     except (KeyError, LaunchExecutionError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -1161,10 +1172,14 @@ def _service(ctx: typer.Context) -> Any:
 
 def _catalog(ctx: typer.Context) -> Any:
     from .data_catalog import ComputeBazaarCatalog
+    from .operations import OperationalLedger
 
     state = _state(ctx)
     _require_lake(state.lake)
-    return ComputeBazaarCatalog(lake_root=state.lake.root)
+    return ComputeBazaarCatalog(
+        lake_root=state.lake.root,
+        operations=OperationalLedger(),
+    )
 
 
 def _analysis_store() -> Any:
@@ -1173,10 +1188,10 @@ def _analysis_store() -> Any:
     return AnalysisStore()
 
 
-def _live_offers() -> Any:
-    from .live_offers import LiveOfferService
+def _offers() -> Any:
+    from .offers import OfferService
 
-    return LiveOfferService.from_environment()
+    return OfferService.from_environment()
 
 
 def _require_lake(lake: LakeSelection) -> None:

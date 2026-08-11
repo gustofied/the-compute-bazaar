@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .ecb import DEFAULT_ECB_EUR_USD_URL, fetch_latest_eur_usd_rate
 from .http import retrying_session
 
@@ -121,8 +121,8 @@ def normalize_gpu_products(
     fx_observed_date: str,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for product in products:
@@ -156,7 +156,7 @@ def normalize_gpu_products(
         source_availability = str(product.get("availability") or "").lower()
         is_deployable = source_availability in {"available", "scarce"}
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider="scaleway",
                 source_connector="scaleway",
                 source_offer_id=f"{offer_id}:{zone}",
@@ -165,7 +165,7 @@ def normalize_gpu_products(
                 gpu_model=gpu_model,
                 gpu_count=gpu_count,
                 vram_gb=vram_gb,
-                price_usd_hr=price_eur_hr * eur_usd_rate,
+                price_usd_instance_hr=price_eur_hr * eur_usd_rate,
                 available_gpu_count=gpu_count if is_deployable else None,
                 currency="USD",
                 country=_country_for_zone(zone),

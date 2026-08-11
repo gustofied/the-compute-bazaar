@@ -331,7 +331,7 @@ def ingest_spheron(
         raw_offer_count=len(fetched.offers),
         normalized=normalized,
         unknown_gpu_names=unknown_gpu_names,
-        snapshot_query={"source_type": "live_multi_provider_gpu_offers"},
+        snapshot_query={"source_type": "multi_provider_offer_observations"},
         automq_bootstrap_servers=automq_bootstrap_servers,
         automq_config=automq_config,
         topic_prefix=topic_prefix,

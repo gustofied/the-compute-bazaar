@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 
 
 DEFAULT_AWS_SPOT_REGIONS = (
@@ -166,8 +166,8 @@ def normalize_spot_prices(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_instance_types: list[str] = []
 
     for entry in prices:
@@ -186,7 +186,7 @@ def normalize_spot_prices(
         availability_zone = str(entry.get("AvailabilityZone") or "")
         gpu_count = int(spec["gpu_count"])
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider="aws_spot",
                 source_offer_id=f"{region}:{availability_zone}:{instance_type}:linux-unix",
                 observed_at=observed_at,
@@ -196,7 +196,7 @@ def normalize_spot_prices(
                 else f"{spec['gpu_model']}_x{gpu_count}",
                 gpu_count=gpu_count,
                 vram_gb=float(spec["vram_gb"]),
-                price_usd_hr=price,
+                price_usd_instance_hr=price,
                 country=None,
                 region=", ".join(part for part in (region, availability_zone) if part)
                 or None,

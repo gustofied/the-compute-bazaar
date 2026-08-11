@@ -13,7 +13,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 
 
 DEFAULT_VAST_API_BASE = "https://console.vast.ai/api/v0"
@@ -162,8 +162,8 @@ def normalize_offers(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in offers:
@@ -183,7 +183,7 @@ def normalize_offer(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> GpuOffer | None:
+) -> OfferObservation | None:
     gpu_name = str(entry.get("gpu_name") or entry.get("gpuName") or "")
     if not gpu_name:
         return None
@@ -199,7 +199,7 @@ def normalize_offer(
     if gpu_count > 1:
         gpu_model = f"{gpu_model}_x{gpu_count}"
 
-    price = _price_usd_hr(entry)
+    price = _price_usd_instance_hr(entry)
     if price is None or price <= 0:
         return None
 
@@ -215,7 +215,7 @@ def normalize_offer(
     rentable = entry.get("rentable")
     availability_status = "available" if rentable is not False else "unavailable"
 
-    return GpuOffer(
+    return OfferObservation(
         provider="vast",
         source_offer_id=source_offer_id,
         observed_at=observed_at,
@@ -223,7 +223,7 @@ def normalize_offer(
         gpu_model=gpu_model,
         gpu_count=gpu_count,
         vram_gb=round(gpu_ram_mb / 1024, 2) if gpu_ram_mb else None,
-        price_usd_hr=price,
+        price_usd_instance_hr=price,
         available_gpu_count=gpu_count if availability_status == "available" else None,
         country=country,
         region=region,
@@ -240,7 +240,7 @@ def normalize_offer(
     )
 
 
-def _price_usd_hr(entry: Mapping[str, Any]) -> float | None:
+def _price_usd_instance_hr(entry: Mapping[str, Any]) -> float | None:
     search = entry.get("search")
     if isinstance(search, Mapping):
         value = search.get("totalHour") or search.get("total_hour")

@@ -1,4 +1,4 @@
-"""Adapter that mounts the existing evaluation viewer into the Terminal."""
+"""Mount the evaluation workspace into the Terminal."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class EvalWorkspace:
 
     @classmethod
     def load(cls, evaluation_root: Path | None) -> EvalWorkspace:
-        if evaluation_root is None or not evaluation_root.is_dir():
+        if evaluation_root is None:
             return cls()
         bench_root = evaluation_root.resolve().parents[1]
         if not (bench_root / "viewer" / "app.py").is_file():
@@ -28,7 +28,7 @@ class EvalWorkspace:
         module = importlib.import_module("viewer.app")
         return cls(
             app=module.create_app(evaluation_root, base_path="/eval"),
-            first_url=_first_evaluation_url(evaluation_root),
+            first_url=module.first_evaluation_url(evaluation_root),
         )
 
     @property
@@ -45,14 +45,3 @@ class EvalWorkspace:
         if not self.available or self.app is None:
             return
         shell.mount("/eval", self.app, name="evaluation-workspace")
-
-
-def _first_evaluation_url(evaluation_root: Path) -> str | None:
-    for container in ("runs", "jobs"):
-        for run_dir in sorted(evaluation_root.glob(f"*/{container}/*")):
-            if (run_dir / "view.json").is_file() or (
-                (run_dir / "protocol.json").is_file()
-                and (run_dir / "trials.json").is_file()
-            ):
-                return f"/eval/evals/{run_dir.parent.parent.name}"
-    return None

@@ -9,12 +9,15 @@ import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..fleet import FleetMachine, FleetRegistry, SshEndpoint
-from .launch import LaunchPlan
+from .fleet import FleetMachine, FleetRegistry, SshEndpoint
+from .provisioning import LaunchPlan
+
+if TYPE_CHECKING:
+    from .operations import OperationalLedger
 
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -68,6 +71,7 @@ class RunpodExecutor:
         runner: CommandRunner = subprocess.run,
         binary: str | None = None,
         identity_file: str | None = None,
+        ledger: OperationalLedger | None = None,
     ) -> None:
         self.api_key = api_key
         self.registry = registry or FleetRegistry()
@@ -82,6 +86,7 @@ class RunpodExecutor:
                 )
             ).expanduser()
         )
+        self.ledger = ledger
 
     def execute(
         self,
@@ -139,13 +144,7 @@ class RunpodExecutor:
             terminate_at=terminate_at,
         )
         self.registry.put(machine)
-
-        try:
-            machine = self.resolve_ssh(machine)
-        except (KeyError, TypeError, ValueError, LaunchExecutionError) as exc:
-            warnings.append(f"Pod created; SSH endpoint is not ready: {exc}")
-
-        return LaunchReceipt(
+        receipt = LaunchReceipt(
             machine=machine,
             plan_id=plan.plan_id,
             launched_at=launched_at,
@@ -156,10 +155,28 @@ class RunpodExecutor:
                 4,
             ),
             command=tuple(command),
-            warnings=tuple(warnings),
         )
+        if self.ledger:
+            self.ledger.record_launch(plan, receipt)
 
-    def resolve_ssh(self, machine: FleetMachine) -> FleetMachine:
+        try:
+            machine = self.resolve_ssh(machine, record=False)
+        except (KeyError, TypeError, ValueError, LaunchExecutionError) as exc:
+            warnings.append(f"Pod created; SSH endpoint is not ready: {exc}")
+
+        receipt = receipt.model_copy(
+            update={"machine": machine, "warnings": tuple(warnings)}
+        )
+        if self.ledger:
+            self.ledger.record_launch(plan, receipt)
+        return receipt
+
+    def resolve_ssh(
+        self,
+        machine: FleetMachine,
+        *,
+        record: bool = True,
+    ) -> FleetMachine:
         if machine.provider != "runpod":
             raise LaunchExecutionError(
                 f"SSH resolution is not implemented for {machine.provider}"
@@ -179,6 +196,8 @@ class RunpodExecutor:
             }
         )
         self.registry.put(resolved)
+        if record and self.ledger:
+            self.ledger.record_machine_state(resolved)
         return resolved
 
     def terminate(self, machine: FleetMachine, *, confirm: bool) -> FleetMachine:
@@ -191,6 +210,8 @@ class RunpodExecutor:
         self._run_json([self.binary, "pod", "delete", machine.provider_resource_id])
         terminated = machine.model_copy(update={"state": "terminated", "ssh": None})
         self.registry.put(terminated)
+        if self.ledger:
+            self.ledger.record_machine_state(terminated)
         return terminated
 
     def _create_command(

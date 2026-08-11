@@ -2,20 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 from .datafusion import DataFusionEngine
-from .silver_contract import silver_market_state_select, silver_offer_select
-
-
-@dataclass(frozen=True)
-class SilverOfferSource:
-    table_name: str
-    source_run_id: str
-    source_manifest_ref: str | None
-    source_normalized_ref: str
+from .silver_contract import silver_market_state_select, silver_observation_select
 
 
 GPU_PRICE_INDEX_HISTORY_FIELDS = (
@@ -40,18 +31,9 @@ GPU_PRICE_INDEX_HISTORY_FIELDS = (
 )
 
 
-def silver_source_select(source: SilverOfferSource) -> str:
-    return silver_offer_select(
-        source.table_name,
-        source_run_id=source.source_run_id,
-        source_manifest_ref=source.source_manifest_ref,
-        source_normalized_ref=source.source_normalized_ref,
-    )
-
-
-def silver_source_cte(sources: list[SilverOfferSource]) -> str:
-    selects = [silver_source_select(source) for source in sources]
-    return f"silver_gpu_offers as ({' union all '.join(selects)})"
+def silver_source_cte(table_names: list[str]) -> str:
+    selects = [silver_observation_select(table_name) for table_name in table_names]
+    return f"silver_offer_observations as ({' union all '.join(selects)})"
 
 
 def source_catalog_values(provider_scope: list[str]) -> str:

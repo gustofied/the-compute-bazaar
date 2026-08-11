@@ -11,8 +11,9 @@ select
   max(offers.observed_at) as latest_observed_at,
   $gold_run_id as gold_run_id,
   $calculated_at as calculated_at
-from silver_gpu_offers offers
+from silver_offer_observations offers
 left join source_catalog catalog using (source_connector)
+where offers.observation_purpose = 'scheduled'
 group by
   offers.source_connector,
   catalog.source_kind,

@@ -11,7 +11,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 
 
 DEFAULT_AKASH_GPU_PRICES_URL = "https://console-api.akash.network/v1/gpu-prices"
@@ -86,8 +86,8 @@ def normalize_gpu_prices(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in models:
@@ -116,7 +116,7 @@ def normalize_gpu_prices(
             continue
 
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider="akash",
                 source_offer_id=":".join(
                     part
@@ -132,7 +132,7 @@ def normalize_gpu_prices(
                 gpu_model=gpu_model,
                 gpu_count=1,
                 vram_gb=vram_gb,
-                price_usd_hr=floor_price,
+                price_usd_instance_hr=floor_price,
                 available_gpu_count=available_units if available_units > 0 else None,
                 country=None,
                 region="Akash Network",

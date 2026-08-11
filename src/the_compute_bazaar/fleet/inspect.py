@@ -56,10 +56,28 @@ field disk_total_gb "${1:-}"
 field disk_used_gb "${2:-}"
 field disk_free_gb "${3:-}"
 field uptime_seconds "$(awk '{printf "%d", $1}' /proc/uptime 2>/dev/null || true)"
-field cuda_version "$(nvcc --version 2>/dev/null | awk '/release/ {print $0}' | tail -1 || true)"
+field driver_cuda_version "$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9.]*\).*/\1/p' | head -1 || true)"
+field cuda_toolkit_version "$(nvcc --version 2>/dev/null | sed -n 's/.*release \([^,]*\).*/\1/p' | tail -1 || true)"
 field docker_version "$(docker --version 2>/dev/null || true)"
+if [ "${CBZ_VERIFY_GPU_EXECUTION:-0}" = 1 ]; then
+  if command -v python3 >/dev/null 2>&1 && python3 -c 'import torch' >/dev/null 2>&1; then
+    if python3 -c 'import torch; x=torch.ones(1, device="cuda"); y=(x+x).item(); torch.cuda.synchronize(); assert y == 2' >/dev/null 2>&1; then
+      field gpu_execution_status pass
+      field gpu_execution_detail "PyTorch CUDA tensor operation completed"
+    else
+      field gpu_execution_status fail
+      field gpu_execution_detail "PyTorch CUDA tensor operation failed"
+    fi
+  else
+    field gpu_execution_status not_tested
+    field gpu_execution_detail "PyTorch CUDA runtime not present"
+  fi
+else
+  field gpu_execution_status not_tested
+  field gpu_execution_detail "not checked by telemetry probe"
+fi
 printf 'CBZ_GPU_BEGIN\n'
-nvidia-smi --query-gpu=index,name,memory.total,memory.used,utilization.gpu,power.draw,power.limit,temperature.gpu,temperature.gpu.tlimit,driver_version,pstate,pci.bus_id,pcie.link.gen.current,pcie.link.width.current --format=csv,noheader,nounits 2>/dev/null || true
+nvidia-smi --query-gpu=index,name,memory.total,memory.used,utilization.gpu,power.draw,power.limit,temperature.gpu,temperature.gpu.tlimit,driver_version,pstate,pci.bus_id,pcie.link.gen.current,pcie.link.gen.max,pcie.link.width.current,pcie.link.width.max --format=csv,noheader,nounits 2>/dev/null || true
 printf 'CBZ_GPU_END\n'
 """.strip()
 
@@ -81,12 +99,17 @@ class FleetInspector:
         self.runner = runner
         self.known_hosts_file = known_hosts_file
 
-    def inspect(self, machine: FleetMachine) -> FleetInspection:
+    def inspect(
+        self,
+        machine: FleetMachine,
+        *,
+        verify_gpu_execution: bool = False,
+    ) -> FleetInspection:
         if machine.ssh is None:
             raise FleetInspectError(f"Fleet host {machine.host_id} has no SSH endpoint")
         known_hosts = self.known_hosts_file or (
             Path(machine.ssh.identity_file).expanduser().parent
-            / "compute_bazaar_runpod_known_hosts"
+            / "compute_bazaar_fleet_known_hosts"
         )
         known_hosts.parent.mkdir(parents=True, exist_ok=True)
         command = [
@@ -114,7 +137,7 @@ class FleetInspector:
         ]
         result = self.runner(
             command,
-            input=PROBE,
+            input=(f"CBZ_VERIFY_GPU_EXECUTION={int(verify_gpu_execution)}\n{PROBE}"),
             capture_output=True,
             text=True,
             timeout=45,
@@ -152,7 +175,7 @@ def _parse_probe(
 
     devices: list[GpuDevice] = []
     for row in csv.reader(StringIO("\n".join(gpu_lines)), skipinitialspace=True):
-        if len(row) != 14:
+        if len(row) != 16:
             continue
         devices.append(
             GpuDevice(
@@ -168,8 +191,10 @@ def _parse_probe(
                 driver_version=row[9].strip(),
                 performance_state=row[10].strip() or None,
                 pci_bus_id=row[11].strip() or None,
-                pcie_generation=_integer(row[12]),
-                pcie_width=_integer(row[13]),
+                pcie_generation_current=_integer(row[12]),
+                pcie_generation_max=_integer(row[13]),
+                pcie_width_current=_integer(row[14]),
+                pcie_width_max=_integer(row[15]),
             )
         )
     return FleetInspection(
@@ -186,8 +211,11 @@ def _parse_probe(
         disk_used_gb=_integer(fields.get("disk_used_gb")),
         disk_free_gb=_integer(fields.get("disk_free_gb")),
         uptime_seconds=_integer(fields.get("uptime_seconds")),
-        cuda_version=fields.get("cuda_version") or None,
+        driver_cuda_version=fields.get("driver_cuda_version") or None,
+        cuda_toolkit_version=fields.get("cuda_toolkit_version") or None,
         docker_version=fields.get("docker_version") or None,
+        gpu_execution_status=fields.get("gpu_execution_status") or "not_tested",
+        gpu_execution_detail=fields.get("gpu_execution_detail") or None,
         gpus=tuple(devices),
     )
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from the_compute_bazaar.fleet import (
     FleetInspector,
     FleetMachine,
+    FleetMonitor,
     FleetRegistry,
     FleetService,
     SshEndpoint,
@@ -50,10 +51,13 @@ CBZ\tdisk_total_gb\t50
 CBZ\tdisk_used_gb\t1
 CBZ\tdisk_free_gb\t80
 CBZ\tuptime_seconds\t42
-CBZ\tcuda_version\tCuda compilation tools, release 12.8
+CBZ\tdriver_cuda_version\t12.8
+CBZ\tcuda_toolkit_version\t12.8
 CBZ\tdocker_version\tDocker version 27.0.0
+CBZ\tgpu_execution_status\tpass
+CBZ\tgpu_execution_detail\tPyTorch CUDA tensor operation completed
 CBZ_GPU_BEGIN
-0, NVIDIA H100 80GB HBM3, 81559, 120, 14, 80.2, 310, 31, 47, 570.86.15, P0, 00000000:01:00.0, 4, 16
+0, NVIDIA H100 80GB HBM3, 81559, 120, 14, 80.2, 310, 31, 47, 570.86.15, P0, 00000000:01:00.0, 4, 4, 16, 16
 CBZ_GPU_END
 """
 
@@ -78,13 +82,23 @@ class FleetTest(unittest.TestCase):
             selected = machine(identity)
             registry = FleetRegistry(root / "fleet")
             registry.put(selected)
-            calls: list[list[str]] = []
+            calls: list[tuple[list[str], str]] = []
 
             def fake_runner(
-                command: list[str], **_: object
+                command: list[str], **kwargs: object
             ) -> subprocess.CompletedProcess[str]:
-                calls.append(command)
-                return subprocess.CompletedProcess(command, 0, PROBE_OUTPUT, "")
+                script = str(kwargs.get("input", ""))
+                calls.append((command, script))
+                output = PROBE_OUTPUT
+                if script.startswith("CBZ_VERIFY_GPU_EXECUTION=0"):
+                    output = output.replace(
+                        "CBZ\tgpu_execution_status\tpass",
+                        "CBZ\tgpu_execution_status\tnot_tested",
+                    ).replace(
+                        "CBZ\tgpu_execution_detail\tPyTorch CUDA tensor operation completed",
+                        "CBZ\tgpu_execution_detail\tnot checked by telemetry probe",
+                    )
+                return subprocess.CompletedProcess(command, 0, output, "")
 
             inspector = FleetInspector(
                 runner=fake_runner,
@@ -101,8 +115,126 @@ class FleetTest(unittest.TestCase):
             self.assertEqual(inspection.gpus[0].utilization_pct, 14)
             self.assertEqual(inspection.cpu_count, 13.6)
             self.assertEqual(result.readiness, "ready")
-            self.assertIn("StrictHostKeyChecking=accept-new", calls[0])
-            self.assertIn("ControlMaster=auto", calls[0])
+            self.assertIn("StrictHostKeyChecking=accept-new", calls[0][0])
+            self.assertIn("ControlMaster=auto", calls[0][0])
+            self.assertTrue(calls[0][1].startswith("CBZ_VERIFY_GPU_EXECUTION=0"))
+            self.assertTrue(calls[1][1].startswith("CBZ_VERIFY_GPU_EXECUTION=1"))
+
+    def test_monitor_is_lightweight_and_records_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            selected = machine(root / "id_ed25519")
+            registry = FleetRegistry(root / "fleet")
+            registry.put(selected)
+            scripts: list[str] = []
+            records: list[tuple[object, object]] = []
+
+            def fake_runner(
+                command: list[str], **kwargs: object
+            ) -> subprocess.CompletedProcess[str]:
+                scripts.append(str(kwargs.get("input", "")))
+                output = PROBE_OUTPUT.replace(
+                    "CBZ\tgpu_execution_status\tpass",
+                    "CBZ\tgpu_execution_status\tnot_tested",
+                ).replace(
+                    "CBZ\tgpu_execution_detail\tPyTorch CUDA tensor operation completed",
+                    "CBZ\tgpu_execution_detail\tnot checked by telemetry probe",
+                )
+                return subprocess.CompletedProcess(command, 0, output, "")
+
+            class Ledger:
+                def record_inspection(
+                    self, inspection: object, doctor: object = None
+                ) -> None:
+                    records.append((inspection, doctor))
+
+            service = FleetService(
+                registry=registry,
+                inspector=FleetInspector(
+                    runner=fake_runner,
+                    known_hosts_file=root / "known_hosts",
+                ),
+                ledger=Ledger(),  # type: ignore[arg-type]
+            )
+
+            _, result = service.monitor(selected.host_id)
+
+            self.assertEqual(result.readiness, "ready")
+            self.assertNotIn("gpu_execution", {check.check for check in result.checks})
+            self.assertEqual(len(records), 1)
+            self.assertTrue(scripts[0].startswith("CBZ_VERIFY_GPU_EXECUTION=0"))
+
+    def test_background_monitor_keeps_last_sample_after_host_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            selected = machine(root / "id_ed25519")
+            registry = FleetRegistry(root / "fleet")
+            registry.put(selected)
+            failing = False
+
+            def fake_runner(
+                command: list[str], **_: object
+            ) -> subprocess.CompletedProcess[str]:
+                if failing:
+                    return subprocess.CompletedProcess(command, 255, "", "timeout")
+                return subprocess.CompletedProcess(command, 0, PROBE_OUTPUT, "")
+
+            service = FleetService(
+                registry=registry,
+                inspector=FleetInspector(
+                    runner=fake_runner,
+                    known_hosts_file=root / "known_hosts",
+                ),
+            )
+            monitor = FleetMonitor(service, interval_seconds=1)
+
+            monitor.poll_once()
+            first = monitor.state(selected.host_id)
+            self.assertIsNotNone(first)
+            assert first is not None
+            self.assertEqual(first.status, "ok")
+
+            failing = True
+            monitor.poll_once()
+            stale = monitor.state(selected.host_id)
+            self.assertIsNotNone(stale)
+            assert stale is not None
+            self.assertEqual(stale.status, "stale")
+            self.assertEqual(stale.inspection, first.inspection)
+            self.assertEqual(stale.consecutive_failures, 1)
+
+    def test_one_bad_gpu_blocks_multi_gpu_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            selected = machine(root / "id_ed25519").model_copy(update={"gpu_count": 2})
+            registry = FleetRegistry(root / "fleet")
+            registry.put(selected)
+            output = PROBE_OUTPUT.replace(
+                "CBZ_GPU_END",
+                "1, NVIDIA H100 80GB HBM3, 0, 0, 0, 70, 310, 32, 47, "
+                "570.86.15, P0, 00000000:02:00.0, 4, 4, 8, 16\n"
+                "CBZ_GPU_END",
+            )
+
+            def fake_runner(
+                command: list[str], **_: object
+            ) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(command, 0, output, "")
+
+            service = FleetService(
+                registry=registry,
+                inspector=FleetInspector(
+                    runner=fake_runner,
+                    known_hosts_file=root / "known_hosts",
+                ),
+            )
+
+            result = service.doctor(selected.host_id)
+            checks = {check.check: check for check in result.checks}
+
+            self.assertEqual(result.readiness, "not_ready")
+            self.assertEqual(checks["gpu_memory"].status, "fail")
+            self.assertEqual(checks["pcie_link"].status, "warn")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -67,8 +67,8 @@ def normalize_hostnodes(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for hostnode in hostnodes:
@@ -119,7 +119,7 @@ def normalize_hostnodes(
             is_available = available_count is not None and available_count > 0
             gpu_key = str(gpu.get("v0Name") or gpu_name)
             normalized.append(
-                GpuOffer(
+                OfferObservation(
                     provider="tensordock",
                     source_offer_id=f"{hostnode_id}:{gpu_key}",
                     observed_at=observed_at,
@@ -127,7 +127,7 @@ def normalize_hostnodes(
                     gpu_model=gpu_model,
                     gpu_count=1,
                     vram_gb=_vram_from_name(gpu_name),
-                    price_usd_hr=price,
+                    price_usd_instance_hr=price,
                     available_gpu_count=available_count if is_available else None,
                     country=_string_or_none(location.get("country")),
                     region=region,

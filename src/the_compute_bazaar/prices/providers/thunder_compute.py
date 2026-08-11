@@ -11,7 +11,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -88,8 +88,8 @@ def normalize_catalog(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
     statuses = _mapping_value(availability, "specs")
 
@@ -118,7 +118,7 @@ def normalize_catalog(
         status = str(status_value or "").strip().lower()
         is_available = status == "available"
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider="thunder_compute",
                 source_connector="thunder_compute",
                 source_offer_id=str(spec_key),
@@ -127,7 +127,7 @@ def normalize_catalog(
                 gpu_model=gpu_model,
                 gpu_count=gpu_count,
                 vram_gb=vram_gb,
-                price_usd_hr=price,
+                price_usd_instance_hr=price,
                 available_gpu_count=gpu_count if is_available else None,
                 country=None,
                 region="north_america",

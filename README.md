@@ -20,6 +20,12 @@ Arrow. Perspective also accepts Arrow data, so I am currently exploring it to
 visualize the query results. All of this can be used through the CLI and
 Terminal.
 
+Hourly reads, direct provider reads, and the final check before a rental use the
+same offer-observation columns. Scheduled rows live in S3; direct reads, launch
+checks, and Fleet measurements stay private and local. DataFusion presents them
+as one catalog, so we can follow the market record into a selected offer and the
+machine that arrived without putting direct reads into the hourly index.
+
 The idea behind the lake being object storage is that agents can use SQL for
 analysis or inspect the underlying files directly, such as contracts, deals, or
 whatever else needs source evidence. This matters because compute markets are
@@ -48,13 +54,13 @@ while `price-index` prints one example market view.
 `compute-bazaar` prints tables by default. Use
 `compute-bazaar --format json COMMAND` for machine-readable output.
 
-## Query
+## Data
 
 Start by listing the DataFusion catalog and inspecting a table.
 
 ```bash
 compute-bazaar tables
-compute-bazaar describe silver.gpu_offers
+compute-bazaar describe silver.offer_observations
 compute-bazaar describe gold.fact_gpu_price_index
 ```
 
@@ -65,17 +71,19 @@ compute-bazaar availability --gpu-model H100 --history --limit 20
 
 compute-bazaar sql "
 select provider, gpu_model, price_usd_gpu_hr
-from silver.gpu_offers
+from silver.offer_observations
+where observation_purpose = 'scheduled'
 order by price_usd_gpu_hr
 limit 20
 "
 ```
 
-`listings` reads the synced hourly record. `offers` asks RunPod and Verda for
-what can be selected now.
+`listings` reads the synced hourly record. `offers` asks RunPod and Verda what
+can be selected now. Both use `silver.offer_observations`; the row says whether
+it came from the hourly run or a direct provider read.
 
 ```bash
-uv sync --extra live
+uv sync --extra providers
 compute-bazaar offers list --provider runpod --gpu-model H100
 compute-bazaar offers inspect OFFER_ID
 ```
@@ -105,10 +113,10 @@ pnpm --dir terminal install
 compute-bazaar terminal
 ```
 
-The Terminal opens with Data, Fleet, Eval, and Trade. Data is where DataFusion queries
-market data and [Perspective](https://perspective-dev.github.io) turns the
-results into tables and charts. Eval contains agent evaluation tasks, jobs, and
-trials powered by Harbor. Trade is in the works.
+The Terminal opens with Data, Fleet, Eval, and Trade. Data is where DataFusion
+queries market data and [Perspective](https://perspective-dev.github.io) turns
+the results into tables and charts. Eval contains agent evaluation tasks, jobs,
+and trials powered by Harbor. Trade is in the works.
 
 Data can open a saved query or custom SQL as an interactive table or chart.
 
@@ -156,7 +164,7 @@ compute-bazaar terminal --stop
 
 Fleet connects to rented machines over SSH. It checks what arrived, reports
 whether the machine is ready, and monitors its GPU, CPU, memory, disk, power,
-and temperature every five seconds.
+and temperature every five seconds while the Terminal is open.
 
 ```bash
 compute-bazaar offers list --provider runpod
@@ -175,12 +183,18 @@ compute-bazaar terminal
 compute-bazaar fleet terminate HOST_ID --confirm
 ```
 
-## Data
+One catalog follows an offer from the market into Fleet:
 
-The Compute Bazaar Data project builds a live market lake for compute. Hourly
-pipelines collect and normalize public offers, prices, availability, and market
-history into raw, analysis-ready, and modeled datasets.
+```bash
+compute-bazaar sql "select * from silver.current_offers order by price_usd_gpu_hr"
+compute-bazaar sql "select * from silver.offer_observations order by observed_at desc"
+compute-bazaar sql "select * from fleet.machines order by created_at desc"
+compute-bazaar sql "select * from gold.fact_market_to_fleet"
+compute-bazaar model run gpu-launch-candidates
+```
 
-The data can be queried with SQL through DataFusion or inspected directly as
-source files. Queries and market models can be saved, rerun as new observations
-arrive, displayed in Terminal, or used by agents.
+The hourly run records the market. `offers list` records a direct provider read.
+`launch run` checks the provider again before spending and keeps that exact
+observation on the allocation. Fleet then records the machine and its five-second
+measurements. The hourly and direct reads use the same columns, but they run on
+their own clocks.

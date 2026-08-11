@@ -11,7 +11,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -68,8 +68,8 @@ def normalize_gpu_availability(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in rows:
@@ -115,7 +115,7 @@ def normalize_gpu_availability(
                 availability_status = "available" if is_available else "unavailable"
 
             normalized.append(
-                GpuOffer(
+                OfferObservation(
                     provider="jarvislabs",
                     source_connector="jarvislabs",
                     source_offer_id=f"{region}:{gpu_name}:{price_mode}",
@@ -124,7 +124,7 @@ def normalize_gpu_availability(
                     gpu_model=gpu_model,
                     gpu_count=1,
                     vram_gb=vram_gb,
-                    price_usd_hr=price,
+                    price_usd_instance_hr=price,
                     available_gpu_count=row_capacity,
                     country=_country_for_region(region),
                     region=region,

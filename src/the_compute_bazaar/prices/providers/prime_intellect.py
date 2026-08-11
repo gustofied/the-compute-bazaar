@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 
 
 DEFAULT_PRIME_INTELLECT_API_BASE = "https://api.primeintellect.ai/api/v1"
@@ -112,8 +112,8 @@ def normalize_availability(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in items:
@@ -163,7 +163,7 @@ def normalize_availability(
         )
 
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider=provider,
                 source_connector="prime_intellect",
                 source_offer_id=":".join(
@@ -176,7 +176,7 @@ def normalize_availability(
                 gpu_model=gpu_model,
                 gpu_count=gpu_count,
                 vram_gb=gpu_memory_gb,
-                price_usd_hr=price,
+                price_usd_instance_hr=price,
                 available_gpu_count=None,
                 currency=str(prices.get("currency") or "USD"),
                 country=country,
@@ -188,8 +188,8 @@ def normalize_availability(
                 gpu_socket=_string_or_none(entry.get("socket")),
                 stock_status=stock_status or None,
                 price_is_variable=_bool_or_none(prices.get("isVariable")),
-                minimum_executable_price_usd_hr=minimum_executable_price,
-                required_resource_price_usd_hr=required_resource_price,
+                minimum_executable_price_usd_instance_hr=minimum_executable_price,
+                required_resource_price_usd_instance_hr=required_resource_price,
                 price_basis="provider_reported_gpu_base_rate",
                 metadata={
                     "upstream_provider": provider_name,

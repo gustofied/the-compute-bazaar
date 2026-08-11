@@ -8,6 +8,9 @@ select
   provider,
   catalog.source_kind,
   catalog.observation_kind,
+  observation_id,
+  batch_id,
+  market_run_id,
   source_offer_id,
   gpu_model as gpu_product_id,
   gpu_model,
@@ -43,6 +46,7 @@ select
   source_normalized_ref,
   $gold_run_id as gold_run_id,
   $calculated_at as calculated_at
-from silver_gpu_offers
+from silver_offer_observations
 left join source_catalog catalog using (source_connector)
 where price_usd_instance_hr > 0
+  and observation_purpose = 'scheduled'

@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 
 
 DEFAULT_SPHERON_OFFERS_URL = "https://app.spheron.ai/api/gpu-offers"
@@ -78,8 +78,8 @@ def normalize_offers(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in offers:
@@ -136,7 +136,7 @@ def normalize_offers(
         upstream_provider = str(entry.get("provider") or "").strip()
         provider = _provider_id(upstream_provider)
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider=provider,
                 source_offer_id=str(entry.get("offerId") or entry.get("name") or ""),
                 observed_at=observed_at,
@@ -144,7 +144,7 @@ def normalize_offers(
                 gpu_model=gpu_model,
                 gpu_count=gpu_count,
                 vram_gb=vram_gb,
-                price_usd_hr=price,
+                price_usd_instance_hr=price,
                 available_gpu_count=available_gpu_count,
                 source_connector="spheron",
                 country=None,

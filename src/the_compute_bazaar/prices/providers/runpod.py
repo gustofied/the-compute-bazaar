@@ -5,12 +5,14 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+import hashlib
 from typing import Any
 
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..events import sha256_json
+from ..schemas import OfferObservation
 
 
 DEFAULT_RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"
@@ -135,8 +137,8 @@ def normalize_gpu_types(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in gpu_types:
@@ -162,7 +164,7 @@ def normalize_gpu_types(
         )
 
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider="runpod",
                 source_offer_id=f"{entry.get('id')}:ondemand:1",
                 observed_at=observed_at,
@@ -170,7 +172,7 @@ def normalize_gpu_types(
                 gpu_model=gpu_model,
                 gpu_count=1,
                 vram_gb=vram_gb,
-                price_usd_hr=price,
+                price_usd_instance_hr=price,
                 available_gpu_count=1 if availability_status == "available" else None,
                 country=None,
                 region="global",
@@ -192,6 +194,83 @@ def normalize_gpu_types(
     return normalized, sorted(set(unknown_gpu_names))
 
 
+def normalize_live_market(
+    gpu_types: Iterable[Mapping[str, Any]],
+    data_centers: Iterable[Mapping[str, Any]],
+    *,
+    observed_at: datetime,
+    batch_id: str,
+    purpose: str,
+    query_scope: dict[str, Any],
+) -> list[OfferObservation]:
+    gpu_types = list(gpu_types)
+    data_centers = list(data_centers)
+    raw_hash = sha256_json({"gpu_types": gpu_types, "data_centers": data_centers})
+    locations = _live_locations(data_centers)
+    observations: list[OfferObservation] = []
+    for row in gpu_types:
+        native_gpu_id = str(row.get("id") or "")
+        gpu_name = str(row.get("displayName") or native_gpu_id)
+        vram_gb = _float_or_none(row.get("memoryInGb"))
+        gpu_model = canonical_gpu_model(
+            gpu_name, vram_gb * 1024 if vram_gb is not None else None
+        )
+        if not native_gpu_id or not gpu_model:
+            continue
+        available_locations = locations.get(native_gpu_id, ())
+        for cloud_type, enabled_key, price_key in (
+            ("secure", "secureCloud", "securePrice"),
+            ("community", "communityCloud", "communityPrice"),
+        ):
+            price = _float_or_none(row.get(price_key))
+            if not row.get(enabled_key) or price is None or price <= 0:
+                continue
+            location_ids = tuple(item[0] for item in available_locations)
+            stock = _best_stock(item[2] for item in available_locations)
+            native_offer_id = f"{native_gpu_id}:{cloud_type}"
+            offer_id = _offer_id("runpod", native_offer_id)
+            observations.append(
+                OfferObservation(
+                    provider="runpod",
+                    source_offer_id=offer_id,
+                    observed_at=observed_at,
+                    gpu_raw_name=gpu_name,
+                    gpu_model=gpu_model,
+                    gpu_count=1,
+                    vram_gb=vram_gb,
+                    price_usd_instance_hr=price,
+                    source_connector="runpod",
+                    is_secure=cloud_type == "secure",
+                    availability_status=(
+                        "available" if location_ids else "unavailable"
+                    ),
+                    stock_status=stock,
+                    price_basis="provider_live_price",
+                    metadata={"native_offer_id": native_offer_id},
+                    observation_id=f"{batch_id}:{offer_id}",
+                    batch_id=batch_id,
+                    observation_purpose=purpose,
+                    observation_resolution="deployment_option",
+                    selection_resolution="datacenter_set",
+                    query_scope=query_scope,
+                    cloud_type=cloud_type,
+                    location_ids=location_ids,
+                    selection_fingerprint=(f"runpod:{native_gpu_id}:{cloud_type}:1"),
+                    native_selection={
+                        "provider": "runpod",
+                        "operation": "create_pod",
+                        "gpuTypeIds": [native_gpu_id],
+                        "gpuCount": 1,
+                        "cloudType": cloud_type.upper(),
+                        "dataCenterIds": list(location_ids),
+                    },
+                    raw_hash=raw_hash,
+                    methodology_version="runpod_live_market",
+                )
+            )
+    return observations
+
+
 def _extract_gpu_types(payload: Any) -> list[dict[str, Any]]:
     return _extract_rows(payload, "gpuTypes")
 
@@ -203,6 +282,42 @@ def _extract_rows(payload: Any, field: str) -> list[dict[str, Any]]:
     if not isinstance(data, Mapping) or not isinstance(data.get(field), list):
         return []
     return [dict(row) for row in data[field] if isinstance(row, Mapping)]
+
+
+def _live_locations(
+    data_centers: Iterable[Mapping[str, Any]],
+) -> dict[str, tuple[tuple[str, str, str], ...]]:
+    result: dict[str, list[tuple[str, str, str]]] = {}
+    for center in data_centers:
+        center_id = str(center.get("id") or "")
+        availability = center.get("gpuAvailability")
+        if not center_id or not isinstance(availability, list):
+            continue
+        name = str(center.get("name") or center.get("location") or center_id)
+        for row in availability:
+            if not isinstance(row, Mapping):
+                continue
+            gpu_type_id = str(row.get("gpuTypeId") or "")
+            stock = str(row.get("stockStatus") or "none")
+            if gpu_type_id and _stock_rank(stock):
+                result.setdefault(gpu_type_id, []).append((center_id, name, stock))
+    return {
+        key: tuple(sorted(values, key=lambda item: item[0]))
+        for key, values in result.items()
+    }
+
+
+def _best_stock(values: Iterable[str]) -> str:
+    return max(values, key=_stock_rank, default="none")
+
+
+def _stock_rank(value: str) -> int:
+    return {"high": 3, "medium": 2, "low": 1}.get(value.strip().lower(), 0)
+
+
+def _offer_id(provider: str, native_offer_id: str) -> str:
+    digest = hashlib.sha256(native_offer_id.encode()).hexdigest()[:12]
+    return f"{provider}:{digest}"
 
 
 def _float_or_none(value: Any) -> float | None:

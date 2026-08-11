@@ -81,8 +81,10 @@ class GpuDevice(BaseModel):
     temperature_limit_c: int | None = None
     performance_state: str | None = None
     pci_bus_id: str | None = None
-    pcie_generation: int | None = Field(default=None, ge=0)
-    pcie_width: int | None = Field(default=None, ge=0)
+    pcie_generation_current: int | None = Field(default=None, ge=0)
+    pcie_generation_max: int | None = Field(default=None, ge=0)
+    pcie_width_current: int | None = Field(default=None, ge=0)
+    pcie_width_max: int | None = Field(default=None, ge=0)
 
 
 class FleetInspection(BaseModel):
@@ -101,8 +103,11 @@ class FleetInspection(BaseModel):
     disk_used_gb: int | None = Field(default=None, ge=0)
     disk_free_gb: int | None = Field(default=None, ge=0)
     uptime_seconds: int | None = Field(default=None, ge=0)
-    cuda_version: str | None = None
+    driver_cuda_version: str | None = None
+    cuda_toolkit_version: str | None = None
     docker_version: str | None = None
+    gpu_execution_status: Literal["pass", "fail", "not_tested"] = "not_tested"
+    gpu_execution_detail: str | None = None
     gpus: tuple[GpuDevice, ...] = ()
 
     def row(self) -> dict[str, object]:
@@ -122,7 +127,8 @@ class FleetInspection(BaseModel):
             "gpu_count": len(self.gpus),
             "gpu_names": ", ".join(device.name for device in self.gpus),
             "driver": self.gpus[0].driver_version if self.gpus else None,
-            "cuda": self.cuda_version,
+            "driver_cuda_version": self.driver_cuda_version,
+            "cuda_toolkit_version": self.cuda_toolkit_version,
             "observed_at": self.observed_at,
         }
 

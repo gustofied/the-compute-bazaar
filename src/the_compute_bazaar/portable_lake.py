@@ -13,8 +13,8 @@ from urllib.parse import urlparse
 
 from .contracts import (
     GOLD_MARKET_CONTRACT,
-    GPU_OFFERS_RUN_CONTRACT,
-    PORTABLE_LAKE_CONTRACT,
+    OFFER_OBSERVATIONS_RUN_CONTRACT,
+    MARKET_LAKE_CONTRACT,
 )
 from .prices.gold_manifest import (
     GOLD_MANIFEST_TABLE,
@@ -87,7 +87,7 @@ def build_portable_lake(
     _make_source_manifests_portable(output, provider_scope)
 
     metadata = {
-        "contract": PORTABLE_LAKE_CONTRACT,
+        "contract": MARKET_LAKE_CONTRACT,
         "run_id": source_latest["run_id"],
         "observed_at": source_latest["observed_at"],
         "provider_scope": provider_scope,
@@ -140,10 +140,14 @@ def _copy_latest_silver(
     observed_at = str(source_manifest["observed_at"])
 
     for provider in provider_scope:
-        normalized_relative = f"silver/gpu_offers/{provider}/offers.parquet"
-        manifest_relative = f"_manifests/gpu_offers/provider={provider}/latest.json"
+        normalized_relative = (
+            f"silver/offer_observations/{provider}/observations.parquet"
+        )
+        manifest_relative = (
+            f"_manifests/offer_observations/provider={provider}/latest.json"
+        )
         state_relative = f"silver/compute_market_state/{provider}/observations.parquet"
-        source_run_id = source_run_ids.get(provider) or f"{provider}-portable"
+        source_run_id = str(source_run_ids[provider])
         offer_rows = _sanitize_rows(read_parquet_rows(source_offer_refs[provider]))
         for row in offer_rows:
             row.update(
@@ -176,15 +180,15 @@ def _copy_latest_silver(
         write_json(
             str(manifest_path),
             {
-                "contract": GPU_OFFERS_RUN_CONTRACT,
-                "table": "gpu_offers",
+                "contract": OFFER_OBSERVATIONS_RUN_CONTRACT,
+                "table": "offer_observations",
                 "provider": provider,
                 "run_id": source_run_id,
                 "observed_at": observed_at,
                 "raw_ref": None,
                 "normalized_ref": normalized_relative,
                 "raw_offer_count": len(offer_rows),
-                "normalized_offer_count": len(offer_rows),
+                "normalized_observation_count": len(offer_rows),
                 "published_events": 0,
                 "publish_mode": "portable_lake",
                 "unknown_gpu_names": [],
@@ -258,7 +262,7 @@ def _portable_gold_manifest(
         for provider in provider_scope
     }
     manifest["source_normalized_refs"] = {
-        provider: f"silver/gpu_offers/{provider}/offers.parquet"
+        provider: f"silver/offer_observations/{provider}/observations.parquet"
         for provider in provider_scope
     }
     manifest["source_market_state_refs"] = {
@@ -294,7 +298,9 @@ def _make_source_manifests_portable(
     for provider in provider_scope:
         ref = latest_manifest_ref(str(output_root), provider=provider)
         manifest = dict(read_json(ref))
-        manifest["normalized_ref"] = f"silver/gpu_offers/{provider}/offers.parquet"
+        manifest["normalized_ref"] = (
+            f"silver/offer_observations/{provider}/observations.parquet"
+        )
         manifest["manifest_ref"] = _relative(output_root, ref)
         write_json(ref, manifest)
 
@@ -317,7 +323,7 @@ def _write_inventory(
             }
         )
     inventory = {
-        "contract": PORTABLE_LAKE_CONTRACT,
+        "contract": MARKET_LAKE_CONTRACT,
         "run_id": metadata["run_id"],
         "observed_at": metadata["observed_at"],
         "provider_scope": metadata["provider_scope"],
@@ -331,13 +337,17 @@ def _write_inventory(
 
 def _supported_provider_scope(manifest: dict[str, Any]) -> list[str]:
     refs = dict(manifest.get("source_normalized_refs") or {})
-    scope = [
-        str(provider)
-        for provider in manifest.get("provider_scope") or []
-        if provider in refs
-    ]
+    run_ids = dict(manifest.get("source_run_ids") or {})
+    scope = [str(provider) for provider in manifest.get("provider_scope") or []]
     if not scope:
-        raise RuntimeError("Source manifest has no supported provider observations")
+        raise RuntimeError("Gold manifest has no provider scope")
+    missing_refs = [provider for provider in scope if not refs.get(provider)]
+    missing_run_ids = [provider for provider in scope if not run_ids.get(provider)]
+    if missing_refs or missing_run_ids:
+        missing = sorted(set(missing_refs + missing_run_ids))
+        raise RuntimeError(
+            "Gold manifest has incomplete provider lineage: " + ", ".join(missing)
+        )
     return scope
 
 
@@ -350,15 +360,25 @@ def _portableize_lineage(
 ) -> list[dict[str, Any]]:
     for row in rows:
         connector = str(row.get("source_connector") or "")
+        has_lineage = any(
+            field in row
+            for field in (
+                "source_manifest_ref",
+                "source_normalized_ref",
+                "source_market_state_ref",
+            )
+        )
+        if has_lineage and not connector:
+            raise RuntimeError("Gold row has lineage fields but no source_connector")
         if not connector:
             continue
         if "source_manifest_ref" in row:
             row["source_manifest_ref"] = (
-                f"_manifests/gpu_offers/provider={connector}/latest.json"
+                f"_manifests/offer_observations/provider={connector}/latest.json"
             )
         if "source_normalized_ref" in row:
             row["source_normalized_ref"] = (
-                f"silver/gpu_offers/{connector}/offers.parquet"
+                f"silver/offer_observations/{connector}/observations.parquet"
             )
         if "source_market_state_ref" in row:
             relative = f"silver/compute_market_state/{connector}/observations.parquet"

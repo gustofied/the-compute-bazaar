@@ -1,7 +1,12 @@
 # Architecture
 
 ```text
-providers -> Windmill -> AutoMQ -> S3 -> DataFusion -> CLI / Terminal
+provider APIs
+  scheduled -> Windmill -> Bronze -> Silver Parquet -> Gold -> public lake
+  direct -------------------------> private operations -> allocation -> Fleet
+
+Silver Parquet + private operations -> silver.offer_observations
+                                    -> DataFusion -> CLI / Terminal
 ```
 
 ## Market data
@@ -18,6 +23,22 @@ Gold    shared market models
 A sanitized Silver and Gold copy is published as the public lake. The CLI syncs
 that Parquet data locally, so DataFusion can query it without cloud credentials
 or a database server.
+
+All provider reads use one row contract and one DataFusion table:
+
+```text
+silver.offer_observations
+  scheduled   hourly market record used by Gold
+  interactive direct provider read
+  preflight   provider read immediately before launch
+```
+
+Windmill writes scheduled rows to S3 each hour and publishes them to AutoMQ.
+Direct reads and launch checks are written to the private local ledger when
+they happen. DataFusion unions both stores as `silver.offer_observations`.
+`observation_purpose` says why a row exists. `observation_resolution` and
+`selection_resolution` say how precisely it identifies something a provider
+can supply.
 
 ## Query layer
 
@@ -49,3 +70,25 @@ A working model becomes Gold only when it should be a shared data contract.
 The CLI and Terminal use the same DataFusion engine. Data is available now,
 Eval contains the Harbor evaluation viewer, and Trade remains reserved for the
 later execution system.
+
+## Fleet
+
+The launch path is:
+
+```text
+offer observation
+  -> final provider check
+  -> provider allocation
+  -> Fleet machine
+  -> Fleet observations
+```
+
+`silver.current_offers` is the latest direct observation for each provider
+selection. `fleet.allocations` links a machine to the exact final-check row.
+`gold.fact_market_to_fleet` compares the selected price with the nearest prior
+GPU Price Index and the machine that was delivered. Private machine data stays
+local.
+
+SQL or an agent can find a candidate and prepare a launch plan. Creating a paid
+machine still requires a price ceiling, runtime deadline, and explicit
+confirmation.

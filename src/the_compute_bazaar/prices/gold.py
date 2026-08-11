@@ -16,7 +16,6 @@ from .gold_manifest import (
 )
 from .datafusion import DataFusionEngine
 from .gold_sources import (
-    SilverOfferSource,
     merge_compute_market_state_history,
     merge_gpu_price_index_history,
     silver_source_cte,
@@ -145,24 +144,11 @@ def build_gold_market_tables(
     }
 
     tables = {
-        f"silver_gpu_offers_{index}": source_normalized_refs[source_provider]
+        f"silver_offer_observations_{index}": source_normalized_refs[source_provider]
         for index, source_provider in enumerate(provider_scope)
     }
     engine = DataFusionEngine(tables)
-    silver_sources = [
-        SilverOfferSource(
-            table_name=f"silver_gpu_offers_{index}",
-            source_run_id=source_run_ids[source_provider],
-            source_manifest_ref=(
-                str(source_manifests[source_provider]["manifest_ref"])
-                if source_manifests[source_provider].get("manifest_ref")
-                else None
-            ),
-            source_normalized_ref=source_normalized_refs[source_provider],
-        )
-        for index, source_provider in enumerate(provider_scope)
-    ]
-    silver_source_cte_sql = silver_source_cte(silver_sources)
+    silver_source_cte_sql = silver_source_cte(list(tables))
     source_catalog_values_sql = source_catalog_values(provider_scope)
     rows_by_table = {
         "fact_gpu_listings": engine.query(

@@ -6,16 +6,17 @@ import subprocess
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import requests
 
 from the_compute_bazaar.fleet import FleetRegistry
-from the_compute_bazaar.live_offers import (
+from the_compute_bazaar.offers import OfferService
+from the_compute_bazaar.provider_execution import (
     LaunchExecutionError,
-    LaunchPlanner,
-    LiveOfferService,
     RunpodExecutor,
 )
+from the_compute_bazaar.provisioning import LaunchPlanner
 from the_compute_bazaar.prices.providers.runpod import RunpodClient
 
 
@@ -71,7 +72,50 @@ class FakeVerdaClient:
         )
 
 
-class LiveOfferServiceTest(unittest.TestCase):
+class OfferServiceTest(unittest.TestCase):
+    def test_display_limit_does_not_truncate_recorded_observations(self) -> None:
+        class Ledger:
+            batch: Any = None
+
+            def record_offer_observations(self, batch: Any) -> None:
+                self.batch = batch
+
+        ledger = Ledger()
+        result = OfferService(
+            runpod_client=FakeRunpodClient(),
+            ledger=ledger,  # type: ignore[arg-type]
+        ).list_offers(providers=["runpod"], limit=1)
+
+        self.assertEqual(len(result.observations), 1)
+        self.assertEqual(len(ledger.batch.observations), 2)
+        self.assertEqual(
+            {row.observation_purpose for row in ledger.batch.observations},
+            {"interactive"},
+        )
+
+    def test_hidden_unavailable_rows_are_still_recorded(self) -> None:
+        class Ledger:
+            batch: Any = None
+
+            def record_offer_observations(self, batch: Any) -> None:
+                self.batch = batch
+
+        class UnavailableRunpodClient(FakeRunpodClient):
+            def fetch_live_market(self) -> SimpleNamespace:
+                payload = super().fetch_live_market()
+                payload.data_centers = []
+                return payload
+
+        ledger = Ledger()
+        result = OfferService(
+            runpod_client=UnavailableRunpodClient(),
+            ledger=ledger,  # type: ignore[arg-type]
+        ).list_offers(providers=["runpod"])
+
+        self.assertEqual(result.observations, ())
+        self.assertEqual(len(ledger.batch.observations), 2)
+        self.assertFalse(any(row.available for row in ledger.batch.observations))
+
     def test_runpod_authentication_never_enters_the_request_url(self) -> None:
         class FailingSession:
             def post(self, url: str, **kwargs: object) -> object:
@@ -97,16 +141,16 @@ class LiveOfferServiceTest(unittest.TestCase):
         )
 
     def test_runpod_keeps_cloud_and_datacenter_selectors(self) -> None:
-        result = LiveOfferService(runpod_client=FakeRunpodClient()).list_offers(
+        result = OfferService(runpod_client=FakeRunpodClient()).list_offers(
             providers=["runpod"], gpu_model="H100"
         )
 
-        self.assertEqual(len(result.offers), 2)
-        secure = next(row for row in result.offers if row.cloud_type == "secure")
+        self.assertEqual(len(result.observations), 2)
+        secure = next(row for row in result.observations if row.cloud_type == "secure")
         self.assertEqual(secure.location_ids, ("EU-RO-1",))
         self.assertEqual(secure.stock_status, "High")
         self.assertEqual(
-            secure.selection,
+            secure.native_selection,
             {
                 "provider": "runpod",
                 "operation": "create_pod",
@@ -118,16 +162,15 @@ class LiveOfferServiceTest(unittest.TestCase):
         )
 
     def test_verda_keeps_instance_type_and_location(self) -> None:
-        result = LiveOfferService(verda_client=FakeVerdaClient()).list_offers(
+        result = OfferService(verda_client=FakeVerdaClient()).list_offers(
             providers=["verda"], gpu_model="H100"
         )
 
-        self.assertEqual(len(result.offers), 1)
-        offer = result.offers[0]
+        self.assertEqual(len(result.observations), 1)
+        offer = result.observations[0]
         self.assertEqual(offer.location, "FIN-01")
-        self.assertEqual(offer.native_offer_id, "1H100.8V:FIN-01")
         self.assertEqual(
-            offer.selection,
+            offer.native_selection,
             {
                 "provider": "verda",
                 "operation": "create_instance",
@@ -137,18 +180,21 @@ class LiveOfferServiceTest(unittest.TestCase):
         )
 
     def test_inspect_revalidates_the_provider_offer(self) -> None:
-        service = LiveOfferService(runpod_client=FakeRunpodClient())
-        visible = service.list_offers(providers=["runpod"]).offers[0]
+        service = OfferService(runpod_client=FakeRunpodClient())
+        visible = service.list_offers(providers=["runpod"]).observations[0]
 
-        inspected = service.inspect(visible.offer_id)
+        inspected = service.inspect(visible.source_offer_id)
 
-        self.assertEqual(inspected.native_offer_id, visible.native_offer_id)
+        self.assertEqual(inspected.source_offer_id, visible.source_offer_id)
+        self.assertEqual(inspected.observation_purpose, "preflight")
+        self.assertEqual(inspected.observation_resolution, "deployment_option")
+        self.assertNotEqual(inspected.observation_id, visible.observation_id)
 
     def test_runpod_plan_uses_native_selection_without_submitting(self) -> None:
-        service = LiveOfferService(runpod_client=FakeRunpodClient())
-        offer = service.list_offers(providers=["runpod"]).offers[0]
+        service = OfferService(runpod_client=FakeRunpodClient())
+        offer = service.list_offers(providers=["runpod"]).observations[0]
 
-        plan = LaunchPlanner(service).plan(offer.offer_id)
+        plan = LaunchPlanner(service).plan(offer.source_offer_id)
 
         self.assertEqual(plan.status, "draft")
         self.assertEqual(plan.required_inputs, ("name", "image"))
@@ -158,14 +204,14 @@ class LiveOfferServiceTest(unittest.TestCase):
         self.assertFalse(plan.payload()["submitted"])
 
     def test_runpod_plan_becomes_ready_when_request_is_complete(self) -> None:
-        service = LiveOfferService(
+        service = OfferService(
             runpod_api_key="configured",
             runpod_client=FakeRunpodClient(),
         )
-        offer = service.list_offers(providers=["runpod"]).offers[0]
+        offer = service.list_offers(providers=["runpod"]).observations[0]
 
         plan = LaunchPlanner(service).plan(
-            offer.offer_id,
+            offer.source_offer_id,
             name="bazaar-h100-01",
             image="runpod/pytorch:latest",
         )
@@ -177,11 +223,11 @@ class LiveOfferServiceTest(unittest.TestCase):
         self.assertTrue(plan.credentials_configured)
 
     def test_verda_plan_requires_ssh_key_and_keeps_exact_location(self) -> None:
-        service = LiveOfferService(verda_client=FakeVerdaClient())
-        offer = service.list_offers(providers=["verda"]).offers[0]
+        service = OfferService(verda_client=FakeVerdaClient())
+        offer = service.list_offers(providers=["verda"]).observations[0]
 
         plan = LaunchPlanner(service).plan(
-            offer.offer_id,
+            offer.source_offer_id,
             name="bazaar-h100-02",
             image="ubuntu-22.04-cuda",
         )
@@ -191,13 +237,13 @@ class LiveOfferServiceTest(unittest.TestCase):
         self.assertEqual(plan.request["location_code"], "FIN-01")
 
     def test_paid_runpod_launch_requires_explicit_confirmation(self) -> None:
-        service = LiveOfferService(
+        service = OfferService(
             runpod_api_key="configured",
             runpod_client=FakeRunpodClient(),
         )
-        offer = service.list_offers(providers=["runpod"]).offers[0]
+        offer = service.list_offers(providers=["runpod"]).observations[0]
         plan = LaunchPlanner(service).plan(
-            offer.offer_id,
+            offer.source_offer_id,
             name="bazaar-h100-01",
             image="runpod/pytorch:latest",
         )
@@ -211,13 +257,13 @@ class LiveOfferServiceTest(unittest.TestCase):
             )
 
     def test_runpod_execution_has_price_ceiling_and_provider_deadline(self) -> None:
-        service = LiveOfferService(
+        service = OfferService(
             runpod_api_key="configured",
             runpod_client=FakeRunpodClient(),
         )
-        offer = service.list_offers(providers=["runpod"]).offers[0]
+        offer = service.list_offers(providers=["runpod"]).observations[0]
         plan = LaunchPlanner(service).plan(
-            offer.offer_id,
+            offer.source_offer_id,
             name="bazaar-h100-01",
             image="runpod/pytorch:latest",
         )
@@ -269,13 +315,13 @@ class LiveOfferServiceTest(unittest.TestCase):
             self.assertEqual(receipt.expected_max_cost_usd, 0.995)
 
     def test_wait_timeout_still_registers_the_paid_pod(self) -> None:
-        service = LiveOfferService(
+        service = OfferService(
             runpod_api_key="configured",
             runpod_client=FakeRunpodClient(),
         )
-        offer = service.list_offers(providers=["runpod"]).offers[0]
+        offer = service.list_offers(providers=["runpod"]).observations[0]
         plan = LaunchPlanner(service).plan(
-            offer.offer_id,
+            offer.source_offer_id,
             name="bazaar-h100-01",
             image="runpod/pytorch:latest",
         )
@@ -314,13 +360,13 @@ class LiveOfferServiceTest(unittest.TestCase):
             self.assertEqual(len(receipt.warnings), 2)
 
     def test_runpod_execution_refuses_price_above_ceiling(self) -> None:
-        service = LiveOfferService(
+        service = OfferService(
             runpod_api_key="configured",
             runpod_client=FakeRunpodClient(),
         )
-        offer = service.list_offers(providers=["runpod"]).offers[0]
+        offer = service.list_offers(providers=["runpod"]).observations[0]
         plan = LaunchPlanner(service).plan(
-            offer.offer_id,
+            offer.source_offer_id,
             name="bazaar-h100-01",
             image="runpod/pytorch:latest",
         )

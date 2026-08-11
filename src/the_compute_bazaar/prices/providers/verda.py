@@ -6,12 +6,14 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+import hashlib
 from typing import Any
 
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..events import sha256_json
+from ..schemas import OfferObservation
 
 
 DEFAULT_VERDA_API_BASE = "https://api.verda.com/v1"
@@ -122,8 +124,8 @@ def normalize_instance_catalog(
     availability: Iterable[Mapping[str, Any]] | None,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
     locations_by_type = _locations_by_instance_type(availability)
     has_live_availability = availability is not None
@@ -225,6 +227,62 @@ def normalize_instance_catalog(
     return normalized, sorted(set(unknown_gpu_names))
 
 
+def normalize_live_catalog(
+    instance_types: Iterable[Mapping[str, Any]],
+    availability: Iterable[Mapping[str, Any]],
+    *,
+    observed_at: datetime,
+    batch_id: str,
+    purpose: str,
+    query_scope: dict[str, Any],
+) -> list[OfferObservation]:
+    instance_types = list(instance_types)
+    availability = list(availability)
+    normalized, _ = normalize_instance_catalog(
+        instance_types,
+        availability=availability,
+        observed_at=observed_at,
+        raw_ref=None,
+    )
+    raw_hash = sha256_json(
+        {"instance_types": instance_types, "availability": availability}
+    )
+    observations: list[OfferObservation] = []
+    for row in normalized:
+        if not row.available or row.is_spot:
+            continue
+        instance_type = str(row.metadata["instance_type"])
+        native_offer_id = f"{instance_type}:{row.region}"
+        offer_id = _offer_id("verda", native_offer_id)
+        observations.append(
+            row.with_context(
+                source_offer_id=offer_id,
+                source_connector="verda",
+                stock_status="available",
+                price_basis="provider_live_price",
+                metadata={**row.metadata, "native_offer_id": native_offer_id},
+                observation_id=f"{batch_id}:{offer_id}",
+                batch_id=batch_id,
+                observation_purpose=purpose,
+                observation_resolution="exact_offer",
+                selection_resolution="exact_datacenter",
+                query_scope=query_scope,
+                cloud_type="secure",
+                location_ids=(str(row.region),),
+                selection_fingerprint=f"verda:{instance_type}:{row.region}",
+                native_selection={
+                    "provider": "verda",
+                    "operation": "create_instance",
+                    "instance_type": instance_type,
+                    "location_code": row.region,
+                },
+                raw_hash=raw_hash,
+                methodology_version="verda_live_availability",
+            )
+        )
+    return observations
+
+
 def _offer(
     *,
     entry: Mapping[str, Any],
@@ -240,9 +298,9 @@ def _offer(
     is_spot: bool,
     availability_status: str,
     capacity_confirmed: bool,
-) -> GpuOffer:
+) -> OfferObservation:
     price_kind = "spot" if is_spot else "ondemand"
-    return GpuOffer(
+    return OfferObservation(
         provider="verda",
         source_offer_id=f"{instance_type}:{region}:{price_kind}",
         observed_at=observed_at,
@@ -250,7 +308,7 @@ def _offer(
         gpu_model=gpu_model,
         gpu_count=gpu_count,
         vram_gb=vram_gb,
-        price_usd_hr=price,
+        price_usd_instance_hr=price,
         available_gpu_count=gpu_count if capacity_confirmed else None,
         country=_country_from_location(region),
         region=region,
@@ -331,3 +389,8 @@ def _int_or_none(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _offer_id(provider: str, native_offer_id: str) -> str:
+    digest = hashlib.sha256(native_offer_id.encode()).hexdigest()[:12]
+    return f"{provider}:{digest}"

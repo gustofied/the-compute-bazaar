@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -106,8 +106,8 @@ def normalize_gpu_products(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for product in products:
@@ -133,7 +133,7 @@ def normalize_gpu_products(
 
         package_model = str(product.get("package_model") or "").strip() or None
         normalized.append(
-            GpuOffer(
+            OfferObservation(
                 provider="oracle_cloud",
                 source_connector="oracle_cloud",
                 source_offer_id=part_number,
@@ -142,7 +142,7 @@ def normalize_gpu_products(
                 gpu_model=gpu_model,
                 gpu_count=1,
                 vram_gb=vram_gb,
-                price_usd_hr=price_usd_gpu_hr,
+                price_usd_instance_hr=price_usd_gpu_hr,
                 currency="USD",
                 is_spot=False,
                 availability_status="published_rate",

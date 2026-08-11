@@ -108,9 +108,13 @@ def create_terminal_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        yield
-        if shell is not None:
-            shell.close()
+        fleet_workspace.start()
+        try:
+            yield
+        finally:
+            fleet_workspace.stop()
+            if shell is not None:
+                shell.close()
 
     app = FastAPI(
         title="Compute Bazaar Terminal",

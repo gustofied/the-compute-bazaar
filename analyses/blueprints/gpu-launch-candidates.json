@@ -1,0 +1,29 @@
+{
+  "blueprint_id": "gpu-launch-candidates",
+  "created_at": "2026-08-10T18:00:00Z",
+  "description": "Current provider offers ranked by GPU-hour price.",
+  "model_id": "gpu-launch-candidates",
+  "perspective": {
+    "columns": [
+      "offer_id",
+      "provider",
+      "gpu_model",
+      "cloud_type",
+      "region",
+      "price_usd_gpu_hr",
+      "benchmark_usd_gpu_hr",
+      "price_vs_benchmark_pct",
+      "observed_at"
+    ],
+    "plugin": "Datagrid",
+    "settings": false,
+    "sort": [
+      [
+        "price_usd_gpu_hr",
+        "asc"
+      ]
+    ]
+  },
+  "title": "GPU launch candidates",
+  "updated_at": "2026-08-10T18:00:00Z"
+}

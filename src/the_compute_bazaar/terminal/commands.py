@@ -92,7 +92,7 @@ class SqlAction(_Action):
     perspective: dict[str, Any] | None = None
 
 
-class LiveOffersAction(_Action):
+class OffersAction(_Action):
     kind: Literal["offers"] = "offers"
     provider: Literal["runpod", "verda"] | None = None
     gpu_model: str | None = None
@@ -135,7 +135,7 @@ TerminalAction: TypeAlias = Annotated[
     | TableAction
     | DescribeAction
     | SqlAction
-    | LiveOffersAction
+    | OffersAction
     | LaunchPlanAction
     | ShellAction
     | ErrorAction,
@@ -436,7 +436,7 @@ def _offers(argument: str) -> TerminalAction:
     limit = _parsed_limit(parsed, 100)
     if isinstance(limit, ErrorAction):
         return limit
-    return LiveOffersAction(
+    return OffersAction(
         provider=provider,
         gpu_model=parsed.values.get("gpu-model"),
         offer_id=offer_id,

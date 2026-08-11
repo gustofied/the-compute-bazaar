@@ -1,4 +1,4 @@
-"""Download and inspect the public portable market lake."""
+"""Download and inspect the public market lake."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from .contracts import PORTABLE_LAKE_CONTRACT, require_contract
+from .contracts import MARKET_LAKE_CONTRACT, require_contract
 from .data_root import default_synced_lake_root
 from .prices.gold_manifest import read_latest_gold_manifest
 
@@ -114,10 +114,26 @@ def inspect_lake(*, root: str, kind: str, label: str) -> dict[str, Any]:
             )
         return result
 
-    manifest = read_latest_gold_manifest(root)
     index = _read_mapping(path / "index.json") if path and path.is_dir() else {}
     sync = _read_mapping(path / ".sync.json") if path and path.is_dir() else {}
     portable = _read_mapping(path / "portable.json") if path and path.is_dir() else {}
+    for payload in (index, portable):
+        if payload and payload.get("contract") != MARKET_LAKE_CONTRACT:
+            result = {
+                "status": "incompatible",
+                "kind": kind,
+                "label": label,
+                "root": root,
+                "contract": payload.get("contract"),
+            }
+            if kind == "public_cache":
+                result.update(
+                    source_url=DEFAULT_PUBLIC_LAKE_URL,
+                    next_command="compute-bazaar data sync",
+                )
+            return result
+
+    manifest = read_latest_gold_manifest(root)
     observed_at = str(manifest.get("observed_at") or "")
     return {
         "status": "ready",
@@ -159,7 +175,7 @@ def _validate_generation(staging: Path, *, index: dict[str, Any]) -> None:
 
     manifest = read_latest_gold_manifest(str(staging))
     portable = _read_mapping(staging / "portable.json")
-    require_contract(portable, contract=PORTABLE_LAKE_CONTRACT)
+    require_contract(portable, contract=MARKET_LAKE_CONTRACT)
 
     run_ids = {
         str(index.get("run_id") or ""),
@@ -182,13 +198,13 @@ def _validated_index(payload: bytes) -> dict[str, Any]:
     try:
         value = json.loads(payload.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Portable lake index is not valid JSON") from exc
+        raise RuntimeError("Market lake index is not valid JSON") from exc
     if not isinstance(value, dict):
-        raise RuntimeError("Unsupported portable lake index")
-    require_contract(value, contract=PORTABLE_LAKE_CONTRACT)
+        raise RuntimeError("Market lake index must be a JSON object")
+    require_contract(value, contract=MARKET_LAKE_CONTRACT)
     files = value.get("files")
     if not isinstance(files, list) or value.get("file_count") != len(files):
-        raise RuntimeError("Portable lake index has an invalid file inventory")
+        raise RuntimeError("Market lake index has an invalid file inventory")
 
     seen: set[str] = set()
     total = 0
@@ -225,7 +241,7 @@ def _safe_relative_path(value: Any) -> PurePosixPath:
         raise RuntimeError("Portable lake index contains an invalid path")
     path = PurePosixPath(value)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
-        raise RuntimeError(f"Unsafe portable lake path: {value}")
+        raise RuntimeError(f"Unsafe market lake path: {value}")
     return path
 
 

@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 from ..normalize import canonical_gpu_model
-from ..schemas import GpuOffer
+from ..schemas import OfferObservation
 from .http import retrying_session
 
 
@@ -67,8 +67,8 @@ def normalize_instance_types(
     *,
     observed_at: datetime,
     raw_ref: str | None,
-) -> tuple[list[GpuOffer], list[str]]:
-    normalized: list[GpuOffer] = []
+) -> tuple[list[OfferObservation], list[str]]:
+    normalized: list[OfferObservation] = []
     unknown_gpu_names: list[str] = []
 
     for entry in instance_types:
@@ -107,7 +107,7 @@ def normalize_instance_types(
         available_regions = _available_regions(entry)
         for region in available_regions:
             normalized.append(
-                GpuOffer(
+                OfferObservation(
                     provider=provider,
                     source_connector="inference_sh",
                     source_offer_id=f"{entry.get('id') or entry.get('shade_instance_type')}:{region}",
@@ -116,7 +116,7 @@ def normalize_instance_types(
                     gpu_model=gpu_model,
                     gpu_count=gpu_count,
                     vram_gb=vram_gb,
-                    price_usd_hr=hourly_price_cents / 100,
+                    price_usd_instance_hr=hourly_price_cents / 100,
                     available_gpu_count=gpu_count,
                     country=None,
                     region=region,

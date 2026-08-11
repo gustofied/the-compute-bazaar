@@ -7,13 +7,13 @@ from datetime import datetime
 from typing import Any
 
 from .automq import DryRunPublisher, KafkaPublisher, Publisher, kafka_config_from_env
-from .events import make_event, sha256_json
+from .events import make_event, sha256_json, sha256_text
 from .manifest import run_manifest_ref, write_run_manifest
-from .schemas import ComputeMarketState, GpuOffer, ProviderSnapshot
+from .schemas import ComputeMarketState, OfferObservation, ProviderSnapshot
 from .storage import (
     table_partition,
     write_json,
-    write_offers_parquet,
+    write_offer_observations_parquet,
     write_parquet_rows,
 )
 
@@ -25,7 +25,7 @@ class IngestResult:
     raw_ref: str
     normalized_ref: str | None
     raw_offer_count: int
-    normalized_offer_count: int
+    normalized_observation_count: int
     unknown_gpu_names: list[str]
     published_events: int
     publish_mode: str
@@ -40,7 +40,7 @@ class IngestResult:
             "raw_ref": self.raw_ref,
             "normalized_ref": self.normalized_ref,
             "raw_offer_count": self.raw_offer_count,
-            "normalized_offer_count": self.normalized_offer_count,
+            "normalized_observation_count": self.normalized_observation_count,
             "unknown_gpu_names": self.unknown_gpu_names,
             "published_events": self.published_events,
             "publish_mode": self.publish_mode,
@@ -60,7 +60,7 @@ def persist_provider_snapshot(
     raw_ref: str,
     raw_payload: Any,
     raw_offer_count: int,
-    normalized: list[GpuOffer],
+    normalized: list[OfferObservation],
     unknown_gpu_names: list[str],
     snapshot_query: dict[str, Any],
     automq_bootstrap_servers: str | None,
@@ -72,17 +72,53 @@ def persist_provider_snapshot(
     """Persist one source observation and publish its event tape records."""
     observed_date = observed_at.date().isoformat()
     write_json(raw_ref, raw_payload)
-    normalized_ref: str | None = None
-    if normalized:
-        normalized_ref = table_partition(
+    raw_hash = sha256_json(raw_payload)
+    normalized_ref = (
+        table_partition(
             lake_root,
-            table="silver/gpu_offers",
+            table="silver/offer_observations",
             observed_date=observed_date,
             provider=provider,
             run_id=run_id,
-            filename="offers.parquet",
+            filename="observations.parquet",
         )
-        write_offers_parquet(normalized_ref, normalized)
+        if normalized
+        else None
+    )
+    source_manifest_ref = run_manifest_ref(
+        lake_root,
+        provider=provider,
+        observed_date=observed_date,
+        run_id=run_id,
+    )
+    normalized = [
+        observation.with_context(
+            observation_id="obs-"
+            + sha256_text(f"{run_id}\x1f{provider}\x1f{observation.source_offer_id}")[
+                :20
+            ],
+            batch_id=run_id,
+            market_run_id=trace_id,
+            observation_purpose="scheduled",
+            observation_resolution="market_summary",
+            selection_resolution="gpu_type",
+            query_scope=snapshot_query,
+            response_complete=True,
+            source_connector=observation.source_connector or provider,
+            selection_fingerprint=sha256_text(
+                f"{provider}\x1f{observation.source_offer_id}"
+            )[:20],
+            raw_ref=raw_ref,
+            raw_hash=raw_hash,
+            source_run_id=run_id,
+            source_manifest_ref=source_manifest_ref,
+            source_normalized_ref=normalized_ref,
+            methodology_version="scheduled_provider_normalization",
+        )
+        for observation in normalized
+    ]
+    if normalized_ref:
+        write_offer_observations_parquet(normalized_ref, normalized)
 
     market_state_rows = list(market_state or [])
     market_state_ref: str | None = None
@@ -124,7 +160,7 @@ def persist_provider_snapshot(
         provider=provider,
         fetched_at=observed_at,
         raw_ref=raw_ref,
-        payload_hash=sha256_json(raw_payload),
+        payload_hash=raw_hash,
         offer_count=raw_offer_count,
         query=snapshot_query,
     )
@@ -144,9 +180,9 @@ def persist_provider_snapshot(
     published_events = 1
     for offer in normalized:
         publisher.publish(
-            f"{topic_prefix}.normalized_offer",
+            f"{topic_prefix}.offer_observation",
             make_event(
-                event_type="gpu.normalized_offer",
+                event_type="gpu.offer_observation",
                 provider=provider,
                 payload=offer.to_dict(),
                 run_id=run_id,
@@ -183,7 +219,7 @@ def persist_provider_snapshot(
         raw_ref=raw_ref,
         normalized_ref=normalized_ref,
         raw_offer_count=raw_offer_count,
-        normalized_offer_count=len(normalized),
+        normalized_observation_count=len(normalized),
         published_events=published_events,
         unknown_gpu_names=unknown_gpu_names,
         publish_mode=publish_mode,
@@ -196,7 +232,7 @@ def persist_provider_snapshot(
         raw_ref=raw_ref,
         normalized_ref=normalized_ref,
         raw_offer_count=raw_offer_count,
-        normalized_offer_count=len(normalized),
+        normalized_observation_count=len(normalized),
         unknown_gpu_names=unknown_gpu_names,
         published_events=published_events,
         publish_mode=publish_mode,

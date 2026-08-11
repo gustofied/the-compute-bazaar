@@ -6,11 +6,11 @@ from collections.abc import Mapping
 from typing import Any
 
 
-GPU_OFFERS_RUN_CONTRACT = "compute_bazaar_gpu_offers_run"
+OFFER_OBSERVATIONS_RUN_CONTRACT = "compute_bazaar_offer_observations_run"
 GOLD_MARKET_CONTRACT = "compute_bazaar_gold_market"
 MARKET_RUN_CONTRACT = "compute_bazaar_market_run"
 MARKET_EVENT_CONTRACT = "compute_bazaar_market_event"
-PORTABLE_LAKE_CONTRACT = "compute_bazaar_portable_lake"
+MARKET_LAKE_CONTRACT = "compute_bazaar_market_lake"
 CARD_CONTRACT = "compute_bazaar_card"
 PUBLICATION_CONTRACT = "compute_bazaar_publication"
 PUBLICATION_ROUTE_CONTRACT = "compute_bazaar_publication_route"
