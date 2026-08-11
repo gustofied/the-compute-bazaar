@@ -6,7 +6,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from .inspect import FleetInspector
-from .models import DoctorCheck, FleetDoctorResult, FleetInspection, FleetMachine
+from .models import (
+    DoctorCheck,
+    FleetDoctorResult,
+    FleetHealthResult,
+    FleetInspection,
+    FleetMachine,
+)
 from .registry import FleetRegistry
 
 if TYPE_CHECKING:
@@ -39,31 +45,33 @@ class FleetService:
             self.registry.get(host_id), verify_gpu_execution=False
         )
         if self.ledger:
-            self.ledger.record_inspection(inspection)
+            self.ledger.record_telemetry(inspection)
         return inspection
 
     def doctor(self, host_id: str) -> FleetDoctorResult:
         inspection = self.inspector.inspect(
             self.registry.get(host_id), verify_gpu_execution=True
         )
-        return self.doctor_inspection(inspection)
+        result = self.doctor_inspection(inspection)
+        if self.ledger:
+            self.ledger.record_telemetry(inspection)
+            self.ledger.record_capacity_verification(inspection, result)
+        return result
 
-    def monitor(self, host_id: str) -> tuple[FleetInspection, FleetDoctorResult]:
+    def monitor(self, host_id: str) -> tuple[FleetInspection, FleetHealthResult]:
         inspection = self.inspector.inspect(
             self.registry.get(host_id), verify_gpu_execution=False
         )
-        result = self.doctor_inspection(inspection, include_gpu_execution=False)
+        result = self.health_inspection(inspection)
+        if self.ledger:
+            self.ledger.record_telemetry(inspection)
         return inspection, result
 
     def doctor_inspection(
         self,
         inspection: FleetInspection,
-        *,
-        include_gpu_execution: bool = True,
     ) -> FleetDoctorResult:
-        checks = _readiness_checks(
-            inspection, include_gpu_execution=include_gpu_execution
-        )
+        checks = [*_health_checks(inspection), _gpu_execution_check(inspection)]
         required_failed = any(check.status == "fail" for check in checks)
         warned = any(check.status == "warn" for check in checks)
         readiness = (
@@ -75,16 +83,23 @@ class FleetService:
             readiness=readiness,
             checks=tuple(checks),
         )
-        if self.ledger:
-            self.ledger.record_inspection(inspection, result)
         return result
 
+    @staticmethod
+    def health_inspection(inspection: FleetInspection) -> FleetHealthResult:
+        checks = _health_checks(inspection)
+        failed = any(check.status == "fail" for check in checks)
+        warned = any(check.status == "warn" for check in checks)
+        health = "unhealthy" if failed else "degraded" if warned else "healthy"
+        return FleetHealthResult(
+            host_id=inspection.machine.host_id,
+            observed_at=inspection.observed_at,
+            health=health,
+            checks=tuple(checks),
+        )
 
-def _readiness_checks(
-    inspection: FleetInspection,
-    *,
-    include_gpu_execution: bool = True,
-) -> list[DoctorCheck]:
+
+def _health_checks(inspection: FleetInspection) -> list[DoctorCheck]:
     expected = inspection.machine.gpu_count
     detected = len(inspection.gpus)
     drivers = sorted(
@@ -108,10 +123,17 @@ def _readiness_checks(
     ]
     narrowed_links = [
         index
-        for index, _, _, current_width, max_width in links
-        if current_width is not None
-        and max_width is not None
-        and current_width < max_width
+        for index, current_gen, max_gen, current_width, max_width in links
+        if (
+            current_gen is not None
+            and max_gen is not None
+            and current_gen < max_gen
+        )
+        or (
+            current_width is not None
+            and max_width is not None
+            and current_width < max_width
+        )
     ]
     checks = [
         DoctorCheck(check="ssh", status="pass", detail="read-only probe completed"),
@@ -170,18 +192,18 @@ def _readiness_checks(
             ),
         ),
     ]
-    if include_gpu_execution:
-        checks.append(
-            DoctorCheck(
-                check="gpu_execution",
-                status=(
-                    "pass"
-                    if inspection.gpu_execution_status == "pass"
-                    else "fail"
-                    if inspection.gpu_execution_status == "fail"
-                    else "warn"
-                ),
-                detail=inspection.gpu_execution_detail or "not tested",
-            )
-        )
     return checks
+
+
+def _gpu_execution_check(inspection: FleetInspection) -> DoctorCheck:
+    return DoctorCheck(
+        check="gpu_execution",
+        status=(
+            "pass"
+            if inspection.gpu_execution_status == "pass"
+            else "fail"
+            if inspection.gpu_execution_status == "fail"
+            else "warn"
+        ),
+        detail=inspection.gpu_execution_detail or "not tested",
+    )

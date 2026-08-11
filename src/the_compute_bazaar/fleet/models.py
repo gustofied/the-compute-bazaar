@@ -30,39 +30,29 @@ class FleetMachine(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     host_id: str
-    provider: str
-    provider_resource_id: str
+    allocation_id: str | None = None
     name: str
     state: MachineState
     gpu_model: str
     gpu_count: int = Field(ge=1)
-    price_usd_gpu_hr: float = Field(gt=0)
-    price_usd_instance_hr: float = Field(gt=0)
     created_at: datetime
-    terminate_at: datetime
     ssh: SshEndpoint | None = None
 
     @model_validator(mode="after")
     def validate_times(self) -> FleetMachine:
-        for field in ("created_at", "terminate_at"):
-            value = getattr(self, field)
-            if value.tzinfo is None or value.utcoffset() is None:
-                raise ValueError(f"{field} must be timezone-aware")
-        if self.terminate_at <= self.created_at:
-            raise ValueError("terminate_at must follow created_at")
+        if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
+            raise ValueError("created_at must be timezone-aware")
         return self
 
     def row(self) -> dict[str, object]:
         return {
             "host_id": self.host_id,
-            "provider": self.provider,
+            "allocation_id": self.allocation_id,
             "name": self.name,
             "state": self.state,
             "gpu_model": self.gpu_model,
             "gpu_count": self.gpu_count,
-            "price_usd_instance_hr": self.price_usd_instance_hr,
             "ssh_host": self.ssh.host if self.ssh else None,
-            "terminate_at": self.terminate_at,
         }
 
 
@@ -113,7 +103,7 @@ class FleetInspection(BaseModel):
     def row(self) -> dict[str, object]:
         return {
             "host_id": self.machine.host_id,
-            "provider": self.machine.provider,
+            "allocation_id": self.machine.allocation_id,
             "state": self.machine.state,
             "os": self.os_name,
             "kernel": self.kernel,
@@ -157,3 +147,12 @@ class FleetDoctorResult(BaseModel):
             "readiness": self.readiness,
             "rows": [check.model_dump(mode="json") for check in self.checks],
         }
+
+
+class FleetHealthResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    host_id: str
+    observed_at: datetime
+    health: Literal["healthy", "degraded", "unhealthy"]
+    checks: tuple[DoctorCheck, ...]

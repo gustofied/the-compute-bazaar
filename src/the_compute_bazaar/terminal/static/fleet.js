@@ -167,6 +167,7 @@ function renderHosts() {
 }
 
 function countdown(machine) {
+  if (!machine.terminate_at) return "No deadline";
   const remaining = new Date(machine.terminate_at).getTime() - Date.now();
   if (remaining <= 0) return "Delete due";
   return `Deletes in ${Math.max(1, Math.ceil(remaining / 60000))}m`;
@@ -191,7 +192,7 @@ function renderSnapshot(payload) {
   elements.empty.hidden = true;
   elements.overview.hidden = true;
   elements.view.hidden = false;
-  elements.provider.textContent = [machine.provider, machine.state, payload.monitor?.status === "stale" ? "stale" : null].filter(Boolean).join(" / ");
+  elements.provider.textContent = [machine.provider || "imported", machine.state, payload.monitor?.status === "stale" ? "stale" : null].filter(Boolean).join(" / ");
   elements.name.textContent = machine.name;
   elements.subtitle.textContent = `${machine.gpu_count} × ${machine.gpu_model} · $${number(machine.price_usd_instance_hr, 2)} / hr`;
   elements.readiness.textContent = readiness.replace("_", " ");
@@ -258,7 +259,7 @@ function overviewRow(host) {
     ? "fault"
     : payload?.monitor?.status === "stale"
       ? "stale"
-      : payload?.readiness ?? host.state;
+      : payload?.health ?? host.state;
   const memory = gpu ? `${formatMemory(gpu.memoryUsed)} / ${formatMemory(gpu.memoryTotal)}` : "—";
   return `
     <button class="overview-row ${escapeHtml(status)}" type="button" role="row" data-overview-host="${escapeHtml(host.host_id)}" ${host.ssh_ready && host.state === "running" ? "" : "disabled"}>

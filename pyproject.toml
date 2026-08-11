@@ -40,6 +40,11 @@ compute-bazaar = "the_compute_bazaar.cli:main"
 requires = ["uv_build>=0.9.18,<0.10.0"]
 build-backend = "uv_build"
 
+[dependency-groups]
+dev = [
+    "ruff>=0.14.0,<0.15.0",
+]
+
 [tool.ruff]
 extend-exclude = [
     "compute-bazaar-bench/evals/reliability-is-blind/dev_tests/fixtures",

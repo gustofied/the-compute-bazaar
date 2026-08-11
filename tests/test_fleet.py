@@ -3,33 +3,35 @@ from __future__ import annotations
 import subprocess
 import tempfile
 import unittest
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 from the_compute_bazaar.fleet import (
     FleetInspector,
+    FleetInspection,
     FleetMachine,
     FleetMonitor,
     FleetRegistry,
     FleetService,
     SshEndpoint,
 )
+from the_compute_bazaar.fleet.models import GpuDevice
 
 
-def machine(identity_file: Path) -> FleetMachine:
+def machine(
+    identity_file: Path,
+    *,
+    allocation_id: str | None = "allocation-123",
+) -> FleetMachine:
     created_at = datetime(2026, 8, 10, 12, tzinfo=UTC)
     return FleetMachine(
         host_id="runpod:pod-123",
-        provider="runpod",
-        provider_resource_id="pod-123",
+        allocation_id=allocation_id,
         name="bazaar-h100-01",
         state="running",
         gpu_model="H100_80GB",
         gpu_count=1,
-        price_usd_gpu_hr=2.49,
-        price_usd_instance_hr=2.49,
         created_at=created_at,
-        terminate_at=created_at + timedelta(minutes=30),
         ssh=SshEndpoint(
             host="203.0.113.10",
             port=22123,
@@ -143,10 +145,8 @@ class FleetTest(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, output, "")
 
             class Ledger:
-                def record_inspection(
-                    self, inspection: object, doctor: object = None
-                ) -> None:
-                    records.append((inspection, doctor))
+                def record_telemetry(self, inspection: object) -> None:
+                    records.append((inspection, None))
 
             service = FleetService(
                 registry=registry,
@@ -159,7 +159,7 @@ class FleetTest(unittest.TestCase):
 
             _, result = service.monitor(selected.host_id)
 
-            self.assertEqual(result.readiness, "ready")
+            self.assertEqual(result.health, "healthy")
             self.assertNotIn("gpu_execution", {check.check for check in result.checks})
             self.assertEqual(len(records), 1)
             self.assertTrue(scripts[0].startswith("CBZ_VERIFY_GPU_EXECUTION=0"))
@@ -235,6 +235,41 @@ class FleetTest(unittest.TestCase):
             self.assertEqual(result.readiness, "not_ready")
             self.assertEqual(checks["gpu_memory"].status, "fail")
             self.assertEqual(checks["pcie_link"].status, "warn")
+
+    def test_pcie_generation_downgrade_warns_at_full_width(self) -> None:
+        selected = machine(Path("/tmp/id_ed25519"))
+        inspection = FleetInspection(
+            machine=selected,
+            observed_at=datetime(2026, 8, 10, 12, 5, tzinfo=UTC),
+            disk_free_gb=40,
+            gpu_execution_status="pass",
+            gpu_execution_detail="verified",
+            gpus=(
+                GpuDevice(
+                    index=0,
+                    name="NVIDIA H100 80GB HBM3",
+                    memory_total_mb=81559,
+                    driver_version="570.86.15",
+                    temperature_c=31,
+                    pcie_generation_current=4,
+                    pcie_generation_max=5,
+                    pcie_width_current=16,
+                    pcie_width_max=16,
+                ),
+            ),
+        )
+
+        result = FleetService().doctor_inspection(inspection)
+        checks = {check.check: check for check in result.checks}
+
+        self.assertEqual(result.readiness, "degraded")
+        self.assertEqual(checks["pcie_link"].status, "warn")
+
+    def test_imported_host_does_not_require_an_allocation(self) -> None:
+        imported = machine(Path("/tmp/id_ed25519"), allocation_id=None)
+
+        self.assertIsNone(imported.allocation_id)
+        self.assertEqual(imported.row()["host_id"], "runpod:pod-123")
 
 
 if __name__ == "__main__":

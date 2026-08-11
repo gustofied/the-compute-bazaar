@@ -80,6 +80,12 @@ OFFER_OBSERVATION_COLUMNS = (
         _text("source_offer_id"),
         "Provider-scoped offer key.",
     ),
+    SilverColumn(
+        "market_product_key",
+        "Utf8",
+        _text("market_product_key"),
+        "Product identity shared across observation resolutions.",
+    ),
     SilverColumn("gpu_raw_name", "Utf8", _text("gpu_raw_name"), "Source GPU name."),
     SilverColumn("gpu_model", "Utf8", _text("gpu_model"), "Canonical GPU model."),
     SilverColumn("gpu_count", "Int64", "cast(gpu_count as bigint)", "GPU count."),

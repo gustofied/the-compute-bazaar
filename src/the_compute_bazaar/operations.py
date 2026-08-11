@@ -1,13 +1,13 @@
-"""Private offer, allocation, and Fleet history."""
+"""Private evidence, provisioning, allocation, and Fleet history."""
 
 from __future__ import annotations
 
 import json
 import sqlite3
 from contextlib import closing
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from .fleet.registry import FleetRegistry, default_fleet_root
 
@@ -16,11 +16,25 @@ if TYPE_CHECKING:
 
     from .fleet.models import FleetDoctorResult, FleetInspection, FleetMachine
     from .offers import OfferBatch
-    from .provider_execution import LaunchReceipt
-    from .provisioning import LaunchPlan
+    from .provisioning import Allocation, ProvisioningAttempt, ProvisioningRequest
 
+
+SCHEMA_VERSION = 3
+TELEMETRY_RETENTION = timedelta(hours=6)
 
 SCHEMA = """
+create table if not exists provider_read_batches (
+  batch_id text not null,
+  source_connector text not null,
+  observed_at text not null,
+  purpose text not null,
+  query_scope_json text not null,
+  raw_ref text not null,
+  raw_hash text not null,
+  sanitized_payload_json text not null,
+  primary key (batch_id, source_connector)
+);
+
 create table if not exists offer_observations (
   observation_id text primary key,
   batch_id text not null,
@@ -32,6 +46,7 @@ create table if not exists offer_observations (
   provider text not null,
   source_connector text not null,
   source_offer_id text not null,
+  market_product_key text,
   gpu_raw_name text not null,
   gpu_model text not null,
   gpu_count integer not null,
@@ -67,54 +82,104 @@ create table if not exists offer_observations (
   schema_version text not null
 );
 
-create table if not exists fleet_allocations (
-  host_id text primary key,
-  provider text not null,
-  provider_resource_id text not null,
-  offer_observation_id text not null,
-  offer_batch_id text not null,
-  offer_id text not null,
+create index if not exists offer_observations_offer_time
+  on offer_observations (source_offer_id, observed_at desc);
+
+create table if not exists provisioning_requests (
+  request_id text primary key,
   plan_id text not null,
-  name text not null,
-  cloud_type text not null,
-  location text not null,
-  state text not null,
-  gpu_family text,
+  candidate_observation_id text,
+  preflight_observation_id text not null,
+  preflight_batch_id text not null,
+  source_offer_id text not null,
+  market_product_key text not null,
+  acquisition_connector text not null,
+  capacity_provider text not null,
+  operation text not null,
   gpu_model text not null,
   gpu_count integer not null,
   selected_price_usd_gpu_hr real not null,
   selected_price_usd_instance_hr real not null,
-  offer_observed_at text not null,
-  launched_at text not null,
-  terminate_at text not null,
-  terminated_at text,
+  max_hourly_usd real not null,
+  runtime_minutes integer not null,
   expected_max_cost_usd real not null,
-  ssh_ready integer not null,
-  updated_at text not null
+  request_hash text not null,
+  provider_request_json text not null,
+  created_at text not null,
+  state text not null,
+  foreign key (candidate_observation_id) references offer_observations(observation_id),
+  foreign key (preflight_observation_id) references offer_observations(observation_id)
 );
 
-create table if not exists fleet_observations (
-  observation_id text primary key,
+create table if not exists provisioning_attempts (
+  attempt_id text primary key,
+  request_id text not null,
+  attempt_number integer not null,
+  state text not null,
+  started_at text not null,
+  completed_at text,
+  provider_resource_id text,
+  error text,
+  unique (request_id, attempt_number),
+  foreign key (request_id) references provisioning_requests(request_id)
+);
+
+create table if not exists allocations (
+  allocation_id text primary key,
+  request_id text not null unique,
+  successful_attempt_id text not null unique,
+  acquisition_connector text not null,
+  capacity_provider text not null,
+  provider_resource_id text not null,
+  state text not null,
+  realized_price_usd_gpu_hr real,
+  realized_price_usd_instance_hr real,
+  created_at text not null,
+  terminate_at text,
+  terminated_at text,
+  updated_at text not null,
+  foreign key (request_id) references provisioning_requests(request_id),
+  foreign key (successful_attempt_id) references provisioning_attempts(attempt_id)
+);
+
+create table if not exists fleet_telemetry (
+  sample_id text primary key,
   host_id text not null,
-  provider text not null,
   observed_at text not null,
-  readiness text,
   gpu_count_detected integer not null,
   gpu_utilization_pct real,
   gpu_memory_used_mb integer,
   gpu_memory_total_mb integer,
   gpu_temperature_c integer,
+  gpu_power_draw_w real,
   cpu_utilization_pct real,
   memory_used_mb integer,
   memory_mb integer,
   disk_free_gb integer,
-  driver_versions text,
-  driver_cuda_version text,
-  cuda_toolkit_version text,
-  inspection_json text not null,
-  checks_json text
+  error text
 );
+
+create index if not exists fleet_telemetry_host_time
+  on fleet_telemetry (host_id, observed_at desc);
+
+create table if not exists capacity_verifications (
+  verification_id text primary key,
+  host_id text not null,
+  observed_at text not null,
+  readiness text not null,
+  expected_gpu_count integer not null,
+  detected_gpu_count integer not null,
+  inspection_json text not null,
+  checks_json text not null
+);
+
+create index if not exists capacity_verifications_host_time
+  on capacity_verifications (host_id, observed_at desc);
 """
+
+
+class ProvisioningStateError(RuntimeError):
+    """A request cannot safely move to another provider call."""
 
 
 class OperationalLedger:
@@ -134,45 +199,235 @@ class OperationalLedger:
             _mtime(self.registry.path),
         )
 
-    def record_offer_observations(self, batch: OfferBatch) -> None:
-        rows = []
-        for observation in batch.observations:
-            row = observation.row()
-            if not row["observation_id"]:
-                raise ValueError("Direct offer observation has no observation_id")
-            rows.append(row)
-        if rows:
-            self._insert("offer_observations", rows, ignore=True)
+    def record_offer_batch(self, batch: OfferBatch) -> None:
+        evidence = [
+            {
+                "batch_id": item.batch_id,
+                "source_connector": item.source_connector,
+                "observed_at": item.observed_at,
+                "purpose": item.purpose,
+                "query_scope_json": _json(item.query_scope),
+                "raw_ref": item.raw_ref,
+                "raw_hash": item.raw_hash,
+                "sanitized_payload_json": _json(item.sanitized_payload),
+            }
+            for item in batch.provider_reads
+        ]
+        observations = [item.row() for item in batch.observations]
+        if any(not row["observation_id"] for row in observations):
+            raise ValueError("Direct offer observation has no observation_id")
+        with closing(self._connect()) as connection, connection:
+            _insert(connection, "provider_read_batches", evidence, ignore=True)
+            _insert(connection, "offer_observations", observations, ignore=True)
 
-    def record_launch(self, plan: LaunchPlan, receipt: LaunchReceipt) -> None:
-        machine = receipt.machine
-        now = _timestamp(datetime.now(UTC))
-        row = {
-            "host_id": machine.host_id,
-            "provider": machine.provider,
-            "provider_resource_id": machine.provider_resource_id,
-            "offer_observation_id": plan.offer_observation_id,
-            "offer_batch_id": plan.offer_batch_id,
-            "offer_id": plan.offer_id,
-            "plan_id": plan.plan_id,
-            "name": machine.name,
-            "cloud_type": plan.cloud_type,
-            "location": plan.location,
-            "state": machine.state,
-            "gpu_family": _gpu_family(machine.gpu_model),
-            "gpu_model": machine.gpu_model,
-            "gpu_count": machine.gpu_count,
-            "selected_price_usd_gpu_hr": machine.price_usd_gpu_hr,
-            "selected_price_usd_instance_hr": machine.price_usd_instance_hr,
-            "offer_observed_at": _timestamp(plan.observed_at),
-            "launched_at": _timestamp(receipt.launched_at),
-            "terminate_at": _timestamp(receipt.terminate_at),
-            "terminated_at": None,
-            "expected_max_cost_usd": receipt.expected_max_cost_usd,
-            "ssh_ready": machine.ssh is not None,
-            "updated_at": now,
-        }
-        self._insert("fleet_allocations", [row], replace=True)
+    def latest_offer_observation_id(self, source_offer_id: str) -> str | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+select observation_id
+from offer_observations
+where source_offer_id = ?
+  and observation_purpose = 'interactive'
+order by observed_at desc, observation_id desc
+limit 1
+""",
+                (source_offer_id,),
+            ).fetchone()
+        return str(row["observation_id"]) if row else None
+
+    def begin_provisioning(
+        self, request: ProvisioningRequest
+    ) -> ProvisioningAttempt:
+        from .provisioning import ProvisioningAttempt
+
+        with closing(self._connect()) as connection:
+            connection.execute("begin immediate")
+            try:
+                existing = connection.execute(
+                    "select request_hash from provisioning_requests where request_id = ?",
+                    (request.request_id,),
+                ).fetchone()
+                if existing and existing["request_hash"] != request.request_hash:
+                    raise ProvisioningStateError(
+                        f"Provisioning request identity collision: {request.request_id}"
+                    )
+                if not existing:
+                    _insert(
+                        connection,
+                        "provisioning_requests",
+                        [_request_row(request)],
+                    )
+                latest = connection.execute(
+                    """
+select attempt_number, state
+from provisioning_attempts
+where request_id = ?
+order by attempt_number desc
+limit 1
+""",
+                    (request.request_id,),
+                ).fetchone()
+                if latest and latest["state"] in {"pending", "uncertain", "succeeded"}:
+                    raise ProvisioningStateError(
+                        f"Provisioning request {request.request_id} is "
+                        f"{latest['state']}; reconcile it before retrying"
+                    )
+                number = int(latest["attempt_number"]) + 1 if latest else 1
+                attempt = ProvisioningAttempt(
+                    attempt_id=f"attempt-{_identity(request.request_id, str(number))}",
+                    request_id=request.request_id,
+                    attempt_number=number,
+                    state="pending",
+                    started_at=datetime.now(UTC),
+                )
+                _insert(
+                    connection,
+                    "provisioning_attempts",
+                    [attempt.model_dump(mode="python")],
+                )
+                connection.execute(
+                    "update provisioning_requests set state = 'pending' where request_id = ?",
+                    (request.request_id,),
+                )
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return attempt
+
+    def complete_provisioning_attempt(
+        self,
+        attempt_id: str,
+        *,
+        state: Literal["succeeded", "failed", "uncertain"],
+        provider_resource_id: str | None = None,
+        error: str | None = None,
+        completed_at: datetime | None = None,
+    ) -> None:
+        completed_at = completed_at or datetime.now(UTC)
+        with closing(self._connect()) as connection, connection:
+            row = connection.execute(
+                "select request_id, state from provisioning_attempts where attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+            if not row:
+                raise KeyError(f"Unknown provisioning attempt: {attempt_id}")
+            if row["state"] != "pending":
+                raise ProvisioningStateError(
+                    f"Provisioning attempt {attempt_id} is already {row['state']}"
+                )
+            connection.execute(
+                """
+update provisioning_attempts
+set state = ?, completed_at = ?, provider_resource_id = ?, error = ?
+where attempt_id = ?
+""",
+                (
+                    state,
+                    _timestamp(completed_at),
+                    provider_resource_id,
+                    error,
+                    attempt_id,
+                ),
+            )
+            connection.execute(
+                "update provisioning_requests set state = ? where request_id = ?",
+                (state, row["request_id"]),
+            )
+
+    def reconcile_attempt(
+        self,
+        attempt_id: str,
+        *,
+        state: Literal["succeeded", "failed"],
+        provider_resource_id: str | None = None,
+        note: str | None = None,
+    ) -> None:
+        with closing(self._connect()) as connection, connection:
+            row = connection.execute(
+                "select request_id, state from provisioning_attempts where attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+            if not row:
+                raise KeyError(f"Unknown provisioning attempt: {attempt_id}")
+            if row["state"] != "uncertain":
+                raise ProvisioningStateError(
+                    f"Only an uncertain attempt can be reconciled; found {row['state']}"
+                )
+            connection.execute(
+                """
+update provisioning_attempts
+set state = ?, completed_at = ?, provider_resource_id = coalesce(?, provider_resource_id),
+    error = ?
+where attempt_id = ?
+""",
+                (
+                    state,
+                    _timestamp(datetime.now(UTC)),
+                    provider_resource_id,
+                    note,
+                    attempt_id,
+                ),
+            )
+            connection.execute(
+                "update provisioning_requests set state = ? where request_id = ?",
+                (state, row["request_id"]),
+            )
+
+    def record_allocation(self, allocation: Allocation) -> None:
+        with closing(self._connect()) as connection, connection:
+            attempt = connection.execute(
+                """
+select request_id, state, provider_resource_id
+from provisioning_attempts
+where attempt_id = ?
+""",
+                (allocation.successful_attempt_id,),
+            ).fetchone()
+            if not attempt:
+                raise ProvisioningStateError(
+                    f"Unknown provisioning attempt: {allocation.successful_attempt_id}"
+                )
+            if attempt["request_id"] != allocation.request_id:
+                raise ProvisioningStateError(
+                    "Allocation request does not match its provisioning attempt"
+                )
+            if attempt["state"] != "succeeded":
+                raise ProvisioningStateError(
+                    f"Allocation attempt is {attempt['state']}, not succeeded"
+                )
+            if attempt["provider_resource_id"] != allocation.provider_resource_id:
+                raise ProvisioningStateError(
+                    "Allocation resource does not match its provisioning attempt"
+                )
+            _insert(
+                connection,
+                "allocations",
+                [allocation.model_dump(mode="python")],
+            )
+
+    def allocation_for_machine(self, machine: FleetMachine) -> dict[str, Any]:
+        if not machine.allocation_id:
+            raise KeyError(f"Fleet node {machine.host_id} has no allocation")
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+select
+  allocation.*,
+  request.gpu_model,
+  request.gpu_count,
+  request.selected_price_usd_gpu_hr,
+  request.selected_price_usd_instance_hr,
+  request.expected_max_cost_usd
+from allocations allocation
+join provisioning_requests request using (request_id)
+where allocation_id = ?
+""",
+                (machine.allocation_id,),
+            ).fetchone()
+        if not row:
+            raise KeyError(f"Unknown allocation: {machine.allocation_id}")
+        return dict(row)
 
     def record_machine_state(
         self,
@@ -180,94 +435,115 @@ class OperationalLedger:
         *,
         occurred_at: datetime | None = None,
     ) -> None:
+        if not machine.allocation_id:
+            return
         when = occurred_at or datetime.now(UTC)
         with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
-update fleet_allocations
-set state = ?, ssh_ready = ?,
+update allocations
+set state = ?,
     terminated_at = case when ? = 'terminated' then ? else terminated_at end,
     updated_at = ?
-where host_id = ?
+where allocation_id = ?
 """,
                 (
                     machine.state,
-                    int(machine.ssh is not None),
                     machine.state,
                     _timestamp(when),
                     _timestamp(when),
-                    machine.host_id,
+                    machine.allocation_id,
                 ),
             )
 
-    def record_inspection(
+    def record_telemetry(
         self,
         inspection: FleetInspection,
-        doctor: FleetDoctorResult | None = None,
+        *,
+        error: str | None = None,
     ) -> None:
         gpus = inspection.gpus
         row = {
-            "observation_id": _identity(
+            "sample_id": _identity(
                 inspection.machine.host_id, inspection.observed_at.isoformat()
             ),
             "host_id": inspection.machine.host_id,
-            "provider": inspection.machine.provider,
-            "observed_at": _timestamp(inspection.observed_at),
-            "readiness": doctor.readiness if doctor else None,
+            "observed_at": inspection.observed_at,
             "gpu_count_detected": len(gpus),
             "gpu_utilization_pct": _average(gpu.utilization_pct for gpu in gpus),
-            "gpu_memory_used_mb": sum(gpu.memory_used_mb for gpu in gpus)
-            if gpus
-            else None,
-            "gpu_memory_total_mb": sum(gpu.memory_total_mb for gpu in gpus)
-            if gpus
-            else None,
+            "gpu_memory_used_mb": sum(gpu.memory_used_mb for gpu in gpus) if gpus else None,
+            "gpu_memory_total_mb": sum(gpu.memory_total_mb for gpu in gpus) if gpus else None,
             "gpu_temperature_c": max(
                 (gpu.temperature_c for gpu in gpus if gpu.temperature_c is not None),
                 default=None,
             ),
+            "gpu_power_draw_w": sum(
+                gpu.power_draw_w for gpu in gpus if gpu.power_draw_w is not None
+            )
+            if any(gpu.power_draw_w is not None for gpu in gpus)
+            else None,
             "cpu_utilization_pct": inspection.cpu_utilization_pct,
             "memory_used_mb": inspection.memory_used_mb,
             "memory_mb": inspection.memory_mb,
             "disk_free_gb": inspection.disk_free_gb,
-            "driver_versions": ",".join(sorted({gpu.driver_version for gpu in gpus})),
-            "driver_cuda_version": inspection.driver_cuda_version,
-            "cuda_toolkit_version": inspection.cuda_toolkit_version,
-            "inspection_json": _json(inspection.model_dump(mode="json")),
-            "checks_json": _json(doctor.payload()) if doctor else None,
+            "error": error,
         }
-        self._insert("fleet_observations", [row], replace=True)
+        cutoff = inspection.observed_at - TELEMETRY_RETENTION
+        with closing(self._connect()) as connection, connection:
+            _insert(connection, "fleet_telemetry", [row], replace=True)
+            connection.execute(
+                "delete from fleet_telemetry where observed_at < ?",
+                (_timestamp(cutoff),),
+            )
+
+    def record_capacity_verification(
+        self,
+        inspection: FleetInspection,
+        doctor: FleetDoctorResult,
+    ) -> None:
+        row = {
+            "verification_id": f"verify-{_identity(doctor.host_id, doctor.observed_at.isoformat())}",
+            "host_id": doctor.host_id,
+            "observed_at": doctor.observed_at,
+            "readiness": doctor.readiness,
+            "expected_gpu_count": inspection.machine.gpu_count,
+            "detected_gpu_count": len(inspection.gpus),
+            "inspection_json": _json(inspection.model_dump(mode="json")),
+            "checks_json": _json(doctor.payload()),
+        }
+        self._insert("capacity_verifications", [row], replace=True)
+
+    def latest_capacity_verification(self, host_id: str) -> dict[str, Any] | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+select * from capacity_verifications
+where host_id = ?
+order by observed_at desc
+limit 1
+""",
+                (host_id,),
+            ).fetchone()
+        return dict(row) if row else None
 
     def arrow_tables(self) -> dict[str, pa.Table]:
         import pyarrow as pa
 
-        definitions = {
+        schemas = {
+            "provider_read_batches": _provider_read_schema(pa),
             "offer_observations": _offer_schema(pa),
-            "fleet_allocations": _allocation_schema(pa),
-            "fleet_observations": _fleet_observation_schema(pa),
+            "provisioning_requests": _request_schema(pa),
+            "provisioning_attempts": _attempt_schema(pa),
+            "allocations": _allocation_schema(pa),
+            "fleet_telemetry": _telemetry_schema(pa),
+            "capacity_verifications": _verification_schema(pa),
         }
         with closing(self._connect()) as connection:
             tables = {
-                name: _arrow_table(connection, f"select * from {table}", schema)
-                for name, table, schema in (
-                    (
-                        "offer_observations",
-                        "offer_observations",
-                        definitions["offer_observations"],
-                    ),
-                    (
-                        "fleet_allocations",
-                        "fleet_allocations",
-                        definitions["fleet_allocations"],
-                    ),
-                    (
-                        "fleet_observations",
-                        "fleet_observations",
-                        definitions["fleet_observations"],
-                    ),
-                )
+                name: _arrow_table(connection, f"select * from {name}", schema)
+                for name, schema in schemas.items()
             }
-        tables["fleet_machines"] = pa.Table.from_pylist(
+        tables["fleet_nodes"] = pa.Table.from_pylist(
             [_machine_row(machine) for machine in self.registry.list()],
             schema=_machine_schema(pa),
         )
@@ -281,24 +557,69 @@ where host_id = ?
         ignore: bool = False,
         replace: bool = False,
     ) -> None:
-        columns = tuple(rows[0])
-        mode = "replace" if replace else "ignore" if ignore else "abort"
-        sql = (
-            f"insert or {mode} into {table} ({', '.join(columns)}) "
-            f"values ({', '.join('?' for _ in columns)})"
-        )
-        values = [tuple(_sqlite(row[column]) for column in columns) for row in rows]
         with closing(self._connect()) as connection, connection:
-            connection.executemany(sql, values)
+            _insert(connection, table, rows, ignore=ignore, replace=replace)
 
     def _connect(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.path.parent.chmod(0o700)
         connection = sqlite3.connect(self.path, timeout=5)
         connection.row_factory = sqlite3.Row
+        connection.execute("pragma foreign_keys=on")
         connection.execute("pragma journal_mode=wal")
         connection.execute("pragma busy_timeout=5000")
         connection.executescript(SCHEMA)
+        _migrate(connection)
+        connection.execute(
+            "create index if not exists offer_observations_product_time "
+            "on offer_observations (market_product_key, observed_at desc)"
+        )
+        connection.execute(f"pragma user_version={SCHEMA_VERSION}")
+        connection.commit()
+        self.path.chmod(0o600)
         return connection
+
+
+def _migrate(connection: sqlite3.Connection) -> None:
+    version = int(connection.execute("pragma user_version").fetchone()[0])
+    if version >= SCHEMA_VERSION:
+        return
+    columns = {
+        str(row["name"])
+        for row in connection.execute("pragma table_info(offer_observations)")
+    }
+    if "market_product_key" not in columns:
+        connection.execute(
+            "alter table offer_observations add column market_product_key text"
+        )
+    connection.execute("drop table if exists fleet_allocations")
+    connection.execute("drop table if exists fleet_observations")
+
+
+def _insert(
+    connection: sqlite3.Connection,
+    table: str,
+    rows: list[dict[str, Any]],
+    *,
+    ignore: bool = False,
+    replace: bool = False,
+) -> None:
+    if not rows:
+        return
+    columns = tuple(rows[0])
+    mode = "replace" if replace else "ignore" if ignore else "abort"
+    sql = (
+        f"insert or {mode} into {table} ({', '.join(columns)}) "
+        f"values ({', '.join('?' for _ in columns)})"
+    )
+    values = [tuple(_sqlite(row[column]) for column in columns) for row in rows]
+    connection.executemany(sql, values)
+
+
+def _request_row(request: ProvisioningRequest) -> dict[str, Any]:
+    row = request.model_dump(mode="python")
+    row["provider_request_json"] = _json(row.pop("provider_request"))
+    return row
 
 
 def _arrow_table(
@@ -317,7 +638,7 @@ def _arrow_table(
     return pa.Table.from_pylist(rows, schema=schema)
 
 
-def _offer_schema(pa: Any) -> Any:
+def _schema(pa: Any, fields: tuple[tuple[str, str], ...]) -> Any:
     types = {
         "text": pa.string(),
         "time": pa.timestamp("us", tz="UTC"),
@@ -325,162 +646,214 @@ def _offer_schema(pa: Any) -> Any:
         "float": pa.float64(),
         "bool": pa.bool_(),
     }
-    fields = (
-        ("observation_id", "text"),
-        ("batch_id", "text"),
-        ("market_run_id", "text"),
-        ("observation_purpose", "text"),
-        ("observation_resolution", "text"),
-        ("selection_resolution", "text"),
-        ("observed_at", "time"),
-        ("provider", "text"),
-        ("source_connector", "text"),
-        ("source_offer_id", "text"),
-        ("gpu_raw_name", "text"),
-        ("gpu_model", "text"),
-        ("gpu_count", "int"),
-        ("vram_gb", "float"),
-        ("price_usd_instance_hr", "float"),
-        ("price_usd_gpu_hr", "float"),
-        ("currency", "text"),
-        ("available_gpu_count_lower_bound", "int"),
-        ("is_available", "bool"),
-        ("source_availability_status", "text"),
-        ("source_stock_status", "text"),
-        ("country", "text"),
-        ("region", "text"),
-        ("cloud_type", "text"),
-        ("location_ids_json", "text"),
-        ("selection_fingerprint", "text"),
-        ("native_selection_json", "text"),
-        ("query_scope_json", "text"),
-        ("response_complete", "bool"),
-        ("is_spot", "bool"),
-        ("is_secure", "bool"),
-        ("gpu_socket", "text"),
-        ("price_is_variable", "bool"),
-        ("minimum_executable_price_usd_instance_hr", "float"),
-        ("required_resource_price_usd_instance_hr", "float"),
-        ("price_basis", "text"),
-        ("raw_ref", "text"),
-        ("raw_hash", "text"),
-        ("source_run_id", "text"),
-        ("source_manifest_ref", "text"),
-        ("source_normalized_ref", "text"),
-        ("methodology_version", "text"),
-        ("schema_version", "text"),
-    )
     return pa.schema([(name, types[kind]) for name, kind in fields])
 
 
-def _allocation_schema(pa: Any) -> Any:
-    return pa.schema(
-        [
-            ("host_id", pa.string()),
-            ("provider", pa.string()),
-            ("provider_resource_id", pa.string()),
-            ("offer_observation_id", pa.string()),
-            ("offer_batch_id", pa.string()),
-            ("offer_id", pa.string()),
-            ("plan_id", pa.string()),
-            ("name", pa.string()),
-            ("cloud_type", pa.string()),
-            ("location", pa.string()),
-            ("state", pa.string()),
-            ("gpu_family", pa.string()),
-            ("gpu_model", pa.string()),
-            ("gpu_count", pa.int64()),
-            ("selected_price_usd_gpu_hr", pa.float64()),
-            ("selected_price_usd_instance_hr", pa.float64()),
-            ("offer_observed_at", pa.timestamp("us", tz="UTC")),
-            ("launched_at", pa.timestamp("us", tz="UTC")),
-            ("terminate_at", pa.timestamp("us", tz="UTC")),
-            ("terminated_at", pa.timestamp("us", tz="UTC")),
-            ("expected_max_cost_usd", pa.float64()),
-            ("ssh_ready", pa.bool_()),
-            ("updated_at", pa.timestamp("us", tz="UTC")),
-        ]
+def _provider_read_schema(pa: Any) -> Any:
+    return _schema(
+        pa,
+        (
+            ("batch_id", "text"),
+            ("source_connector", "text"),
+            ("observed_at", "time"),
+            ("purpose", "text"),
+            ("query_scope_json", "text"),
+            ("raw_ref", "text"),
+            ("raw_hash", "text"),
+            ("sanitized_payload_json", "text"),
+        ),
     )
 
 
-def _fleet_observation_schema(pa: Any) -> Any:
-    return pa.schema(
-        [
-            ("observation_id", pa.string()),
-            ("host_id", pa.string()),
-            ("provider", pa.string()),
-            ("observed_at", pa.timestamp("us", tz="UTC")),
-            ("readiness", pa.string()),
-            ("gpu_count_detected", pa.int64()),
-            ("gpu_utilization_pct", pa.float64()),
-            ("gpu_memory_used_mb", pa.int64()),
-            ("gpu_memory_total_mb", pa.int64()),
-            ("gpu_temperature_c", pa.int64()),
-            ("cpu_utilization_pct", pa.float64()),
-            ("memory_used_mb", pa.int64()),
-            ("memory_mb", pa.int64()),
-            ("disk_free_gb", pa.int64()),
-            ("driver_versions", pa.string()),
-            ("driver_cuda_version", pa.string()),
-            ("cuda_toolkit_version", pa.string()),
-            ("inspection_json", pa.string()),
-            ("checks_json", pa.string()),
-        ]
+def _offer_schema(pa: Any) -> Any:
+    return _schema(
+        pa,
+        (
+            ("observation_id", "text"),
+            ("batch_id", "text"),
+            ("market_run_id", "text"),
+            ("observation_purpose", "text"),
+            ("observation_resolution", "text"),
+            ("selection_resolution", "text"),
+            ("observed_at", "time"),
+            ("provider", "text"),
+            ("source_connector", "text"),
+            ("source_offer_id", "text"),
+            ("market_product_key", "text"),
+            ("gpu_raw_name", "text"),
+            ("gpu_model", "text"),
+            ("gpu_count", "int"),
+            ("vram_gb", "float"),
+            ("price_usd_instance_hr", "float"),
+            ("price_usd_gpu_hr", "float"),
+            ("currency", "text"),
+            ("available_gpu_count_lower_bound", "int"),
+            ("is_available", "bool"),
+            ("source_availability_status", "text"),
+            ("source_stock_status", "text"),
+            ("country", "text"),
+            ("region", "text"),
+            ("cloud_type", "text"),
+            ("location_ids_json", "text"),
+            ("selection_fingerprint", "text"),
+            ("native_selection_json", "text"),
+            ("query_scope_json", "text"),
+            ("response_complete", "bool"),
+            ("is_spot", "bool"),
+            ("is_secure", "bool"),
+            ("gpu_socket", "text"),
+            ("price_is_variable", "bool"),
+            ("minimum_executable_price_usd_instance_hr", "float"),
+            ("required_resource_price_usd_instance_hr", "float"),
+            ("price_basis", "text"),
+            ("raw_ref", "text"),
+            ("raw_hash", "text"),
+            ("source_run_id", "text"),
+            ("source_manifest_ref", "text"),
+            ("source_normalized_ref", "text"),
+            ("methodology_version", "text"),
+            ("schema_version", "text"),
+        ),
+    )
+
+
+def _request_schema(pa: Any) -> Any:
+    return _schema(
+        pa,
+        (
+            ("request_id", "text"),
+            ("plan_id", "text"),
+            ("candidate_observation_id", "text"),
+            ("preflight_observation_id", "text"),
+            ("preflight_batch_id", "text"),
+            ("source_offer_id", "text"),
+            ("market_product_key", "text"),
+            ("acquisition_connector", "text"),
+            ("capacity_provider", "text"),
+            ("operation", "text"),
+            ("gpu_model", "text"),
+            ("gpu_count", "int"),
+            ("selected_price_usd_gpu_hr", "float"),
+            ("selected_price_usd_instance_hr", "float"),
+            ("max_hourly_usd", "float"),
+            ("runtime_minutes", "int"),
+            ("expected_max_cost_usd", "float"),
+            ("request_hash", "text"),
+            ("provider_request_json", "text"),
+            ("created_at", "time"),
+            ("state", "text"),
+        ),
+    )
+
+
+def _attempt_schema(pa: Any) -> Any:
+    return _schema(
+        pa,
+        (
+            ("attempt_id", "text"),
+            ("request_id", "text"),
+            ("attempt_number", "int"),
+            ("state", "text"),
+            ("started_at", "time"),
+            ("completed_at", "time"),
+            ("provider_resource_id", "text"),
+            ("error", "text"),
+        ),
+    )
+
+
+def _allocation_schema(pa: Any) -> Any:
+    return _schema(
+        pa,
+        (
+            ("allocation_id", "text"),
+            ("request_id", "text"),
+            ("successful_attempt_id", "text"),
+            ("acquisition_connector", "text"),
+            ("capacity_provider", "text"),
+            ("provider_resource_id", "text"),
+            ("state", "text"),
+            ("realized_price_usd_gpu_hr", "float"),
+            ("realized_price_usd_instance_hr", "float"),
+            ("created_at", "time"),
+            ("terminate_at", "time"),
+            ("terminated_at", "time"),
+            ("updated_at", "time"),
+        ),
+    )
+
+
+def _telemetry_schema(pa: Any) -> Any:
+    return _schema(
+        pa,
+        (
+            ("sample_id", "text"),
+            ("host_id", "text"),
+            ("observed_at", "time"),
+            ("gpu_count_detected", "int"),
+            ("gpu_utilization_pct", "float"),
+            ("gpu_memory_used_mb", "int"),
+            ("gpu_memory_total_mb", "int"),
+            ("gpu_temperature_c", "int"),
+            ("gpu_power_draw_w", "float"),
+            ("cpu_utilization_pct", "float"),
+            ("memory_used_mb", "int"),
+            ("memory_mb", "int"),
+            ("disk_free_gb", "int"),
+            ("error", "text"),
+        ),
+    )
+
+
+def _verification_schema(pa: Any) -> Any:
+    return _schema(
+        pa,
+        (
+            ("verification_id", "text"),
+            ("host_id", "text"),
+            ("observed_at", "time"),
+            ("readiness", "text"),
+            ("expected_gpu_count", "int"),
+            ("detected_gpu_count", "int"),
+            ("inspection_json", "text"),
+            ("checks_json", "text"),
+        ),
     )
 
 
 def _machine_schema(pa: Any) -> Any:
-    return pa.schema(
-        [
-            ("host_id", pa.string()),
-            ("provider", pa.string()),
-            ("provider_resource_id", pa.string()),
-            ("name", pa.string()),
-            ("state", pa.string()),
-            ("gpu_model", pa.string()),
-            ("gpu_count", pa.int64()),
-            ("price_usd_gpu_hr", pa.float64()),
-            ("price_usd_instance_hr", pa.float64()),
-            ("created_at", pa.timestamp("us", tz="UTC")),
-            ("terminate_at", pa.timestamp("us", tz="UTC")),
-            ("ssh_ready", pa.bool_()),
-            ("ssh_host", pa.string()),
-            ("ssh_port", pa.int64()),
-            ("ssh_user", pa.string()),
-        ]
+    return _schema(
+        pa,
+        (
+            ("host_id", "text"),
+            ("allocation_id", "text"),
+            ("name", "text"),
+            ("state", "text"),
+            ("gpu_model", "text"),
+            ("gpu_count", "int"),
+            ("created_at", "time"),
+            ("ssh_ready", "bool"),
+            ("ssh_host", "text"),
+            ("ssh_port", "int"),
+            ("ssh_user", "text"),
+        ),
     )
 
 
 def _machine_row(machine: FleetMachine) -> dict[str, Any]:
     return {
         "host_id": machine.host_id,
-        "provider": machine.provider,
-        "provider_resource_id": machine.provider_resource_id,
+        "allocation_id": machine.allocation_id,
         "name": machine.name,
         "state": machine.state,
         "gpu_model": machine.gpu_model,
         "gpu_count": machine.gpu_count,
-        "price_usd_gpu_hr": machine.price_usd_gpu_hr,
-        "price_usd_instance_hr": machine.price_usd_instance_hr,
         "created_at": machine.created_at,
-        "terminate_at": machine.terminate_at,
         "ssh_ready": machine.ssh is not None,
         "ssh_host": machine.ssh.host if machine.ssh else None,
         "ssh_port": machine.ssh.port if machine.ssh else None,
         "ssh_user": machine.ssh.user if machine.ssh else None,
     }
-
-
-def _gpu_family(model: str) -> str | None:
-    upper = model.upper()
-    return next(
-        (
-            family
-            for family in ("H100", "H200", "B200", "B300", "A100")
-            if upper == family or upper.startswith(f"{family}_")
-        ),
-        None,
-    )
 
 
 def _sqlite(value: Any) -> Any:

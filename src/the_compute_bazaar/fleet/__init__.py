@@ -2,12 +2,19 @@
 
 from .inspect import FleetInspectError, FleetInspector
 from .monitor import FleetMonitor, FleetMonitorState
-from .models import FleetDoctorResult, FleetInspection, FleetMachine, SshEndpoint
+from .models import (
+    FleetDoctorResult,
+    FleetHealthResult,
+    FleetInspection,
+    FleetMachine,
+    SshEndpoint,
+)
 from .registry import FleetRegistry
 from .service import FleetService
 
 __all__ = [
     "FleetDoctorResult",
+    "FleetHealthResult",
     "FleetInspectError",
     "FleetInspection",
     "FleetInspector",

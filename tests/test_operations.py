@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -13,9 +15,8 @@ from the_compute_bazaar.fleet.models import FleetInspection, GpuDevice
 from the_compute_bazaar.offers import OfferService
 from the_compute_bazaar.operations import OperationalLedger
 from the_compute_bazaar.prices.datafusion import DataFusionEngine
-from the_compute_bazaar.provider_execution import LaunchReceipt
+from the_compute_bazaar.provider_execution import RunpodExecutor
 from the_compute_bazaar.provisioning import LaunchPlanner
-from tests.test_fleet import machine
 from tests.test_offers import FakeRunpodClient
 
 
@@ -30,24 +31,54 @@ class OperationalLedgerTest(unittest.TestCase):
                 runpod_client=FakeRunpodClient(),
                 ledger=ledger,
             )
-            offer = service.list_offers(providers=["runpod"]).observations[0]
+            offer = next(
+                row
+                for row in service.list_offers(providers=["runpod"]).observations
+                if row.cloud_type == "secure"
+            )
             plan = LaunchPlanner(service).plan(
                 offer.source_offer_id,
                 name="fleet-h100-01",
                 image="runpod/pytorch:latest",
             )
-            selected = machine(root / "id_ed25519")
-            registry.put(selected)
-            receipt = LaunchReceipt(
-                machine=selected,
-                plan_id=plan.plan_id,
-                launched_at=selected.created_at,
-                terminate_at=selected.terminate_at,
+            identity = root / "id_ed25519"
+            identity.write_text("test", encoding="utf-8")
+
+            def fake_runner(
+                command: list[str], **_: object
+            ) -> subprocess.CompletedProcess[str]:
+                payload = (
+                    {"id": "pod-123", "desiredStatus": "RUNNING"}
+                    if command[1:3] == ["pod", "create"]
+                    else {
+                        "id": "pod-123",
+                        "ip": "203.0.113.10",
+                        "port": 22123,
+                        "ssh_command": "ssh root@203.0.113.10 -p 22123",
+                    }
+                )
+                return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+
+            receipt = RunpodExecutor(
+                api_key="configured",
+                registry=registry,
+                runner=fake_runner,
+                identity_file=str(identity),
+                ledger=ledger,
+            ).execute(
+                plan,
+                runtime_minutes=30,
                 max_hourly_usd=3,
-                expected_max_cost_usd=1.245,
-                command=("runpodctl",),
+                confirm_spend=True,
             )
-            ledger.record_launch(plan, receipt)
+            selected = receipt.machine
+            sibling = selected.model_copy(
+                update={
+                    "host_id": "runpod:pod-123/node-2",
+                    "name": "fleet-h100-02",
+                }
+            )
+            registry.put(sibling)
 
             inspection = FleetInspection(
                 machine=selected,
@@ -70,53 +101,72 @@ class OperationalLedgerTest(unittest.TestCase):
                 ),
             )
             doctor = FleetService().doctor_inspection(inspection)
-            ledger.record_inspection(inspection, doctor)
+            ledger.record_telemetry(inspection)
 
-            engine = DataFusionEngine()
-            tables = ledger.arrow_tables()
-            for name, table in tables.items():
-                engine.register_arrow_table(f"_local_{name}", table)
-            engine.create_schema("silver")
-            engine.create_view(
-                "silver",
-                "offer_observations",
-                "select * from _local_offer_observations",
+            before_rows = _query_delivery_facts(ledger)
+            self.assertEqual(len(before_rows), 2)
+            before_verification = next(
+                row for row in before_rows if row["host_id"] == selected.host_id
             )
-            engine.create_schema("fleet")
-            for name in ("machines", "allocations", "observations"):
-                engine.create_view(
-                    "fleet",
-                    name,
-                    f"select * from _local_fleet_{name}",
-                )
-            engine.create_schema("gold")
-            benchmark = pa.Table.from_pylist(
-                [
-                    {
-                        "benchmark_family_id": "H100",
-                        "benchmark_usd_gpu_hr": 2.0,
-                        "gold_observed_at": datetime(2026, 8, 10, 11, tzinfo=UTC),
-                    }
-                ]
-            )
-            engine.register_arrow_table("_benchmark_history", benchmark)
-            engine.create_view(
-                "gold",
-                "fact_gpu_price_index_history",
-                "select * from _benchmark_history",
-            )
-            engine.create_view(
-                "gold",
-                "fact_market_to_fleet",
-                _market_to_fleet_sql(),
+            self.assertIsNone(before_verification["latest_readiness"])
+            self.assertIsNone(before_verification["first_ready_at"])
+
+            ledger.record_capacity_verification(inspection, doctor)
+            delivered = next(
+                row
+                for row in _query_delivery_facts(ledger)
+                if row["host_id"] == selected.host_id
             )
 
-            rows = engine.query("select * from gold.fact_market_to_fleet")
+            self.assertEqual(delivered["latest_readiness"], "ready")
+            self.assertEqual(delivered["verification_count"], 1)
+            self.assertEqual(delivered["benchmark_usd_gpu_hr"], 2.0)
+            self.assertAlmostEqual(delivered["selected_vs_benchmark_pct"], 24.5)
+            self.assertEqual(
+                delivered["candidate_observation_id"], plan.candidate_observation_id
+            )
+            self.assertEqual(
+                delivered["preflight_observation_id"], plan.preflight_observation_id
+            )
 
-            self.assertEqual(len(rows), 1)
-            self.assertEqual(rows[0]["latest_readiness"], "ready")
-            self.assertEqual(rows[0]["benchmark_usd_gpu_hr"], 2.0)
-            self.assertAlmostEqual(rows[0]["selected_vs_benchmark_pct"], 24.5)
+
+def _query_delivery_facts(ledger: OperationalLedger) -> list[dict[str, object]]:
+    engine = DataFusionEngine()
+    for name, table in ledger.arrow_tables().items():
+        engine.register_arrow_table(f"_local_{name}", table)
+    engine.create_schema("silver")
+    engine.create_view(
+        "silver",
+        "offer_observations",
+        "select * from _local_offer_observations",
+    )
+    engine.create_schema("fleet")
+    for view, source in {
+        "nodes": "fleet_nodes",
+        "allocations": "allocations",
+        "telemetry": "fleet_telemetry",
+        "capacity_verifications": "capacity_verifications",
+        "provisioning_requests": "provisioning_requests",
+    }.items():
+        engine.create_view("fleet", view, f"select * from _local_{source}")
+    engine.create_schema("gold")
+    benchmark = pa.Table.from_pylist(
+        [
+            {
+                "benchmark_family_id": "H100",
+                "benchmark_usd_gpu_hr": 2.0,
+                "gold_observed_at": datetime(2026, 8, 10, 11, tzinfo=UTC),
+            }
+        ]
+    )
+    engine.register_arrow_table("_benchmark_history", benchmark)
+    engine.create_view(
+        "gold",
+        "fact_gpu_price_index_history",
+        "select * from _benchmark_history",
+    )
+    engine.create_view("gold", "fact_market_to_fleet", _market_to_fleet_sql())
+    return engine.query("select * from gold.fact_market_to_fleet order by host_id")
 
 
 if __name__ == "__main__":

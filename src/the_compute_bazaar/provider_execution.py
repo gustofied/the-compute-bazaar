@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 import subprocess
@@ -14,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from .fleet import FleetMachine, FleetRegistry, SshEndpoint
-from .provisioning import LaunchPlan
+from .provisioning import Allocation, LaunchPlan, ProvisioningRequest
 
 if TYPE_CHECKING:
     from .operations import OperationalLedger
@@ -40,6 +41,9 @@ class LaunchReceipt(BaseModel):
 
     machine: FleetMachine
     plan_id: str
+    request_id: str
+    attempt_id: str
+    allocation_id: str
     launched_at: datetime
     terminate_at: datetime
     max_hourly_usd: float = Field(gt=0)
@@ -49,13 +53,16 @@ class LaunchReceipt(BaseModel):
 
     def payload(self) -> dict[str, Any]:
         return {
-            "contract": "compute-bazaar.launch-receipt.v1",
+            "contract": "compute-bazaar.launch-receipt.v2",
             "observed_at": self.launched_at,
             "rows": [
                 {
                     **self.machine.row(),
                     "expected_max_cost_usd": self.expected_max_cost_usd,
                     "plan_id": self.plan_id,
+                    "request_id": self.request_id,
+                    "attempt_id": self.attempt_id,
+                    "allocation_id": self.allocation_id,
                 }
             ],
             "receipt": self.model_dump(mode="json"),
@@ -96,18 +103,24 @@ class RunpodExecutor:
         max_hourly_usd: float,
         confirm_spend: bool,
         wait_timeout: str = "10m",
+        preflight_max_age_seconds: int = 60,
     ) -> LaunchReceipt:
         _validate_execution(
             plan,
             runtime_minutes=runtime_minutes,
             max_hourly_usd=max_hourly_usd,
             confirm_spend=confirm_spend,
+            preflight_max_age_seconds=preflight_max_age_seconds,
         )
         if not self.api_key:
             raise LaunchExecutionError("RUNPOD_API_KEY is not configured")
         if not Path(self.identity_file).is_file():
             raise LaunchExecutionError(
                 f"RunPod SSH key not found: {self.identity_file}"
+            )
+        if self.ledger is None:
+            raise LaunchExecutionError(
+                "Paid launch requires the private operational ledger"
             )
 
         launched_at = datetime.now(UTC)
@@ -117,36 +130,86 @@ class RunpodExecutor:
             terminate_at=terminate_at,
             wait_timeout=wait_timeout,
         )
+        request = ProvisioningRequest.from_plan(
+            plan,
+            runtime_minutes=runtime_minutes,
+            max_hourly_usd=max_hourly_usd,
+            created_at=launched_at,
+        )
+        try:
+            attempt = self.ledger.begin_provisioning(request)
+        except RuntimeError as exc:
+            raise LaunchExecutionError(str(exc)) from exc
         warnings: list[str] = []
         try:
             payload = self._run_json(command)
         except RunpodctlError as exc:
             payload = exc.payload
-            if not _find_text(payload, "id", "podId", "pod_id"):
+            pod_id = _find_text(payload, "id", "podId", "pod_id")
+            if not pod_id:
+                self.ledger.complete_provisioning_attempt(
+                    attempt.attempt_id,
+                    state="uncertain",
+                    error=str(exc),
+                )
                 raise
             warnings.append(f"Pod created but the readiness wait ended: {exc}")
+        except (LaunchExecutionError, OSError) as exc:
+            self.ledger.complete_provisioning_attempt(
+                attempt.attempt_id,
+                state="uncertain",
+                error=str(exc),
+            )
+            raise LaunchExecutionError(str(exc)) from exc
         pod_id = _find_text(payload, "id", "podId", "pod_id")
         if not pod_id:
-            raise LaunchExecutionError("RunPod created a Pod but returned no Pod ID")
+            message = "RunPod returned no Pod ID; creation state is uncertain"
+            self.ledger.complete_provisioning_attempt(
+                attempt.attempt_id,
+                state="uncertain",
+                error=message,
+            )
+            raise LaunchExecutionError(message)
+
+        self.ledger.complete_provisioning_attempt(
+            attempt.attempt_id,
+            state="succeeded",
+            provider_resource_id=pod_id,
+        )
+        allocation_id = "allocation-" + hashlib.sha256(
+            f"{request.request_id}\x1f{pod_id}".encode()
+        ).hexdigest()[:16]
+        allocation = Allocation(
+            allocation_id=allocation_id,
+            request_id=request.request_id,
+            successful_attempt_id=attempt.attempt_id,
+            acquisition_connector=plan.source_connector,
+            capacity_provider=plan.capacity_provider,
+            provider_resource_id=pod_id,
+            state=_machine_state(_find_text(payload, "desiredStatus", "status")),
+            created_at=launched_at,
+            terminate_at=terminate_at,
+            updated_at=launched_at,
+        )
+        self.ledger.record_allocation(allocation)
 
         name = str(plan.request["name"])
         machine = FleetMachine(
             host_id=f"runpod:{pod_id}",
-            provider="runpod",
-            provider_resource_id=pod_id,
+            allocation_id=allocation_id,
             name=name,
-            state=_machine_state(_find_text(payload, "desiredStatus", "status")),
+            state=allocation.state,
             gpu_model=plan.gpu_model,
             gpu_count=plan.gpu_count,
-            price_usd_gpu_hr=plan.price_usd_gpu_hr,
-            price_usd_instance_hr=plan.price_usd_instance_hr,
             created_at=launched_at,
-            terminate_at=terminate_at,
         )
         self.registry.put(machine)
         receipt = LaunchReceipt(
             machine=machine,
             plan_id=plan.plan_id,
+            request_id=request.request_id,
+            attempt_id=attempt.attempt_id,
+            allocation_id=allocation_id,
             launched_at=launched_at,
             terminate_at=terminate_at,
             max_hourly_usd=max_hourly_usd,
@@ -156,19 +219,14 @@ class RunpodExecutor:
             ),
             command=tuple(command),
         )
-        if self.ledger:
-            self.ledger.record_launch(plan, receipt)
-
         try:
-            machine = self.resolve_ssh(machine, record=False)
+            machine = self.resolve_ssh(machine)
         except (KeyError, TypeError, ValueError, LaunchExecutionError) as exc:
             warnings.append(f"Pod created; SSH endpoint is not ready: {exc}")
 
         receipt = receipt.model_copy(
             update={"machine": machine, "warnings": tuple(warnings)}
         )
-        if self.ledger:
-            self.ledger.record_launch(plan, receipt)
         return receipt
 
     def resolve_ssh(
@@ -177,12 +235,20 @@ class RunpodExecutor:
         *,
         record: bool = True,
     ) -> FleetMachine:
-        if machine.provider != "runpod":
+        if self.ledger is None:
+            raise LaunchExecutionError("Fleet operation requires the private ledger")
+        try:
+            allocation = self.ledger.allocation_for_machine(machine)
+        except KeyError as exc:
+            raise LaunchExecutionError(str(exc)) from exc
+        connector = str(allocation["acquisition_connector"])
+        if connector != "runpod":
             raise LaunchExecutionError(
-                f"SSH resolution is not implemented for {machine.provider}"
+                f"SSH resolution is not implemented for {connector}"
             )
+        provider_resource_id = str(allocation["provider_resource_id"])
         payload = self._run_json(
-            [self.binary, "ssh", "info", machine.provider_resource_id]
+            [self.binary, "ssh", "info", provider_resource_id]
         )
         resolved = machine.model_copy(
             update={
@@ -196,22 +262,30 @@ class RunpodExecutor:
             }
         )
         self.registry.put(resolved)
-        if record and self.ledger:
+        if record:
             self.ledger.record_machine_state(resolved)
         return resolved
 
     def terminate(self, machine: FleetMachine, *, confirm: bool) -> FleetMachine:
         if not confirm:
             raise LaunchExecutionError("Termination requires --confirm")
-        if machine.provider != "runpod":
+        if self.ledger is None:
+            raise LaunchExecutionError("Fleet operation requires the private ledger")
+        try:
+            allocation = self.ledger.allocation_for_machine(machine)
+        except KeyError as exc:
+            raise LaunchExecutionError(str(exc)) from exc
+        connector = str(allocation["acquisition_connector"])
+        if connector != "runpod":
             raise LaunchExecutionError(
-                f"Fleet termination is not implemented for {machine.provider}"
+                f"Fleet termination is not implemented for {connector}"
             )
-        self._run_json([self.binary, "pod", "delete", machine.provider_resource_id])
+        self._run_json(
+            [self.binary, "pod", "delete", str(allocation["provider_resource_id"])]
+        )
         terminated = machine.model_copy(update={"state": "terminated", "ssh": None})
         self.registry.put(terminated)
-        if self.ledger:
-            self.ledger.record_machine_state(terminated)
+        self.ledger.record_machine_state(terminated)
         return terminated
 
     def _create_command(
@@ -295,8 +369,9 @@ def _validate_execution(
     runtime_minutes: int,
     max_hourly_usd: float,
     confirm_spend: bool,
+    preflight_max_age_seconds: int = 60,
 ) -> None:
-    if plan.provider != "runpod":
+    if plan.source_connector != "runpod":
         raise LaunchExecutionError("Only RunPod execution is implemented")
     if plan.status != "ready_for_confirmation":
         missing = ", ".join(plan.required_inputs)
@@ -311,6 +386,11 @@ def _validate_execution(
         raise LaunchExecutionError(
             f"Current instance price ${plan.price_usd_instance_hr:g}/hr exceeds "
             f"the ${max_hourly_usd:g}/hr ceiling"
+        )
+    age = datetime.now(UTC) - plan.observed_at.astimezone(UTC)
+    if age > timedelta(seconds=preflight_max_age_seconds):
+        raise LaunchExecutionError(
+            f"Preflight is {int(age.total_seconds())} seconds old; plan it again"
         )
 
 

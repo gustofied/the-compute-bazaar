@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -28,11 +30,24 @@ class ProviderStatus:
 
 
 @dataclass(frozen=True)
+class ProviderReadBatch:
+    batch_id: str
+    observed_at: datetime
+    source_connector: str
+    purpose: str
+    query_scope: dict[str, Any]
+    raw_ref: str
+    raw_hash: str
+    sanitized_payload: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class OfferBatch:
     batch_id: str
     observed_at: datetime
     observations: tuple[OfferObservation, ...]
     providers: tuple[ProviderStatus, ...]
+    provider_reads: tuple[ProviderReadBatch, ...] = ()
 
     def payload(self) -> dict[str, Any]:
         return {
@@ -105,9 +120,10 @@ class OfferService:
         observations: list[OfferObservation] = []
         displayed: list[OfferObservation] = []
         statuses: list[ProviderStatus] = []
+        provider_reads: list[ProviderReadBatch] = []
         for provider in selected:
             try:
-                rows = (
+                rows, provider_read = (
                     self._runpod_observations(
                         observed_at, batch_id, purpose, query_scope
                     )
@@ -130,6 +146,7 @@ class OfferService:
                 row for row in matched if include_unavailable or row.available
             )
             statuses.append(ProviderStatus(provider, "ok", len(matched)))
+            provider_reads.append(provider_read)
 
         observations.sort(key=_offer_sort_key)
         displayed.sort(key=_offer_sort_key)
@@ -138,9 +155,10 @@ class OfferService:
             observed_at=observed_at,
             observations=tuple(observations),
             providers=tuple(statuses),
+            provider_reads=tuple(provider_reads),
         )
         if self.ledger:
-            self.ledger.record_offer_observations(complete)
+            self.ledger.record_offer_batch(complete)
         return replace(complete, observations=tuple(displayed[:limit]))
 
     def inspect(self, offer_id: str) -> OfferObservation:
@@ -163,13 +181,18 @@ class OfferService:
             f"Offer {offer_id} is no longer visible. Run: compute-bazaar offers list"
         )
 
+    def candidate_observation_id(self, offer_id: str) -> str | None:
+        if not self.ledger:
+            return None
+        return self.ledger.latest_offer_observation_id(offer_id)
+
     def _runpod_observations(
         self,
         observed_at: datetime,
         batch_id: str,
         purpose: str,
         query_scope: dict[str, Any],
-    ) -> list[OfferObservation]:
+    ) -> tuple[list[OfferObservation], ProviderReadBatch]:
         if self._runpod_client is None:
             try:
                 from .prices.providers.runpod import RunpodClient
@@ -181,7 +204,22 @@ class OfferService:
         from .prices.providers.runpod import normalize_live_market
 
         fetched = self._runpod_client.fetch_live_market()
-        return normalize_live_market(
+        payload = _sanitized_payload(
+            getattr(
+                fetched,
+                "raw_payload",
+                {"gpu_types": fetched.gpu_types, "data_centers": fetched.data_centers},
+            )
+        )
+        provider_read = _provider_read(
+            batch_id=batch_id,
+            observed_at=observed_at,
+            connector="runpod",
+            purpose=purpose,
+            query_scope=query_scope,
+            payload=payload,
+        )
+        rows = normalize_live_market(
             fetched.gpu_types,
             fetched.data_centers,
             observed_at=observed_at,
@@ -189,6 +227,13 @@ class OfferService:
             purpose=purpose,
             query_scope=query_scope,
         )
+        return [
+            row.with_context(
+                raw_ref=provider_read.raw_ref,
+                raw_hash=provider_read.raw_hash,
+            )
+            for row in rows
+        ], provider_read
 
     def _verda_observations(
         self,
@@ -196,7 +241,7 @@ class OfferService:
         batch_id: str,
         purpose: str,
         query_scope: dict[str, Any],
-    ) -> list[OfferObservation]:
+    ) -> tuple[list[OfferObservation], ProviderReadBatch]:
         if (
             not self.verda_access_token
             and not (self.verda_client_id and self.verda_client_secret)
@@ -221,7 +266,25 @@ class OfferService:
             raise _CredentialsRequired(
                 "Verda credentials are valid for pricing only, not live availability."
             )
-        return normalize_live_catalog(
+        payload = _sanitized_payload(
+            getattr(
+                fetched,
+                "raw_payload",
+                {
+                    "instance_types": fetched.instance_types,
+                    "availability": fetched.availability,
+                },
+            )
+        )
+        provider_read = _provider_read(
+            batch_id=batch_id,
+            observed_at=observed_at,
+            connector="verda",
+            purpose=purpose,
+            query_scope=query_scope,
+            payload=payload,
+        )
+        rows = normalize_live_catalog(
             fetched.instance_types,
             fetched.availability,
             observed_at=observed_at,
@@ -229,6 +292,13 @@ class OfferService:
             purpose=purpose,
             query_scope=query_scope,
         )
+        return [
+            row.with_context(
+                raw_ref=provider_read.raw_ref,
+                raw_hash=provider_read.raw_hash,
+            )
+            for row in rows
+        ], provider_read
 
 
 class _CredentialsRequired(RuntimeError):
@@ -280,3 +350,41 @@ def _offer_sort_key(row: OfferObservation) -> tuple[bool, float, str, str]:
         row.provider,
         row.source_offer_id,
     )
+
+
+def _provider_read(
+    *,
+    batch_id: str,
+    observed_at: datetime,
+    connector: str,
+    purpose: str,
+    query_scope: dict[str, Any],
+    payload: dict[str, Any],
+) -> ProviderReadBatch:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return ProviderReadBatch(
+        batch_id=batch_id,
+        observed_at=observed_at,
+        source_connector=connector,
+        purpose=purpose,
+        query_scope=query_scope,
+        raw_ref=f"sqlite://provider_read_batches/{batch_id}/{connector}",
+        raw_hash=hashlib.sha256(encoded).hexdigest(),
+        sanitized_payload=payload,
+    )
+
+
+def _sanitized_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): "[redacted]"
+            if any(
+                token in str(key).lower()
+                for token in ("authorization", "api_key", "token", "secret", "password")
+            )
+            else _sanitized_payload(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_sanitized_payload(item) for item in value]
+    return value

@@ -7,14 +7,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import Event, Lock, Thread
 
-from .models import FleetDoctorResult, FleetInspection, FleetMachine
+from .models import FleetHealthResult, FleetInspection, FleetMachine
 from .service import FleetService
 
 
 @dataclass(frozen=True)
 class FleetMonitorState:
     inspection: FleetInspection | None
-    doctor: FleetDoctorResult | None
+    health: FleetHealthResult | None
     polled_at: datetime
     error: str | None = None
     consecutive_failures: int = 0
@@ -69,13 +69,13 @@ class FleetMonitor:
             for future in as_completed(futures):
                 host_id = futures[future]
                 try:
-                    inspection, doctor = future.result()
+                    inspection, health = future.result()
                 except (
                     Exception
                 ) as exc:  # One failed host must not stop the fleet loop.
                     self._record_failure(host_id, str(exc))
                 else:
-                    self._record_success(host_id, inspection, doctor)
+                    self._record_success(host_id, inspection, health)
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -86,12 +86,12 @@ class FleetMonitor:
         self,
         host_id: str,
         inspection: FleetInspection,
-        doctor: FleetDoctorResult,
+        health: FleetHealthResult,
     ) -> None:
         with self._lock:
             self._states[host_id] = FleetMonitorState(
                 inspection=inspection,
-                doctor=doctor,
+                health=health,
                 polled_at=datetime.now(UTC),
             )
 
@@ -100,7 +100,7 @@ class FleetMonitor:
             previous = self._states.get(host_id)
             self._states[host_id] = FleetMonitorState(
                 inspection=previous.inspection if previous else None,
-                doctor=previous.doctor if previous else None,
+                health=previous.health if previous else None,
                 polled_at=datetime.now(UTC),
                 error=error,
                 consecutive_failures=(previous.consecutive_failures if previous else 0)

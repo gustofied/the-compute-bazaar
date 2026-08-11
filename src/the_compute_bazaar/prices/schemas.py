@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field, is_dataclass, replace
 from datetime import date, datetime, timezone
 from math import isfinite
@@ -106,6 +107,7 @@ class OfferObservation:
     response_complete: bool = True
     cloud_type: str | None = None
     location_ids: tuple[str, ...] = ()
+    market_product_key: str | None = None
     selection_fingerprint: str | None = None
     native_selection: dict[str, Any] = field(default_factory=dict)
     raw_hash: str | None = None
@@ -165,6 +167,8 @@ class OfferObservation:
             "exact_datacenter",
         }:
             raise ValueError("Unknown selection resolution")
+        if self.market_product_key is None:
+            object.__setattr__(self, "market_product_key", _market_product_key(self))
 
     def event_key(self) -> str:
         return f"{self.provider}:{self.gpu_model}:{self.source_offer_id}"
@@ -208,6 +212,7 @@ class OfferObservation:
             "provider": self.provider,
             "source_connector": self.source_connector or self.provider,
             "source_offer_id": self.source_offer_id,
+            "market_product_key": self.market_product_key,
             "gpu_raw_name": self.gpu_raw_name,
             "gpu_model": self.gpu_model,
             "gpu_count": self.gpu_count,
@@ -249,6 +254,38 @@ class OfferObservation:
 
     def to_dict(self) -> dict[str, Any]:
         return to_jsonable(self.row())
+
+
+def _market_product_key(observation: OfferObservation) -> str:
+    connector = observation.source_connector or observation.provider
+    price_kind = "spot" if observation.is_spot else "ondemand"
+    if connector == "runpod":
+        gpu_ids = observation.native_selection.get("gpuTypeIds") or ()
+        native = (
+            next(iter(gpu_ids), None)
+            or observation.metadata.get("gpu_type_id")
+            or observation.source_offer_id.split(":", 1)[0]
+        )
+        return f"runpod:{_key_part(native)}:{price_kind}"
+    if connector == "verda":
+        native = (
+            observation.native_selection.get("instance_type")
+            or observation.metadata.get("instance_type")
+            or observation.source_offer_id.split(":", 1)[0]
+        )
+        return f"verda:{_key_part(native)}:{price_kind}"
+    return ":".join(
+        (
+            _key_part(connector),
+            _key_part(observation.gpu_model),
+            str(observation.gpu_count),
+            price_kind,
+        )
+    )
+
+
+def _key_part(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(value).lower()).strip("_")
 
 
 @dataclass(frozen=True)

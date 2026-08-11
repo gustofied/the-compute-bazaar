@@ -5,12 +5,15 @@ import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 from the_compute_bazaar.data_catalog import ComputeBazaarCatalog
 from the_compute_bazaar.data_sync import inspect_lake
+from the_compute_bazaar.offers import OfferService
+from the_compute_bazaar.operations import OperationalLedger
 from the_compute_bazaar.portable_lake import build_portable_lake
 from the_compute_bazaar.prices.datafusion import DataFusionEngine
 from the_compute_bazaar.prices.gold import build_gold_market_tables
@@ -99,6 +102,56 @@ class DataFusionEngineTest(unittest.TestCase):
                 {"lium-market-1", "vast-market-1"},
             )
             self.assertEqual(benchmark["provider_count"], 2)
+
+            class DirectRunpodClient:
+                def fetch_live_market(self) -> SimpleNamespace:
+                    return SimpleNamespace(
+                        gpu_types=[
+                            {
+                                "id": "NVIDIA H100 80GB HBM3",
+                                "displayName": "H100 PCIe",
+                                "memoryInGb": 80,
+                                "secureCloud": True,
+                                "communityCloud": False,
+                                "securePrice": 2.75,
+                            }
+                        ],
+                        data_centers=[
+                            {
+                                "id": "EU-RO-1",
+                                "gpuAvailability": [
+                                    {
+                                        "gpuTypeId": "NVIDIA H100 80GB HBM3",
+                                        "stockStatus": "High",
+                                    }
+                                ],
+                            }
+                        ],
+                    )
+
+            ledger = OperationalLedger(root / "operations.sqlite3")
+            OfferService(
+                runpod_client=DirectRunpodClient(),
+                ledger=ledger,
+            ).list_offers(providers=["runpod"])
+            combined = ComputeBazaarCatalog(
+                lake_root=str(portable), operations=ledger
+            ).query(
+                """
+select observation_purpose, count(*) as observation_count
+from silver.offer_observations
+group by observation_purpose
+order by observation_purpose
+"""
+            )["rows"]
+
+            self.assertEqual(
+                combined,
+                [
+                    {"observation_purpose": "interactive", "observation_count": 1},
+                    {"observation_purpose": "scheduled", "observation_count": 2},
+                ],
+            )
             self.assertEqual(
                 inspect_lake(root=str(portable), kind="local", label="test")["status"],
                 "ready",

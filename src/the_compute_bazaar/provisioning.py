@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,9 +20,12 @@ class LaunchPlan(BaseModel):
 
     plan_id: str
     offer_id: str
-    offer_observation_id: str
-    offer_batch_id: str
-    provider: str
+    candidate_observation_id: str | None = None
+    preflight_observation_id: str
+    preflight_batch_id: str
+    market_product_key: str
+    source_connector: str
+    capacity_provider: str
     operation: Literal["create_pod", "create_instance"]
     endpoint: str
     observed_at: datetime
@@ -42,8 +45,10 @@ class LaunchPlan(BaseModel):
         return {
             "plan_id": self.plan_id,
             "offer_id": self.offer_id,
-            "offer_observation_id": self.offer_observation_id,
-            "provider": self.provider,
+            "candidate_observation_id": self.candidate_observation_id,
+            "preflight_observation_id": self.preflight_observation_id,
+            "source_connector": self.source_connector,
+            "capacity_provider": self.capacity_provider,
             "gpu_model": self.gpu_model,
             "gpu_count": self.gpu_count,
             "price_usd_gpu_hr": self.price_usd_gpu_hr,
@@ -58,12 +63,116 @@ class LaunchPlan(BaseModel):
 
     def payload(self) -> dict[str, Any]:
         return {
-            "contract": "compute-bazaar.launch-plan.v1",
+            "contract": "compute-bazaar.launch-plan.v2",
             "observed_at": self.observed_at,
             "rows": [self.row()],
             "plan": self.model_dump(mode="json"),
             "submitted": False,
         }
+
+
+class ProvisioningRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    request_id: str
+    plan_id: str
+    candidate_observation_id: str | None = None
+    preflight_observation_id: str
+    preflight_batch_id: str
+    source_offer_id: str
+    market_product_key: str
+    acquisition_connector: str
+    capacity_provider: str
+    operation: str
+    gpu_model: str
+    gpu_count: int = Field(ge=1)
+    selected_price_usd_gpu_hr: float = Field(gt=0)
+    selected_price_usd_instance_hr: float = Field(gt=0)
+    max_hourly_usd: float = Field(gt=0)
+    runtime_minutes: int = Field(ge=5, le=120)
+    expected_max_cost_usd: float = Field(gt=0)
+    request_hash: str
+    provider_request: dict[str, Any]
+    created_at: datetime
+    state: Literal["pending", "succeeded", "failed", "uncertain"] = "pending"
+
+    @classmethod
+    def from_plan(
+        cls,
+        plan: LaunchPlan,
+        *,
+        runtime_minutes: int,
+        max_hourly_usd: float,
+        created_at: datetime | None = None,
+    ) -> ProvisioningRequest:
+        created_at = created_at or datetime.now(UTC)
+        request_payload = {
+            "plan_id": plan.plan_id,
+            "candidate_observation_id": plan.candidate_observation_id,
+            "preflight_observation_id": plan.preflight_observation_id,
+            "runtime_minutes": runtime_minutes,
+            "max_hourly_usd": max_hourly_usd,
+            "provider_request": plan.request,
+        }
+        encoded = json.dumps(
+            request_payload, sort_keys=True, separators=(",", ":")
+        ).encode()
+        request_hash = hashlib.sha256(encoded).hexdigest()
+        return cls(
+            request_id=f"request-{request_hash[:16]}",
+            plan_id=plan.plan_id,
+            candidate_observation_id=plan.candidate_observation_id,
+            preflight_observation_id=plan.preflight_observation_id,
+            preflight_batch_id=plan.preflight_batch_id,
+            source_offer_id=plan.offer_id,
+            market_product_key=plan.market_product_key,
+            acquisition_connector=plan.source_connector,
+            capacity_provider=plan.capacity_provider,
+            operation=plan.operation,
+            gpu_model=plan.gpu_model,
+            gpu_count=plan.gpu_count,
+            selected_price_usd_gpu_hr=plan.price_usd_gpu_hr,
+            selected_price_usd_instance_hr=plan.price_usd_instance_hr,
+            max_hourly_usd=max_hourly_usd,
+            runtime_minutes=runtime_minutes,
+            expected_max_cost_usd=round(
+                plan.price_usd_instance_hr * runtime_minutes / 60, 4
+            ),
+            request_hash=request_hash,
+            provider_request=plan.request,
+            created_at=created_at,
+        )
+
+
+class ProvisioningAttempt(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    attempt_id: str
+    request_id: str
+    attempt_number: int = Field(ge=1)
+    state: Literal["pending", "succeeded", "failed", "uncertain"]
+    started_at: datetime
+    completed_at: datetime | None = None
+    provider_resource_id: str | None = None
+    error: str | None = None
+
+
+class Allocation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    allocation_id: str
+    request_id: str
+    successful_attempt_id: str
+    acquisition_connector: str
+    capacity_provider: str
+    provider_resource_id: str
+    state: str
+    realized_price_usd_gpu_hr: float | None = Field(default=None, gt=0)
+    realized_price_usd_instance_hr: float | None = Field(default=None, gt=0)
+    created_at: datetime
+    terminate_at: datetime | None = None
+    terminated_at: datetime | None = None
+    updated_at: datetime
 
 
 class LaunchPlanner:
@@ -89,19 +198,25 @@ class LaunchPlanner:
         if volume_gb < 0:
             raise ValueError("volume_gb cannot be negative")
 
+        candidate_observation_id = self.service.candidate_observation_id(offer_id)
         offer = self.service.inspect(offer_id)
         if not offer.available:
             raise ValueError(f"Offer {offer_id} is not currently available")
-        if offer.provider == "runpod":
+        connector = offer.source_connector or offer.provider
+        if connector == "runpod":
             return self._runpod_plan(
                 offer,
+                candidate_observation_id=candidate_observation_id,
                 name=name,
                 image=image,
                 disk_gb=disk_gb,
                 volume_gb=volume_gb,
             )
+        if connector != "verda":
+            raise ValueError(f"No acquisition connector for {connector}")
         return self._verda_plan(
             offer,
+            candidate_observation_id=candidate_observation_id,
             name=name,
             image=image,
             ssh_key_ids=ssh_key_ids,
@@ -112,6 +227,7 @@ class LaunchPlanner:
         self,
         offer: OfferObservation,
         *,
+        candidate_observation_id: str | None,
         name: str | None,
         image: str | None,
         disk_gb: int,
@@ -142,6 +258,7 @@ class LaunchPlanner:
             missing.append("image")
         return self._build(
             offer,
+            candidate_observation_id=candidate_observation_id,
             endpoint="https://rest.runpod.io/v1/pods",
             request=request,
             missing=missing,
@@ -156,6 +273,7 @@ class LaunchPlanner:
         self,
         offer: OfferObservation,
         *,
+        candidate_observation_id: str | None,
         name: str | None,
         image: str | None,
         ssh_key_ids: tuple[str, ...],
@@ -188,6 +306,7 @@ class LaunchPlanner:
             missing.append("ssh_key_id")
         return self._build(
             offer,
+            candidate_observation_id=candidate_observation_id,
             endpoint="https://api.verda.com/v1/instances",
             request=request,
             missing=missing,
@@ -202,13 +321,14 @@ class LaunchPlanner:
     def _build(
         offer: OfferObservation,
         *,
+        candidate_observation_id: str | None,
         endpoint: str,
         request: dict[str, Any],
         missing: list[str],
         credentials_configured: bool,
         checks: tuple[str, ...],
     ) -> LaunchPlan:
-        if not offer.observation_id or not offer.batch_id:
+        if not offer.observation_id or not offer.batch_id or not offer.market_product_key:
             raise ValueError("Preflight observation has no lineage")
         identity = json.dumps(
             {
@@ -223,9 +343,12 @@ class LaunchPlanner:
         return LaunchPlan(
             plan_id=plan_id,
             offer_id=offer.source_offer_id,
-            offer_observation_id=offer.observation_id,
-            offer_batch_id=offer.batch_id,
-            provider=offer.provider,
+            candidate_observation_id=candidate_observation_id,
+            preflight_observation_id=offer.observation_id,
+            preflight_batch_id=offer.batch_id,
+            market_product_key=offer.market_product_key,
+            source_connector=offer.source_connector or offer.provider,
+            capacity_provider=offer.provider,
             operation=offer.native_selection["operation"],
             endpoint=endpoint,
             observed_at=offer.observed_at,

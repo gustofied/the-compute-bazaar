@@ -4,6 +4,7 @@ import unittest
 import json
 import subprocess
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -12,12 +13,13 @@ import requests
 
 from the_compute_bazaar.fleet import FleetRegistry
 from the_compute_bazaar.offers import OfferService
+from the_compute_bazaar.operations import OperationalLedger
 from the_compute_bazaar.provider_execution import (
     LaunchExecutionError,
     RunpodExecutor,
 )
 from the_compute_bazaar.provisioning import LaunchPlanner
-from the_compute_bazaar.prices.providers.runpod import RunpodClient
+from the_compute_bazaar.prices.providers.runpod import RunpodClient, normalize_gpu_types
 
 
 class FakeRunpodClient:
@@ -77,7 +79,7 @@ class OfferServiceTest(unittest.TestCase):
         class Ledger:
             batch: Any = None
 
-            def record_offer_observations(self, batch: Any) -> None:
+            def record_offer_batch(self, batch: Any) -> None:
                 self.batch = batch
 
         ledger = Ledger()
@@ -97,7 +99,7 @@ class OfferServiceTest(unittest.TestCase):
         class Ledger:
             batch: Any = None
 
-            def record_offer_observations(self, batch: Any) -> None:
+            def record_offer_batch(self, batch: Any) -> None:
                 self.batch = batch
 
         class UnavailableRunpodClient(FakeRunpodClient):
@@ -190,6 +192,59 @@ class OfferServiceTest(unittest.TestCase):
         self.assertEqual(inspected.observation_resolution, "deployment_option")
         self.assertNotEqual(inspected.observation_id, visible.observation_id)
 
+    def test_scheduled_and_direct_reads_share_a_market_product_key(self) -> None:
+        observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+        scheduled, _ = normalize_gpu_types(
+            [
+                {
+                    "id": "NVIDIA H100 80GB HBM3",
+                    "displayName": "H100 PCIe",
+                    "memoryInGb": 80,
+                    "secureCloud": True,
+                    "lowestPrice": {
+                        "stockStatus": "High",
+                        "uninterruptablePrice": 2.49,
+                    },
+                }
+            ],
+            observed_at=observed_at,
+            raw_ref="raw.json",
+        )
+        direct = OfferService(runpod_client=FakeRunpodClient()).list_offers(
+            providers=["runpod"]
+        )
+
+        self.assertEqual(
+            scheduled[0].market_product_key,
+            direct.observations[0].market_product_key,
+        )
+
+    def test_direct_provider_evidence_is_sanitized_and_retained(self) -> None:
+        class RawRunpodClient(FakeRunpodClient):
+            def fetch_live_market(self) -> SimpleNamespace:
+                payload = super().fetch_live_market()
+                payload.raw_payload = {
+                    "authorization": "Bearer secret",
+                    "nested": {"api_key": "secret", "count": 1},
+                }
+                return payload
+
+        with tempfile.TemporaryDirectory() as temporary:
+            ledger = OperationalLedger(Path(temporary) / "operations.sqlite3")
+            OfferService(
+                runpod_client=RawRunpodClient(),
+                ledger=ledger,
+            ).list_offers(providers=["runpod"])
+
+            row = ledger.arrow_tables()["provider_read_batches"].to_pylist()[0]
+
+            self.assertTrue(row["raw_ref"].startswith("sqlite://"))
+            self.assertNotIn("secret", row["sanitized_payload_json"])
+            self.assertEqual(
+                json.loads(row["sanitized_payload_json"])["authorization"],
+                "[redacted]",
+            )
+
     def test_runpod_plan_uses_native_selection_without_submitting(self) -> None:
         service = OfferService(runpod_client=FakeRunpodClient())
         offer = service.list_offers(providers=["runpod"]).observations[0]
@@ -257,28 +312,32 @@ class OfferServiceTest(unittest.TestCase):
             )
 
     def test_runpod_execution_has_price_ceiling_and_provider_deadline(self) -> None:
-        service = OfferService(
-            runpod_api_key="configured",
-            runpod_client=FakeRunpodClient(),
-        )
-        offer = service.list_offers(providers=["runpod"]).observations[0]
-        plan = LaunchPlanner(service).plan(
-            offer.source_offer_id,
-            name="bazaar-h100-01",
-            image="runpod/pytorch:latest",
-        )
-
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             identity = root / "id_ed25519"
             identity.write_text("test", encoding="utf-8")
             calls: list[list[str]] = []
+            registry = FleetRegistry(root / "fleet")
+            ledger = OperationalLedger(root / "operations.sqlite3", registry=registry)
+            service = OfferService(
+                runpod_api_key="configured",
+                runpod_client=FakeRunpodClient(),
+                ledger=ledger,
+            )
+            offer = service.list_offers(providers=["runpod"]).observations[0]
+            plan = LaunchPlanner(service).plan(
+                offer.source_offer_id,
+                name="bazaar-h100-01",
+                image="runpod/pytorch:latest",
+            )
 
             def fake_runner(
                 command: list[str], **_: object
             ) -> subprocess.CompletedProcess[str]:
                 calls.append(command)
                 if command[1:3] == ["pod", "create"]:
+                    attempts = ledger.arrow_tables()["provisioning_attempts"].to_pylist()
+                    self.assertEqual(attempts[0]["state"], "pending")
                     output = {"id": "pod-123", "desiredStatus": "RUNNING"}
                 else:
                     output = {
@@ -291,13 +350,13 @@ class OfferServiceTest(unittest.TestCase):
                     }
                 return subprocess.CompletedProcess(command, 0, json.dumps(output), "")
 
-            registry = FleetRegistry(root / "fleet")
             receipt = RunpodExecutor(
                 api_key="configured",
                 registry=registry,
                 runner=fake_runner,
                 binary="runpodctl",
                 identity_file=str(identity),
+                ledger=ledger,
             ).execute(
                 plan,
                 runtime_minutes=30,
@@ -313,23 +372,33 @@ class OfferServiceTest(unittest.TestCase):
             self.assertEqual(receipt.machine.ssh.host, "203.0.113.10")
             self.assertEqual(registry.get("runpod:pod-123"), receipt.machine)
             self.assertEqual(receipt.expected_max_cost_usd, 0.995)
+            self.assertEqual(receipt.machine.allocation_id, receipt.allocation_id)
+            request = ledger.arrow_tables()["provisioning_requests"].to_pylist()[0]
+            self.assertEqual(
+                request["candidate_observation_id"], plan.candidate_observation_id
+            )
+            self.assertEqual(
+                request["preflight_observation_id"], plan.preflight_observation_id
+            )
 
     def test_wait_timeout_still_registers_the_paid_pod(self) -> None:
-        service = OfferService(
-            runpod_api_key="configured",
-            runpod_client=FakeRunpodClient(),
-        )
-        offer = service.list_offers(providers=["runpod"]).observations[0]
-        plan = LaunchPlanner(service).plan(
-            offer.source_offer_id,
-            name="bazaar-h100-01",
-            image="runpod/pytorch:latest",
-        )
-
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             identity = root / "id_ed25519"
             identity.write_text("test", encoding="utf-8")
+            registry = FleetRegistry(root / "fleet")
+            ledger = OperationalLedger(root / "operations.sqlite3", registry=registry)
+            service = OfferService(
+                runpod_api_key="configured",
+                runpod_client=FakeRunpodClient(),
+                ledger=ledger,
+            )
+            offer = service.list_offers(providers=["runpod"]).observations[0]
+            plan = LaunchPlanner(service).plan(
+                offer.source_offer_id,
+                name="bazaar-h100-01",
+                image="runpod/pytorch:latest",
+            )
 
             def fake_runner(
                 command: list[str], **_: object
@@ -342,12 +411,12 @@ class OfferServiceTest(unittest.TestCase):
                 pending = {"error": "pod not ready", "id": "pod-123"}
                 return subprocess.CompletedProcess(command, 0, json.dumps(pending), "")
 
-            registry = FleetRegistry(root / "fleet")
             receipt = RunpodExecutor(
                 api_key="configured",
                 registry=registry,
                 runner=fake_runner,
                 identity_file=str(identity),
+                ledger=ledger,
             ).execute(
                 plan,
                 runtime_minutes=30,
@@ -378,6 +447,82 @@ class OfferServiceTest(unittest.TestCase):
                 max_hourly_usd=1,
                 confirm_spend=True,
             )
+
+    def test_runpod_execution_rejects_a_stale_preflight(self) -> None:
+        service = OfferService(
+            runpod_api_key="configured",
+            runpod_client=FakeRunpodClient(),
+        )
+        offer = service.list_offers(providers=["runpod"]).observations[0]
+        plan = LaunchPlanner(service).plan(
+            offer.source_offer_id,
+            name="bazaar-h100-01",
+            image="runpod/pytorch:latest",
+        ).model_copy(
+            update={"observed_at": datetime.now(UTC) - timedelta(minutes=2)}
+        )
+
+        with self.assertRaisesRegex(LaunchExecutionError, "plan it again"):
+            RunpodExecutor(api_key="configured").execute(
+                plan,
+                runtime_minutes=30,
+                max_hourly_usd=3,
+                confirm_spend=True,
+            )
+
+    def test_uncertain_create_blocks_a_duplicate_provider_call(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            identity = root / "id_ed25519"
+            identity.write_text("test", encoding="utf-8")
+            registry = FleetRegistry(root / "fleet")
+            ledger = OperationalLedger(root / "operations.sqlite3", registry=registry)
+            service = OfferService(
+                runpod_api_key="configured",
+                runpod_client=FakeRunpodClient(),
+                ledger=ledger,
+            )
+            offer = service.list_offers(providers=["runpod"]).observations[0]
+            plan = LaunchPlanner(service).plan(
+                offer.source_offer_id,
+                name="bazaar-h100-01",
+                image="runpod/pytorch:latest",
+            )
+            calls = 0
+
+            def failing_runner(
+                command: list[str], **_: object
+            ) -> subprocess.CompletedProcess[str]:
+                nonlocal calls
+                calls += 1
+                return subprocess.CompletedProcess(command, 1, "", "network lost")
+
+            executor = RunpodExecutor(
+                api_key="configured",
+                registry=registry,
+                runner=failing_runner,
+                identity_file=str(identity),
+                ledger=ledger,
+            )
+
+            with self.assertRaises(LaunchExecutionError):
+                executor.execute(
+                    plan,
+                    runtime_minutes=30,
+                    max_hourly_usd=3,
+                    confirm_spend=True,
+                )
+            with self.assertRaisesRegex(LaunchExecutionError, "uncertain"):
+                executor.execute(
+                    plan,
+                    runtime_minutes=30,
+                    max_hourly_usd=3,
+                    confirm_spend=True,
+                )
+
+            attempts = ledger.arrow_tables()["provisioning_attempts"].to_pylist()
+            self.assertEqual(calls, 1)
+            self.assertEqual(attempts[0]["state"], "uncertain")
 
 
 if __name__ == "__main__":

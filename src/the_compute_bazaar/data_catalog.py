@@ -202,13 +202,22 @@ order by ordinal_position
             f"{self._scheduled_offer_sql} union all select * from _local_offer_observations",
         )
         self.engine.create_view("silver", "current_offers", _current_offers_sql())
+        self.engine.create_view(
+            "silver",
+            "provider_read_batches",
+            "select * from _local_provider_read_batches",
+        )
         self.engine.create_schema("fleet")
-        for name in ("machines", "allocations", "observations"):
-            self.engine.create_view(
-                "fleet",
-                name,
-                f"select * from _local_fleet_{name}",
-            )
+        views = {
+            "nodes": "fleet_nodes",
+            "allocations": "allocations",
+            "telemetry": "fleet_telemetry",
+            "capacity_verifications": "capacity_verifications",
+            "provisioning_requests": "provisioning_requests",
+            "provisioning_attempts": "provisioning_attempts",
+        }
+        for view, source in views.items():
+            self.engine.create_view("fleet", view, f"select * from _local_{source}")
 
         if (
             "fact_gpu_price_index_history" in self._gold_tables
@@ -259,72 +268,116 @@ def _market_to_fleet_sql() -> str:
 with benchmark_at_launch as (
   select
     allocation.*,
-    offer.observation_purpose as selected_observation_purpose,
-    offer.observation_resolution as selected_observation_resolution,
-    offer.selection_resolution as selected_selection_resolution,
-    offer.selection_fingerprint,
-    offer.source_connector,
-    offer.source_offer_id,
-    offer.raw_hash as selected_raw_hash,
+    request.plan_id,
+    request.candidate_observation_id,
+    request.preflight_observation_id,
+    request.preflight_batch_id,
+    request.source_offer_id,
+    request.market_product_key,
+    request.gpu_model,
+    request.gpu_count,
+    request.selected_price_usd_gpu_hr,
+    request.selected_price_usd_instance_hr,
+    request.expected_max_cost_usd,
+    preflight.observation_purpose as selected_observation_purpose,
+    preflight.observation_resolution as selected_observation_resolution,
+    preflight.selection_resolution as selected_selection_resolution,
+    preflight.selection_fingerprint,
+    preflight.raw_hash as selected_raw_hash,
+    preflight.observed_at as offer_observed_at,
+    candidate.price_usd_gpu_hr as candidate_price_usd_gpu_hr,
+    node.host_id,
+    node.name,
+    node.state as node_state,
+    node.ssh_ready,
     benchmark.benchmark_usd_gpu_hr,
     benchmark.gold_observed_at as benchmark_observed_at,
     row_number() over (
-      partition by allocation.host_id
+      partition by allocation.allocation_id, node.host_id
       order by benchmark.gold_observed_at desc
     ) as benchmark_rank
   from fleet.allocations allocation
-  join silver.offer_observations offer
-    on offer.observation_id = allocation.offer_observation_id
+  join fleet.provisioning_requests request using (request_id)
+  join silver.offer_observations preflight
+    on preflight.observation_id = request.preflight_observation_id
+  left join silver.offer_observations candidate
+    on candidate.observation_id = request.candidate_observation_id
+  left join fleet.nodes node using (allocation_id)
   left join gold.fact_gpu_price_index_history benchmark
-    on benchmark.benchmark_family_id = allocation.gpu_family
-    and benchmark.gold_observed_at <= allocation.launched_at
+    on benchmark.benchmark_family_id = split_part(request.gpu_model, '_', 1)
+    and benchmark.gold_observed_at <= allocation.created_at
 ),
-observation_summary as (
+verification_summary as (
   select
     host_id,
     min(case when readiness = 'ready' then observed_at else null end)
       as first_ready_at,
     max(observed_at) as latest_observed_at,
-    count(*) as observation_count
-  from fleet.observations
+    count(*) as verification_count
+  from fleet.capacity_verifications
   group by host_id
 ),
-latest_observation as (
-  select host_id, readiness, gpu_utilization_pct, gpu_temperature_c
+latest_verification as (
+  select host_id, readiness
   from (
     select
       *,
       row_number() over (
         partition by host_id order by observed_at desc
-      ) as observation_rank
-    from fleet.observations
+      ) as verification_rank
+    from fleet.capacity_verifications
   )
-  where observation_rank = 1
+  where verification_rank = 1
+),
+latest_telemetry as (
+  select host_id, observed_at, gpu_utilization_pct, gpu_temperature_c
+  from (
+    select
+      *,
+      row_number() over (
+        partition by host_id order by observed_at desc
+      ) as telemetry_rank
+    from fleet.telemetry
+  )
+  where telemetry_rank = 1
 )
 select
+  allocation.allocation_id,
   allocation.host_id,
-  allocation.provider,
+  allocation.request_id,
+  allocation.successful_attempt_id,
+  allocation.acquisition_connector,
+  allocation.capacity_provider,
   allocation.provider_resource_id,
-  allocation.offer_observation_id,
-  allocation.offer_batch_id,
-  allocation.offer_id,
   allocation.plan_id,
+  allocation.candidate_observation_id,
+  allocation.preflight_observation_id,
+  allocation.preflight_batch_id,
+  allocation.source_offer_id,
+  allocation.market_product_key,
   allocation.name,
-  allocation.state,
-  allocation.gpu_family,
+  allocation.state as allocation_state,
+  allocation.node_state,
   allocation.gpu_model,
   allocation.gpu_count,
-  allocation.cloud_type,
-  allocation.location,
   allocation.selected_observation_purpose,
   allocation.selected_observation_resolution,
   allocation.selected_selection_resolution,
   allocation.selection_fingerprint,
-  allocation.source_connector,
-  allocation.source_offer_id,
   allocation.selected_raw_hash,
+  allocation.candidate_price_usd_gpu_hr,
   allocation.selected_price_usd_gpu_hr,
   allocation.selected_price_usd_instance_hr,
+  case
+    when allocation.candidate_price_usd_gpu_hr > 0 then
+      100 * (
+        allocation.selected_price_usd_gpu_hr
+        / allocation.candidate_price_usd_gpu_hr - 1
+      )
+    else null
+  end as preflight_price_change_pct,
+  allocation.realized_price_usd_gpu_hr,
+  allocation.realized_price_usd_instance_hr,
   allocation.benchmark_usd_gpu_hr,
   case
     when allocation.benchmark_usd_gpu_hr > 0 then
@@ -336,19 +389,24 @@ select
   end as selected_vs_benchmark_pct,
   allocation.offer_observed_at,
   allocation.benchmark_observed_at,
-  allocation.launched_at,
+  allocation.created_at as allocated_at,
   allocation.terminate_at,
   allocation.terminated_at,
   allocation.expected_max_cost_usd,
   allocation.ssh_ready,
   summary.first_ready_at,
   summary.latest_observed_at,
-  summary.observation_count,
-  latest.readiness as latest_readiness,
-  latest.gpu_utilization_pct as latest_gpu_utilization_pct,
-  latest.gpu_temperature_c as latest_gpu_temperature_c
+  summary.verification_count,
+  verified.readiness as latest_readiness,
+  telemetry.observed_at as latest_telemetry_at,
+  telemetry.gpu_utilization_pct as latest_gpu_utilization_pct,
+  telemetry.gpu_temperature_c as latest_gpu_temperature_c
 from benchmark_at_launch allocation
-left join observation_summary summary using (host_id)
-left join latest_observation latest using (host_id)
+left join verification_summary summary
+  on summary.host_id = allocation.host_id
+left join latest_verification verified
+  on verified.host_id = allocation.host_id
+left join latest_telemetry telemetry
+  on telemetry.host_id = allocation.host_id
 where allocation.benchmark_rank = 1
 """
