@@ -82,6 +82,6 @@ analyze      -> draft                      -> review
 
 ### [reliability-is-blind](evals/reliability-is-blind/README.md)
 
-`reliability-is-blind` is the existing interactive brokerage evaluation. An
-agent places supply into deals and must learn which suppliers to trust from
-delivery outcomes without receiving hidden causal labels.
+`reliability-is-blind` is an interactive compute-brokerage evaluation. An agent
+repeatedly places supply into deals and learns which suppliers to trust from
+delivery outcomes without being told which supplier caused a failure.
