@@ -1,0 +1,34 @@
+{
+  "schema_version": "compute-bazaar-bench.transactions.live-spend-gate.v2",
+  "stage": "entry",
+  "status": "passed",
+  "checked_at": "2026-08-10T22:28:47.012994+00:00",
+  "protocol_sha256": "f8bd8e28aab293376d22fb4940b529f86ec5c9a6af6340dd6685896636656f48",
+  "account": {
+    "key_limit_usd": 60,
+    "key_limit_remaining_usd": 24.994928987999998,
+    "key_usage_usd": 35.005071012,
+    "total_credits_usd": 70.0,
+    "total_usage_usd": 64.332161023,
+    "account_remaining_usd": 5.667838977000002
+  },
+  "estimate": {
+    "oracle_expected_usd": 0.6177722093023256,
+    "route_preflight_expected_usd": 0.005031589999999999,
+    "official_judge_expected_usd": 3.088861046511628,
+    "official_agent_expected_usd": 0.07547385,
+    "official_expected_usd": 3.164334896511628,
+    "complete_expected_usd": 3.7871386958139532,
+    "observed_oracle_stage_usd": null,
+    "observed_route_preflight_usd": null,
+    "required_balance_usd": 4.733923369767441,
+    "headroom_usd": 0.933915607232561,
+    "modal_usd": null
+  },
+  "checks": {
+    "pricing_matches_frozen_gate": true,
+    "account_covers_stage": true,
+    "key_limit_covers_stage": true
+  },
+  "rule": "Complete known spend plus 25 percent before the first paid call."
+}

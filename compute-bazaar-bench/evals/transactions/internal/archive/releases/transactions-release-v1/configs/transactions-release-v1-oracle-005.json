@@ -1,0 +1,23 @@
+{
+  "job_name": "transactions-release-v1-oracle-005",
+  "jobs_dir": "compute-bazaar-bench/jobs/raw",
+  "n_attempts": 1,
+  "n_concurrent_trials": 1,
+  "environment": {
+    "type": "modal",
+    "kwargs": {
+      "modal_vm_runtime": true
+    }
+  },
+  "agents": [
+    {
+      "name": "oracle",
+      "n_concurrent": 1
+    }
+  ],
+  "tasks": [
+    {
+      "path": "compute-bazaar-bench/evals/transactions/draft-capacity-data-room-population-plan"
+    }
+  ]
+}

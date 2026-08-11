@@ -1,0 +1,578 @@
+{
+  "schema_version": "compute-bazaar-bench.transactions.release-summary.v1",
+  "release_id": "transactions-release-v1",
+  "protocol_sha256": "9906227acbcfa422eb43300bf9444dccde46758b35f09bc40d4b793bb4baede8",
+  "native_analysis_sha256": "34d510d2b68bb62dc89a2e850da31651c428675a17f9544a4ac1fc2c2bd50aec",
+  "preserved_adjudication_sha256": "60954694cec2113b3cdf6f2955f91d9640e951cb44db2bdeeec659afe3d16adf",
+  "scenario": "CB-2026-041",
+  "rows": [
+    {
+      "model_key": "mistral-small-2603",
+      "model": "Mistral Small 2603",
+      "job": "transactions-release-v1-mistral-small-2603-001",
+      "execution_origin": "fresh_native_harbor",
+      "execution_label": "Fresh Harbor run",
+      "planned": 15,
+      "completed": 15,
+      "scored": 14,
+      "valid_docx": 0,
+      "invalid_output": 14,
+      "invalid_output_reasons": {
+        "deliverable is not a valid DOCX archive": 9,
+        "deliverable size is outside the accepted range: 38 bytes": 1,
+        "required deliverable not produced: capacity-agreement-deviation-report.docx": 2,
+        "required deliverable not produced: capacity-data-room-population-plan.docx": 2
+      },
+      "infrastructure": 1,
+      "strict_all_pass": 0,
+      "strict_all_pass_rate": 0.0,
+      "criterion_passes": 0,
+      "criterion_total": 793,
+      "criterion_pass_rate": 0.0,
+      "criterion_evaluation": "not_run_output_gate",
+      "semantic_judge_batches": 0,
+      "equal_task_macro": 0.0,
+      "craft": {
+        "good": 0,
+        "mixed": 0,
+        "poor": 0,
+        "reviewed": 0
+      },
+      "telemetry": {
+        "median_agent_seconds": 37.3238485,
+        "median_input_tokens": 95114.5,
+        "median_cache_tokens": 75584.0,
+        "median_output_tokens": 1267.5,
+        "agent_cost_usd": null,
+        "judge_cost_usd": 0.0,
+        "modal_cost_usd": null
+      },
+      "trajectory_observations": {
+        "trials": 14,
+        "tool_calls": {
+          "bash": 70,
+          "glob": 17,
+          "read": 52,
+          "task": 1,
+          "write": 10
+        },
+        "used_python_docx": 1,
+        "attempted_visual_render": 2,
+        "reopened_output": 0,
+        "checked_output_exists": 0,
+        "attempted_package_install": 6,
+        "direct_binary_read": 10,
+        "trials_with_execution_errors": 11,
+        "error_observations": 18
+      },
+      "tasks": {
+        "normalize-buyer-mandate": {
+          "attempted": 5,
+          "retained": 5,
+          "infrastructure_errors": 0,
+          "valid_docx": 0,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "harbor_reward": {
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "attempt_values": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "latency_seconds": {
+            "agent": {
+              "mean": 124.0317514,
+              "median": 125.506985,
+              "min": 22.548287,
+              "max": 306.136237
+            },
+            "verifier": {
+              "mean": 39.4071038,
+              "median": 38.766488,
+              "min": 38.361768,
+              "max": 41.579337
+            },
+            "total": {
+              "mean": 219.2576948,
+              "median": 219.639343,
+              "min": 120.692206,
+              "max": 403.69975
+            }
+          }
+        },
+        "draft-capacity-data-room-population-plan": {
+          "attempted": 5,
+          "retained": 5,
+          "infrastructure_errors": 0,
+          "valid_docx": 0,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "harbor_reward": {
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "attempt_values": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "latency_seconds": {
+            "agent": {
+              "mean": 20.144606,
+              "median": 20.338,
+              "min": 8.429755,
+              "max": 38.256612
+            },
+            "verifier": {
+              "mean": 39.0570662,
+              "median": 38.91252,
+              "min": 36.605665,
+              "max": 42.188306
+            },
+            "total": {
+              "mean": 116.2350044,
+              "median": 112.963065,
+              "min": 104.132342,
+              "max": 129.431328
+            }
+          }
+        },
+        "compare-capacity-agreement-against-term-sheet": {
+          "attempted": 5,
+          "retained": 4,
+          "infrastructure_errors": 1,
+          "valid_docx": 0,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "harbor_reward": {
+            "mean": 0.0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "attempt_values": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "latency_seconds": {
+            "agent": {
+              "mean": 89.71524525,
+              "median": 91.7736625,
+              "min": 7.529814,
+              "max": 167.783842
+            },
+            "verifier": {
+              "mean": 37.53926225,
+              "median": 37.698627,
+              "min": 35.25551,
+              "max": 39.504285
+            },
+            "total": {
+              "mean": 185.27750575,
+              "median": 188.73764549999999,
+              "min": 100.526838,
+              "max": 263.107894
+            }
+          }
+        }
+      }
+    },
+    {
+      "model_key": "deepseek-v4-flash-0731",
+      "model": "DeepSeek V4 Flash 0731",
+      "job": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "execution_origin": "preserved_output_adjudication",
+      "execution_label": "Earlier output, regraded",
+      "planned": 15,
+      "completed": 15,
+      "scored": 15,
+      "valid_docx": 15,
+      "invalid_output": 0,
+      "invalid_output_reasons": {},
+      "infrastructure": 0,
+      "strict_all_pass": 1,
+      "strict_all_pass_rate": 0.06666666666666667,
+      "criterion_passes": 721,
+      "criterion_total": 855,
+      "criterion_pass_rate": 0.8432748538011696,
+      "criterion_evaluation": "semantic_judge",
+      "semantic_judge_batches": null,
+      "equal_task_macro": 0.8463778512013448,
+      "craft": {
+        "good": 0,
+        "mixed": 10,
+        "poor": 5,
+        "reviewed": 15
+      },
+      "telemetry": {
+        "median_agent_seconds": 328.56808,
+        "median_input_tokens": 160056.0,
+        "median_cache_tokens": 131584.0,
+        "median_output_tokens": 8652.0,
+        "agent_cost_usd": null,
+        "judge_cost_usd": null,
+        "modal_cost_usd": null
+      },
+      "tasks": {
+        "normalize-buyer-mandate": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.7892857142857143,
+            "median": 0.7857142857142857,
+            "min": 0.7678571428571429,
+            "max": 0.8035714285714286
+          },
+          "reward": {
+            "mean": 0.79298,
+            "median": 0.7895,
+            "min": 0.7719,
+            "max": 0.807
+          },
+          "semantic_passes": 221,
+          "semantic_criteria": 280,
+          "criterion_pass_rate": 0.7892857142857143,
+          "attempt_values": [
+            0.8035714285714286,
+            0.8035714285714286,
+            0.7857142857142857,
+            0.7857142857142857,
+            0.7678571428571429
+          ]
+        },
+        "draft-capacity-data-room-population-plan": {
+          "retained": 5,
+          "all_pass": 1,
+          "semantic": {
+            "mean": 0.9433962264150944,
+            "median": 0.9433962264150944,
+            "min": 0.8867924528301887,
+            "max": 1.0
+          },
+          "reward": {
+            "mean": 0.94446,
+            "median": 0.9445,
+            "min": 0.8889,
+            "max": 1.0
+          },
+          "semantic_passes": 250,
+          "semantic_criteria": 265,
+          "criterion_pass_rate": 0.9433962264150944,
+          "attempt_values": [
+            0.9433962264150944,
+            0.9245283018867925,
+            0.8867924528301887,
+            0.9622641509433962,
+            1.0
+          ]
+        },
+        "compare-capacity-agreement-against-term-sheet": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.8064516129032258,
+            "median": 0.7903225806451613,
+            "min": 0.7419354838709677,
+            "max": 0.9193548387096774
+          },
+          "reward": {
+            "mean": 0.8095,
+            "median": 0.7936,
+            "min": 0.746,
+            "max": 0.9206
+          },
+          "semantic_passes": 250,
+          "semantic_criteria": 310,
+          "criterion_pass_rate": 0.8064516129032258,
+          "attempt_values": [
+            0.8064516129032258,
+            0.7903225806451613,
+            0.9193548387096774,
+            0.7419354838709677,
+            0.7741935483870968
+          ]
+        }
+      }
+    },
+    {
+      "model_key": "gpt-5.6-luna",
+      "model": "GPT-5.6 Luna",
+      "job": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "execution_origin": "preserved_output_adjudication",
+      "execution_label": "Earlier output, regraded",
+      "planned": 15,
+      "completed": 15,
+      "scored": 14,
+      "valid_docx": 14,
+      "invalid_output": 0,
+      "invalid_output_reasons": {},
+      "infrastructure": 1,
+      "strict_all_pass": 1,
+      "strict_all_pass_rate": 0.07142857142857142,
+      "criterion_passes": 722,
+      "criterion_total": 802,
+      "criterion_pass_rate": 0.9002493765586035,
+      "criterion_evaluation": "semantic_judge",
+      "semantic_judge_batches": null,
+      "equal_task_macro": 0.9075036953308409,
+      "craft": {
+        "good": 1,
+        "mixed": 6,
+        "poor": 7,
+        "reviewed": 14
+      },
+      "telemetry": {
+        "median_agent_seconds": 118.1678475,
+        "median_input_tokens": 271112.5,
+        "median_cache_tokens": 271054.0,
+        "median_output_tokens": 7210.5,
+        "agent_cost_usd": null,
+        "judge_cost_usd": null,
+        "modal_cost_usd": null
+      },
+      "tasks": {
+        "normalize-buyer-mandate": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.9071428571428571,
+            "median": 0.9107142857142857,
+            "min": 0.8392857142857143,
+            "max": 0.9821428571428571
+          },
+          "reward": {
+            "mean": 0.90878,
+            "median": 0.9123,
+            "min": 0.8421,
+            "max": 0.9825
+          },
+          "semantic_passes": 254,
+          "semantic_criteria": 280,
+          "criterion_pass_rate": 0.9071428571428571,
+          "attempt_values": [
+            0.9107142857142857,
+            0.8928571428571429,
+            0.9821428571428571,
+            0.8392857142857143,
+            0.9107142857142857
+          ]
+        },
+        "draft-capacity-data-room-population-plan": {
+          "retained": 4,
+          "all_pass": 1,
+          "semantic": {
+            "mean": 0.9669811320754718,
+            "median": 0.9622641509433962,
+            "min": 0.9433962264150944,
+            "max": 1.0
+          },
+          "reward": {
+            "mean": 0.967625,
+            "median": 0.9630000000000001,
+            "min": 0.9445,
+            "max": 1.0
+          },
+          "semantic_passes": 205,
+          "semantic_criteria": 212,
+          "criterion_pass_rate": 0.9669811320754716,
+          "attempt_values": [
+            0.9433962264150944,
+            0.9811320754716981,
+            0.9433962264150944,
+            1.0
+          ]
+        },
+        "compare-capacity-agreement-against-term-sheet": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.8483870967741935,
+            "median": 0.8870967741935484,
+            "min": 0.6935483870967742,
+            "max": 0.9516129032258065
+          },
+          "reward": {
+            "mean": 0.8508,
+            "median": 0.8889,
+            "min": 0.6984,
+            "max": 0.9524
+          },
+          "semantic_passes": 263,
+          "semantic_criteria": 310,
+          "criterion_pass_rate": 0.8483870967741935,
+          "attempt_values": [
+            0.6935483870967742,
+            0.8064516129032258,
+            0.9032258064516129,
+            0.8870967741935484,
+            0.9516129032258065
+          ]
+        }
+      }
+    },
+    {
+      "model_key": "glm-5.2",
+      "model": "GLM 5.2",
+      "job": "transactions-comparison-v1-glm-5.2-001",
+      "execution_origin": "preserved_output_adjudication",
+      "execution_label": "Earlier output, regraded",
+      "planned": 15,
+      "completed": 15,
+      "scored": 14,
+      "valid_docx": 14,
+      "invalid_output": 0,
+      "invalid_output_reasons": {},
+      "infrastructure": 1,
+      "strict_all_pass": 0,
+      "strict_all_pass_rate": 0.0,
+      "criterion_passes": 733,
+      "criterion_total": 793,
+      "criterion_pass_rate": 0.9243379571248423,
+      "criterion_evaluation": "semantic_judge",
+      "semantic_judge_batches": null,
+      "equal_task_macro": 0.9256608121032954,
+      "craft": {
+        "good": 0,
+        "mixed": 9,
+        "poor": 5,
+        "reviewed": 14
+      },
+      "telemetry": {
+        "median_agent_seconds": 243.87692800000002,
+        "median_input_tokens": 151482.5,
+        "median_cache_tokens": 126943.5,
+        "median_output_tokens": 11641.5,
+        "agent_cost_usd": null,
+        "judge_cost_usd": null,
+        "modal_cost_usd": null
+      },
+      "tasks": {
+        "normalize-buyer-mandate": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.8714285714285714,
+            "median": 0.875,
+            "min": 0.8392857142857143,
+            "max": 0.9107142857142857
+          },
+          "reward": {
+            "mean": 0.87368,
+            "median": 0.8772,
+            "min": 0.8421,
+            "max": 0.9123
+          },
+          "semantic_passes": 244,
+          "semantic_criteria": 280,
+          "criterion_pass_rate": 0.8714285714285714,
+          "attempt_values": [
+            0.8571428571428571,
+            0.9107142857142857,
+            0.875,
+            0.8392857142857143,
+            0.875
+          ]
+        },
+        "draft-capacity-data-room-population-plan": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.9660377358490566,
+            "median": 0.9622641509433962,
+            "min": 0.9433962264150944,
+            "max": 0.9811320754716981
+          },
+          "reward": {
+            "mean": 0.9667,
+            "median": 0.963,
+            "min": 0.9445,
+            "max": 0.9815
+          },
+          "semantic_passes": 256,
+          "semantic_criteria": 265,
+          "criterion_pass_rate": 0.9660377358490566,
+          "attempt_values": [
+            0.9433962264150944,
+            0.9622641509433962,
+            0.9811320754716981,
+            0.9811320754716981,
+            0.9622641509433962
+          ]
+        },
+        "compare-capacity-agreement-against-term-sheet": {
+          "retained": 4,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.9395161290322581,
+            "median": 0.9516129032258065,
+            "min": 0.8870967741935484,
+            "max": 0.967741935483871
+          },
+          "reward": {
+            "mean": 0.9405,
+            "median": 0.9524,
+            "min": 0.8889,
+            "max": 0.9683
+          },
+          "semantic_passes": 233,
+          "semantic_criteria": 248,
+          "criterion_pass_rate": 0.9395161290322581,
+          "attempt_values": [
+            0.8870967741935484,
+            0.9516129032258065,
+            0.967741935483871,
+            0.9516129032258065
+          ]
+        }
+      }
+    }
+  ],
+  "account_observation": {
+    "openrouter_balance_before_official_usd": 9.146862476999999,
+    "openrouter_balance_after_official_usd": 9.029871686999996,
+    "combined_openrouter_spend_usd": 0.11699079000000268,
+    "allocation": "Combined account change only; agent and judge costs cannot be split reliably from the retained telemetry."
+  },
+  "preserved_replay_observation": {
+    "semantic_judge_batches": 129,
+    "openrouter_judge_usd": 8.854735,
+    "modal_usd": null,
+    "allocation": "The replay judge total covers all three preserved-output rows and cannot be split reliably by model."
+  },
+  "limitations": [
+    "The five attempts show rollout variation on one linked synthetic matter, not independent-matter accuracy.",
+    "Sampling is unseeded and inference compute is not equalized.",
+    "OpenRouter Exacto is fixed, but the downstream backend provider is not pinned or necessarily observed.",
+    "GPT-5.4 is an LLM judge with one pass per criterion.",
+    "The table mixes one fresh native Harbor execution with three older preserved-output adjudications. Their agent execution dates and origins differ even though the release grader is the same.",
+    "The comparison does not establish statistical significance, general model superiority, or broad compute-market competence."
+  ]
+}

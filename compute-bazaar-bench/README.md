@@ -41,8 +41,7 @@ compute-bazaar-bench/
 |   `-- transactions/
 |-- viewer/
 `-- jobs/
-    |-- raw/
-    `-- reports/
+    `-- <harbor-job>/
 ```
 
 Open the Compute Bazaar Terminal and enter `eval`:
@@ -59,10 +58,17 @@ harbor run \
   -a AGENT \
   -m MODEL \
   -e ENVIRONMENT \
-  -o compute-bazaar-bench/jobs/raw
+  -o compute-bazaar-bench/jobs
 ```
 
 You can also run Harbor directly from any shell.
+
+Browse the resulting jobs with Harbor's native viewer:
+
+```bash
+cd compute-bazaar-bench
+harbor view jobs
+```
 
 ## Evaluations
 

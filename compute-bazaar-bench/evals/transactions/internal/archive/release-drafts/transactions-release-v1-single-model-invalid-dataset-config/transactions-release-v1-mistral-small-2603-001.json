@@ -1,0 +1,36 @@
+{
+  "job_name": "transactions-release-v1-mistral-small-2603-001",
+  "jobs_dir": "compute-bazaar-bench/jobs/raw",
+  "n_attempts": 5,
+  "n_concurrent_trials": 1,
+  "environment": {
+    "type": "modal",
+    "kwargs": {
+      "modal_vm_runtime": true
+    }
+  },
+  "agents": [
+    {
+      "name": "opencode",
+      "model_name": "openrouter/mistralai/mistral-small-2603:exacto",
+      "n_concurrent": 1,
+      "extra_allowed_hosts": [
+        "openrouter.ai"
+      ],
+      "kwargs": {
+        "version": "1.18.11"
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "path": "compute-bazaar-bench/evals/transactions/normalize-buyer-mandate"
+    },
+    {
+      "path": "compute-bazaar-bench/evals/transactions/draft-capacity-data-room-population-plan"
+    },
+    {
+      "path": "compute-bazaar-bench/evals/transactions/compare-capacity-agreement-against-term-sheet"
+    }
+  ]
+}

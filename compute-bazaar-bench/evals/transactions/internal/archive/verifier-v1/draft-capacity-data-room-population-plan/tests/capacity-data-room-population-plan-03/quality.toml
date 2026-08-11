@@ -1,0 +1,86 @@
+[judge]
+judge = "openrouter/openai/gpt-5.4"
+files = ["/tests/source-context.md", "/app/capacity-data-room-population-plan.docx.md"]
+prompt_template = "../judge-prompt.md"
+weight = 13
+
+[scoring]
+aggregation = "weighted_mean"
+
+[[criterion]]
+id = "C-041"
+name = "c-041"
+description = "Escalates the utility-pricing disclosure conflict to Owen Mercer and transaction leadership and proposes a controlled resolution, rather than silently withholding or releasing the material. FAIL if no escalation path is given."
+type = "binary"
+
+[[criterion]]
+id = "C-042"
+name = "c-042"
+description = "Implements the instructed two-step supplier-document process: redacted purchase and warranty materials in Phase 1, followed by unredacted versions for the clean team in Phase 2. FAIL if the sequencing is wrong."
+type = "binary"
+
+[[criterion]]
+id = "C-043"
+name = "c-043"
+description = "Flags that the buyer requested unredacted hardware provenance and may reject redacted Phase 1 materials, requiring agreement on access before release. FAIL if the buyer-side conflict is ignored."
+type = "binary"
+
+[[criterion]]
+id = "C-044"
+name = "c-044"
+description = "Includes the NorthSpan carrier and PolarLoop cooling agreements despite their values falling below the general contract threshold because they are operationally critical. FAIL if either is deferred solely by value."
+type = "binary"
+
+[[criterion]]
+id = "C-045"
+name = "c-045"
+description = "Separates routine corporate approvals from bid strategy and valuation material, applying document-specific redaction or privilege review rather than withholding all board records. FAIL if the treatment is overbroad or indiscriminate."
+type = "binary"
+
+[[criterion]]
+id = "C-046"
+name = "c-046"
+description = "Prioritizes the Crestline equipment financing documents, UCC or lien evidence, payoff or release mechanics, and lender consent needed to establish hardware control. FAIL if financing encumbrances are not treated as material."
+type = "binary"
+
+[[criterion]]
+id = "C-047"
+name = "c-047"
+description = "Identifies current cyber and technology errors-and-omissions insurance as missing or unconfirmed and assigns collection to the finance or risk owner. FAIL if insurance completeness is overstated."
+type = "binary"
+
+[[criterion]]
+id = "C-048"
+name = "c-048"
+description = "Names the relevant third-party coordination points: Granite Plains Electric Cooperative, NorthSpan Fiber, Crestline Infrastructure Credit, Kestrel Infrastructure Advisory, and Hart & Vale LLP. FAIL if the plan relies only on internal collection."
+type = "binary"
+
+[[criterion]]
+id = "C-049"
+name = "c-049"
+description = "Sequences power, site control, hardware title and liens, and technical commissioning ahead of lower-risk background material. FAIL if gating evidence is not prioritized."
+type = "binary"
+
+[[criterion]]
+id = "C-050"
+name = "c-050"
+description = "Provides a release cadence with an initial index, Phase 1 upload, issue review, Phase 2 or clean-team release, and ongoing delta updates. FAIL if the timeline is only a final deadline."
+type = "binary"
+
+[[criterion]]
+id = "C-051"
+name = "c-051"
+description = "Applies sensitivity labels consistently to pricing, customer, security, personal, privileged, and financing material. FAIL if sensitive material lacks a handling rule."
+type = "binary"
+
+[[criterion]]
+id = "C-052"
+name = "c-052"
+description = "Does not invent missing documents or resolve evidentiary conflicts by assumption; gaps remain explicit with owner and next step. FAIL for any material unsupported assertion."
+type = "binary"
+
+[[criterion]]
+id = "C-053"
+name = "c-053"
+description = "The deliverable is concise, internally consistent, and usable by a transaction team without reconstructing the source files. FAIL if material instructions, statuses, or decisions are contradictory or hard to follow."
+type = "binary"

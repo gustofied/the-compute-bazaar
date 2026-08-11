@@ -1,0 +1,246 @@
+{
+  "schema_version": "compute-bazaar-bench.transactions.release-protocol.v1",
+  "protocol_id": "transactions-release-v1",
+  "status": "frozen_pending_prerequisites",
+  "frozen_at": "2026-08-10T22:22:42Z",
+  "source_git_head": "240f0be24f15b2cb566be3118e831bf518cf8560",
+  "source_state": "The worktree is intentionally uncommitted. This protocol binds the exact task, verifier, configuration, and review hashes below.",
+  "scope": "A one-model native Harbor extension for Mistral Small 2603, presented beside three preserved-output adjudications on the same release grader and linked synthetic compute opportunity CB-2026-041.",
+  "scenario_pack": "CB-2026-041",
+  "method": {
+    "lineage": "Harvey Legal Agent Benchmark",
+    "source": "https://github.com/harveyai/harvey-labs",
+    "shape": "Short professional request, closed matter, reviewable DOCX, detailed binary criteria, strict all-pass headline, diagnostic criterion scores, cost and latency reporting, and trajectory review.",
+    "release_grader": "The verifier was corrected during private calibration. Every public release score must come from the frozen canonical grader bound here.",
+    "private_history": "Original verifier-v1 scores and excluded development runs remain preserved but are excluded from the default public report and viewer. The release view includes only release-grader scores and labels whether they came from a fresh Harbor run or a preserved-output replay."
+  },
+  "tasks": [
+    {
+      "name": "normalize-buyer-mandate",
+      "path": "compute-bazaar-bench/evals/transactions/normalize-buyer-mandate",
+      "digest": "sha256:a3b6a5b09b36c8b610d5d9fde9ba6dda4230dad3b6605c72045648f11145784d",
+      "deliverable": "buyer-mandate-brief.docx",
+      "semantic_criteria": 56,
+      "verifier_tree_sha256": "d3889f32788e211d68762e919c6e66ddcc3717e20929fc89ceccb1e52582ece9",
+      "instruction_sha256": "7eec294eee4aa0bd670beb591e9d1daa1967f0343a51e7ac13d380e99ee0282d",
+      "environment_tree_sha256": "221ff55268c20f8927f74735104747a8eb6582656603429d1e8b7c635cef494d",
+      "agent_visible_task_config_sha256": "6182b0e558d2061ad3d93a275513da56ef296a9e95356d3e5bf1e2535be2d194",
+      "output_contract_and_integrity_tree_sha256": "5081d8d53083b2ffb03716b63b818c719098a66b4fa8461d19d11561d646b51a"
+    },
+    {
+      "name": "draft-capacity-data-room-population-plan",
+      "path": "compute-bazaar-bench/evals/transactions/draft-capacity-data-room-population-plan",
+      "digest": "sha256:7ea780f18f0b8122c4d3e6b79b5e08e7b1ef912bfc929c2731d9f56841dcd289",
+      "deliverable": "capacity-data-room-population-plan.docx",
+      "semantic_criteria": 53,
+      "verifier_tree_sha256": "bfe86bfc7c8f96cb7df45a0207354393f8895ce3f452f72eb2953736fdaf4429",
+      "instruction_sha256": "d248a508ac4c927dbc88976ecf41dcd59a5a7f83480006b0d9ca3508ed091fe2",
+      "environment_tree_sha256": "55656f1fab556a22f73526a79efe8b3ed902821bd8fbeb0c44ad011646bf5970",
+      "agent_visible_task_config_sha256": "9f96d0699252efe94f4cd0162baed9c8016632d0e350981c05ecb5a1de87c193",
+      "output_contract_and_integrity_tree_sha256": "4f609246c88bf483afc3b6325c6114222070ef49cf6808aca538e3303b0a0744"
+    },
+    {
+      "name": "compare-capacity-agreement-against-term-sheet",
+      "path": "compute-bazaar-bench/evals/transactions/compare-capacity-agreement-against-term-sheet",
+      "digest": "sha256:75ae674326e86f15dbef33ebe74ad0e4e9aaf502e6986e815c99a32c34c9e0fe",
+      "deliverable": "capacity-agreement-deviation-report.docx",
+      "semantic_criteria": 62,
+      "verifier_tree_sha256": "eb50cb9101c9521236d5017541e7f3a756d782de4a2289b9e52bd3cdc564c0e7",
+      "instruction_sha256": "32d82f129f76989d9219a598dfa965fe355be27501e83995f0913bdd1270cdfb",
+      "environment_tree_sha256": "cf8d782dd7e234e89f0887084840bcdf2f507edf7dc5ce3d42a2e56c5cfd9b46",
+      "agent_visible_task_config_sha256": "0ef6b66d892bd6c10d111207fe79c16e2bc3a683b1eb2464b4e09395b5475c55",
+      "output_contract_and_integrity_tree_sha256": "8d6ce27d3fa19591b4ac6a21bb5e5ba382ec8b63cc81bd0598476f96d388c27d"
+    }
+  ],
+  "models": [
+    {
+      "key": "mistral-small-2603",
+      "display_name": "Mistral Small 2603",
+      "catalog_id": "mistralai/mistral-small-2603",
+      "canonical_slug": "mistralai/mistral-small-2603",
+      "agent_model": "openrouter/mistralai/mistral-small-2603:exacto",
+      "role": "compact model",
+      "preflight_job": "transactions-release-v1-mistral-small-2603-preflight-001",
+      "preflight_config_path": "configs/transactions-release-v1-mistral-small-2603-preflight-001.json",
+      "preflight_config_sha256": "c94f6564083376a7b57b60871792cd3656ee5f0b49ad64896525e88257cea67d",
+      "job": "transactions-release-v1-mistral-small-2603-001",
+      "config_path": "configs/transactions-release-v1-mistral-small-2603-001.json",
+      "config_sha256": "1c3eab2ae9acfba8be8e959bd7519bc21620e598775f6d6599fcc15c0a9772d2",
+      "route_evidence": "compute-bazaar-bench/jobs/raw/transactions-comparison-v1-mistral-small-2603-canary-001/config.json"
+    }
+  ],
+  "inactive_prepared_configs": [
+    {
+      "key": "glm-5.2",
+      "display_name": "GLM 5.2",
+      "catalog_id": "z-ai/glm-5.2",
+      "canonical_slug": "z-ai/glm-5.2-20260616",
+      "agent_model": "openrouter/z-ai/glm-5.2-20260616:exacto",
+      "status": "inactive_unlaunched",
+      "reason": "Adam chose the preserved-output GLM row and no fresh GLM rerun.",
+      "preflight_config_path": "configs/inactive/transactions-release-v1-glm-5.2-preflight-001.json",
+      "preflight_config_sha256": "9dfd0fbb7a5af043fa59e782d152151e78647dd48de8889c86e7907b700f8a22",
+      "config_path": "configs/inactive/transactions-release-v1-glm-5.2-001.json",
+      "config_sha256": "3fdb2ac4ccd5b746911a8d73832f7cdc1f1e9fb782400474cbb1b8e9a8c9b4ec"
+    }
+  ],
+  "preserved_adjudication": {
+    "analysis_path": "compute-bazaar-bench/jobs/reports/transactions-comparison-v1-adjudication-replay-001/analysis.json",
+    "analysis_sha256": "60954694cec2113b3cdf6f2955f91d9640e951cb44db2bdeeec659afe3d16adf",
+    "run_path": "compute-bazaar-bench/jobs/adjudications/transactions-comparison-v1-adjudication-replay-001/attempt-001/adjudication-run.json",
+    "run_sha256": "70c4b0f9fe1685b85eaf118f609dc9ba8e9f4d6ed4470682402a04049b6c80ca",
+    "commitment_path": "compute-bazaar-bench/evals/transactions/adjudication/adjudication-replay-001.commitment.json",
+    "commitment_sha256": "46fa6fa6df984686785aeaedb044110514b9a224658a2df2238258ec3a8fe9e2",
+    "modal_amendment_path": "compute-bazaar-bench/evals/transactions/adjudication/adjudication-replay-001.modal-amendment.json",
+    "modal_amendment_sha256": "6fa2b04126a41b0d815f05addadd14ba675e31fdafa0b7340a511066f31a9a3c",
+    "agent_rerun": false,
+    "release_grader_equivalence": "The replay verifier trees are byte-identical to the canonical release grader trees bound in tasks."
+  },
+  "comparison_rows": [
+    {
+      "model": "Mistral Small 2603",
+      "job": "transactions-release-v1-mistral-small-2603-001",
+      "execution_origin": "fresh_native_harbor",
+      "score_origin": "release_grader",
+      "fresh_agent_execution": true
+    },
+    {
+      "model": "DeepSeek V4 Flash 0731",
+      "job": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "execution_origin": "preserved_output_adjudication",
+      "score_origin": "release_grader_replay",
+      "agent_rerun": false
+    },
+    {
+      "model": "GPT-5.6 Luna",
+      "job": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "execution_origin": "preserved_output_adjudication",
+      "score_origin": "release_grader_replay",
+      "agent_rerun": false
+    },
+    {
+      "model": "GLM 5.2",
+      "job": "transactions-comparison-v1-glm-5.2-001",
+      "execution_origin": "preserved_output_adjudication",
+      "score_origin": "release_grader_replay",
+      "agent_rerun": false
+    }
+  ],
+  "routing": {
+    "provider": "openrouter",
+    "provider_host": "openrouter.ai",
+    "variant": "exacto",
+    "model_aliases_allowed": false,
+    "model_fallback_allowed": false,
+    "backend_provider_pinned": false,
+    "identity_boundary": "Harbor and ATIF retain the requested exact OpenCode model string. They do not prove which downstream backend endpoint OpenRouter selected unless that metadata is separately exposed."
+  },
+  "runtime": {
+    "harbor_version": "0.20.0",
+    "environment": "modal",
+    "modal_vm_runtime": true,
+    "agent": "opencode",
+    "agent_version": "1.18.11",
+    "concurrency": 1,
+    "max_retries": 0,
+    "sampling_seed_controlled": false,
+    "sampling_parameters": "Native model and OpenRouter defaults."
+  },
+  "judge": {
+    "model": "openrouter/openai/gpt-5.4",
+    "canonical_slug": "openai/gpt-5.4-20260305",
+    "rewardkit_version": "0.1.7",
+    "semantic_batches_per_valid_trial": 3,
+    "planned_official_batches": 45,
+    "passes_per_criterion": 1
+  },
+  "oracle": {
+    "job": "transactions-release-v1-oracle-001",
+    "config_path": "configs/transactions-release-v1-oracle-001.json",
+    "config_sha256": "809c72e545f6a28580f83c9516e660936f2d2b31fa6baf59a6b1c2dd9987c522",
+    "planned_trials": 3,
+    "planned_judge_batches": 9,
+    "acceptance": "All three exact artifacts have manifest status ok, no nested verifier or judge error, reward 1, and all_pass 1."
+  },
+  "model_route_preflight": {
+    "task_path": "preflight/model-route",
+    "task_digest": "sha256:779ab6a1e1b6086d0020361804509d53e4b27c84ae8df1e44a0635b9af01dfb7",
+    "planned_trials": 1,
+    "verification_disabled": true,
+    "acceptance": "The requested exact model string resolves through OpenCode in Modal and the agent phase finishes without a credential, provider, OpenCode, Harbor, or Modal exception. Response wording is not a quality gate."
+  },
+  "prerequisites": {
+    "order": [
+      "Static task, verifier, commitment, and configuration validation",
+      "Live account balance and reservation gate before any paid call",
+      "Oracle validation against the release grader",
+      "Modal and exact model-route credential preflight",
+      "Recheck live balance and freeze the post-Oracle and post-route-preflight gates",
+      "Complete the single official job"
+    ],
+    "spend_rule": "Run paid work serially. The entry gate must cover the complete known Oracle, route-preflight, and official estimate with 25 percent headroom. After Oracle and route preflight, recheck the live balance and pricing. The official gate requires the complete remaining 15-trial estimate, plus 25 percent, plus the entire observed Oracle-stage spend as a conservative upper bound for one judge call. Never intentionally launch a partial official job.",
+    "spend_gate_baseline": "spend-gate-002.json",
+    "live_gate_sequence": [
+      "entry",
+      "post_oracle",
+      "official"
+    ]
+  },
+  "official_run": {
+    "attempts_per_task": 5,
+    "tasks_per_model": 3,
+    "planned_trials_per_model": 15,
+    "planned_trials_total": 15,
+    "one_job_per_model": true,
+    "job_order": [
+      "mistral-small-2603"
+    ],
+    "retry_rule": "No Harbor retries and no selective replacement. A genuine infrastructure-invalidated job remains preserved and is either reported incomplete or superseded by a complete versioned 15-trial job after repair."
+  },
+  "trial_classification": {
+    "accepted": "Normal agent execution, the exact required artifact recorded once with status ok, a complete ATIF trajectory, a completed release-grader result, and no nested verifier or judge error.",
+    "agent_invalid_output": "A missing, malformed, or wrong required DOCX after otherwise normal agent execution is an official zero. It cannot be used to censor a model or withhold its official job.",
+    "infrastructure_failure": "A proven build, credential, provider, Modal, Harbor, artifact-collection, verifier, judge, or Harbor AgentTimeoutError failure is retained in planned and completion counts but excluded from model-quality denominators.",
+    "preflight_boundary": "Preflights test installation, credentials, exact route resolution, and grader plumbing only. Their semantic output is not inspected and cannot determine whether a model enters the official comparison."
+  },
+  "reporting": {
+    "default_scope": "One fresh native Mistral Small Harbor run and three preserved-output release-grader adjudications for DeepSeek, GPT-5.6 Luna, and GLM. Execution origin is always shown.",
+    "headline": "Strict all-pass, shown as passes over valid quality trials.",
+    "adjacent_diagnostics": [
+      "Pooled semantic criterion pass rate",
+      "Equal-task macro semantic criterion pass rate",
+      "Per-task strict all-pass and criterion pass rates",
+      "Planned, completed, valid, invalid-output, and infrastructure counts",
+      "Blind document craft as good, mixed, or poor, separate from semantic reward",
+      "Median agent execution latency and median input, cache, and output tokens",
+      "Agent, judge, and Modal cost only where genuinely observed; unavailable fields remain null",
+      "Evidence-backed trajectory observations with raw trial references"
+    ],
+    "public_table_columns": [
+      "Model",
+      "Execution origin",
+      "Valid / planned",
+      "Strict all-pass",
+      "Criterion pass",
+      "Equal-task macro",
+      "Craft good / mixed / poor",
+      "Median agent latency",
+      "Median input / output tokens",
+      "Agent cost",
+      "Judge cost",
+      "Modal cost"
+    ],
+    "craft_rubric_path": "transactions-release-v1.craft-rubric.json",
+    "craft_rubric_sha256": "cbb999830e87b7173497940fb9e5ff099a02b779b420312f0310778a3265b8c1",
+    "manual_trace_sample": "Inspect the earliest-started valid trial in each model-task pair, breaking ties by trial ID, plus every invalid output, infrastructure failure, semantic outlier, and craft outlier.",
+    "history_policy": "Private verifier-v1 scores, Claude and Mistral development records, credit history, and the abandoned two-model release draft remain preserved under internal or archive routes and are absent from the default public report and viewer."
+  },
+  "limitations": [
+    "The five attempts show rollout variation on one linked synthetic matter, not independent-matter accuracy.",
+    "Sampling is unseeded and inference compute is not equalized.",
+    "OpenRouter Exacto is fixed, but the downstream backend provider is not pinned or necessarily observed.",
+    "GPT-5.4 is an LLM judge with one pass per criterion.",
+    "The table mixes one fresh native Harbor execution with three older preserved-output adjudications. Their agent execution dates and origins differ even though the release grader is the same.",
+    "The comparison does not establish statistical significance, general model superiority, or broad compute-market competence."
+  ]
+}

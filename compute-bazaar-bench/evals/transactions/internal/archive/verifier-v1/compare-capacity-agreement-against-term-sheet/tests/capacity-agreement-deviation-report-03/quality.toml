@@ -1,0 +1,140 @@
+[judge]
+judge = "openrouter/openai/gpt-5.4"
+files = ["/tests/source-context.md", "/app/capacity-agreement-deviation-report.docx.md"]
+prompt_template = "../judge-prompt.md"
+weight = 22
+
+[scoring]
+aggregation = "weighted_mean"
+
+[[criterion]]
+id = "C-041"
+name = "c-041"
+description = "ISSUE_012: Recommends restoring the eight-hour monthly maintenance limit and seven-day notice period. FAIL if no precise correction is proposed."
+type = "binary"
+
+[[criterion]]
+id = "C-042"
+name = "c-042"
+description = "ISSUE_013: Identifies that the force-majeure termination right moves from 90 consecutive days in the term sheet to 180 days in the agreement. FAIL if the period change is missed."
+type = "binary"
+
+[[criterion]]
+id = "C-043"
+name = "c-043"
+description = "ISSUE_013: Classifies the longer force-majeure lock-in as adverse and unexplained and recommends restoring 90 days or adding an earlier capacity-shortfall exit. FAIL if impact or remedy is missing."
+type = "binary"
+
+[[criterion]]
+id = "C-044"
+name = "c-044"
+description = "ISSUE_014: Identifies that the term sheet permits affiliate assignment and named controlled-customer workloads, while the agreement requires provider consent and prohibits all third-party use. FAIL if the rights restriction is missed."
+type = "binary"
+
+[[criterion]]
+id = "C-045"
+name = "c-045"
+description = "ISSUE_014: Classifies the assignment and use restriction as adverse and recommends restoring both agreed rights while retaining the no-unrestricted-resale rule. FAIL if status or remedy is missing."
+type = "binary"
+
+[[criterion]]
+id = "C-046"
+name = "c-046"
+description = "ISSUE_015: Identifies that the term sheet conditions signing on evidence of provider authority, utility delivery, commissioning, hardware title, liens, and required consents, while Sections 12.1 and 12.2 only provide qualified control language and let Provider decide which consents are necessary. FAIL if the control gap is missed."
+type = "binary"
+
+[[criterion]]
+id = "C-047"
+name = "c-047"
+description = "ISSUE_015: Treats authority, title, liens, and consent evidence as unresolved signing risk rather than assuming the agreement proves capacity control. FAIL if the condition is marked satisfied without evidence."
+type = "binary"
+
+[[criterion]]
+id = "C-048"
+name = "c-048"
+description = "ISSUE_015: Recommends objective evidence and required consents as conditions to signing or service commencement, together with a defined permitted-lien and release treatment. FAIL if the response is vague or post-closing only."
+type = "binary"
+
+[[criterion]]
+id = "C-049"
+name = "c-049"
+description = "ISSUE_016: Identifies that the term sheet requires an enforceable Holdings parent guarantee as a condition, while Section 12.3 postpones discussion of its form and amount until after signing. FAIL if the missing support is overlooked."
+type = "binary"
+
+[[criterion]]
+id = "C-050"
+name = "c-050"
+description = "ISSUE_016: Classifies the missing parent guarantee as materially adverse and a signing blocker and recommends attaching and executing it at signing. FAIL if its timing or remedy is softened."
+type = "binary"
+
+[[criterion]]
+id = "C-051"
+name = "c-051"
+description = "ISSUE_017: Identifies that an agreed security schedule is a term-sheet condition but the draft package only references a schedule that is not included, leaving customer-key and audit-log details incomplete. FAIL if the missing schedule is missed."
+type = "binary"
+
+[[criterion]]
+id = "C-052"
+name = "c-052"
+description = "ISSUE_017: Treats the incomplete security package as an unresolved hard stop and does not assume commercially reasonable safeguards satisfy the agreed controls. FAIL if the risk is understated."
+type = "binary"
+
+[[criterion]]
+id = "C-053"
+name = "c-053"
+description = "ISSUE_017: Recommends completing and attaching the security schedule before signing while preserving current SOC 2, US data, customer-managed-key, and exportable-log requirements. FAIL if the correction is incomplete."
+type = "binary"
+
+[[criterion]]
+id = "C-054"
+name = "c-054"
+description = "ISSUE_018: Identifies the change from confidential AAA arbitration seated in New York to exclusive litigation in state or federal courts in Virginia. FAIL if the dispute-forum change is missed."
+type = "binary"
+
+[[criterion]]
+id = "C-055"
+name = "c-055"
+description = "ISSUE_018: Classifies the forum change as adverse or approval-required, gives a reasoned buyer impact, and recommends restoring arbitration unless Northstar approves litigation. FAIL if treatment is conclusory or wrong."
+type = "binary"
+
+[[criterion]]
+id = "C-056"
+name = "c-056"
+description = "ISSUE_019: Identifies the option for another 1,024 B200 GPUs at no more than $3.30/GPU-hour as a favorable deviation expressly agreed on August 28 and recommends preserving it. FAIL if it is missed or treated as an error."
+type = "binary"
+
+[[criterion]]
+id = "C-057"
+name = "c-057"
+description = "Execution risk: States that power evidence supports only 12 MW on January 15 and another 12 MW on April 1, so the contracted GPU ramp is not yet substantiated, and recommends reconciliation before signing. FAIL if the power gate is omitted or treated as satisfied."
+type = "binary"
+
+[[criterion]]
+id = "C-058"
+name = "c-058"
+description = "Execution risk: Flags the Blue Mesa site-option exercise deadline of October 31, 2026 and calls for extension or exercise plus required consent through the service term. FAIL if site control is omitted."
+type = "binary"
+
+[[criterion]]
+id = "C-059"
+name = "c-059"
+description = "Execution risk: Keeps hardware title, serial allocation, UCC or lien review, Crestline consent, permitted liens, and release mechanics open until evidenced. FAIL if hardware control is assumed."
+type = "binary"
+
+[[criterion]]
+id = "C-060"
+name = "c-060"
+description = "Execution risk: Flags cyber and technology E&O coverage, financial capacity, and the final credit package as open buyer diligence rather than agreement deviations already resolved. FAIL if insurance or credit risk disappears."
+type = "binary"
+
+[[criterion]]
+id = "C-061"
+name = "c-061"
+description = "Prioritizes signing blockers and states that Northstar should not sign while a hard stop remains unresolved or the draft fails it, instead of presenting every item as equal. FAIL if the report has no usable execution hierarchy."
+type = "binary"
+
+[[criterion]]
+id = "C-062"
+name = "c-062"
+description = "Consistently analyzes from Northstar's buyer perspective and gives a source-grounded response for each material deviation, distinguishing agreed changes, favorable additions, unexplained drafting, and open diligence. FAIL if the perspective or classifications are materially inconsistent."
+type = "binary"

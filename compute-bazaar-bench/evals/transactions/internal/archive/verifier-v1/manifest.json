@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "status": "archived_private_calibration_grader",
+  "source_git_commit": "240f0be24f15b2cb566be3118e831bf518cf8560",
+  "tasks": {
+    "normalize-buyer-mandate": {
+      "task_digest": "sha256:2932b4083612616afa6f3867e0208a546743025424c484342f5fbad889083410",
+      "tests_tree_sha256": "9801125eb958ef06219d4d7b322d9135fdfba2d0d62953d2628a7da5b7f7c4c1"
+    },
+    "draft-capacity-data-room-population-plan": {
+      "task_digest": "sha256:d5132045ccf8068060fb483e7c70996cc4a61a410230f13238be87569b1fdbe7",
+      "tests_tree_sha256": "6cb044252f2cdefa7a6417a76c92f2dbfe47fd327747ff2b7b21d91652df181e"
+    },
+    "compare-capacity-agreement-against-term-sheet": {
+      "task_digest": "sha256:370004ab122e5036ecf8f60ac074f609f8d527db216f5500620b6721c83532e6",
+      "tests_tree_sha256": "2aa1e026a031134d83f694f80449adbb0a833d6ca12d7c3fcfe0de237592c62d"
+    }
+  },
+  "scope": "Archived tests only. Agent-visible task surfaces remain in the canonical task packages and are bound by the private calibration equivalence manifest."
+}

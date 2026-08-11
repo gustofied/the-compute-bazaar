@@ -1,0 +1,17 @@
+{
+  "schema_version": "compute-bazaar-bench.public-view.v1",
+  "release_id": "transactions-release-v1",
+  "protocol_path": "transactions-release-v1/transactions-release-v1.commitment.json",
+  "protocol_sha256": "3e3c2ec280b6971d5035e4470c95bfa6cacd0afd3132257011714ee834c68b80",
+  "managed_tasks": [
+    "normalize-buyer-mandate",
+    "draft-capacity-data-room-population-plan",
+    "compare-capacity-agreement-against-term-sheet"
+  ],
+  "jobs": [
+    "transactions-release-v1-mistral-small-2603-001",
+    "transactions-release-v1-glm-5.2-001"
+  ],
+  "report": "transactions-release-v1",
+  "include_private_calibration": false
+}

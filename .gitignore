@@ -51,6 +51,5 @@ tfplan
 /.pi/skills/
 /outputs/
 /jobs/
-/compute-bazaar-bench/jobs/raw/
-/compute-bazaar-bench/jobs/reports/
+/compute-bazaar-bench/jobs/
 /prime-rl/

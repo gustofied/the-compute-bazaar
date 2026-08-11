@@ -296,13 +296,6 @@ def _present_reliability_is_blind(
                         "gustofied/reliability-is-blind/latest"
                     ),
                 ),
-                TaskLink(
-                    label="Source",
-                    href=(
-                        "https://github.com/gustofied/the-compute-bazaar/tree/"
-                        "main/compute-bazaar-bench/evals/reliability-is-blind"
-                    ),
-                ),
             ],
             launch=LaunchSpec(
                 package_path=("compute-bazaar-bench/evals/reliability-is-blind/harbor"),

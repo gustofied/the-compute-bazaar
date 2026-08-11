@@ -1,0 +1,889 @@
+{
+  "schema_version": "compute-bazaar-bench.transactions.craft-review.v1",
+  "protocol_id": "transactions-comparison-v1",
+  "rubric_sha256": "10a9c742568ec440d5a6c78db45e84d5db3ef6056b13ccee9f5b8af3a1ee3d81",
+  "blind_mapping_sha256": "e74a2ed2e506a8be09fc0e66c1a10a6d0684024408d7d0ed27f1c74d41fed074",
+  "blind_review_sha256": "22bb0a77f403a615a2dce49c43591223903913f60e895aa06700c4313aa157ca",
+  "trials": {
+    "gpt-5.6-luna/compare-capacity-agreement-again__araUf2q": {
+      "review_id": "12407064a67fcc49",
+      "page_count": 15,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 3-11 split long table rows across pages with unlabeled continuations and large empty areas; page 12's adjacent headers run together. Content remains legible, but the flow needs local table formatting.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "120aee79048ca02e3af8ed9106273607b4c7b43c16756e422c7b7338071ec466",
+      "clipping": false,
+      "overlap": false
+    },
+    "glm-5.2/normalize-buyer-mandate__LhvrkMR": {
+      "review_id": "19f09a70b8f01fa8",
+      "page_count": 7,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Page 3 carries a single table row from page 2 without a repeated header and shows a crowded bullet transition; page 7 resumes numbering at 4 and leaves most of the page blank. Readable but needs local pagination/list cleanup.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "8d1d53d4a11640db8eded31e951a97ff82467ad1193402bb41bd2268d2a2bdff",
+      "clipping": false,
+      "overlap": false
+    },
+    "glm-5.2/normalize-buyer-mandate__fjaqw2p": {
+      "review_id": "1f31fac95f71a40b",
+      "page_count": 7,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 2, 4, and 6 show stray or crowded bullet markers at preceding line ends; page 7 is heavily under-filled. The document remains readable but needs list and pagination cleanup.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "47eb1614f783c2106ac6b07e45f306bfaa343472c229a0c5aa8669a98ce16f51",
+      "clipping": false,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/draft-capacity-data-room-populat__p4rmB3T": {
+      "review_id": "257697c5b0be0e30",
+      "page_count": 11,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Tables continue without repeated headers across pages 1-3, 4-8, and 9-10; several pages open with isolated continuation rows. Content is legible, but repeated-header and keep-together cleanup is needed.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "dbb03a6d4603def4c1cbec1688b760a8a30454b0622c3246c6567bc7da23c51c",
+      "clipping": false,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/normalize-buyer-mandate__HaxxNbs": {
+      "review_id": "257f06140ee91b79",
+      "page_count": 5,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Page 3 continues the requirement table without a repeated header; page 4 has a crowded O7/O8 bullet transition. Readable, but table continuation and list spacing need local revision.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "5cbec2f159127ee4dfe97933e7798dcccd593fdcde9e934e06f79fc251d7e4b8",
+      "clipping": false,
+      "overlap": false
+    },
+    "gpt-5.6-luna/compare-capacity-agreement-again__JRivMxf": {
+      "review_id": "3328c3e68924d75d",
+      "page_count": 5,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 2-3 continue the dense five-column register without repeated headers; page 4 begins with a single orphaned continuation cell. Table text is small but legible; pagination needs revision.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "ba8aacf375767c2e2a360789588c827a20f2e27f7cc58f8c5d7fe0bf13b5b69f",
+      "clipping": false,
+      "overlap": false
+    },
+    "gpt-5.6-luna/normalize-buyer-mandate__Pmca7dy": {
+      "review_id": "37ce9a8dd40a9ed3",
+      "page_count": 4,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Page 4 carries only one continuation row before the final response section and leaves most of the page blank. The content is clean and legible, but pagination needs local tightening.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "6ea096b44fc38dedb82ba3697acd85550880d1399678510af5ec810625ceea15",
+      "clipping": false,
+      "overlap": false
+    },
+    "gpt-5.6-luna/draft-capacity-data-room-populat__GRnjKok": {
+      "review_id": "3b999dcc48fb449d",
+      "page_count": 8,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Page 2 is almost empty except for one orphaned continuation row, and page 4 similarly strands the rest of a table at the top. Dense tables remain legible, but the pagination requires a broad cleanup.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "3990857bf3393eb6b90ca2d346bbfea458937b02f1e7fbaa6983db835d321d73",
+      "clipping": false,
+      "overlap": false
+    },
+    "glm-5.2/normalize-buyer-mandate__cgNoF6P": {
+      "review_id": "44b6c1cb629b38d4",
+      "page_count": 8,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 3-6 and 8 open with table continuation fragments without repeated headers; page 6 also shows crowded list markers, and page 8 is heavily under-filled. Readable, but pagination and list formatting need cleanup.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "b78315301ab1ed63c8f1a0bb46359b44092396d4218d379b28c6ccf746dcf252",
+      "clipping": false,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/compare-capacity-agreement-again__qgKtnsE": {
+      "review_id": "461a085a199d4f05",
+      "page_count": 7,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 3-5 continue dense tables without repeated headers, with narrow columns causing awkward word breaks; page 7 is heavily under-filled. Content remains legible, but table and pagination formatting need revision.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "bedcaa9919d222e68874acd0df9744b854866030bd2901107bf8a33fa3a6ac4c",
+      "clipping": false,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/normalize-buyer-mandate__Kv8YyfW": {
+      "review_id": "4b79429ce446db9b",
+      "page_count": 4,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "The page 2 contradiction table continues on page 3 without a repeated header, and pages 1 and 3 show stray or crowded bullet markers at line ends. Legible but needs list and table-continuation cleanup.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "09431f26b3a826962794105e0b74f5d5d18099c956d6fa8ee2a7a4f16f537c7d",
+      "clipping": false,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/draft-capacity-data-room-populat__xuwokdw": {
+      "review_id": "51b33854f43e8246",
+      "page_count": 19,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 7 and 15 are almost empty except for isolated continuation rows; major tables across pages 2-12, 14-15, and 18-19 repeatedly split without headers. The content is legible, but the document needs a broad pagination pass.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "135ed77a2229c3b3801729155a921cb9c18077721f416c76e1a19a169d6388bf",
+      "clipping": false,
+      "overlap": false
+    },
+    "gpt-5.6-luna/compare-capacity-agreement-again__DL4cWQu": {
+      "review_id": "541efbb9bc04951e",
+      "page_count": 4,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": true
+      },
+      "practical_usability": "mixed",
+      "notes": "The deviation matrix continues across pages 1-3; pages 2 and 3 begin mid-row without a repeated header. Otherwise polished and legible, but the page flow needs a local table fix.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "c4e96525f50f27791fb39f672dcceaa9e7450faf0b934b91c64d59c6e48af392",
+      "clipping": false,
+      "overlap": false
+    },
+    "glm-5.2/draft-capacity-data-room-populat__rzF8czU": {
+      "review_id": "5c9048478a6c4c0d",
+      "page_count": 20,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "The request register (pages 4-9) and evidence register (pages 10-12) span many pages without repeated headers; pages 9 and 12 contain only isolated continuation rows, and page 20 is heavily under-filled. Readable, but pagination needs a broad cleanup.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "346cf42980ed73fb26b107691ee934de762fbd86493e9ccec2e37ab21c07950e",
+      "clipping": false,
+      "overlap": false
+    },
+    "glm-5.2/compare-capacity-agreement-again__thJG7WD": {
+      "review_id": "709338567b83070c",
+      "page_count": 13,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "The deviation register across pages 2-8 repeatedly splits rows; pages 4, 6, and 8 start with continuation fragments, and page 8 leaves most of the page blank. Dense tables remain legible, but the report needs pagination cleanup.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "95b69702047399a1a6dad7e0d46b4e4cd7a3b20bc00d4455be393f01492856ad",
+      "clipping": false,
+      "overlap": false
+    },
+    "gpt-5.6-luna/draft-capacity-data-room-populat__R8LxKgJ": {
+      "review_id": "735dffa9e0a926df",
+      "page_count": 8,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Page 1 crowds the title and subtitle together; pages 2-7 repeatedly split tables without repeated headers, and page 8 is almost entirely blank. Content remains legible, but the report needs pagination and title-spacing cleanup.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "65de606a99bded7dbee8b43eb1d5c058df06ec88ae769f09eddd4eb11aeea5e5",
+      "clipping": false,
+      "overlap": false
+    },
+    "glm-5.2/draft-capacity-data-room-populat__nHhBNdj": {
+      "review_id": "77a9fa5f935e293e",
+      "page_count": 21,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": false,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Pages 5-10 turn the request map into extremely narrow, hard-to-follow columns; page 10 has colliding cell content around D-24, and page 20 shows bullet/list collisions. These critical layout defects make portions of the work product unusable.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "3be241e0ab1256ef45b38ff99f7c5dced810eb83306568b66b1d6c0f0d1ef390",
+      "clipping": false,
+      "overlap": true
+    },
+    "gpt-5.6-luna/normalize-buyer-mandate__sRu2xYN": {
+      "review_id": "78409a2a3397ae43",
+      "page_count": 7,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": true,
+        "professional-work-product": true
+      },
+      "practical_usability": "good",
+      "notes": "",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "ed62dbea69cafdb6873cacdbace6a17f0f70de54336cef11f1ef98d34944aa39",
+      "clipping": false,
+      "overlap": false
+    },
+    "glm-5.2/compare-capacity-agreement-again__uVFG5CM": {
+      "review_id": "7a68c778be02106c",
+      "page_count": 14,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Pages 2 and 14 contain multiple run-together list/heading transitions, including 'methodThe' and merged numbered-item text. Pages 4-10 also fragment a long table without repeated headers, with page 10 almost empty; the text collisions are a critical craft failure.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "0610f9fc1e815d424faa098de92f7cfee0a33c26dcdc96cd7d9e5991d0344d0f",
+      "clipping": false,
+      "overlap": true
+    },
+    "gpt-5.6-luna/compare-capacity-agreement-again__8Yc377s": {
+      "review_id": "9463c5a2001d43f6",
+      "page_count": 4,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 1 visibly collides the report title with the matter number and the buyer name with the subtitle. That critical overlap prevents a professional first page; page 4 is also heavily under-filled.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "a48b1e2bc900240a1e69f43153810daa816c713837e61a4f853459ba8db82e67",
+      "clipping": false,
+      "overlap": true
+    },
+    "gpt-5.6-luna/compare-capacity-agreement-again__NdC2PQ2": {
+      "review_id": "9c899bd60c3f50f9",
+      "page_count": 11,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": false,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": false,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 1 presents an empty table of contents. The long matrix across pages 4-9 repeatedly opens mid-row; page 8 visibly loses part of the R-17 row label and several cells are severely word-wrapped. The missing or clipped table content is a critical usability failure.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "25284ef1ab658aadfb09e2f7d07d5593a80a2044ac5256a13240807ccaa74fe1",
+      "clipping": true,
+      "overlap": false
+    },
+    "glm-5.2/draft-capacity-data-room-populat__7HH8y3t": {
+      "review_id": "9d3dcbbea132a707",
+      "page_count": 22,
+      "criterion_values": {
+        "render-success": false,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": false,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 8 has overlapping or collapsed content in the ten-column request table, and page 12 is completely blank. Pages 7-10 also continue the table without headers; these critical render and table defects make portions unusable.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "f6520bfcb9db1006bfd4b3dca1849e6ac1f41058c1842334e1e3fa4dc8cb835e",
+      "clipping": false,
+      "overlap": true
+    },
+    "deepseek-v4-flash-0731/draft-capacity-data-room-populat__zeJ3Boa": {
+      "review_id": "9f70512743d3f53d",
+      "page_count": 10,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": false,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 4 visibly collapses the D-10 to D-12 table rows, causing cell content and borders to collide. Pages 3-6 also continue the long request table without repeated headers; the critical overlap makes part of the matrix unusable.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "3484e48ca182ece1195d7f9f324eb01336570eaf835377b3f91f33e2535bbbcb",
+      "clipping": false,
+      "overlap": true
+    },
+    "deepseek-v4-flash-0731/compare-capacity-agreement-again__NBDCqBe": {
+      "review_id": "a6b73d8dc893e4bc",
+      "page_count": 11,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 2 strands the second bullet marker at the end of the preceding recommendation line. The material-deviation table continues across pages 2-5 without repeated headers, and page 11 is nearly empty; the list collision is a critical layout failure.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "40307a57620cd5ba01c26af92450c725cc87ecf9606adec31ef86766ec85ed47",
+      "clipping": false,
+      "overlap": true
+    },
+    "gpt-5.6-luna/draft-capacity-data-room-populat__Ws6XBgx": {
+      "review_id": "a963fc08597cd95c",
+      "page_count": 8,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": false,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 1 runs the subtitle into the matter line and the final body text into the page number. Page 5's table obscures part of the footer/page number, and page 7 clips the running header at the left edge. These critical collisions and clipping failures recur across the work product.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "298c2afe651d8324fcc44bb611457ed2236e1eb11d7a15673110ccf76b7422b1",
+      "clipping": true,
+      "overlap": true
+    },
+    "gpt-5.6-luna/normalize-buyer-mandate__BUKyfvD": {
+      "review_id": "af3f130f86314dd3",
+      "page_count": 7,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": false,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 3 misaligns the continued technical-table headers, and page 5 repeatedly runs adjacent contradiction-table columns together, including the service-date and term rows. Those critical table collisions undermine reliable reading despite otherwise clear body text.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "b47524efc2c13cd3f9d0d2084d24b41cb2bfea8e012f996282c62b0742871db2",
+      "clipping": false,
+      "overlap": true
+    },
+    "glm-5.2/normalize-buyer-mandate__LfozfNs": {
+      "review_id": "b0dad2642603b8a5",
+      "page_count": 7,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": true
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 2 and 3 begin with isolated table continuations without repeated headers. The document is otherwise polished and legible, but the page flow needs a local keep-together/repeated-header fix.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "35bd65d95693f38dee8e79224ed3880152768422eaba87d941b40368ca6816a3",
+      "clipping": false,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/draft-capacity-data-room-populat__kPveMS5": {
+      "review_id": "b1c512c96364bf51",
+      "page_count": 13,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": false,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Pages 4-9 fragment a seven-column matrix into narrow, heavily wrapped continuations. More seriously, page 11 collapses the bottom rows of the missing-evidence table so adjacent text and rules collide; that critical table defect makes part of the register unreliable.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "2fc4dc5ced747cc0a32d87b6ac44d1b96560bd8e223657f7d84d917e8d23771f",
+      "clipping": false,
+      "overlap": true
+    },
+    "gpt-5.6-luna/draft-capacity-data-room-populat__GkcxtKV": {
+      "review_id": "b60f29acd76ddbe9",
+      "page_count": 8,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 2-7 repeatedly continue large tables without repeated headers; page 8 contains only a two-line continuation and footer, leaving nearly the whole page empty. The content remains legible, but pagination needs a broad cleanup.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "426ebdc85fe654dd43a5e1e966e426e2d103514931afd438e8097731f708ec56",
+      "clipping": false,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/normalize-buyer-mandate__L2cG9Tt": {
+      "review_id": "b750c3b73d42a773",
+      "page_count": 5,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 4 embeds multiple bullet markers at the ends of preceding lines in the assumptions and open-questions lists. Page 3 also opens with an unlabeled table continuation; the list collisions are a critical layout failure.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "26fb2d2577c35d1946fe4c4880f163e83be9bccb3d11fe6aedbbf25dcfdf9104",
+      "clipping": false,
+      "overlap": true
+    },
+    "deepseek-v4-flash-0731/compare-capacity-agreement-again__8Mwxdg8": {
+      "review_id": "b888ffde03dcfc34",
+      "page_count": 8,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 2-5 continue the narrow seven-column deviation matrix without repeated headers, and page 7's checklist table carries its verdict onto page 8. The tables are legible, but the document needs a substantial pagination pass.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "9fc6019fb0f03f435649fc1fe8dc0c096f4c3609e71331d9a7b32aa044614ac0",
+      "clipping": false,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/draft-capacity-data-room-populat__Wwhw6vg": {
+      "review_id": "bb7229533168df18",
+      "page_count": 13,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": false,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Portrait pages 3, 5, 10, and 12 clip the right end of the running page-number footer; page 5 is also almost empty except for one continuation row. The repeated clipping is a critical craft failure.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "08a349980603da8e9899a725bfceccae1c12d63a60b732c96b00a21d8a6abe61",
+      "clipping": true,
+      "overlap": false
+    },
+    "glm-5.2/compare-capacity-agreement-again__jJmxG6y": {
+      "review_id": "bf58daea8ae288ad",
+      "page_count": 18,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 3-11 split the main deviation matrix across many unlabeled mid-row continuations, and pages 12-14 similarly fragment the checklist. Page 18 is heavily under-filled; content remains legible, but pagination needs a broad cleanup.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "c54b27fe1d1d5e54f7684dda51aa4047a0b83f387d1f85be74b8589e03ab5722",
+      "clipping": false,
+      "overlap": false
+    },
+    "glm-5.2/normalize-buyer-mandate__g2FC9Ha": {
+      "review_id": "c47ffe0093aca65c",
+      "page_count": 7,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 3 repeatedly strands bullet markers at the ends of preceding lines across several requirement lists. Tables also continue across pages 1-2 and 4-5 without repeated headers, and page 7 is under-filled; the list collisions are a critical layout failure.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "76bb65cc1713ac65ee207775cb2acf9c8f5dfb1cb0383fb6c12155d265567ed5",
+      "clipping": false,
+      "overlap": true
+    },
+    "gpt-5.6-luna/draft-capacity-data-room-populat__iSFUB5P": {
+      "review_id": "cbb10a9762fe56d1",
+      "page_count": 9,
+      "criterion_values": {
+        "render-success": false,
+        "no-clipping": false,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 5 is blank apart from running header/footer, and page 6's running header is visibly clipped or garbled. Dense registers across pages 3-4 and 6-7 also continue without repeated headers; the blank and clipped page furniture are critical failures.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "b19974c961fdc26c661adc63c0a79c9123f78f92ddd4b923577c23abc6335f54",
+      "clipping": true,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/normalize-buyer-mandate__g8d2hxb": {
+      "review_id": "d57de5d8753901d6",
+      "page_count": 6,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 1-3 split the controlling-requirements table without repeated headers; page 6 carries only three final document-control rows and leaves most of the page empty. Readable, but the pagination needs cleanup.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "5b60c87437e4ffdc95d279773dc450f6e521b01d4f5b1f598ab21c93b82b94c8",
+      "clipping": false,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/normalize-buyer-mandate__fgKBvcG": {
+      "review_id": "e0610b27993c95d9",
+      "page_count": 4,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Page 2 continues the controlling-requirements table without a repeated header, page 3 strands the next section heading at the bottom, and page 4 is heavily under-filled. The content remains clean and legible, but pagination needs local revision.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "2b88ce7e10601ba30eaeb2ea7470ebc8c62bb0f95f0b3db7a0d86569bb7cc9af",
+      "clipping": false,
+      "overlap": false
+    },
+    "deepseek-v4-flash-0731/compare-capacity-agreement-again__nLrh2ja": {
+      "review_id": "e1261d07497da48d",
+      "page_count": 7,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 3-6 continue long tables mid-row without repeated headers, and page 7 is substantially under-filled. The content remains clean and legible, but pagination and table continuation need revision.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "c819f346a5e0e5355db647c68a1b74fc99dfbfcdf5c33831d3f265b982cd83d0",
+      "clipping": false,
+      "overlap": false
+    },
+    "glm-5.2/draft-capacity-data-room-populat__hZedMKB": {
+      "review_id": "e1bd5c0c031f3b7b",
+      "page_count": 17,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 1 repeatedly strands bullet markers at the ends of preceding operating-rule lines. Pages 6-11 also split a very narrow request table without repeated headers; the list collisions are a critical layout failure.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "33f88dc395aaf22d47ec8c0ff00c0c338169392658c655b82c1a0661b521639e",
+      "clipping": false,
+      "overlap": true
+    },
+    "deepseek-v4-flash-0731/compare-capacity-agreement-again__AFudigJ": {
+      "review_id": "e25a460685a808b4",
+      "page_count": 7,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "The checklist continues from page 5 onto page 6 without a repeated header, and page 7 contains only the closing response bullets. The document remains legible, but pagination needs local tightening.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "e5271d297dfa2229d4346bcb794dd1096fc191d5c0e4733d9c209f0ab1665b5a",
+      "clipping": false,
+      "overlap": false
+    },
+    "glm-5.2/draft-capacity-data-room-populat__ezPyqHm": {
+      "review_id": "e2fa4164df8e2fe8",
+      "page_count": 20,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Pages 8-11 continue the ten-column request map without repeated headers; page 15 carries only three final gap rows, and page 20 is heavily under-filled. Tables remain legible, but the document needs a broad pagination pass.",
+      "task": "draft-capacity-data-room-population-plan",
+      "source_sha256": "7fb311e90f403b3433fd85ce42dea75ac8477b992cc0406c95abdc17b6bebc00",
+      "clipping": false,
+      "overlap": false
+    },
+    "gpt-5.6-luna/normalize-buyer-mandate__AxQsCUu": {
+      "review_id": "f19f927507c2e74e",
+      "page_count": 3,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": true,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "On page 3, two open-question bullet markers run directly into the following 'Identify' and 'Confirm' text. The otherwise polished brief has a critical local overlap defect.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "4b1c75e0733161fc674e537b3a90cbc39f954ebfd0b42a3d9de2ded73e2c1e6f",
+      "clipping": false,
+      "overlap": true
+    },
+    "gpt-5.6-luna/normalize-buyer-mandate__rwCxpyY": {
+      "review_id": "f91de2a8eaa08aa8",
+      "page_count": 4,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": false,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "poor",
+      "notes": "Page 1 collides the oversized title with the matter line and crowds the adjacent normalized subtitle into the same header block. This critical first-page overlap prevents a professional work product; page 4 is also heavily under-filled.",
+      "task": "normalize-buyer-mandate",
+      "source_sha256": "71c74f08865df3a23426a599ca824b24d34b41730f6362050a0773aa67b5e939",
+      "clipping": false,
+      "overlap": true
+    },
+    "glm-5.2/compare-capacity-agreement-again__zqhJx8D": {
+      "review_id": "fa274c0f153a9cfc",
+      "page_count": 12,
+      "criterion_values": {
+        "render-success": true,
+        "no-clipping": true,
+        "no-overlap": true,
+        "body-readable": true,
+        "tables-readable": true,
+        "hierarchy-clear": true,
+        "page-flow-usable": false,
+        "professional-work-product": false
+      },
+      "practical_usability": "mixed",
+      "notes": "Long tables repeatedly continue mid-row without repeated headers across pages 1-10; page 12 also drops the bullet marker before R-03 and leaves most of the page empty. Content remains legible, but pagination and list formatting need cleanup.",
+      "task": "compare-capacity-agreement-against-term-sheet",
+      "source_sha256": "41b0cc39aa38a4c7ef8139ec0f2a99b83b833d0f0b49998040ce60e9ba4f9803",
+      "clipping": false,
+      "overlap": false
+    }
+  }
+}

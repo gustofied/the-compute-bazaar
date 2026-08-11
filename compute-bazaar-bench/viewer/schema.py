@@ -25,7 +25,9 @@ class LaunchSpec(ViewModel):
     task_id: str
     default_agent: str = "terminus-2"
     default_environment: str = "modal"
-    default_jobs_dir: str = "compute-bazaar-bench/jobs/raw"
+    default_jobs_dir: str = "compute-bazaar-bench/jobs"
+    default_env_file: str = ".env"
+    modal_vm_runtime: bool = True
 
 
 class GraderInfo(ViewModel):
@@ -52,6 +54,39 @@ class Metric(ViewModel):
     value: str
     hint: str = ""
     tone: Tone = "neutral"
+
+
+class BenchmarkLegendItem(ViewModel):
+    label: str
+    tone: Tone
+
+
+class BenchmarkSegment(ViewModel):
+    label: str
+    value: float = Field(ge=0, le=1)
+    tone: Tone
+
+
+class BenchmarkRow(ViewModel):
+    label: str
+    value: str
+    detail: str = ""
+    segments: list[BenchmarkSegment] = Field(default_factory=list)
+
+
+class BenchmarkChart(ViewModel):
+    eyebrow: str = "Benchmark"
+    title: str
+    description: str = ""
+    rows: list[BenchmarkRow]
+    legend: list[BenchmarkLegendItem] = Field(default_factory=list)
+    footnote: str = ""
+
+
+class ComparisonGroup(ViewModel):
+    id: str
+    label: str
+    chart: BenchmarkChart
 
 
 class Notice(ViewModel):
@@ -92,17 +127,42 @@ class DetailSection(ViewModel):
     warning: str = ""
 
 
+class TraceToolCall(ViewModel):
+    name: str
+    arguments: Any
+
+
+class TraceStep(ViewModel):
+    step_id: str
+    source: str
+    label: str
+    message: str = ""
+    tool_calls: list[TraceToolCall] = Field(default_factory=list)
+    observation: str = ""
+    metrics: dict[str, Any] = Field(default_factory=dict)
+
+
+class TracePresentation(ViewModel):
+    schema_version: str = ""
+    step_count: int = Field(ge=0)
+    final_metrics: dict[str, Any] = Field(default_factory=dict)
+    steps: list[TraceStep] = Field(default_factory=list)
+
+
 class TrialPresentation(ViewModel):
     trial_id: str
     title: str
     summary: list[Metric]
     sections: list[DetailSection]
+    trace: TracePresentation | None = None
 
 
 class JobPresentation(ViewModel):
     schema_version: str = "compute-bazaar.viewer.job.v1"
     task: TaskInfo
     job_id: str
+    started_at: str = ""
+    finished_at: str = ""
     agent_count: int = Field(ge=0)
     trial_count: int = Field(ge=0)
     primary_score: Metric | None = None

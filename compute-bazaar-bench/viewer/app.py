@@ -1,4 +1,4 @@
-"""Local FastAPI viewer for Compute Bazaar evaluation reports."""
+"""Local FastAPI viewer for Compute Bazaar tasks, jobs, and reports."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import sys
 from typing import Any, Sequence
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -20,12 +21,30 @@ BENCH_ROOT = Path(__file__).resolve().parents[1]
 if str(BENCH_ROOT) not in sys.path:
     sys.path.insert(0, str(BENCH_ROOT))
 
+from viewer.benchmark_charts import discover_comparison_groups  # noqa: E402
 from viewer.presenters import load_job_presentation  # noqa: E402
+from viewer.harbor_jobs import (  # noqa: E402
+    present_harbor_job,
+    summarize_harbor_job,
+)
+from viewer.job_sources import (  # noqa: E402
+    JobSource,
+    discover_job_sources,
+    load_public_release_summary,
+)
+from viewer.report_overlays import apply_report_overlay  # noqa: E402
+from viewer.task_catalog import discover_task_definitions  # noqa: E402
 from viewer.schema import (  # noqa: E402
+    BenchmarkChart,
+    ComparisonGroup,
     DataTable,
     JobPresentation,
     Metric,
+    TableCell,
+    TableColumn,
+    TableRow,
     TaskInfo,
+    TracePresentation,
     TrialPresentation,
 )
 
@@ -106,10 +125,15 @@ h2 { margin: 0; font-size: 15px; letter-spacing: 0; }
   color: var(--muted);
   line-height: 1.45;
 }
-.note-editor { margin: 0 0 24px; }
+.note-editor { margin: 0 0 20px; border: 1px solid var(--line); background: var(--panel); }
+.note-editor summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 44px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.note-editor summary::-webkit-details-marker { display: none; }
+.note-editor summary::after { content: "+"; color: var(--muted); }
+.note-editor[open] summary::after { content: "-"; }
+.note-editor-body { padding: 0 12px 12px; }
 .note-editor textarea {
   width: 100%;
-  min-height: 92px;
+  min-height: 76px;
   resize: vertical;
   padding: 12px;
   border: 1px solid var(--line);
@@ -190,6 +214,89 @@ dialog::backdrop { background: rgb(0 0 0 / 72%); }
 .metric:last-child { border-right: 0; }
 .metric-label { color: var(--muted); font-size: 11px; text-transform: uppercase; }
 .metric-value { font-size: 24px; margin-top: 12px; line-height: 1; }
+.benchmark { padding: 28px 0 4px; }
+.comparison-picker {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 24px;
+}
+.comparison-picker label {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.comparison-picker select {
+  min-width: 250px;
+  min-height: 38px;
+  padding: 7px 34px 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.benchmark-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 28px;
+  margin-bottom: 18px;
+}
+.benchmark-copy { max-width: 760px; }
+.benchmark-description {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.5;
+}
+.benchmark-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px 18px; }
+.benchmark-legend-item { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+.benchmark-swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--line-strong); }
+.benchmark-swatch.good, .benchmark-segment.good { background: var(--green); }
+.benchmark-swatch.warn, .benchmark-segment.warn { background: var(--amber); }
+.benchmark-swatch.bad, .benchmark-segment.bad { background: var(--red); }
+.benchmark-swatch.info, .benchmark-segment.info { background: var(--blue); }
+.benchmark-swatch.neutral, .benchmark-segment.neutral { background: #465049; }
+.benchmark-list { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.benchmark-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 250px) minmax(260px, 1fr) minmax(210px, 260px);
+  align-items: center;
+  gap: 20px;
+  min-height: 72px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.benchmark-row:last-child { border-bottom: 0; }
+.benchmark-label { font-size: 14px; font-weight: 700; }
+.benchmark-track {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 20px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel-deep);
+}
+.benchmark-track.is-empty { border-style: dashed; }
+.benchmark-segment { height: 100%; min-width: 1px; }
+.benchmark-track-note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.benchmark-result { min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.benchmark-value { display: block; font-size: 16px; font-weight: 700; }
+.benchmark-detail { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.benchmark-footnote { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .section { margin-top: 26px; }
 .section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 16px; }
 .eval-list { border: 1px solid var(--line); }
@@ -201,6 +308,9 @@ dialog::backdrop { background: rgb(0 0 0 / 72%); }
   min-height: 82px;
   padding: 14px;
   border-bottom: 1px solid var(--line);
+}
+.job-row {
+  grid-template-columns: minmax(260px, 1.5fr) minmax(110px, 0.55fr) minmax(165px, 0.8fr) minmax(70px, 0.35fr) minmax(70px, 0.35fr) minmax(260px, 1.5fr);
 }
 .eval-row:last-child { border-bottom: 0; }
 .eval-row:hover { background: var(--panel-hover); }
@@ -234,10 +344,30 @@ tbody tr:hover { background: var(--panel-hover); }
 .detail:nth-child(2n) { border-right: 0; }
 .detail-key { color: var(--muted); font-size: 11px; text-transform: uppercase; margin-bottom: 7px; }
 pre { overflow: auto; background: var(--panel-deep); border: 1px solid var(--line); padding: 14px; line-height: 1.45; }
+.trace-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.trace-list { border: 1px solid var(--line); }
+.trace-step { border-bottom: 1px solid var(--line); background: var(--panel); }
+.trace-step:last-child { border-bottom: 0; }
+.trace-step[open] { background: var(--panel-deep); }
+.trace-step summary { display: grid; grid-template-columns: 68px 80px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 48px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.trace-step summary::-webkit-details-marker { display: none; }
+.trace-step summary::before { content: "+"; grid-column: 1; grid-row: 1; justify-self: end; color: var(--muted); }
+.trace-step[open] summary::before { content: "-"; }
+.trace-number { grid-column: 1; grid-row: 1; color: var(--muted); }
+.trace-source { color: var(--blue); text-transform: uppercase; font-size: 11px; }
+.trace-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trace-usage { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.trace-body { padding: 0 12px 14px 80px; }
+.trace-block + .trace-block { margin-top: 12px; }
+.trace-block-label { margin-bottom: 5px; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.trace-body pre { max-height: 460px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.trace-tool + .trace-tool { margin-top: 8px; }
+.trace-tool-name { display: inline-block; margin-bottom: 5px; color: var(--green); }
 .back { display: inline-block; margin-bottom: 20px; color: var(--muted); }
 @media (max-width: 980px) {
   .eval-row { grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(100px, 1fr)); }
   .eval-row > :last-child { grid-column: 1 / -1; }
+  .job-row { grid-template-columns: minmax(220px, 2fr) minmax(110px, 1fr) minmax(165px, 1.2fr) repeat(2, minmax(80px, 0.6fr)); }
 }
 @media (max-width: 640px) {
   .shell { width: min(100% - 20px, 1480px); padding-top: 18px; }
@@ -251,9 +381,23 @@ pre { overflow: auto; background: var(--panel-deep); border: 1px solid var(--lin
   .task-disclosures { grid-template-columns: 1fr; }
   .task-disclosure + .task-disclosure { border-left: 0; padding-left: 0; }
   .task-actions { width: 100%; margin-top: 0; }
+  .comparison-picker { align-items: stretch; flex-direction: column; gap: 6px; }
+  .comparison-picker select { width: 100%; min-width: 0; }
+  .benchmark-head { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .benchmark-legend { justify-content: flex-start; }
+  .benchmark-row { grid-template-columns: minmax(0, 1fr) auto; gap: 9px 12px; padding: 13px 0; }
+  .benchmark-track { grid-column: 1 / -1; grid-row: 2; height: 16px; }
+  .benchmark-result { grid-column: 2; grid-row: 1; }
+  .benchmark-detail { display: none; }
   .form-grid { grid-template-columns: 1fr; }
   .field.wide { grid-column: auto; }
   .detail { border-right: 0; }
+  .trace-step summary { grid-template-columns: 56px minmax(0, 1fr); }
+  .trace-number { grid-column: 1; }
+  .trace-source { grid-column: 2; }
+  .trace-label { grid-column: 2; }
+  .trace-usage { display: none; }
+  .trace-body { padding-left: 12px; }
   .eval-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .eval-row > :first-child, .eval-row > :last-child { grid-column: 1 / -1; }
 }
@@ -265,6 +409,31 @@ def _read_json(path: Path) -> Any:
         return json.loads(path.read_text())
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         raise RuntimeError(f"cannot read viewer file {path}: {exc}") from exc
+
+
+def _parse_timestamp(value: str) -> datetime | None:
+    clean = value.strip()
+    if not clean:
+        return None
+    if clean.endswith("Z"):
+        clean = f"{clean[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(clean)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _format_timestamp(value: str) -> str:
+    parsed = _parse_timestamp(value)
+    return "—" if parsed is None else parsed.strftime("%d %b %Y, %H:%M")
+
+
+def _timestamp_sort_key(value: str) -> float:
+    parsed = _parse_timestamp(value)
+    return float("-inf") if parsed is None else parsed.timestamp()
 
 
 def _compute_bazaar_mark() -> str:
@@ -286,50 +455,6 @@ def _layout(title: str, body: str, base_path: str) -> str:
 <body data-terminal-workspace="eval"><header class="topbar">{_compute_bazaar_mark()}</header><main class="shell">{body}</main>
 <script type="module" src="/terminal-assets/perspective/command.js?v=20260808-2"></script>
 <script type="module">import {{ setupComputeTitleEmbroidery }} from "{embroidery}"; setupComputeTitleEmbroidery();</script></body></html>"""
-
-
-def _discover_run_paths(source: Path) -> dict[str, dict[str, Path]]:
-    source = source.resolve()
-    if (source / "view.json").is_file():
-        raw = _read_json(source / "view.json")
-        if not isinstance(raw, dict):
-            raise RuntimeError("view.json must be a JSON object")
-        task = raw.get("task", {})
-        return {
-            str(task.get("slug") or "evaluation"): {
-                str(raw.get("job_id") or source.name): source
-            }
-        }
-    if (source / "protocol.json").is_file() and (source / "trials.json").is_file():
-        protocol = _read_json(source / "protocol.json")
-        if not isinstance(protocol, dict):
-            raise RuntimeError("protocol.json must be a JSON object")
-        eval_slug = (
-            "reliability-is-blind"
-            if protocol.get("schema_version") == "reliability-is-blind.protocol.v1"
-            else str(protocol.get("eval_slug") or "evaluation")
-        )
-        run_id = str(protocol.get("protocol_id") or source.name)
-        return {eval_slug: {run_id: source}}
-
-    discovered: dict[str, dict[str, Path]] = {}
-    for container in ("runs", "jobs"):
-        for run_dir in sorted(source.glob(f"*/{container}/*")):
-            if not run_dir.is_dir():
-                continue
-            has_view = (run_dir / "view.json").is_file()
-            has_analysis = (run_dir / "protocol.json").is_file() and (
-                run_dir / "trials.json"
-            ).is_file()
-            if has_view or has_analysis:
-                eval_slug = run_dir.parent.parent.name
-                discovered.setdefault(eval_slug, {})[run_dir.name] = run_dir
-    if not discovered:
-        raise RuntimeError(
-            "results root must contain <eval>/runs/<job>/view.json or "
-            "protocol.json plus trials.json"
-        )
-    return discovered
 
 
 class JobNote(BaseModel):
@@ -359,6 +484,7 @@ def _write_note(run_dir: Path, text: str) -> dict[str, str]:
         "text": clean,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+    run_dir.mkdir(parents=True, exist_ok=True)
     path = run_dir / "notes.json"
     temporary = path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(value, indent=2) + "\n")
@@ -370,26 +496,53 @@ def _run_summary(
     presentation: JobPresentation, note: dict[str, str] | None = None
 ) -> dict[str, Any]:
     note = note or {"text": "", "updated_at": ""}
+    origin = next(
+        (
+            metric.value
+            for metric in presentation.metrics
+            if metric.label == "Execution origin"
+        ),
+        "",
+    )
     return {
         "run_id": presentation.job_id,
+        "started_at": presentation.started_at,
+        "finished_at": presentation.finished_at,
+        "started": _format_timestamp(presentation.started_at),
         "score": presentation.primary_score,
         "agents": presentation.agent_count,
         "trials": presentation.trial_count,
         "note": note["text"],
         "note_updated_at": note["updated_at"],
+        "origin": origin,
     }
 
 
 def _evaluation_summary(
-    presentation: JobPresentation, *, job_count: int = 1
+    task: TaskInfo,
+    *,
+    jobs: int,
+    agent_configurations: set[tuple[str, str]],
+    trials: int,
 ) -> dict[str, Any]:
     return {
-        "slug": presentation.task.slug,
-        "name": presentation.task.name,
-        "domain": presentation.task.domain,
-        "jobs": job_count,
-        "agents": presentation.agent_count,
-        "trials": presentation.trial_count,
+        "slug": task.slug,
+        "name": task.name,
+        "domain": task.domain,
+        "jobs": jobs,
+        "agents": len(agent_configurations),
+        "trials": trials,
+    }
+
+
+def _empty_evaluation_summary(task: TaskInfo) -> dict[str, Any]:
+    return {
+        "slug": task.slug,
+        "name": task.name,
+        "domain": task.domain,
+        "jobs": 0,
+        "agents": 0,
+        "trials": 0,
     }
 
 
@@ -441,9 +594,18 @@ def _task_hero_html(task: TaskInfo, base_path: str) -> str:
         if instruction or grader
         else ""
     )
+    native_link_attribute = ' data-external-link="true"' if base_path else ""
     links = "".join(
-        f'<a class="button" href="{escape(link.href)}" target="_blank" rel="noreferrer">{escape(link.label)} ↗</a>'
+        f'<a class="button" href="{escape(link.href)}" target="_blank" '
+        f'rel="noreferrer"{native_link_attribute}>{escape(link.label)} ↗</a>'
         for link in task.links
+    )
+    external_link_script = (
+        """<script>
+document.querySelectorAll('[data-external-link]').forEach(link=>link.addEventListener('click',async event=>{event.preventDefault();try{const response=await fetch('/api/terminal/external',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:link.href})});if(!response.ok)throw new Error('external open rejected');}catch(_error){window.location.assign(link.href);}}));
+</script>"""
+        if base_path and task.links
+        else ""
     )
     launcher = ""
     dialog = ""
@@ -452,39 +614,45 @@ def _task_hero_html(task: TaskInfo, base_path: str) -> str:
         launcher = '<button class="button primary" id="open-launch" type="button">Launch job</button>'
         spec = json.dumps(launch.model_dump()).replace("<", "\\u003c")
         dialog = f"""<dialog id="launch-dialog"><div class="dialog-head"><div><div class="eyebrow">Harbor</div><h2>Launch job</h2></div><button class="button dialog-close" id="close-launch" type="button" aria-label="Close">×</button></div><div class="dialog-body"><div class="form-grid">
-<div class="field"><label for="launch-agent">Agent</label><input id="launch-agent" value="{escape(launch.default_agent)}"></div>
-<div class="field"><label for="launch-model">Model</label><input id="launch-model" placeholder="provider/model"></div>
+<div class="field"><label for="launch-agent">Agent</label><input id="launch-agent" value="{escape(launch.default_agent)}" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
+<div class="field"><label for="launch-model">Model</label><input id="launch-model" placeholder="provider/model" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
 <div class="field"><label for="launch-environment">Environment</label><select id="launch-environment"><option value="{escape(launch.default_environment)}">{escape(launch.default_environment.title())}</option></select></div>
 <div class="field"><label for="launch-attempts">Attempts</label><input id="launch-attempts" type="number" min="1" max="100" value="1"></div>
 <div class="field"><label for="launch-concurrency">Concurrency</label><input id="launch-concurrency" type="number" min="1" max="100" value="1"></div>
-<div class="field"><label for="launch-name">Job name</label><input id="launch-name" value="{escape(task.slug)}-job-001"></div>
+<div class="field"><label for="launch-name">Job name</label><input id="launch-name" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
 </div><pre class="command-preview" id="launch-command"></pre><div class="dialog-actions"><span class="muted" id="copy-state"></span><button class="button primary" id="copy-command" type="button">Copy command</button></div></div></dialog>
 <script>
 const launchSpec={spec};const launchDialog=document.getElementById('launch-dialog');
 const launchFields=['launch-agent','launch-model','launch-environment','launch-attempts','launch-concurrency','launch-name'];
 const shellQuote=value=>/^[A-Za-z0-9_./:@+-]+$/.test(value)?value:`'${{value.replaceAll("'", "'\\\"'\\\"'")}}'`;
-const buildCommand=()=>{{const value=id=>document.getElementById(id).value.trim();const parts=['harbor','run','-p',launchSpec.package_path,'-i',launchSpec.task_id,'-a',value('launch-agent')];if(value('launch-model'))parts.push('-m',value('launch-model'));parts.push('-e',value('launch-environment'),'-o',launchSpec.default_jobs_dir,'-k',value('launch-attempts'),'-n',value('launch-concurrency'),'--job-name',value('launch-name'));document.getElementById('launch-command').textContent=parts.map(shellQuote).join(' ');}};
-launchFields.forEach(id=>document.getElementById(id).addEventListener('input',buildCommand));buildCommand();
-document.getElementById('open-launch').addEventListener('click',()=>launchDialog.showModal());
+const tmuxSession=value=>value.toLowerCase().replaceAll(/[^a-z0-9_-]/g,'-').replaceAll(/-+/g,'-').slice(0,80)||'compute-bazaar-eval';
+const newJobName=()=>{{const now=new Date().toISOString();const stamp=now.slice(0,19).replaceAll('-','').replaceAll(':','').replace('T','-');const suffix=globalThis.crypto?.randomUUID?crypto.randomUUID().slice(0,6):Math.random().toString(36).slice(2,8);return `${{launchSpec.task_id}}-job-${{stamp}}-${{suffix}}`;}};
+const buildCommand=()=>{{const value=id=>document.getElementById(id).value.trim();const environment=value('launch-environment');const attempts=value('launch-attempts');const parts=['harbor','run','--env-file',launchSpec.default_env_file,'-p',launchSpec.package_path,'-a',value('launch-agent')];if(value('launch-model'))parts.push('-m',value('launch-model'));parts.push('-e',environment);if(environment==='modal'&&launchSpec.modal_vm_runtime)parts.push('--ek','modal_vm_runtime=true');parts.push('-o',launchSpec.default_jobs_dir);if(attempts!=='1')parts.push('-k',attempts,'-n',value('launch-concurrency'));parts.push('--job-name',value('launch-name'));const harborCommand=parts.map(shellQuote).join(' ');const command=['tmux','new-session','-A','-s',tmuxSession(value('launch-name')),harborCommand];document.getElementById('launch-command').textContent=command.map(shellQuote).join(' ');}};
+launchFields.forEach(id=>document.getElementById(id).addEventListener('input',buildCommand));document.getElementById('launch-name').value=newJobName();buildCommand();
+document.getElementById('open-launch').addEventListener('click',()=>{{document.getElementById('launch-name').value=newJobName();buildCommand();launchDialog.showModal();}});
 document.getElementById('close-launch').addEventListener('click',()=>launchDialog.close());
 document.getElementById('copy-command').addEventListener('click',async()=>{{await navigator.clipboard.writeText(document.getElementById('launch-command').textContent);document.getElementById('copy-state').textContent='Copied';}});
 </script>"""
     tasks_url = _viewer_path(base_path, "/")
-    return f"""<section class="task-hero"><div><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / {escape(task.domain)}</div><h1>{escape(task.name)}</h1>{description}{disclosures}</div><div class="task-actions">{launcher}{links}</div></section>{dialog}"""
+    return f"""<section class="task-hero"><div><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / {escape(task.domain)}</div><h1>{escape(task.name)}</h1>{description}{disclosures}</div><div class="task-actions">{launcher}{links}</div></section>{dialog}{external_link_script}"""
 
 
 def _runs_html(
     task: TaskInfo,
     runs: Sequence[dict[str, Any]],
     base_path: str = "",
+    release_summary: dict[str, Any] | None = None,
+    comparison_groups: Sequence[ComparisonGroup] = (),
+    selected_comparison: str | None = None,
 ) -> str:
     rows = "".join(
-        f"""<a class="eval-row" href="{_viewer_path(base_path, f"/evals/{escape(task.slug)}/jobs/{escape(run['run_id'])}")}">
+        f"""<a class="eval-row job-row" href="{_viewer_path(base_path, f"/evals/{escape(task.slug)}/jobs/{escape(run['run_id'])}")}">
 <div><span class="eval-cell-label">Job</span><div class="eval-name">{escape(run["run_id"])}</div></div>
 <div title="{escape(run["score"].hint if run["score"] else "")}"><span class="eval-cell-label">{escape(run["score"].label if run["score"] else "Score")}</span>{escape(run["score"].value if run["score"] else "—")}</div>
+<div><span class="eval-cell-label">Started UTC</span>{escape(run["started"])}</div>
 <div><span class="eval-cell-label">Agents</span>{run["agents"]}</div>
 <div><span class="eval-cell-label">Trials</span>{run["trials"]}</div>
-<div><span class="eval-cell-label">Note</span><span class="note-preview" title="{escape(run["note"] or "No note yet")}">{escape(run["note"] or "No note yet")}</span></div>
+<div><span class="eval-cell-label">{"How scored" if run.get("origin") else "Note"}</span><span class="note-preview" title="{escape(run.get("origin") or run["note"] or "No note yet")}">{escape(run.get("origin") or run["note"] or "No note yet")}</span></div>
 </a>"""
         for run in runs
     )
@@ -493,9 +661,211 @@ def _runs_html(
         if not rows
         else f'<div class="eval-list">{rows}</div>'
     )
-    body = f"""{_task_hero_html(task, base_path)}
+    comparison, active_group = _comparison_html(
+        task.slug,
+        comparison_groups,
+        selected_comparison,
+        base_path,
+    )
+    release_id = release_summary.get("release_id") if release_summary else None
+    release = (
+        _release_summary_html(release_summary)
+        if release_summary and active_group == release_id
+        else ""
+    )
+    body = f"""{_task_hero_html(task, base_path)}{comparison}{release}
 <section class="section"><div class="section-head"><h2>Jobs</h2></div>{empty}</section>"""
     return _layout(task.name, body, base_path)
+
+
+def _comparison_html(
+    task_slug: str,
+    groups: Sequence[ComparisonGroup],
+    selected: str | None,
+    base_path: str,
+) -> tuple[str, str | None]:
+    if not groups:
+        return "", None
+    active = next((group for group in groups if group.id == selected), groups[0])
+    options = "".join(
+        '<option '
+        f'value="{escape(_viewer_path(base_path, f"/evals/{task_slug}?comparison={quote(group.id, safe='')}"))}"'
+        f"{' selected' if group.id == active.id else ''}>"
+        f"{escape(group.label)}</option>"
+        for group in groups
+    )
+    picker = ""
+    label_is_repeated = bool(active.chart.eyebrow) and (
+        active.chart.eyebrow.casefold() == active.label.casefold()
+    )
+    if len(groups) > 1 or not label_is_repeated:
+        picker = (
+            '<div class="comparison-picker">'
+            '<label for="comparison-select">Comparison</label>'
+            '<select id="comparison-select" '
+            "onchange=\"window.location.assign(this.value)\">"
+            f"{options}</select></div>"
+        )
+    return f"{picker}{_benchmark_chart_html(active.chart)}", active.id
+
+
+def _benchmark_chart_html(chart: BenchmarkChart) -> str:
+    legend = "".join(
+        '<span class="benchmark-legend-item">'
+        f'<span class="benchmark-swatch {item.tone}" aria-hidden="true"></span>'
+        f"{escape(item.label)}</span>"
+        for item in chart.legend
+    )
+    rendered_rows = []
+    for row in chart.rows:
+        rendered_segments = []
+        used = 0.0
+        segment_labels = []
+        for segment in row.segments:
+            width = min(segment.value, max(0.0, 1.0 - used))
+            used += width
+            segment_labels.append(f"{segment.label} {100 * width:.1f}%")
+            rendered_segments.append(
+                f'<span class="benchmark-segment {segment.tone}" '
+                f'style="width:{100 * width:.6f}%" title="{escape(segment.label)}">'
+                "</span>"
+            )
+        empty_class = " is-empty" if not rendered_segments else ""
+        track_note = (
+            '<span class="benchmark-track-note">No semantic review</span>'
+            if not rendered_segments
+            else ""
+        )
+        aria_parts = [row.label, row.value, row.detail, *segment_labels]
+        aria_label = ". ".join(part for part in aria_parts if part)
+        rendered_rows.append(
+            '<div class="benchmark-row">'
+            f'<div class="benchmark-label">{escape(row.label)}</div>'
+            f'<div class="benchmark-track{empty_class}" role="img" '
+            f'aria-label="{escape(aria_label)}">'
+            f"{''.join(rendered_segments)}{track_note}</div>"
+            '<div class="benchmark-result">'
+            f'<strong class="benchmark-value">{escape(row.value)}</strong>'
+            f'<span class="benchmark-detail">{escape(row.detail)}</span>'
+            "</div></div>"
+        )
+    description = (
+        f'<p class="benchmark-description">{escape(chart.description)}</p>'
+        if chart.description
+        else ""
+    )
+    footnote = (
+        f'<p class="benchmark-footnote">{escape(chart.footnote)}</p>'
+        if chart.footnote
+        else ""
+    )
+    eyebrow = (
+        f'<div class="eyebrow">{escape(chart.eyebrow)}</div>' if chart.eyebrow else ""
+    )
+    return (
+        '<section class="benchmark" aria-labelledby="benchmark-title">'
+        '<div class="benchmark-head"><div class="benchmark-copy">'
+        f'{eyebrow}<h2 id="benchmark-title">{escape(chart.title)}</h2>'
+        f"{description}</div>"
+        f'<div class="benchmark-legend">{legend}</div></div>'
+        f'<div class="benchmark-list">{"".join(rendered_rows)}</div>{footnote}</section>'
+    )
+
+
+def _release_summary_html(summary: dict[str, Any]) -> str:
+    rows = []
+    for row in summary.get("rows", []):
+        craft = row.get("craft") or {}
+        telemetry = row.get("telemetry") or {}
+        strict_rate = row.get("strict_all_pass_rate")
+        criterion_rate = row.get("criterion_pass_rate")
+        macro = row.get("equal_task_macro")
+        agent_seconds = telemetry.get("median_agent_seconds")
+        input_tokens = telemetry.get("median_input_tokens")
+        output_tokens = telemetry.get("median_output_tokens")
+        output_gate_only = row.get("criterion_evaluation") == "not_run_output_gate"
+        rows.append(
+            TableRow(
+                search=" ".join(str(value) for value in row.values()).lower(),
+                cells={
+                    "model": TableCell(value=str(row.get("model") or "—")),
+                    "scored": TableCell(
+                        value=f"{row.get('scored', 0)}/{row.get('planned', 0)}"
+                    ),
+                    "strict": TableCell(
+                        value=(
+                            f"{row.get('strict_all_pass', 0)}/{row.get('scored', 0)} "
+                            f"({_percent_value(strict_rate)})"
+                        )
+                    ),
+                    "criteria": TableCell(
+                        value=(
+                            "not judged"
+                            if output_gate_only
+                            else _percent_value(criterion_rate)
+                        ),
+                        title=(
+                            "No usable document reached checklist review"
+                            if output_gate_only
+                            else "Share of checklist criteria passed"
+                        ),
+                    ),
+                    "macro": TableCell(
+                        value=(
+                            f"{_percent_value(macro)} · output gate"
+                            if output_gate_only
+                            else _percent_value(macro)
+                        )
+                    ),
+                    "craft": TableCell(
+                        value=(
+                            "— (0 reviewable)"
+                            if not craft.get("reviewed")
+                            else f"{craft.get('good', 0)} / "
+                            f"{craft.get('mixed', 0)} / {craft.get('poor', 0)}"
+                        ),
+                        title="Good / mixed / poor",
+                    ),
+                    "latency": TableCell(
+                        value="—"
+                        if agent_seconds is None
+                        else f"{float(agent_seconds):.1f}s"
+                    ),
+                    "tokens": TableCell(
+                        value=(
+                            "—"
+                            if input_tokens is None or output_tokens is None
+                            else f"{int(round(float(input_tokens))):,} / "
+                            f"{int(round(float(output_tokens))):,}"
+                        )
+                    ),
+                },
+            )
+        )
+    table = DataTable(
+        title="Results",
+        description=(
+            "Each agent had five attempts per task. Every requirement means the "
+            "document was valid and every checklist item passed. Document quality "
+            "is shown as good / mixed / poor."
+        ),
+        columns=[
+            TableColumn(key="model", label="Model"),
+            TableColumn(key="scored", label="Scored", align="right"),
+            TableColumn(key="strict", label="Every requirement", align="right"),
+            TableColumn(key="criteria", label="Checklist", align="right"),
+            TableColumn(key="macro", label="Task average", align="right"),
+            TableColumn(key="craft", label="Document quality", align="right"),
+            TableColumn(key="latency", label="Median time", align="right"),
+            TableColumn(key="tokens", label="Input / output", align="right"),
+        ],
+        rows=rows,
+    )
+    return _table_html(table, "", "", "release-comparison", "")
+
+
+def _percent_value(value: Any) -> str:
+    return "—" if value is None else f"{100 * float(value):.1f}%"
 
 
 def _metric_html(metric: Metric) -> str:
@@ -580,16 +950,17 @@ def _index_html(
     note_url = _viewer_path(
         base_path, f"/api/evals/{escape(task.slug)}/jobs/{escape(job_id)}/note"
     )
+    note_preview = note["text"] or "Add context or interpretation"
     body = f"""
 <header class="page-header"><div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Job</div><h1>{escape(job_id)}</h1></div></header>
-<section class="note-editor"><div class="section-head"><h2>Note</h2><span class="muted">{escape(note["updated_at"])}</span></div>
+<details class="note-editor"><summary><strong>Note</strong><span class="muted" id="note-preview">{escape(note_preview)}</span></summary><div class="note-editor-body">
 <textarea id="job-note" maxlength="2000" aria-label="Job note" placeholder="Add context, caveats, or interpretation for this job">{escape(note["text"])}</textarea>
-<div class="note-actions"><button id="save-note" type="button">Save note</button><span class="muted" id="note-state"></span></div></section>
+<div class="note-actions"><button id="save-note" type="button">Save note</button><span class="muted" id="note-state">{escape(note["updated_at"])}</span></div></div></details>
 {notices}<section class="metrics">{metric_cards}</section>
 {_table_html(presentation.agent_table, task.slug, job_id, "agents", base_path)}
 {_table_html(presentation.trial_table, task.slug, job_id, "trials", base_path)}
 <script>
-const save=document.getElementById('save-note');const state=document.getElementById('note-state');save.addEventListener('click',async()=>{{save.disabled=true;state.textContent='Saving…';try{{const response=await fetch('{note_url}',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify({{text:document.getElementById('job-note').value}})}});if(!response.ok)throw new Error('Save failed');state.textContent='Saved';}}catch(error){{state.textContent=error.message;}}finally{{save.disabled=false;}}}});
+const save=document.getElementById('save-note');const state=document.getElementById('note-state');const noteInput=document.getElementById('job-note');const notePreview=document.getElementById('note-preview');save.addEventListener('click',async()=>{{save.disabled=true;state.textContent='Saving…';try{{const response=await fetch('{note_url}',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify({{text:noteInput.value}})}});if(!response.ok)throw new Error('Save failed');notePreview.textContent=noteInput.value.trim()||'Add context or interpretation';state.textContent='Saved';}}catch(error){{state.textContent=error.message;}}finally{{save.disabled=false;}}}});
 </script>"""
     return _layout(job_id, body, base_path)
 
@@ -605,6 +976,7 @@ def _trial_html(
         f'<section class="section"><div class="section-head"><h2>{escape(section.title)}</h2>{f'<span class="warn">{escape(section.warning)}</span>' if section.warning else ""}</div><pre>{escape(json.dumps(section.data, indent=2, sort_keys=True))}</pre></section>'
         for section in trial.sections
     )
+    trace = _trace_html(trial.trace) if trial.trace else ""
     task = presentation.task
     tasks_url = _viewer_path(base_path, "/")
     eval_url = _viewer_path(base_path, f"/evals/{escape(task.slug)}")
@@ -612,77 +984,273 @@ def _trial_html(
         base_path,
         f"/evals/{escape(task.slug)}/jobs/{escape(presentation.job_id)}",
     )
-    body = f"""<a class="back" href="{job_url}">← {escape(presentation.job_id)}</a><header class="page-header"><div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Trial</div><h1>{escape(trial.title)}</h1></div></header><div class="detail-grid">{details}</div>{sections}"""
+    body = f"""<a class="back" href="{job_url}">← {escape(presentation.job_id)}</a><header class="page-header"><div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Trial</div><h1>{escape(trial.title)}</h1></div></header><div class="detail-grid">{details}</div>{trace}{sections}"""
     return _layout(trial.title, body, base_path)
 
 
-def create_app(results_source: Path, *, base_path: str = "") -> FastAPI:
+def _trace_html(trace: TracePresentation) -> str:
+    final_metrics = trace.final_metrics
+    total_steps = final_metrics.get("total_steps", trace.step_count)
+    prompt = final_metrics.get("total_prompt_tokens")
+    completion = final_metrics.get("total_completion_tokens")
+    meta = [f"{total_steps} steps"]
+    if isinstance(prompt, (int, float)):
+        meta.append(f"{int(prompt):,} input tokens")
+    if isinstance(completion, (int, float)):
+        meta.append(f"{int(completion):,} output tokens")
+    if trace.schema_version:
+        meta.append(trace.schema_version)
+
+    rendered_steps = []
+    for step in trace.steps:
+        usage = []
+        prompt_tokens = step.metrics.get("prompt_tokens")
+        completion_tokens = step.metrics.get("completion_tokens")
+        if isinstance(prompt_tokens, (int, float)):
+            usage.append(f"{int(prompt_tokens):,} in")
+        if isinstance(completion_tokens, (int, float)):
+            usage.append(f"{int(completion_tokens):,} out")
+
+        blocks = []
+        if step.message:
+            blocks.append(
+                '<div class="trace-block"><div class="trace-block-label">Message</div>'
+                f"<pre>{escape(step.message)}</pre></div>"
+            )
+        if step.tool_calls:
+            tools = []
+            for tool in step.tool_calls:
+                arguments = json.dumps(tool.arguments, indent=2, sort_keys=True)
+                tools.append(
+                    '<div class="trace-tool">'
+                    f'<code class="trace-tool-name">{escape(tool.name)}</code>'
+                    f"<pre>{escape(arguments)}</pre></div>"
+                )
+            blocks.append(
+                '<div class="trace-block"><div class="trace-block-label">Tool calls</div>'
+                f"{''.join(tools)}</div>"
+            )
+        if step.observation:
+            blocks.append(
+                '<div class="trace-block"><div class="trace-block-label">Observation</div>'
+                f"<pre>{escape(step.observation)}</pre></div>"
+            )
+        body = "".join(blocks) or '<span class="muted">No content recorded.</span>'
+        rendered_steps.append(
+            '<details class="trace-step"><summary>'
+            f'<span class="trace-number">#{escape(step.step_id)}</span>'
+            f'<span class="trace-source">{escape(step.source)}</span>'
+            f'<strong class="trace-label">{escape(step.label)}</strong>'
+            f'<span class="trace-usage">{escape(" · ".join(usage))}</span>'
+            f'</summary><div class="trace-body">{body}</div></details>'
+        )
+    empty = '<div class="empty">No trajectory steps recorded.</div>'
+    timeline = (
+        f'<div class="trace-list">{"".join(rendered_steps)}</div>'
+        if rendered_steps
+        else empty
+    )
+    return (
+        '<section class="section"><div class="trace-head"><h2>Trajectory</h2>'
+        f'<span class="muted">{escape(" · ".join(meta))}</span></div>{timeline}</section>'
+    )
+
+
+def first_evaluation_url(
+    results_source: Path, *, bench_root: Path | None = None
+) -> str | None:
+    root = bench_root or BENCH_ROOT
+    slugs = set(discover_task_definitions(root)) | set(
+        discover_job_sources(root, results_source)
+    )
+    return f"/eval/evals/{sorted(slugs)[0]}" if slugs else None
+
+
+def create_app(
+    results_source: Path,
+    *,
+    base_path: str = "",
+    bench_root: Path | None = None,
+) -> FastAPI:
     base_path = f"/{base_path.strip('/')}" if base_path.strip("/") else ""
-    run_paths = _discover_run_paths(results_source)
+    root = bench_root or BENCH_ROOT
+    task_definitions = discover_task_definitions(root)
+    job_sources = discover_job_sources(root, results_source)
+    public_release = load_public_release_summary(root, results_source)
+    comparison_groups = discover_comparison_groups(root, public_release, job_sources)
     app = FastAPI(title="Compute Bazaar Evals", docs_url=None, redoc_url=None)
     app.mount("/assets", StaticFiles(directory=ASSET_ROOT), name="assets")
 
-    def run_path(eval_slug: str, run_id: str) -> Path:
-        path = run_paths.get(eval_slug, {}).get(run_id)
-        if path is None:
+    def refresh_catalog() -> None:
+        nonlocal task_definitions, job_sources, public_release, comparison_groups
+        task_definitions = discover_task_definitions(root)
+        job_sources = discover_job_sources(root, results_source)
+        public_release = load_public_release_summary(root, results_source)
+        comparison_groups = discover_comparison_groups(
+            root,
+            public_release,
+            job_sources,
+        )
+
+    def job_source(eval_slug: str, run_id: str) -> JobSource:
+        source = job_sources.get(eval_slug, {}).get(run_id)
+        if source is None:
             raise HTTPException(status_code=404, detail="run not found")
-        return path
+        return source
+
+    def note_path(source: JobSource) -> Path:
+        assert source.notes_dir is not None
+        return source.notes_dir
 
     def presentation(eval_slug: str, run_id: str) -> JobPresentation:
-        return load_job_presentation(run_path(eval_slug, run_id), eval_slug, run_id)
+        source = job_source(eval_slug, run_id)
+        if source.raw_dir is not None:
+            task = task_definitions.get(eval_slug) or TaskInfo(
+                slug=eval_slug,
+                name=eval_slug.replace("-", " ").title(),
+                domain="Evaluation",
+            )
+            raw = present_harbor_job(source.raw_dir, task, run_id)
+            return apply_report_overlay(
+                raw,
+                source.report_dir,
+                eval_slug,
+                public_context=source.public_context,
+            )
+        assert source.report_dir is not None
+        return load_job_presentation(source.report_dir, eval_slug, run_id)
 
     def run_summaries(eval_slug: str) -> list[dict[str, Any]]:
-        paths = run_paths.get(eval_slug)
-        if paths is None:
+        sources = job_sources.get(eval_slug)
+        if sources is None and eval_slug not in task_definitions:
             raise HTTPException(status_code=404, detail="eval not found")
-        return [
-            _run_summary(
-                presentation(eval_slug, run_id), _read_note(run_path(eval_slug, run_id))
-            )
-            for run_id in sorted(paths)
-        ]
+        if not sources:
+            return []
+        summaries = []
+        for run_id, source in sources.items():
+            note = _read_note(note_path(source))
+            if source.raw_dir is not None and source.report_dir is None:
+                raw = summarize_harbor_job(source.raw_dir, eval_slug)
+                score = (
+                    Metric(
+                        label="Mean reward",
+                        value=f"{raw.mean_reward:.4f}",
+                        hint="Harbor verifier reward averaged across scored trials",
+                    )
+                    if raw.mean_reward is not None
+                    else None
+                )
+                origin = ""
+                if source.public_context:
+                    origin = str(source.public_context.get("display_label") or "")
+                summary = {
+                    "run_id": run_id,
+                    "started_at": raw.started_at,
+                    "finished_at": raw.finished_at,
+                    "started": _format_timestamp(raw.started_at),
+                    "score": score,
+                    "agents": len(raw.agent_configurations),
+                    "trials": raw.trial_count,
+                    "note": note["text"],
+                    "note_updated_at": note["updated_at"],
+                    "origin": origin,
+                }
+            else:
+                summary = _run_summary(presentation(eval_slug, run_id), note)
+            summaries.append((summary, source.modified_at))
+        summaries.sort(
+            key=lambda item: (
+                _timestamp_sort_key(item[0]["started_at"]),
+                item[1],
+                item[0]["run_id"],
+            ),
+            reverse=True,
+        )
+        return [summary for summary, _ in summaries]
 
     def latest_run_id(eval_slug: str) -> str:
-        paths = run_paths.get(eval_slug)
-        if not paths:
+        sources = job_sources.get(eval_slug)
+        if not sources:
             raise HTTPException(status_code=404, detail="eval not found")
-        return max(
-            paths,
-            key=lambda run_id: max(
-                path.stat().st_mtime
-                for path in (
-                    paths[run_id] / "view.json",
-                    paths[run_id] / "protocol.json",
-                )
-                if path.is_file()
-            ),
-        )
+        return run_summaries(eval_slug)[0]["run_id"]
 
     def evaluation_summaries() -> list[dict[str, Any]]:
         summaries = []
-        for eval_slug, paths in sorted(run_paths.items()):
-            latest = latest_run_id(eval_slug)
-            summaries.append(
-                _evaluation_summary(
-                    presentation(eval_slug, latest), job_count=len(paths)
+        for eval_slug in sorted(set(task_definitions) | set(job_sources)):
+            sources = job_sources.get(eval_slug, {})
+            if sources:
+                raw_job_ids = [
+                    job_id
+                    for job_id, source in sources.items()
+                    if source.raw_dir is not None
+                ]
+                counted_job_ids = raw_job_ids or list(sources)
+                agent_configurations: set[tuple[str, str]] = set()
+                trial_count = 0
+                for job_id in counted_job_ids:
+                    source = sources[job_id]
+                    if source.raw_dir is not None:
+                        raw = summarize_harbor_job(source.raw_dir, eval_slug)
+                        agent_configurations.update(raw.agent_configurations)
+                        trial_count += raw.trial_count
+                    else:
+                        job = presentation(eval_slug, job_id)
+                        trial_count += job.trial_count
+                        agent_configurations.update(
+                            (
+                                row.cells.get("agent", TableCell(value="")).value,
+                                row.cells.get("model", TableCell(value="")).value,
+                            )
+                            for row in job.agent_table.rows
+                            if row.cells.get("agent", TableCell(value="")).value
+                        )
+                summaries.append(
+                    _evaluation_summary(
+                        task_info(eval_slug),
+                        jobs=len(counted_job_ids),
+                        agent_configurations=agent_configurations,
+                        trials=trial_count,
+                    )
                 )
-            )
+            else:
+                summaries.append(_empty_evaluation_summary(task_definitions[eval_slug]))
         return summaries
+
+    def task_info(eval_slug: str) -> TaskInfo:
+        task = task_definitions.get(eval_slug)
+        if task is not None:
+            return task
+        sources = job_sources.get(eval_slug, {})
+        if sources:
+            return presentation(eval_slug, latest_run_id(eval_slug)).task
+        raise HTTPException(status_code=404, detail="eval not found")
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
+        refresh_catalog()
         return _evals_html(evaluation_summaries(), base_path)
 
     @app.get("/evals/{eval_slug}", response_class=HTMLResponse)
-    def evaluation(eval_slug: str) -> str:
-        latest = presentation(eval_slug, latest_run_id(eval_slug))
-        return _runs_html(latest.task, run_summaries(eval_slug), base_path)
+    def evaluation(eval_slug: str, comparison: str | None = None) -> str:
+        refresh_catalog()
+        release_summary = None
+        if public_release and eval_slug in public_release["managed_tasks"]:
+            release_summary = public_release["summary"]
+        return _runs_html(
+            task_info(eval_slug),
+            run_summaries(eval_slug),
+            base_path,
+            release_summary,
+            comparison_groups.get(eval_slug, ()),
+            comparison,
+        )
 
     @app.get("/evals/{eval_slug}/jobs/{run_id}", response_class=HTMLResponse)
     def job_detail(eval_slug: str, run_id: str) -> str:
+        refresh_catalog()
         return _index_html(
             presentation(eval_slug, run_id),
-            _read_note(run_path(eval_slug, run_id)),
+            _read_note(note_path(job_source(eval_slug, run_id))),
             base_path,
         )
 
@@ -691,6 +1259,7 @@ def create_app(results_source: Path, *, base_path: str = "") -> FastAPI:
         response_class=HTMLResponse,
     )
     def trial_detail(eval_slug: str, run_id: str, trial_name: str) -> str:
+        refresh_catalog()
         job = presentation(eval_slug, run_id)
         match = job.trials.get(trial_name)
         if match is None:
@@ -699,22 +1268,27 @@ def create_app(results_source: Path, *, base_path: str = "") -> FastAPI:
 
     @app.get("/api/evals")
     def evals_api() -> list[dict[str, Any]]:
+        refresh_catalog()
         return evaluation_summaries()
 
     @app.get("/api/evals/{eval_slug}/jobs")
     def runs_api(eval_slug: str) -> list[dict[str, Any]]:
+        refresh_catalog()
         return run_summaries(eval_slug)
 
     @app.get("/api/evals/{eval_slug}/jobs/{run_id}")
     def run_api(eval_slug: str, run_id: str) -> dict[str, Any]:
+        refresh_catalog()
         return presentation(eval_slug, run_id).model_dump()
 
     @app.post("/api/evals/{eval_slug}/jobs/{run_id}/note")
     def save_job_note(eval_slug: str, run_id: str, note: JobNote) -> dict[str, str]:
-        return _write_note(run_path(eval_slug, run_id), note.text)
+        refresh_catalog()
+        return _write_note(note_path(job_source(eval_slug, run_id)), note.text)
 
     @app.get("/api/evals/{eval_slug}/jobs/{run_id}/trials")
     def run_trials_api(eval_slug: str, run_id: str) -> list[dict[str, Any]]:
+        refresh_catalog()
         return [
             trial.model_dump()
             for trial in presentation(eval_slug, run_id).trials.values()
@@ -722,12 +1296,18 @@ def create_app(results_source: Path, *, base_path: str = "") -> FastAPI:
 
     @app.get("/api/protocol")
     def protocol_api() -> dict[str, Any]:
-        eval_slug = next(iter(run_paths))
+        refresh_catalog()
+        if not job_sources:
+            raise HTTPException(status_code=404, detail="no jobs found")
+        eval_slug = next(iter(job_sources))
         return presentation(eval_slug, latest_run_id(eval_slug)).model_dump()
 
     @app.get("/api/trials")
     def trials_api() -> list[dict[str, Any]]:
-        eval_slug = next(iter(run_paths))
+        refresh_catalog()
+        if not job_sources:
+            raise HTTPException(status_code=404, detail="no jobs found")
+        eval_slug = next(iter(job_sources))
         job = presentation(eval_slug, latest_run_id(eval_slug))
         return [trial.model_dump() for trial in job.trials.values()]
 

@@ -1,0 +1,64 @@
+{
+  "schema_version": "compute-bazaar-bench.transactions.adjudication-protocol-amendment.v1",
+  "record_kind": "adjudication_replay_protocol_amendment",
+  "amendment_id": "adjudication-replay-001-modal-001",
+  "recorded_at": "2026-08-10T21:29:03Z",
+  "recording_timing": "Recorded after execution as a provenance correction. Adam explicitly required Modal sandbox before the mocked preflight and paid replay.",
+  "authorization": {
+    "source": "Adam's Gate 2 instruction in the originating Codex task",
+    "instruction": "Use Modal sandbox, not the local Docker daemon.",
+    "effective_before": "2026-08-10T20:05:57.069023+00:00"
+  },
+  "parent_commitment": {
+    "path": "adjudication-replay-001.commitment.json",
+    "sha256": "46fa6fa6df984686785aeaedb044110514b9a224658a2df2238258ec3a8fe9e2"
+  },
+  "runtime_change": {
+    "original": "Local Docker execution with a public bridge and a recorded Docker image ID.",
+    "replacement": "Modal VM sandboxes with outbound traffic allowlisted to openrouter.ai, an ephemeral OpenRouter secret, 2 CPUs, 4 GiB memory, and the corrected verifier staged at /app.",
+    "backend": "modal_sandbox",
+    "modal_sdk_version": "1.5.2",
+    "modal_app_name": "compute-bazaar-adjudication",
+    "modal_app_id": "ap-vI0CFF4ufNOsjk8TaXDOXB",
+    "identity_boundary": "Modal exposes immutable image object IDs rather than OCI manifest digests; each image is also bound to its Dockerfile and complete effective context by SHA-256."
+  },
+  "unchanged_protocol": [
+    "Exactly 43 committed source outputs and two original infrastructure exclusions.",
+    "No agent or model rerun.",
+    "The frozen GPT-5.4 judge, RewardKit 0.1.7, criteria, evidence, and inclusion rules.",
+    "Read-only preserved DOCX bytes staged at the exact /app deliverable path.",
+    "No valid grade retry and fail-closed handling for integrity or infrastructure errors."
+  ],
+  "implementation": {
+    "modal_backend_path": "modal_backend.py",
+    "modal_backend_sha256": "ee89a0e185b851fe711563e9d3f87820d073f6b67dad84cd84e6b66514c679e6",
+    "replay_path": "replay.py",
+    "replay_sha256": "90d137efc0f7d183b050604701ffdac7b05f03819a1eccdaec6df753a2491708"
+  },
+  "mocked_preflight": {
+    "path": "compute-bazaar-bench/jobs/adjudications/transactions-comparison-v1-adjudication-replay-001/modal-preflight-003/modal-preflight.json",
+    "sha256": "c3cdc5cb71d9c4992f98500554cf57bcc722395c793e9181f442d156bb2c09c7",
+    "status": "passed",
+    "paid_judge_calls": 0
+  },
+  "completed_run": {
+    "path": "compute-bazaar-bench/jobs/adjudications/transactions-comparison-v1-adjudication-replay-001/attempt-001/adjudication-run.json",
+    "sha256": "70c4b0f9fe1685b85eaf118f609dc9ba8e9f4d6ed4470682402a04049b6c80ca",
+    "status": "complete",
+    "valid_grades": 43
+  },
+  "runtime_images": {
+    "compare-capacity-agreement-against-term-sheet": {
+      "modal_image_object_id": "im-Z8q9dXdnekuuEw1MbM2lyl",
+      "context_tree_sha256": "eb50cb9101c9521236d5017541e7f3a756d782de4a2289b9e52bd3cdc564c0e7"
+    },
+    "draft-capacity-data-room-population-plan": {
+      "modal_image_object_id": "im-klAU8n7k0tygPk0PGJ0OlU",
+      "context_tree_sha256": "bfe86bfc7c8f96cb7df45a0207354393f8895ce3f452f72eb2953736fdaf4429"
+    },
+    "normalize-buyer-mandate": {
+      "modal_image_object_id": "im-v7dAKwzyMBqkhI7Vc9x6eI",
+      "context_tree_sha256": "d3889f32788e211d68762e919c6e66ddcc3717e20929fc89ceccb1e52582ece9"
+    }
+  }
+}

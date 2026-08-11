@@ -1,0 +1,128 @@
+[judge]
+judge = "openrouter/openai/gpt-5.4"
+files = ["/tests/source-context.md", "/app/buyer-mandate-brief.docx.md"]
+prompt_template = "../judge-prompt.md"
+weight = 20
+
+[scoring]
+aggregation = "weighted_mean"
+
+[[criterion]]
+id = "C-021"
+name = "c-021"
+description = "States the minimum fabric requirement as one 400 Gb/s endpoint per GPU. FAIL if the bandwidth or per-GPU basis is omitted."
+type = "binary"
+
+[[criterion]]
+id = "C-022"
+name = "c-022"
+description = "Classifies dual-rail 800 Gb/s fabric as preferred rather than required. FAIL if it is omitted or made mandatory."
+type = "binary"
+
+[[criterion]]
+id = "C-023"
+name = "c-023"
+description = "States external ingress of at least 200 Gb/s, with 400 Gb/s preferred. FAIL if the minimum and preference are not distinguished."
+type = "binary"
+
+[[criterion]]
+id = "C-024"
+name = "c-024"
+description = "States the requirement for 6 PiB of usable shared storage. FAIL if capacity or usable basis is missing."
+type = "binary"
+
+[[criterion]]
+id = "C-025"
+name = "c-025"
+description = "States the aggregate storage performance requirements of 1.2 TB/s read and 800 GB/s write. FAIL if either figure is omitted or misstated."
+type = "binary"
+
+[[criterion]]
+id = "C-026"
+name = "c-026"
+description = "Identifies the workload as sustained multimodal model pretraining followed by fine-tuning and evaluation. FAIL if the workload is omitted or materially mischaracterized."
+type = "binary"
+
+[[criterion]]
+id = "C-027"
+name = "c-027"
+description = "States the monthly cluster availability requirement as at least 99.5%. FAIL if the threshold or monthly measurement period is wrong."
+type = "binary"
+
+[[criterion]]
+id = "C-028"
+name = "c-028"
+description = "States that planned maintenance may not exceed eight hours per month. FAIL if the limit is omitted."
+type = "binary"
+
+[[criterion]]
+id = "C-029"
+name = "c-029"
+description = "States that planned maintenance requires at least seven days' notice. FAIL if the notice period is omitted or incorrect."
+type = "binary"
+
+[[criterion]]
+id = "C-030"
+name = "c-030"
+description = "Includes a 72-hour acceptance burn-in. FAIL if the burn-in requirement or duration is omitted."
+type = "binary"
+
+[[criterion]]
+id = "C-031"
+name = "c-031"
+description = "Requires serial-number and inventory attestation as part of acceptance. FAIL if hardware identity evidence is omitted."
+type = "binary"
+
+[[criterion]]
+id = "C-032"
+name = "c-032"
+description = "Requires an NCCL benchmark against a reference result to be agreed before signing. FAIL if the benchmark or unresolved reference is omitted."
+type = "binary"
+
+[[criterion]]
+id = "C-033"
+name = "c-033"
+description = "Requires a current SOC 2 Type II report. FAIL if the control-report requirement is omitted or made optional."
+type = "binary"
+
+[[criterion]]
+id = "C-034"
+name = "c-034"
+description = "Requires support for customer-managed encryption keys. FAIL if this security requirement is omitted."
+type = "binary"
+
+[[criterion]]
+id = "C-035"
+name = "c-035"
+description = "Requires US data residency. FAIL if data residency is omitted or widened beyond the United States."
+type = "binary"
+
+[[criterion]]
+id = "C-036"
+name = "c-036"
+description = "Requires exportable administrative and workload-access audit logs. FAIL if audit logging is omitted."
+type = "binary"
+
+[[criterion]]
+id = "C-037"
+name = "c-037"
+description = "Identifies hourly renewable-energy matching as a preference, not a condition to proceed. FAIL if it is omitted or elevated to a hard requirement."
+type = "binary"
+
+[[criterion]]
+id = "C-038"
+name = "c-038"
+description = "Requires controlled physical access and named-person access records for the GPU hall. FAIL if physical security is omitted."
+type = "binary"
+
+[[criterion]]
+id = "C-039"
+name = "c-039"
+description = "States that GPU generation or material node configuration may not be substituted without Northstar's written consent. FAIL if substitution control is omitted."
+type = "binary"
+
+[[criterion]]
+id = "C-040"
+name = "c-040"
+description = "States that the delivered software image must support the buyer's CUDA 13 toolchain. FAIL if the software compatibility requirement is omitted."
+type = "binary"

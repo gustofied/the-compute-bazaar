@@ -1,0 +1,357 @@
+{
+  "schema_version": "compute-bazaar-bench.transactions.release-summary.v1",
+  "release_id": "transactions",
+  "protocol_sha256": "46fa6fa6df984686785aeaedb044110514b9a224658a2df2238258ec3a8fe9e2",
+  "scenario": "CB-2026-041",
+  "rows": [
+    {
+      "model_key": "deepseek-v4-flash-0731",
+      "model": "DeepSeek V4 Flash 0731",
+      "job": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "execution_origin": "preserved_output_adjudication",
+      "execution_label": "Original Harbor output, final checklist",
+      "planned": 15,
+      "completed": 15,
+      "scored": 15,
+      "valid_docx": 15,
+      "invalid_output": 0,
+      "invalid_output_reasons": {},
+      "infrastructure": 0,
+      "strict_all_pass": 1,
+      "strict_all_pass_rate": 0.06666666666666667,
+      "criterion_passes": 721,
+      "criterion_total": 855,
+      "criterion_pass_rate": 0.8432748538011696,
+      "criterion_evaluation": "semantic_judge",
+      "semantic_judge_batches": null,
+      "equal_task_macro": 0.8463778512013448,
+      "craft": {
+        "good": 0,
+        "mixed": 10,
+        "poor": 5,
+        "reviewed": 15
+      },
+      "telemetry": {
+        "median_agent_seconds": 328.56808,
+        "median_input_tokens": 160056.0,
+        "median_cache_tokens": 131584.0,
+        "median_output_tokens": 8652.0,
+        "agent_cost_usd": null,
+        "judge_cost_usd": null,
+        "modal_cost_usd": null
+      },
+      "tasks": {
+        "normalize-buyer-mandate": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.7892857142857143,
+            "median": 0.7857142857142857,
+            "min": 0.7678571428571429,
+            "max": 0.8035714285714286
+          },
+          "reward": {
+            "mean": 0.79298,
+            "median": 0.7895,
+            "min": 0.7719,
+            "max": 0.807
+          },
+          "semantic_passes": 221,
+          "semantic_criteria": 280,
+          "criterion_pass_rate": 0.7892857142857143,
+          "attempt_values": [
+            0.8035714285714286,
+            0.8035714285714286,
+            0.7857142857142857,
+            0.7857142857142857,
+            0.7678571428571429
+          ]
+        },
+        "draft-capacity-data-room-population-plan": {
+          "retained": 5,
+          "all_pass": 1,
+          "semantic": {
+            "mean": 0.9433962264150944,
+            "median": 0.9433962264150944,
+            "min": 0.8867924528301887,
+            "max": 1.0
+          },
+          "reward": {
+            "mean": 0.94446,
+            "median": 0.9445,
+            "min": 0.8889,
+            "max": 1.0
+          },
+          "semantic_passes": 250,
+          "semantic_criteria": 265,
+          "criterion_pass_rate": 0.9433962264150944,
+          "attempt_values": [
+            0.9433962264150944,
+            0.9245283018867925,
+            0.8867924528301887,
+            0.9622641509433962,
+            1.0
+          ]
+        },
+        "compare-capacity-agreement-against-term-sheet": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.8064516129032258,
+            "median": 0.7903225806451613,
+            "min": 0.7419354838709677,
+            "max": 0.9193548387096774
+          },
+          "reward": {
+            "mean": 0.8095,
+            "median": 0.7936,
+            "min": 0.746,
+            "max": 0.9206
+          },
+          "semantic_passes": 250,
+          "semantic_criteria": 310,
+          "criterion_pass_rate": 0.8064516129032258,
+          "attempt_values": [
+            0.8064516129032258,
+            0.7903225806451613,
+            0.9193548387096774,
+            0.7419354838709677,
+            0.7741935483870968
+          ]
+        }
+      }
+    },
+    {
+      "model_key": "gpt-5.6-luna",
+      "model": "GPT-5.6 Luna",
+      "job": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "execution_origin": "preserved_output_adjudication",
+      "execution_label": "Original Harbor output, final checklist",
+      "planned": 15,
+      "completed": 15,
+      "scored": 14,
+      "valid_docx": 14,
+      "invalid_output": 0,
+      "invalid_output_reasons": {},
+      "infrastructure": 1,
+      "strict_all_pass": 1,
+      "strict_all_pass_rate": 0.07142857142857142,
+      "criterion_passes": 722,
+      "criterion_total": 802,
+      "criterion_pass_rate": 0.9002493765586035,
+      "criterion_evaluation": "semantic_judge",
+      "semantic_judge_batches": null,
+      "equal_task_macro": 0.9075036953308409,
+      "craft": {
+        "good": 1,
+        "mixed": 6,
+        "poor": 7,
+        "reviewed": 14
+      },
+      "telemetry": {
+        "median_agent_seconds": 118.1678475,
+        "median_input_tokens": 271112.5,
+        "median_cache_tokens": 271054.0,
+        "median_output_tokens": 7210.5,
+        "agent_cost_usd": null,
+        "judge_cost_usd": null,
+        "modal_cost_usd": null
+      },
+      "tasks": {
+        "normalize-buyer-mandate": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.9071428571428571,
+            "median": 0.9107142857142857,
+            "min": 0.8392857142857143,
+            "max": 0.9821428571428571
+          },
+          "reward": {
+            "mean": 0.90878,
+            "median": 0.9123,
+            "min": 0.8421,
+            "max": 0.9825
+          },
+          "semantic_passes": 254,
+          "semantic_criteria": 280,
+          "criterion_pass_rate": 0.9071428571428571,
+          "attempt_values": [
+            0.9107142857142857,
+            0.8928571428571429,
+            0.9821428571428571,
+            0.8392857142857143,
+            0.9107142857142857
+          ]
+        },
+        "draft-capacity-data-room-population-plan": {
+          "retained": 4,
+          "all_pass": 1,
+          "semantic": {
+            "mean": 0.9669811320754718,
+            "median": 0.9622641509433962,
+            "min": 0.9433962264150944,
+            "max": 1.0
+          },
+          "reward": {
+            "mean": 0.967625,
+            "median": 0.9630000000000001,
+            "min": 0.9445,
+            "max": 1.0
+          },
+          "semantic_passes": 205,
+          "semantic_criteria": 212,
+          "criterion_pass_rate": 0.9669811320754716,
+          "attempt_values": [
+            0.9433962264150944,
+            0.9811320754716981,
+            0.9433962264150944,
+            1.0
+          ]
+        },
+        "compare-capacity-agreement-against-term-sheet": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.8483870967741935,
+            "median": 0.8870967741935484,
+            "min": 0.6935483870967742,
+            "max": 0.9516129032258065
+          },
+          "reward": {
+            "mean": 0.8508,
+            "median": 0.8889,
+            "min": 0.6984,
+            "max": 0.9524
+          },
+          "semantic_passes": 263,
+          "semantic_criteria": 310,
+          "criterion_pass_rate": 0.8483870967741935,
+          "attempt_values": [
+            0.6935483870967742,
+            0.8064516129032258,
+            0.9032258064516129,
+            0.8870967741935484,
+            0.9516129032258065
+          ]
+        }
+      }
+    },
+    {
+      "model_key": "glm-5.2",
+      "model": "GLM 5.2",
+      "job": "transactions-comparison-v1-glm-5.2-001",
+      "execution_origin": "preserved_output_adjudication",
+      "execution_label": "Original Harbor output, final checklist",
+      "planned": 15,
+      "completed": 15,
+      "scored": 14,
+      "valid_docx": 14,
+      "invalid_output": 0,
+      "invalid_output_reasons": {},
+      "infrastructure": 1,
+      "strict_all_pass": 0,
+      "strict_all_pass_rate": 0.0,
+      "criterion_passes": 733,
+      "criterion_total": 793,
+      "criterion_pass_rate": 0.9243379571248423,
+      "criterion_evaluation": "semantic_judge",
+      "semantic_judge_batches": null,
+      "equal_task_macro": 0.9256608121032954,
+      "craft": {
+        "good": 0,
+        "mixed": 9,
+        "poor": 5,
+        "reviewed": 14
+      },
+      "telemetry": {
+        "median_agent_seconds": 243.87692800000002,
+        "median_input_tokens": 151482.5,
+        "median_cache_tokens": 126943.5,
+        "median_output_tokens": 11641.5,
+        "agent_cost_usd": null,
+        "judge_cost_usd": null,
+        "modal_cost_usd": null
+      },
+      "tasks": {
+        "normalize-buyer-mandate": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.8714285714285714,
+            "median": 0.875,
+            "min": 0.8392857142857143,
+            "max": 0.9107142857142857
+          },
+          "reward": {
+            "mean": 0.87368,
+            "median": 0.8772,
+            "min": 0.8421,
+            "max": 0.9123
+          },
+          "semantic_passes": 244,
+          "semantic_criteria": 280,
+          "criterion_pass_rate": 0.8714285714285714,
+          "attempt_values": [
+            0.8571428571428571,
+            0.9107142857142857,
+            0.875,
+            0.8392857142857143,
+            0.875
+          ]
+        },
+        "draft-capacity-data-room-population-plan": {
+          "retained": 5,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.9660377358490566,
+            "median": 0.9622641509433962,
+            "min": 0.9433962264150944,
+            "max": 0.9811320754716981
+          },
+          "reward": {
+            "mean": 0.9667,
+            "median": 0.963,
+            "min": 0.9445,
+            "max": 0.9815
+          },
+          "semantic_passes": 256,
+          "semantic_criteria": 265,
+          "criterion_pass_rate": 0.9660377358490566,
+          "attempt_values": [
+            0.9433962264150944,
+            0.9622641509433962,
+            0.9811320754716981,
+            0.9811320754716981,
+            0.9622641509433962
+          ]
+        },
+        "compare-capacity-agreement-against-term-sheet": {
+          "retained": 4,
+          "all_pass": 0,
+          "semantic": {
+            "mean": 0.9395161290322581,
+            "median": 0.9516129032258065,
+            "min": 0.8870967741935484,
+            "max": 0.967741935483871
+          },
+          "reward": {
+            "mean": 0.9405,
+            "median": 0.9524,
+            "min": 0.8889,
+            "max": 0.9683
+          },
+          "semantic_passes": 233,
+          "semantic_criteria": 248,
+          "criterion_pass_rate": 0.9395161290322581,
+          "attempt_values": [
+            0.8870967741935484,
+            0.9516129032258065,
+            0.967741935483871,
+            0.9516129032258065
+          ]
+        }
+      }
+    }
+  ]
+}
