@@ -167,16 +167,18 @@ offer or attached through OpenSSH. Fleet records inventory, runs readiness
 checks, monitors telemetry and health every five seconds, and tracks workloads
 and logs.
 
-```mermaid
-flowchart LR
-    O["Live offer"] --> C["Availability check"] --> P["Provision"] --> A["Allocation"]
-    S["Existing SSH host"] --> T["Attach"]
-    A --> N["Fleet node"]
-    T --> N
-    N --> I["Inventory"]
-    I --> R["Readiness and diagnostics"]
-    R --> M["Telemetry and health"]
-    R --> W["Workloads and logs"]
+```text
+Live offer
+  -> availability check
+  -> provision
+  -> allocation ----+
+                    |
+SSH host -> attach -+-> Fleet node
+                          |
+                          +-> inventory
+                          +-> readiness and diagnostics
+                          +-> telemetry and health
+                          +-> workloads and logs
 ```
 
 Attach an existing node by SSH host alias. OpenSSH resolves its address, user,
