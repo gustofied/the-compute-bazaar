@@ -59,7 +59,7 @@ Document quality is reviewed separately so a factually strong answer does not re
 
 ## Source
 
-The three kinds of work come from [Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark), but the compute transaction and its documents are original.
+The three kinds of work come from [Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark), but the compute transaction and its documents are original. Thanks to [Punit Arani](https://x.com/punit_arani) for converting the Harvey tasks into Harbor packages.
 
 | Compute task | Harvey task form |
 | --- | --- |
