@@ -4,7 +4,7 @@ artifacts = ["/app/capacity-agreement-deviation-report.docx"]
 [task]
 name = "gustofied/compare-capacity-agreement-against-term-sheet"
 description = "Compare a draft reserved GPU capacity agreement against the agreed term sheet."
-keywords = ["compute-market", "contracting", "term-sheet", "reserved-capacity", "deviation-analysis", "professional-work"]
+keywords = ["compute-market", "transactions", "contracting", "term-sheet", "reserved-capacity", "rewardkit", "judge-grading"]
 [[task.authors]]
 name = "Adam Sioud"
 
@@ -12,20 +12,15 @@ name = "Adam Sioud"
 domain = "transactions"
 stage = "contracting"
 work_type = "review"
-category = "compute-market"
-variant = "full"
 n_criteria = 62
 n_deterministic_criteria = 1
 opportunity_id = "CB-2026-041"
-scenario_pack = "CB-2026-041"
-checkpoint = "contracting"
-method = "harvey-lab-adaptation"
 source_task = "energy-natural-resources/compare-power-purchase-agreement-against-term-sheet"
 source_harbor_url = "https://hub.harborframework.com/tasks/punitarani/energy-natural-resources-compare-power-purchase-agreement-against-term-sheet/latest"
 source_harbor_digest = "0c408dfdc2225b8bfd008fe0efe0e19896e6f0114eea757b5dda2dd1cb332d3c"
 source_repository = "https://github.com/harveyai/harvey-labs"
 source_retrieved = "2026-08-09"
-tags = ["compute-market", "contracting", "term-sheet", "reserved-capacity", "deviation-analysis", "risk"]
+tags = ["transactions", "contracting", "agreement-review", "risk"]
 
 [verifier]
 timeout_sec = 3600.0

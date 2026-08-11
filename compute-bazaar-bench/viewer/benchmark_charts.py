@@ -460,7 +460,7 @@ def _transaction_charts(
                 if strict:
                     segments.append(
                         BenchmarkSegment(
-                            label="Passed every requirement",
+                            label="All-pass",
                             value=strict / attempted,
                             tone="good",
                         )
@@ -468,7 +468,7 @@ def _transaction_charts(
                 if missed:
                     segments.append(
                         BenchmarkSegment(
-                            label="Missed one or more requirements",
+                            label="Not all-pass",
                             value=missed / attempted,
                             tone="warn",
                         )
@@ -482,8 +482,8 @@ def _transaction_charts(
                         )
                     )
             detail_parts = [
-                f"{100 * float(mean):.1f}% average requirements met across "
-                f"{retained} scored documents"
+                f"{100 * float(mean):.1f}% criteria passed across "
+                f"{retained} scored runs"
             ]
             if excluded:
                 detail_parts.append(f"{excluded} excluded")
@@ -492,7 +492,7 @@ def _transaction_charts(
                     float(mean),
                     BenchmarkRow(
                         label=label,
-                        value=f"{strict} of {attempted} perfect",
+                        value=f"{strict} of {attempted} all-pass",
                         detail=" · ".join(detail_parts),
                         segments=segments,
                     ),
@@ -507,20 +507,16 @@ def _transaction_charts(
         ]
         charts[task_slug] = BenchmarkChart(
             eyebrow="Transactions",
-            title="Document results",
+            title="All-pass results",
             description=(
-                "Each bar shows attempted documents. A perfect document passed "
-                "every requirement; the percentage below is average requirement "
-                "coverage across scored documents."
+                "Each bar counts runs. Green passed every criterion, amber "
+                "missed at least one, and gray was excluded. The percentage "
+                "below is the average share of criteria passed."
             ),
             rows=chart_rows,
             legend=[
-                BenchmarkLegendItem(
-                    label="Passed every requirement", tone="good"
-                ),
-                BenchmarkLegendItem(
-                    label="Missed one or more", tone="warn"
-                ),
+                BenchmarkLegendItem(label="All-pass", tone="good"),
+                BenchmarkLegendItem(label="Not all-pass", tone="warn"),
                 BenchmarkLegendItem(label="Excluded", tone="neutral"),
             ],
         )

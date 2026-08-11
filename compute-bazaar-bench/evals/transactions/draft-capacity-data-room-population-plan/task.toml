@@ -4,7 +4,7 @@ artifacts = ["/app/capacity-data-room-population-plan.docx"]
 [task]
 name = "gustofied/draft-capacity-data-room-population-plan"
 description = "Draft a seller-side data-room population plan for a reserved GPU capacity transaction."
-keywords = ["compute-market", "data-room", "diligence", "reserved-capacity", "evidence", "professional-work"]
+keywords = ["compute-market", "transactions", "data-room", "diligence", "reserved-capacity", "rewardkit", "judge-grading"]
 [[task.authors]]
 name = "Adam Sioud"
 
@@ -12,20 +12,15 @@ name = "Adam Sioud"
 domain = "transactions"
 stage = "diligence"
 work_type = "draft"
-category = "compute-market"
-variant = "full"
 n_criteria = 53
 n_deterministic_criteria = 1
 opportunity_id = "CB-2026-041"
-scenario_pack = "CB-2026-041"
-checkpoint = "diligence"
-method = "harvey-lab-adaptation"
 source_task = "corporate-ma/draft-data-room-population-plan/scenario-01"
 source_harbor_url = "https://hub.harborframework.com/tasks/punitarani/corporate-ma-draft-data-room-population-plan-scenario-01/latest"
 source_harbor_digest = "c30da1d039066cc6988c3ad396eebcfc71df498f1ba92cbe490b049484434720"
 source_repository = "https://github.com/harveyai/harvey-labs"
 source_retrieved = "2026-08-09"
-tags = ["compute-market", "data-room", "diligence", "evidence-register", "access-control", "capacity"]
+tags = ["transactions", "diligence", "data-room", "evidence"]
 
 [verifier]
 timeout_sec = 3600.0

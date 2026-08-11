@@ -385,7 +385,7 @@ def _public_preserved_adjudication(
     retained: int,
     public_context: dict[str, Any],
 ) -> JobPresentation:
-    """Present final-checklist results for the original agent outputs."""
+    """Present final-rubric results for the original agent outputs."""
     records_by_trial = {str(record["trial"]): record for record in records}
     trial_details = {}
     for trial_id, detail in presentation.trials.items():
@@ -393,12 +393,18 @@ def _public_preserved_adjudication(
         amended = (record or {}).get("amended") or {}
         summary = []
         for metric in detail.summary:
-            if metric.label.lower() in {"reward", "mean reward", "score"}:
+            if metric.label.lower() in {
+                "reward",
+                "mean reward",
+                "score",
+                "reported cost",
+                "cost",
+            }:
                 continue
             label = {
-                "Semantic score": "Requirements met",
-                "Criteria": "Requirements",
-                "All pass": "Perfect document",
+                "Semantic score": "Criteria passed",
+                "Criteria": "Criteria",
+                "All pass": "All-pass",
                 "Document craft": "Document review",
             }.get(metric.label, metric.label)
             value = metric.value
@@ -420,7 +426,7 @@ def _public_preserved_adjudication(
 
     semantic = amended_task.get("semantic") or {}
     semantic_mean = semantic.get("mean") if isinstance(semantic, dict) else None
-    requirements_met = (
+    criteria_passed = (
         f"{100 * float(semantic_mean):.1f}%"
         if isinstance(semantic_mean, (int, float))
         else "—"
@@ -429,24 +435,23 @@ def _public_preserved_adjudication(
     agent_rows = []
     for row in presentation.agent_table.rows:
         cells = dict(row.cells)
-        cells["semantic"] = TableCell(value=requirements_met)
+        cells["semantic"] = TableCell(value=criteria_passed)
         agent_rows.append(row.model_copy(update={"cells": cells}))
     agent_columns = [
         TableColumn(key="agent", label="Agent"),
         TableColumn(key="model", label="Model"),
         TableColumn(key="valid", label="Valid documents", align="right"),
-        TableColumn(key="semantic", label="Requirements met", align="right"),
-        TableColumn(key="all_pass", label="Perfect documents", align="right"),
+        TableColumn(key="semantic", label="Criteria passed", align="right"),
+        TableColumn(key="all_pass", label="All-pass runs", align="right"),
         TableColumn(key="input", label="Input tokens", align="right"),
         TableColumn(key="output", label="Output tokens", align="right"),
-        TableColumn(key="cost", label="Reported cost", align="right"),
     ]
 
     trial_labels = {
-        "semantic": "Requirements met",
-        "criteria": "Requirements",
+        "semantic": "Criteria passed",
+        "criteria": "Criteria",
         "reward": "Reward",
-        "all_pass": "Perfect",
+        "all_pass": "All-pass",
         "craft": "Document review",
     }
     trial_columns = [
@@ -467,9 +472,9 @@ def _public_preserved_adjudication(
     metric_by_label = {metric.label: metric for metric in presentation.metrics}
     metrics = [
         Metric(
-            label="Requirements met",
-            value=requirements_met,
-            hint="Average share of checklist requirements passed",
+            label="Criteria passed",
+            value=criteria_passed,
+            hint="Average share of binary rubric criteria passed",
         ),
         Metric(
             label="Valid documents",
@@ -492,16 +497,16 @@ def _public_preserved_adjudication(
     return presentation.model_copy(
         update={
             "primary_score": Metric(
-                label="Perfect documents",
+                label="All-pass runs",
                 value=f"{amended_task.get('all_pass', 0)}/{retained}",
-                hint="Documents that passed every checklist requirement",
+                hint="Runs in which every rubric criterion passed",
                 tone="good" if amended_task.get("all_pass") else "neutral",
             ),
             "metrics": metrics,
             "notices": [
                 Notice(
                     text=(
-                        "This score applies the final checklist to the original "
+                        "This score applies the final rubric to the original "
                         "DOCX. The agent was not rerun."
                     ),
                     tone="info",
@@ -511,7 +516,7 @@ def _public_preserved_adjudication(
             "agent_table": presentation.agent_table.model_copy(
                 update={
                     "description": (
-                        "Final-checklist results on the original agent output."
+                        "Final rubric results on the original agent output."
                     ),
                     "columns": agent_columns,
                     "rows": agent_rows,
@@ -519,9 +524,7 @@ def _public_preserved_adjudication(
             ),
             "trial_table": presentation.trial_table.model_copy(
                 update={
-                    "description": (
-                        "Final-checklist results for each original DOCX."
-                    ),
+                    "description": "Final rubric results for each original DOCX.",
                     "columns": trial_columns,
                     "rows": trial_rows,
                 }

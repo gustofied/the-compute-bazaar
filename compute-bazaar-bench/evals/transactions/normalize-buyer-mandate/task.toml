@@ -4,7 +4,7 @@ artifacts = ["/app/buyer-mandate-brief.docx"]
 [task]
 name = "gustofied/normalize-buyer-mandate"
 description = "Normalize a disorganized buyer mandate for a reserved GPU capacity transaction."
-keywords = ["compute-market", "procurement", "buyer-mandate", "intake", "reserved-capacity", "professional-work"]
+keywords = ["compute-market", "transactions", "procurement", "buyer-intake", "reserved-capacity", "rewardkit", "judge-grading"]
 [[task.authors]]
 name = "Adam Sioud"
 
@@ -12,20 +12,15 @@ name = "Adam Sioud"
 domain = "transactions"
 stage = "intake"
 work_type = "analyze"
-category = "compute-market"
-variant = "full"
 n_criteria = 56
 n_deterministic_criteria = 1
 opportunity_id = "CB-2026-041"
-scenario_pack = "CB-2026-041"
-checkpoint = "intake"
-method = "harvey-lab-adaptation"
 source_task = "trusts-estates-private-client/extract-client-intake-facts/scenario-01"
 source_harbor_url = "https://hub.harborframework.com/tasks/punitarani/trusts-estates-private-client-extract-client-intake-facts-scenario-01/latest"
 source_harbor_digest = "c23947950ebe792bdf38231f822e30d9e0f71a89229ada5b5f075ece2f2147d9"
 source_repository = "https://github.com/harveyai/harvey-labs"
 source_retrieved = "2026-08-09"
-tags = ["compute-market", "procurement", "buyer-mandate", "fact-extraction", "conflict-resolution", "commercial-analysis"]
+tags = ["transactions", "intake", "buyer-mandate", "commercial-analysis"]
 
 [verifier]
 timeout_sec = 3600.0

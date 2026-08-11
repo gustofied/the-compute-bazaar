@@ -19,7 +19,7 @@ normalize    -> organize       -> compare
 
 OpenCode 1.18.11 ran each model five times on each task. The table includes 43 completed documents: 15 from DeepSeek, 14 from GPT-5.6 Luna, and 14 from GLM 5.2.
 
-| Model | Documents | Perfect documents | Requirements met | Buyer intake | Data room | Agreement review |
+| Model | Runs scored | All-pass runs | Criteria passed | Buyer intake | Data room | Agreement review |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | DeepSeek V4 Flash 0731 | 15/15 | 1/15 | 84.3% | 78.9% | 94.3% | 80.6% |
 | GPT-5.6 Luna | 14/15 | 1/14 | 90.0% | 90.7% | 96.7% | 84.8% |
@@ -38,13 +38,13 @@ evidence register and clear instructions. Agreement review separated the models
 most clearly: GLM met 94.0% of the requirements, compared with 84.8% for Luna
 and 80.6% for DeepSeek. Luna was fastest and strongest on buyer intake.
 
-Only two of the 43 documents met every requirement. Making the final document
+Only two of the 43 scored runs were all-pass. Making the final document
 was a separate weakness: only one DOCX passed every quality check, and none of
 the run records showed the agent previewing its finished document before
 submission. Meeting most requirements did not reliably produce a clean, usable
 document.
 
-The same final checklist was applied to all 43 saved documents; the agents were
+The same final rubric was applied to all 43 saved documents; the agents were
 not rerun. One Luna attempt reached the one-hour limit and one GLM attempt ended
 with a provider error, so neither was included. Each task was attempted five
 times, and repeating a run may produce a different answer. The results cover
@@ -53,7 +53,7 @@ combinations, not a broad model ranking.
 
 ## How It Grades
 
-Each task requires one named DOCX file. The grader first checks that the file exists and is a valid document. It then checks the work against the source material and the task's requirements. The main score is the share of checklist items passed. A complete pass requires every item to pass.
+Each task requires one named DOCX file. The grader first checks that the file exists and is a valid document. It then applies binary criteria covering the facts, analysis, and requested work. Following Harvey LAB, the headline result is all-pass: a run passes only when every criterion passes. The percentage of criteria passed is also shown so incomplete work can still be compared.
 
 Document quality is reviewed separately so a factually strong answer does not receive extra credit merely for looking polished, and a well-designed document cannot hide missing work.
 
