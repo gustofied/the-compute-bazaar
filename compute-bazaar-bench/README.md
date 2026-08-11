@@ -6,17 +6,31 @@ A benchmark for evaluating agents on compute-market tasks.
 
 > hey, i mix eval/evaluation/task/env, they are the same thing btw
 
-The benchmark brings together two complementary styles of environments:
+Large compute deals rarely move through a clean order book. Buyer requirements,
+supply, pricing, terms, diligence, and relationship history are spread across
+messages, calls, spreadsheets, PDFs, data rooms, and people's memory. This
+context has to be reconstructed, checked, and turned into action.
+
+Compute Bazaar Bench asks where agents can be useful across that market, from
+transactions and sourcing to market intelligence, risk, financing, and
+operations. It brings together two complementary styles of environments.
 
 ### Compute Deal Work
 
-Using [Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark) gives this family of evaluations methodological grounding. Instead of inventing benchmark tasks from scratch, we start with task forms that already represent real professional work and test whether they transfer meaningfully into compute transactions.
-
-The products and commentary from [Epilogue](https://epilogue.inc/) and
+Compute Deal Work starts with transactions: intake, diligence, and contracting.
+Human relationships remain central, while agents may carry more of the analysis,
+documentation, and operational volume around them. The products and commentary
+from [Epilogue](https://epilogue.inc/) and
 [ComputeDesk](https://www.compute-desk.com/) around compute desks and deal flow
-motivate the work here, especially their interest in involving agents.
+motivate this direction.
 
-[**transactions**](evals/transactions/README.md) evaluates agents on compute
+[Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark)
+provides the methodological starting point. Rather than inventing arbitrary
+benchmark exercises, we begin with task forms that already represent real
+professional work and test whether they transfer meaningfully into compute
+transactions.
+
+[**transactions**](evals/transactions/) evaluates agents on compute
 deal work across intake, diligence, and contracting.
 
 ### Compute Market Games
@@ -26,7 +40,7 @@ including compute procurement, brokerage, matching, and negotiation. They are
 more alive and interactive than closed professional-work evaluations, and their
 stateful structure makes them more adaptable for training.
 The first implemented environment is
-[`reliability-is-blind`](evals/reliability-is-blind/README.md).
+[`reliability-is-blind`](evals/reliability-is-blind/).
 
 ## Setup
 
@@ -72,7 +86,7 @@ harbor view jobs
 
 ## Evaluations
 
-### [transactions](evals/transactions/README.md)
+### [transactions](evals/transactions/)
 
 Its first three tasks move through intake, diligence, and contracting:
 
@@ -85,7 +99,7 @@ analyze      -> draft                      -> review
 > transaction accurately, with evidence, and without losing the deal's
 > controlling terms?
 
-### [reliability-is-blind](evals/reliability-is-blind/README.md)
+### [reliability-is-blind](evals/reliability-is-blind/)
 
 `reliability-is-blind` is an interactive compute-brokerage evaluation. An agent
 repeatedly places supply into deals and learns which suppliers to trust from
