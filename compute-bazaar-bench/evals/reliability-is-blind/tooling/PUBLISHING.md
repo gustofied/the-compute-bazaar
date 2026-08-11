@@ -11,7 +11,7 @@ The umbrella dataset points to task digest
 
 The task publication contains:
 
-- the Harbor package in `harbor/`;
+- the Harbor environment in `harbor/`;
 - no raw jobs, private protocol manifests, analyzer output, or research
   checkout.
 

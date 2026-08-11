@@ -26,7 +26,7 @@ class HarborTaskPackageTests(unittest.TestCase):
 
     def test_sidecar_and_verifier_use_exact_frozen_engine_copies(self) -> None:
         canonical = (
-            EVAL_ROOT / "evaluation" / "reliability_is_blind" / "engine.py"
+            EVAL_ROOT / "tooling" / "reliability_is_blind" / "engine.py"
         ).read_bytes()
         sidecar = (
             TASK_ROOT / "environment" / "market-sidecar" / "market_engine.py"

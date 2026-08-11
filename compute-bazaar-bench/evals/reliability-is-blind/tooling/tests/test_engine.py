@@ -6,8 +6,8 @@ from pathlib import Path
 import sys
 import unittest
 
-EVALUATOR_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(EVALUATOR_ROOT))
+TOOLING_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(TOOLING_ROOT))
 
 from reliability_is_blind import MarketConfig, MarketEngine, TerminalReason  # noqa: E402
 from reliability_is_blind.engine import _keyed_uniform  # noqa: E402

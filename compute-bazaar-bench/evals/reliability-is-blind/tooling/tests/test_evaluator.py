@@ -11,11 +11,11 @@ import unittest
 from typing import Any, Sequence
 
 EVAL_ROOT = Path(__file__).resolve().parents[2]
-EVALUATOR_ROOT = EVAL_ROOT / "evaluation"
+TOOLING_ROOT = EVAL_ROOT / "tooling"
 TASK_ROOT = EVAL_ROOT / "harbor"
 BENCH_ROOT = EVAL_ROOT.parents[1]
 sys.path.insert(0, str(BENCH_ROOT))
-sys.path.insert(0, str(EVALUATOR_ROOT))
+sys.path.insert(0, str(TOOLING_ROOT))
 
 import analysis as rib_analysis  # noqa: E402
 import protocol as rib_protocol  # noqa: E402

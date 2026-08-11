@@ -47,6 +47,6 @@ dev = [
 
 [tool.ruff]
 extend-exclude = [
-    "compute-bazaar-bench/evals/reliability-is-blind/evaluation/tests/fixtures",
+    "compute-bazaar-bench/evals/reliability-is-blind/tooling/tests/fixtures",
     "external",
 ]
