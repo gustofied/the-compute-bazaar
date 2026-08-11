@@ -63,7 +63,7 @@ class LaunchPlan(BaseModel):
 
     def payload(self) -> dict[str, Any]:
         return {
-            "contract": "compute-bazaar.launch-plan.v2",
+            "contract": "compute-bazaar.launch-plan",
             "observed_at": self.observed_at,
             "rows": [self.row()],
             "plan": self.model_dump(mode="json"),

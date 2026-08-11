@@ -53,7 +53,7 @@ class LaunchReceipt(BaseModel):
 
     def payload(self) -> dict[str, Any]:
         return {
-            "contract": "compute-bazaar.launch-receipt.v2",
+            "contract": "compute-bazaar.launch-receipt",
             "observed_at": self.launched_at,
             "rows": [
                 {
@@ -84,7 +84,7 @@ class ReconciliationReceipt(BaseModel):
 
     def payload(self) -> dict[str, Any]:
         return {
-            "contract": "compute-bazaar.launch-reconciliation.v1",
+            "contract": "compute-bazaar.launch-reconciliation",
             "observed_at": self.observed_at,
             "rows": [self.machine.row()] if self.machine else [],
             "reconciliation": self.model_dump(mode="json"),
