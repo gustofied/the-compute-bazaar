@@ -142,7 +142,10 @@ def _present_reliability_is_blind(
     protocol: dict[str, Any], trials: list[dict[str, Any]], run_id: str
 ) -> JobPresentation:
     task_root = (
-        Path(__file__).resolve().parents[1] / "evals" / "reliability-is-blind" / "task"
+        Path(__file__).resolve().parents[1]
+        / "evals"
+        / "reliability-is-blind"
+        / "harbor"
     )
     instruction = (task_root / "instruction.md").read_text().strip()
     trial_details = {

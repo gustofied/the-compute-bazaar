@@ -123,7 +123,7 @@ def _transactions_adjudication(
     }
     presentation = _transactions(base, adapted, task_slug)
     if (public_context or {}).get("execution_origin") == (
-        "preserved_output_adjudication"
+        "original_harbor_output_final_checklist"
     ):
         return _public_preserved_adjudication(
             presentation,
@@ -386,23 +386,30 @@ def _public_preserved_adjudication(
     public_context: dict[str, Any],
 ) -> JobPresentation:
     """Present final-checklist results for the original agent outputs."""
-    display_origin = str(
-        public_context.get("display_label")
-        or "Original Harbor output, final checklist"
-    )
     records_by_trial = {str(record["trial"]): record for record in records}
     trial_details = {}
     for trial_id, detail in presentation.trials.items():
         record = records_by_trial.get(trial_id)
         amended = (record or {}).get("amended") or {}
-        summary = [
-            metric
-            for metric in detail.summary
-            if metric.label.lower() not in {"reward", "mean reward", "score"}
-        ]
+        summary = []
+        for metric in detail.summary:
+            if metric.label.lower() in {"reward", "mean reward", "score"}:
+                continue
+            label = {
+                "Semantic score": "Requirements met",
+                "Criteria": "Requirements",
+                "All pass": "Perfect document",
+                "Document craft": "Document review",
+            }.get(metric.label, metric.label)
+            value = metric.value
+            if metric.label == "Semantic score" and isinstance(
+                amended.get("semantic_score"), (int, float)
+            ):
+                value = f"{100 * float(amended['semantic_score']):.1f}%"
+            summary.append(metric.model_copy(update={"label": label, "value": value}))
         summary.append(
             Metric(
-                label="Final-checklist reward",
+                label="Reward",
                 value=_number(amended.get("reward"), 4),
             )
         )
@@ -411,39 +418,83 @@ def _public_preserved_adjudication(
             update={"summary": summary, "sections": sections}
         )
 
+    semantic = amended_task.get("semantic") or {}
+    semantic_mean = semantic.get("mean") if isinstance(semantic, dict) else None
+    requirements_met = (
+        f"{100 * float(semantic_mean):.1f}%"
+        if isinstance(semantic_mean, (int, float))
+        else "—"
+    )
+
     agent_rows = []
     for row in presentation.agent_table.rows:
         cells = dict(row.cells)
-        cells["origin"] = TableCell(value=display_origin)
+        cells["semantic"] = TableCell(value=requirements_met)
         agent_rows.append(row.model_copy(update={"cells": cells}))
-    agent_columns = list(presentation.agent_table.columns)
-    agent_columns.insert(2, TableColumn(key="origin", label="Execution origin"))
+    agent_columns = [
+        TableColumn(key="agent", label="Agent"),
+        TableColumn(key="model", label="Model"),
+        TableColumn(key="valid", label="Valid documents", align="right"),
+        TableColumn(key="semantic", label="Requirements met", align="right"),
+        TableColumn(key="all_pass", label="Perfect documents", align="right"),
+        TableColumn(key="input", label="Input tokens", align="right"),
+        TableColumn(key="output", label="Output tokens", align="right"),
+        TableColumn(key="cost", label="Reported cost", align="right"),
+    ]
 
+    trial_labels = {
+        "semantic": "Requirements met",
+        "criteria": "Requirements",
+        "reward": "Reward",
+        "all_pass": "Perfect",
+        "craft": "Document review",
+    }
     trial_columns = [
-        column.model_copy(
-            update={"label": "Final-checklist reward"}
-            if column.key == "reward"
-            else {}
-        )
+        column.model_copy(update={"label": trial_labels.get(column.key, column.label)})
         for column in presentation.trial_table.columns
     ]
-    metrics = [
-        Metric(label="Execution origin", value=display_origin),
-        *[
-            metric.model_copy(
-                update={"label": "Mean final-checklist reward / scored"}
+    trial_rows = []
+    for row in presentation.trial_table.rows:
+        cells = dict(row.cells)
+        trial_id = _cell(row, "trial")
+        amended = (records_by_trial.get(trial_id) or {}).get("amended") or {}
+        semantic_score = amended.get("semantic_score")
+        if isinstance(semantic_score, (int, float)):
+            cells["semantic"] = TableCell(
+                value=f"{100 * float(semantic_score):.1f}%"
             )
-            if metric.label == "Mean Harbor reward / retained"
-            else metric
-            for metric in presentation.metrics
-        ],
+        trial_rows.append(row.model_copy(update={"cells": cells}))
+    metric_by_label = {metric.label: metric for metric in presentation.metrics}
+    metrics = [
+        Metric(
+            label="Requirements met",
+            value=requirements_met,
+            hint="Average share of checklist requirements passed",
+        ),
+        Metric(
+            label="Valid documents",
+            value=metric_by_label.get(
+                "Valid DOCX / retained", Metric(label="", value="—")
+            ).value,
+        ),
+        Metric(
+            label="Document review",
+            value=metric_by_label.get(
+                f"Document craft / {retained} reviewed", Metric(label="", value="—")
+            ).value,
+        ),
     ]
+    excluded = metric_by_label.get(
+        "Excluded trials", Metric(label="", value="0")
+    ).value
+    if excluded != "0":
+        metrics.append(Metric(label="Excluded", value=excluded))
     return presentation.model_copy(
         update={
             "primary_score": Metric(
-                label="Every requirement",
+                label="Perfect documents",
                 value=f"{amended_task.get('all_pass', 0)}/{retained}",
-                hint="Final checklist applied to the original output",
+                hint="Documents that passed every checklist requirement",
                 tone="good" if amended_task.get("all_pass") else "neutral",
             ),
             "metrics": metrics,
@@ -472,6 +523,7 @@ def _public_preserved_adjudication(
                         "Final-checklist results for each original DOCX."
                     ),
                     "columns": trial_columns,
+                    "rows": trial_rows,
                 }
             ),
             "trials": _sanitize_public_trials(trial_details),
@@ -924,7 +976,7 @@ def _transactions(
             "metrics": [
                 Metric(
                     label="Terminal trials",
-                    value=_metric_value(base, "Trials"),
+                    value=_metric_value(base, "Trial records"),
                     hint="Harbor terminal trials over planned trials",
                 ),
                 Metric(

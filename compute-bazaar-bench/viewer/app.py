@@ -41,8 +41,6 @@ from viewer.schema import (  # noqa: E402
     JobPresentation,
     Metric,
     TableCell,
-    TableColumn,
-    TableRow,
     TaskInfo,
     TracePresentation,
     TrialPresentation,
@@ -209,11 +207,11 @@ dialog::backdrop { background: rgb(0 0 0 / 72%); }
 .field input, .field select { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--text); font: inherit; }
 .command-preview { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 76px; margin: 16px 0 0; }
 .dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 14px; }
-.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); border: 1px solid var(--line); margin: 24px 0; }
-.metric { min-height: 92px; padding: 14px; border-right: 1px solid var(--line); }
-.metric:last-child { border-right: 0; }
-.metric-label { color: var(--muted); font-size: 11px; text-transform: uppercase; }
-.metric-value { font-size: 24px; margin-top: 12px; line-height: 1; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 24px 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.metric { min-height: 80px; padding: 12px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--bg); }
+.metric-label { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.metric-value { margin-top: 8px; overflow-wrap: anywhere; font-size: 18px; line-height: 1.35; }
+.job-header h1 { max-width: 100%; overflow-wrap: anywhere; font-size: 20px; line-height: 1.4; }
 .benchmark { padding: 28px 0 4px; }
 .comparison-picker {
   display: flex;
@@ -641,7 +639,6 @@ def _runs_html(
     task: TaskInfo,
     runs: Sequence[dict[str, Any]],
     base_path: str = "",
-    release_summary: dict[str, Any] | None = None,
     comparison_groups: Sequence[ComparisonGroup] = (),
     selected_comparison: str | None = None,
 ) -> str:
@@ -661,19 +658,13 @@ def _runs_html(
         if not rows
         else f'<div class="eval-list">{rows}</div>'
     )
-    comparison, active_group = _comparison_html(
+    comparison, _active_group = _comparison_html(
         task.slug,
         comparison_groups,
         selected_comparison,
         base_path,
     )
-    release_id = release_summary.get("release_id") if release_summary else None
-    release = (
-        _release_summary_html(release_summary)
-        if release_summary and active_group == release_id
-        else ""
-    )
-    body = f"""{_task_hero_html(task, base_path)}{comparison}{release}
+    body = f"""{_task_hero_html(task, base_path)}{comparison}
 <section class="section"><div class="section-head"><h2>Jobs</h2></div>{empty}</section>"""
     return _layout(task.name, body, base_path)
 
@@ -695,17 +686,13 @@ def _comparison_html(
         for group in groups
     )
     picker = ""
-    label_is_repeated = bool(active.chart.eyebrow) and (
-        active.chart.eyebrow.casefold() == active.label.casefold()
+    picker = (
+        '<div class="comparison-picker">'
+        '<label for="comparison-select">Comparison</label>'
+        '<select id="comparison-select" '
+        "onchange=\"window.location.assign(this.value)\">"
+        f"{options}</select></div>"
     )
-    if len(groups) > 1 or not label_is_repeated:
-        picker = (
-            '<div class="comparison-picker">'
-            '<label for="comparison-select">Comparison</label>'
-            '<select id="comparison-select" '
-            "onchange=\"window.location.assign(this.value)\">"
-            f"{options}</select></div>"
-        )
     return f"{picker}{_benchmark_chart_html(active.chart)}", active.id
 
 
@@ -770,102 +757,6 @@ def _benchmark_chart_html(chart: BenchmarkChart) -> str:
         f'<div class="benchmark-legend">{legend}</div></div>'
         f'<div class="benchmark-list">{"".join(rendered_rows)}</div>{footnote}</section>'
     )
-
-
-def _release_summary_html(summary: dict[str, Any]) -> str:
-    rows = []
-    for row in summary.get("rows", []):
-        craft = row.get("craft") or {}
-        telemetry = row.get("telemetry") or {}
-        strict_rate = row.get("strict_all_pass_rate")
-        criterion_rate = row.get("criterion_pass_rate")
-        macro = row.get("equal_task_macro")
-        agent_seconds = telemetry.get("median_agent_seconds")
-        input_tokens = telemetry.get("median_input_tokens")
-        output_tokens = telemetry.get("median_output_tokens")
-        output_gate_only = row.get("criterion_evaluation") == "not_run_output_gate"
-        rows.append(
-            TableRow(
-                search=" ".join(str(value) for value in row.values()).lower(),
-                cells={
-                    "model": TableCell(value=str(row.get("model") or "—")),
-                    "scored": TableCell(
-                        value=f"{row.get('scored', 0)}/{row.get('planned', 0)}"
-                    ),
-                    "strict": TableCell(
-                        value=(
-                            f"{row.get('strict_all_pass', 0)}/{row.get('scored', 0)} "
-                            f"({_percent_value(strict_rate)})"
-                        )
-                    ),
-                    "criteria": TableCell(
-                        value=(
-                            "not judged"
-                            if output_gate_only
-                            else _percent_value(criterion_rate)
-                        ),
-                        title=(
-                            "No usable document reached checklist review"
-                            if output_gate_only
-                            else "Share of checklist criteria passed"
-                        ),
-                    ),
-                    "macro": TableCell(
-                        value=(
-                            f"{_percent_value(macro)} · output gate"
-                            if output_gate_only
-                            else _percent_value(macro)
-                        )
-                    ),
-                    "craft": TableCell(
-                        value=(
-                            "— (0 reviewable)"
-                            if not craft.get("reviewed")
-                            else f"{craft.get('good', 0)} / "
-                            f"{craft.get('mixed', 0)} / {craft.get('poor', 0)}"
-                        ),
-                        title="Good / mixed / poor",
-                    ),
-                    "latency": TableCell(
-                        value="—"
-                        if agent_seconds is None
-                        else f"{float(agent_seconds):.1f}s"
-                    ),
-                    "tokens": TableCell(
-                        value=(
-                            "—"
-                            if input_tokens is None or output_tokens is None
-                            else f"{int(round(float(input_tokens))):,} / "
-                            f"{int(round(float(output_tokens))):,}"
-                        )
-                    ),
-                },
-            )
-        )
-    table = DataTable(
-        title="Results",
-        description=(
-            "Each agent had five attempts per task. Every requirement means the "
-            "document was valid and every checklist item passed. Document quality "
-            "is shown as good / mixed / poor."
-        ),
-        columns=[
-            TableColumn(key="model", label="Model"),
-            TableColumn(key="scored", label="Scored", align="right"),
-            TableColumn(key="strict", label="Every requirement", align="right"),
-            TableColumn(key="criteria", label="Checklist", align="right"),
-            TableColumn(key="macro", label="Task average", align="right"),
-            TableColumn(key="craft", label="Document quality", align="right"),
-            TableColumn(key="latency", label="Median time", align="right"),
-            TableColumn(key="tokens", label="Input / output", align="right"),
-        ],
-        rows=rows,
-    )
-    return _table_html(table, "", "", "release-comparison", "")
-
-
-def _percent_value(value: Any) -> str:
-    return "—" if value is None else f"{100 * float(value):.1f}%"
 
 
 def _metric_html(metric: Metric) -> str:
@@ -952,7 +843,7 @@ def _index_html(
     )
     note_preview = note["text"] or "Add context or interpretation"
     body = f"""
-<header class="page-header"><div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Job</div><h1>{escape(job_id)}</h1></div></header>
+<header class="page-header job-header"><div class="page-heading"><div class="eyebrow"><a class="info" href="{tasks_url}">Tasks</a> / <a class="info" href="{eval_url}">{escape(task.name)}</a> / Job</div><h1>{escape(job_id)}</h1></div></header>
 <details class="note-editor"><summary><strong>Note</strong><span class="muted" id="note-preview">{escape(note_preview)}</span></summary><div class="note-editor-body">
 <textarea id="job-note" maxlength="2000" aria-label="Job note" placeholder="Add context, caveats, or interpretation for this job">{escape(note["text"])}</textarea>
 <div class="note-actions"><button id="save-note" type="button">Save note</button><span class="muted" id="note-state">{escape(note["updated_at"])}</span></div></div></details>
@@ -1233,14 +1124,10 @@ def create_app(
     @app.get("/evals/{eval_slug}", response_class=HTMLResponse)
     def evaluation(eval_slug: str, comparison: str | None = None) -> str:
         refresh_catalog()
-        release_summary = None
-        if public_release and eval_slug in public_release["managed_tasks"]:
-            release_summary = public_release["summary"]
         return _runs_html(
             task_info(eval_slug),
             run_summaries(eval_slug),
             base_path,
-            release_summary,
             comparison_groups.get(eval_slug, ()),
             comparison,
         )

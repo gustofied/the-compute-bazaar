@@ -63,9 +63,6 @@ def _load_task(
             ),
         )
     ]
-    if source_url := metadata.get("source_harbor_url"):
-        links.append(TaskLink(label="Source task", href=str(source_url)))
-
     package_path = task_root.relative_to(bench_root.parent).as_posix()
     return TaskInfo(
         slug=slug,

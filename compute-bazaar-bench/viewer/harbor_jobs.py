@@ -98,9 +98,11 @@ def present_harbor_job(job_dir: Path, task: TaskInfo, job_id: str) -> JobPresent
     ]
     completed = sum(trial["status"] == "completed" for trial in trials)
     errors = sum(trial["status"] == "error" for trial in trials)
+    running = sum(trial["status"] not in {"completed", "error"} for trial in trials)
     pending = max(planned - len(trials), 0)
     agents = _agent_rows(trials)
     retries = _job_stat(job_result, "n_retries")
+    job_finished = bool(job_result.get("finished_at"))
 
     notices = []
     if errors or pending:
@@ -120,21 +122,28 @@ def present_harbor_job(job_dir: Path, task: TaskInfo, job_id: str) -> JobPresent
         trial_count=len(trials),
         primary_score=(
             Metric(
-                label="Mean reward",
+                label="Mean reward" if job_finished else "Provisional mean reward",
                 value=_number(mean(numeric_rewards), 4),
-                hint="Harbor verifier reward averaged across scored trials",
+                hint=(
+                    "Harbor verifier reward averaged across scored trials"
+                    if job_finished
+                    else (
+                        f"Available for {len(numeric_rewards)}/{planned} trials while "
+                        "the job is still running"
+                    )
+                ),
             )
             if numeric_rewards
             else None
         ),
         metrics=[
-            Metric(label="Trials", value=f"{len(trials)}/{planned}"),
-            Metric(label="Completed", value=str(completed)),
+            Metric(label="Trial records", value=f"{len(trials)}/{planned}"),
+            Metric(label="Finished trials", value=str(completed)),
+            Metric(label="Still running", value=str(running)),
             Metric(
                 label="Errors", value=str(errors), tone="bad" if errors else "neutral"
             ),
             Metric(label="Retries", value=str(retries)),
-            Metric(label="Source", value="Harbor job"),
         ],
         notices=notices,
         agent_table=DataTable(

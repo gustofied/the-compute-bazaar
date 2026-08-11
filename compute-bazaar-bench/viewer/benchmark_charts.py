@@ -414,7 +414,7 @@ def _transaction_charts(
     for task_slug in managed_tasks:
         if not isinstance(task_slug, str) or not task_slug:
             raise RuntimeError("Transactions release has an invalid managed task")
-        chart_rows = []
+        ranked_rows: list[tuple[float, BenchmarkRow]] = []
         for agent_result in rows:
             if not isinstance(agent_result, dict):
                 continue
@@ -428,15 +428,24 @@ def _transaction_charts(
             job_id = str(agent_result.get("job") or "")
             job = job_sources.get(task_slug, {}).get(job_id)
             label = _agent_label_from_job(job, model_label)
+            attempted = retained
+            if job is not None and job.raw_dir is not None:
+                attempted = max(
+                    retained,
+                    summarize_harbor_job(job.raw_dir, task_slug).trial_count,
+                )
             output_gate = (
                 agent_result.get("criterion_evaluation") == "not_run_output_gate"
             )
             if output_gate:
-                chart_rows.append(
-                    BenchmarkRow(
-                        label=label,
-                        value="Output gate",
-                        detail=f"0 reviewable documents · {retained} scored attempts",
+                ranked_rows.append(
+                    (
+                        -1.0,
+                        BenchmarkRow(
+                            label=label,
+                            value="No reviewable documents",
+                            detail=f"{attempted} attempts failed the output gate",
+                        ),
                     )
                 )
                 continue
@@ -444,39 +453,76 @@ def _transaction_charts(
             mean = semantic.get("mean") if isinstance(semantic, dict) else None
             if not isinstance(mean, (int, float)):
                 continue
-            chart_rows.append(
-                BenchmarkRow(
-                    label=label,
-                    value=f"{100 * float(mean):.1f}%",
-                    detail=f"{strict}/{retained} complete",
-                    segments=[
+            missed = max(retained - strict, 0)
+            excluded = max(attempted - retained, 0)
+            segments = []
+            if attempted:
+                if strict:
+                    segments.append(
                         BenchmarkSegment(
-                            label="Checklist passed",
-                            value=float(mean),
-                            tone="info",
+                            label="Passed every requirement",
+                            value=strict / attempted,
+                            tone="good",
                         )
-                    ],
+                    )
+                if missed:
+                    segments.append(
+                        BenchmarkSegment(
+                            label="Missed one or more requirements",
+                            value=missed / attempted,
+                            tone="warn",
+                        )
+                    )
+                if excluded:
+                    segments.append(
+                        BenchmarkSegment(
+                            label="Excluded",
+                            value=excluded / attempted,
+                            tone="neutral",
+                        )
+                    )
+            detail_parts = [
+                f"{100 * float(mean):.1f}% average requirements met across "
+                f"{retained} scored documents"
+            ]
+            if excluded:
+                detail_parts.append(f"{excluded} excluded")
+            ranked_rows.append(
+                (
+                    float(mean),
+                    BenchmarkRow(
+                        label=label,
+                        value=f"{strict} of {attempted} perfect",
+                        detail=" · ".join(detail_parts),
+                        segments=segments,
+                    ),
                 )
             )
-        chart_rows.sort(
-            key=lambda row: (
-                not row.segments,
-                -(row.segments[0].value if row.segments else 0),
-                row.label,
+        chart_rows = [
+            row
+            for _score, row in sorted(
+                ranked_rows,
+                key=lambda item: (-item[0], item[1].label),
             )
-        )
+        ]
         charts[task_slug] = BenchmarkChart(
             eyebrow="Transactions",
-            title="Checklist coverage",
+            title="Document results",
             description=(
-                "Average share of task requirements met across scored documents."
+                "Each bar shows attempted documents. A perfect document passed "
+                "every requirement; the percentage below is average requirement "
+                "coverage across scored documents."
             ),
             rows=chart_rows,
-            legend=[BenchmarkLegendItem(label="Checklist passed", tone="info")],
-            footnote=(
-                "Each agent had five attempts per task. A complete pass requires "
-                "a valid DOCX and every checklist item to pass."
-            ),
+            legend=[
+                BenchmarkLegendItem(
+                    label="Passed every requirement", tone="good"
+                ),
+                BenchmarkLegendItem(
+                    label="Missed one or more", tone="warn"
+                ),
+                BenchmarkLegendItem(label="Excluded", tone="neutral"),
+            ],
         )
     return charts
 

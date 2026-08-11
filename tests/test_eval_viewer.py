@@ -14,6 +14,7 @@ if str(BENCH_ROOT) not in sys.path:
     sys.path.insert(0, str(BENCH_ROOT))
 
 from viewer.app import create_app, first_evaluation_url  # noqa: E402
+from viewer.presenters import load_job_presentation  # noqa: E402
 from viewer.task_catalog import discover_task_definitions  # noqa: E402
 
 
@@ -33,6 +34,32 @@ class TaskCatalogTests(unittest.TestCase):
             tasks = discover_task_definitions(bench_root)
 
             self.assertEqual(list(tasks), ["sample-task"])
+
+    def test_report_loader_reads_instruction_from_harbor_package(self) -> None:
+        with TemporaryDirectory() as temporary:
+            report = Path(temporary)
+            _write_json(
+                report / "protocol.json",
+                {
+                    "schema_version": "reliability-is-blind.analysis.v1",
+                    "models": [],
+                    "trials": [],
+                    "observed_trials": 0,
+                    "planned_trials": 0,
+                    "completed_rollouts": 0,
+                    "reliability_targets_met": 0,
+                },
+            )
+            _write_json(report / "trials.json", [])
+
+            presentation = load_job_presentation(
+                report,
+                "reliability-is-blind",
+                "sample-run",
+            )
+
+            self.assertEqual(presentation.task.slug, "reliability-is-blind")
+            self.assertIn("book of 100 compute deals", presentation.task.instruction)
 
     def test_internal_archive_packages_are_not_launchable_tasks(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -135,7 +162,7 @@ class TaskCatalogTests(unittest.TestCase):
             self.assertIn('data-external-link="true"', native_detail)
             self.assertIn("/api/terminal/external", native_detail)
 
-    def test_task_links_own_package_and_upstream_source(self) -> None:
+    def test_task_links_only_own_harbor_package(self) -> None:
         with TemporaryDirectory() as temporary:
             bench_root = Path(temporary) / "bench"
             task_root = bench_root / "evals" / "transactions" / "sample-task"
@@ -162,10 +189,6 @@ class TaskCatalogTests(unittest.TestCase):
                     (
                         "Harbor task",
                         "https://hub.harborframework.com/tasks/gustofied/sample-task/latest",
-                    ),
-                    (
-                        "Source task",
-                        "https://hub.harborframework.com/tasks/source/task/latest",
                     ),
                 ],
             )
@@ -205,6 +228,10 @@ class TaskCatalogTests(unittest.TestCase):
             self.assertEqual(detail["trial_count"], 1)
             self.assertEqual(detail["primary_score"]["label"], "Mean reward")
             self.assertEqual(detail["primary_score"]["value"], "0.7500")
+            metrics = {item["label"]: item["value"] for item in detail["metrics"]}
+            self.assertEqual(metrics["Trial records"], "1/1")
+            self.assertEqual(metrics["Finished trials"], "1")
+            self.assertEqual(metrics["Still running"], "0")
             self.assertIn("sample-task__abc", detail["trials"])
             trial = detail["trials"]["sample-task__abc"]
             self.assertEqual(trial["trace"]["step_count"], 2)
@@ -407,7 +434,7 @@ class TaskCatalogTests(unittest.TestCase):
                 "private-model-route", {item["slug"] for item in evaluations}
             )
 
-    def test_public_release_summary_is_visible_on_task_page(self) -> None:
+    def test_public_release_summary_powers_task_comparison_only(self) -> None:
         with TemporaryDirectory() as temporary:
             bench_root = Path(temporary) / "bench"
             _write_task(bench_root, "sample-task")
@@ -498,15 +525,18 @@ class TaskCatalogTests(unittest.TestCase):
             app = create_app(bench_root / "jobs" / "reports", bench_root=bench_root)
             html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
 
-            self.assertIn("Results", html)
-            self.assertEqual(html.count("<h2>Results</h2>"), 1)
-            self.assertIn("Every requirement", html)
-            self.assertIn("not judged", html)
-            self.assertIn("Checklist coverage", html)
+            self.assertIn("Document results", html)
             self.assertIn("OpenCode 1.0 + Model B", html)
             self.assertIn("72.0%", html)
+            self.assertIn("1 of 5 perfect", html)
+            self.assertIn("Passed every requirement", html)
+            self.assertIn("Missed one or more", html)
+            self.assertIn('class="comparison-picker"', html)
+            self.assertIn(">Release v1</option>", html)
             self.assertIn("No semantic review", html)
             self.assertNotIn(">0.0%</strong>", html)
+            self.assertNotIn("<h2>Results</h2>", html)
+            self.assertNotIn("Document quality", html)
 
     def test_generic_benchmark_chart_is_visible_on_task_page(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -1339,11 +1369,13 @@ class TaskCatalogTests(unittest.TestCase):
                     "jobs": ["model-job-001"],
                     "job_metadata": {
                         "model-job-001": {
-                            "execution_origin": "preserved_output_adjudication",
+                            "execution_origin": (
+                                "original_harbor_output_final_checklist"
+                            ),
                             "display_label": (
                                 "Original Harbor output, final checklist"
                             ),
-                            "score_origin": "release_grader_replay",
+                            "score_origin": "final_checklist",
                             "agent_rerun": False,
                         }
                     },
@@ -1355,12 +1387,33 @@ class TaskCatalogTests(unittest.TestCase):
                 "sample-task", "model-job-001"
             )
 
-            self.assertEqual(detail["primary_score"]["label"], "Every requirement")
+            self.assertEqual(detail["primary_score"]["label"], "Perfect documents")
             self.assertEqual(detail["primary_score"]["value"], "1/1")
+            metrics = {metric["label"]: metric["value"] for metric in detail["metrics"]}
+            self.assertEqual(metrics["Requirements met"], "100.0%")
+            self.assertEqual(metrics["Valid documents"], "1/1")
+            self.assertEqual(
+                [column["label"] for column in detail["trial_table"]["columns"]],
+                [
+                    "Trial",
+                    "Status",
+                    "Requirements met",
+                    "Requirements",
+                    "Reward",
+                    "Perfect",
+                    "Document review",
+                    "Pages",
+                    "Duration",
+                ],
+            )
+            self.assertEqual(
+                detail["trial_table"]["rows"][0]["cells"]["semantic"]["value"],
+                "100.0%",
+            )
             rendered = json.dumps(detail)
             self.assertNotIn("v1 semantic", rendered)
             self.assertNotIn("Original Harbor reward", rendered)
-            self.assertIn("Original Harbor output, final checklist", rendered)
+            self.assertIn("final checklist to the original DOCX", rendered)
             self.assertIn("The agent was not rerun", rendered)
 
     def test_comparison_overlay_keeps_infrastructure_out_of_semantic_results(
