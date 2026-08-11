@@ -11,7 +11,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from the_compute_bazaar.data_catalog import ComputeBazaarCatalog
-from the_compute_bazaar.data_sync import inspect_lake
+from the_compute_bazaar.data_sync import inspect_lake, sync_public_lake
 from the_compute_bazaar.offers import OfferService
 from the_compute_bazaar.operations import OperationalLedger
 from the_compute_bazaar.portable_lake import build_portable_lake
@@ -79,6 +79,18 @@ class DataFusionEngineTest(unittest.TestCase):
                 source_lake_root=str(lake),
                 output_root=str(portable),
             )
+            cache = root / "cache"
+            first_sync = sync_public_lake(
+                base_url=portable.as_uri(), output_root=str(cache)
+            )
+            repeat_sync = sync_public_lake(
+                base_url=portable.as_uri(), output_root=str(cache)
+            )
+            self.assertEqual(first_sync["status"], "synced")
+            self.assertGreater(first_sync["downloaded_bytes"], 0)
+            self.assertEqual(repeat_sync["status"], "current")
+            self.assertEqual(repeat_sync["downloaded_bytes"], 0)
+
             portable_manifest = read_latest_gold_manifest(str(portable))
             for normalized_ref in portable_manifest["source_normalized_refs"].values():
                 table = pq.read_table(normalized_ref)

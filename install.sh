@@ -16,8 +16,9 @@ command -v curl >/dev/null 2>&1 || fail "curl is required"
 
 if ! command -v uv >/dev/null 2>&1; then
     printf 'Installing uv...\n'
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+    mkdir -p "$BIN_DIR"
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$BIN_DIR" sh
+    PATH="$BIN_DIR:$HOME/.cargo/bin:$PATH"
     export PATH
 fi
 command -v uv >/dev/null 2>&1 || fail "uv was installed, but is not on PATH"

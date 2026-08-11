@@ -18,5 +18,10 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.5",
     "vite": "^7.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

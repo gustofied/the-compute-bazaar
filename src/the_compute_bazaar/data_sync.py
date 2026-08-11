@@ -34,6 +34,20 @@ def sync_public_lake(
 
     index_bytes = _download(f"{source_url}/index.json")
     index = _validated_index(index_bytes)
+    if _generation_matches(destination, index=index):
+        _write_sync_metadata(destination, source_url=source_url)
+        return {
+            "status": "current",
+            "root": str(destination),
+            "source_url": source_url,
+            "run_id": index["run_id"],
+            "observed_at": index["observed_at"],
+            "providers": index["provider_scope"],
+            "history_mode": index.get("history_mode"),
+            "file_count": index["file_count"],
+            "downloaded_bytes": 0,
+        }
+
     staging = Path(
         tempfile.mkdtemp(prefix=f".{destination.name}-", dir=destination.parent)
     )
@@ -53,18 +67,7 @@ def sync_public_lake(
             target.write_bytes(payload)
 
         (staging / "index.json").write_bytes(index_bytes)
-        (staging / ".sync.json").write_text(
-            json.dumps(
-                {
-                    "source_url": source_url,
-                    "synced_at": datetime.now(timezone.utc).isoformat(),
-                },
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
+        _write_sync_metadata(staging, source_url=source_url)
         _validate_generation(staging, index=index)
 
         if backup.exists():
@@ -92,6 +95,41 @@ def sync_public_lake(
         "file_count": index["file_count"],
         "downloaded_bytes": sum(item["size"] for item in index["files"]),
     }
+
+
+def _generation_matches(root: Path, *, index: dict[str, Any]) -> bool:
+    if not root.is_dir():
+        return False
+    try:
+        if _validated_index((root / "index.json").read_bytes()) != index:
+            return False
+        for item in index["files"]:
+            target = root / _safe_relative_path(item["path"])
+            if not target.is_file() or target.stat().st_size != item["size"]:
+                return False
+            with target.open("rb") as handle:
+                checksum = hashlib.file_digest(handle, "sha256").hexdigest()
+            if checksum != item["sha256"]:
+                return False
+        _validate_generation(root, index=index)
+    except Exception:
+        return False
+    return True
+
+
+def _write_sync_metadata(root: Path, *, source_url: str) -> None:
+    (root / ".sync.json").write_text(
+        json.dumps(
+            {
+                "source_url": source_url,
+                "synced_at": datetime.now(timezone.utc).isoformat(),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def inspect_lake(*, root: str, kind: str, label: str) -> dict[str, Any]:
@@ -144,7 +182,7 @@ def inspect_lake(*, root: str, kind: str, label: str) -> dict[str, Any]:
         "observed_at": observed_at,
         "age_hours": _age_hours(observed_at),
         "providers": manifest.get("provider_scope") or [],
-        "tables": len(manifest.get("table_refs") or {}),
+        "published_tables": len(manifest.get("table_refs") or {}),
         "file_count": index.get("file_count"),
         "history_mode": portable.get("history_mode"),
         "source_url": sync.get("source_url"),
