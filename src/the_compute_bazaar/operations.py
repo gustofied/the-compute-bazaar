@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from .provisioning import Allocation, ProvisioningAttempt, ProvisioningRequest
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 TELEMETRY_RETENTION = timedelta(hours=6)
 
 ALLOCATIONS_SCHEMA = """

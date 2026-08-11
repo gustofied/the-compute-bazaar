@@ -65,7 +65,42 @@ create table offer_observations (
                 version = connection.execute("pragma user_version").fetchone()[0]
             self.assertIn("market_product_key", columns)
             self.assertIn("request_id", allocation_columns)
-            self.assertEqual(version, 6)
+            self.assertEqual(version, 7)
+
+    def test_current_version_rebuilds_legacy_capacity_verifications(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "operations.sqlite3"
+            with closing(sqlite3.connect(path)) as connection, connection:
+                connection.execute(
+                    """
+create table capacity_verifications (
+  verification_id text primary key,
+  host_id text not null,
+  observed_at text not null,
+  readiness text not null,
+  expected_gpu_count integer not null,
+  detected_gpu_count integer not null,
+  inspection_json text not null,
+  checks_json text not null
+)
+"""
+                )
+                connection.execute("pragma user_version=6")
+
+            with closing(OperationalLedger(path)._connect()):
+                pass
+
+            with closing(sqlite3.connect(path)) as connection:
+                columns = {
+                    row[1]: bool(row[3])
+                    for row in connection.execute(
+                        "pragma table_info(capacity_verifications)"
+                    )
+                }
+                version = connection.execute("pragma user_version").fetchone()[0]
+            self.assertIn("expected_gpu_model", columns)
+            self.assertFalse(columns["expected_gpu_count"])
+            self.assertEqual(version, 7)
 
     def test_market_selection_and_fleet_delivery_join_in_datafusion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
