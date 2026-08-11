@@ -159,22 +159,34 @@ compute-bazaar terminal --stop
 ## Fleet
 
 <p align="center">
-  <img src="assets/compute-bazaar-fleet.webp" alt="The Compute Bazaar Fleet watching a live RunPod GPU machine" width="80%">
+  <img src="assets/compute-bazaar-fleet.webp" alt="The Compute Bazaar Fleet monitoring a live RunPod GPU node" width="80%">
 </p>
 
-Fleet connects to NVIDIA machines over SSH, whether Bazaar launched them or
-someone else supplied access. It checks what arrived, reports whether the
-machine is ready, and monitors its GPU, CPU, memory, disk, power, temperature,
-processes, and workloads every five seconds while the Terminal is open.
+Fleet operates NVIDIA nodes over SSH. A node can be provisioned from a live
+offer or attached through OpenSSH. Fleet records inventory, runs readiness
+checks, monitors telemetry and health every five seconds, and tracks workloads
+and logs.
 
-Attach an existing machine through an alias in your OpenSSH config:
+```mermaid
+flowchart LR
+    O["Live offer"] --> C["Availability check"] --> P["Provision"] --> A["Allocation"]
+    S["Existing SSH host"] --> T["Attach"]
+    A --> N["Fleet node"]
+    T --> N
+    N --> I["Inventory"]
+    I --> R["Readiness and diagnostics"]
+    R --> M["Telemetry and health"]
+    R --> W["Workloads and logs"]
+```
+
+Attach an existing node by SSH host alias. OpenSSH resolves its address, user,
+key, agent, and jump host; Fleet stores only the alias.
 
 ```bash
 compute-bazaar fleet attach gpu-singapore-01 --expect H100 --count 8
 ```
 
-OpenSSH resolves the host, key, agent, and any jump host. Fleet stores the alias,
-not the credentials.
+Or launch one from a live offer.
 
 ```bash
 compute-bazaar offers list --provider runpod
@@ -185,37 +197,45 @@ compute-bazaar launch run OFFER_ID \
   --max-hourly-usd 0.75 \
   --runtime-minutes 30 \
   --confirm-spend
+```
 
+Inspect it, run readiness checks, monitor it, and run workloads through the CLI
+or Terminal.
+
+```bash
 compute-bazaar fleet hosts
 compute-bazaar fleet inspect HOST_ID
 compute-bazaar fleet doctor HOST_ID
+compute-bazaar terminal
 compute-bazaar fleet workload run HOST_ID --name training -- python train.py
 compute-bazaar fleet workload list --host HOST_ID
 compute-bazaar fleet workload logs WORKLOAD_ID
-compute-bazaar terminal
 compute-bazaar fleet terminate HOST_ID --confirm
 ```
 
-One catalog follows an offer from the market into Fleet:
+The DataFusion catalog keeps the market, allocation, and Fleet records together.
 
 ```bash
 compute-bazaar sql "select * from silver.current_offers order by price_usd_gpu_hr"
 compute-bazaar sql "select * from silver.offer_observations order by observed_at desc"
-compute-bazaar sql "select * from fleet.machines order by created_at desc"
+compute-bazaar sql "select * from fleet.nodes order by created_at desc"
 compute-bazaar sql "select * from gold.fact_market_to_fleet"
 compute-bazaar model run gpu-launch-candidates
 ```
 
-The hourly run records the market. `offers list` records a direct provider read.
-`launch run` checks the provider again before spending and keeps that exact
-observation on the allocation. Fleet then records the machine and its five-second
-measurements. Remote workloads keep running when the Terminal closes; Fleet keeps
-their process ID, state, exit code, and logs. The hourly and direct reads use the
-same columns, but they run on their own clocks.
+`launch run` checks availability and price again before spending, then records
+the offer on the allocation. Fleet keeps node inventory, five-second telemetry,
+workload state, exit codes, and logs. Remote workloads continue when the
+Terminal closes.
 
-If a provider call ends before RunPod confirms whether it created a machine,
-check the recorded attempt against the provider before trying again:
+If a launch ends before RunPod confirms the result, reconcile it before trying
+again.
 
 ```bash
 compute-bazaar launch reconcile ATTEMPT_ID
 ```
+
+### To do
+
+- GPU PROC [Not Found] bug need to fix
+- add other providers than runpod
