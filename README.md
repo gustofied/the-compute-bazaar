@@ -43,10 +43,6 @@ export PATH="$HOME/.local/bin:$PATH"
 compute-bazaar terminal
 ```
 
-The installer keeps the checkout under `~/.local/share/compute-bazaar` and puts
-the command in `~/.local/bin`. Without Node.js, pnpm, and Rust, the same command
-opens the Terminal in a browser.
-
 For development, clone the repository directly.
 
 ```bash
