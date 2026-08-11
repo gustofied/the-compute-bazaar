@@ -460,7 +460,7 @@ def _transaction_charts(
                 if strict:
                     segments.append(
                         BenchmarkSegment(
-                            label="All-pass",
+                            label="Passed",
                             value=strict / attempted,
                             tone="good",
                         )
@@ -468,7 +468,7 @@ def _transaction_charts(
                 if missed:
                     segments.append(
                         BenchmarkSegment(
-                            label="Not all-pass",
+                            label="Incomplete",
                             value=missed / attempted,
                             tone="warn",
                         )
@@ -482,7 +482,7 @@ def _transaction_charts(
                         )
                     )
             detail_parts = [
-                f"{100 * float(mean):.1f}% criteria passed across "
+                f"{100 * float(mean):.1f}% criterion pass rate across "
                 f"{retained} scored runs"
             ]
             if excluded:
@@ -492,7 +492,7 @@ def _transaction_charts(
                     float(mean),
                     BenchmarkRow(
                         label=label,
-                        value=f"{strict} of {attempted} all-pass",
+                        value=f"{strict} of {attempted} passed",
                         detail=" · ".join(detail_parts),
                         segments=segments,
                     ),
@@ -507,16 +507,16 @@ def _transaction_charts(
         ]
         charts[task_slug] = BenchmarkChart(
             eyebrow="Transactions",
-            title="All-pass results",
+            title="Run outcomes",
             description=(
                 "Each bar counts runs. Green passed every criterion, amber "
-                "missed at least one, and gray was excluded. The percentage "
-                "below is the average share of criteria passed."
+                "completed with missing criteria, and gray was excluded. The "
+                "percentage below is the average criterion pass rate."
             ),
             rows=chart_rows,
             legend=[
-                BenchmarkLegendItem(label="All-pass", tone="good"),
-                BenchmarkLegendItem(label="Not all-pass", tone="warn"),
+                BenchmarkLegendItem(label="Passed", tone="good"),
+                BenchmarkLegendItem(label="Incomplete", tone="warn"),
                 BenchmarkLegendItem(label="Excluded", tone="neutral"),
             ],
         )

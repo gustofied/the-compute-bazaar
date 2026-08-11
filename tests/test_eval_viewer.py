@@ -525,12 +525,12 @@ class TaskCatalogTests(unittest.TestCase):
             app = create_app(bench_root / "jobs" / "reports", bench_root=bench_root)
             html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
 
-            self.assertIn("All-pass results", html)
+            self.assertIn("Run outcomes", html)
             self.assertIn("OpenCode 1.0 + Model B", html)
             self.assertIn("72.0%", html)
-            self.assertIn("1 of 5 all-pass", html)
-            self.assertIn("All-pass", html)
-            self.assertIn("Not all-pass", html)
+            self.assertIn("1 of 5 passed", html)
+            self.assertIn("Passed", html)
+            self.assertIn("Incomplete", html)
             self.assertIn('class="comparison-picker"', html)
             self.assertIn(">Release v1</option>", html)
             self.assertIn("No semantic review", html)
@@ -1387,20 +1387,20 @@ class TaskCatalogTests(unittest.TestCase):
                 "sample-task", "model-job-001"
             )
 
-            self.assertEqual(detail["primary_score"]["label"], "All-pass runs")
+            self.assertEqual(detail["primary_score"]["label"], "Runs passed")
             self.assertEqual(detail["primary_score"]["value"], "1/1")
             metrics = {metric["label"]: metric["value"] for metric in detail["metrics"]}
-            self.assertEqual(metrics["Criteria passed"], "100.0%")
+            self.assertEqual(metrics["Criterion pass rate"], "100.0%")
             self.assertEqual(metrics["Valid documents"], "1/1")
             self.assertEqual(
                 [column["label"] for column in detail["trial_table"]["columns"]],
                 [
                     "Trial",
                     "Status",
-                    "Criteria passed",
+                    "Criterion pass rate",
                     "Criteria",
                     "Reward",
-                    "All-pass",
+                    "Passed",
                     "Document review",
                     "Pages",
                     "Duration",

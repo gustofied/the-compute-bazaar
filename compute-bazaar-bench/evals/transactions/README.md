@@ -19,11 +19,11 @@ normalize    -> organize       -> compare
 
 OpenCode 1.18.11 ran each model five times on each task. The table includes 43 completed documents: 15 from DeepSeek, 14 from GPT-5.6 Luna, and 14 from GLM 5.2.
 
-| Model | Runs scored | All-pass runs | Criteria passed | Buyer intake | Data room | Agreement review |
+| Model | Runs scored | Run pass rate | Criterion pass rate | Buyer intake | Data room | Agreement review |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| DeepSeek V4 Flash 0731 | 15/15 | 1/15 | 84.3% | 78.9% | 94.3% | 80.6% |
-| GPT-5.6 Luna | 14/15 | 1/14 | 90.0% | 90.7% | 96.7% | 84.8% |
-| GLM 5.2 | 14/15 | 0/14 | 92.4% | 87.1% | 96.6% | 94.0% |
+| DeepSeek V4 Flash 0731 | 15/15 | 1/15 (6.7%) | 84.3% | 78.9% | 94.3% | 80.6% |
+| GPT-5.6 Luna | 14/15 | 1/14 (7.1%) | 90.0% | 90.7% | 96.7% | 84.8% |
+| GLM 5.2 | 14/15 | 0/14 (0.0%) | 92.4% | 87.1% | 96.6% | 94.0% |
 
 | Model | Median OpenCode time | Median total run time | Input tokens | Reused input | Output tokens |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -38,7 +38,7 @@ evidence register and clear instructions. Agreement review separated the models
 most clearly: GLM met 94.0% of the requirements, compared with 84.8% for Luna
 and 80.6% for DeepSeek. Luna was fastest and strongest on buyer intake.
 
-Only two of the 43 scored runs were all-pass. Making the final document
+Two of the 43 scored runs passed the complete rubric. Making the final document
 was a separate weakness: only one DOCX passed every quality check, and none of
 the run records showed the agent previewing its finished document before
 submission. Meeting most requirements did not reliably produce a clean, usable
@@ -53,7 +53,9 @@ combinations, not a broad model ranking.
 
 ## How It Grades
 
-Each task requires one named DOCX file. The grader first checks that the file exists and is a valid document. It then applies binary criteria covering the facts, analysis, and requested work. Following Harvey LAB, the headline result is all-pass: a run passes only when every criterion passes. The percentage of criteria passed is also shown so incomplete work can still be compared.
+Each task requires one named DOCX file. The grader first checks that the file exists and is a valid document. It then applies binary criteria covering the facts, analysis, and requested work. Following Harvey LAB, a run passes when every criterion passes; Harvey calls this all-pass grading. The criterion pass rate shows how much of the rubric each run satisfied.
+
+`pass^k` is a separate repeated-reliability measure in which all `k` attempts on the same task pass. This table reports the observed run pass rate across the scored attempts.
 
 Document quality is reviewed separately so a factually strong answer does not receive extra credit merely for looking polished, and a well-designed document cannot hide missing work.
 

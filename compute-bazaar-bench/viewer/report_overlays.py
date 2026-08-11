@@ -402,9 +402,9 @@ def _public_preserved_adjudication(
             }:
                 continue
             label = {
-                "Semantic score": "Criteria passed",
+                "Semantic score": "Criterion pass rate",
                 "Criteria": "Criteria",
-                "All pass": "All-pass",
+                "All pass": "Passed",
                 "Document craft": "Document review",
             }.get(metric.label, metric.label)
             value = metric.value
@@ -441,17 +441,17 @@ def _public_preserved_adjudication(
         TableColumn(key="agent", label="Agent"),
         TableColumn(key="model", label="Model"),
         TableColumn(key="valid", label="Valid documents", align="right"),
-        TableColumn(key="semantic", label="Criteria passed", align="right"),
-        TableColumn(key="all_pass", label="All-pass runs", align="right"),
+        TableColumn(key="semantic", label="Criterion pass rate", align="right"),
+        TableColumn(key="all_pass", label="Runs passed", align="right"),
         TableColumn(key="input", label="Input tokens", align="right"),
         TableColumn(key="output", label="Output tokens", align="right"),
     ]
 
     trial_labels = {
-        "semantic": "Criteria passed",
+        "semantic": "Criterion pass rate",
         "criteria": "Criteria",
         "reward": "Reward",
-        "all_pass": "All-pass",
+        "all_pass": "Passed",
         "craft": "Document review",
     }
     trial_columns = [
@@ -472,7 +472,7 @@ def _public_preserved_adjudication(
     metric_by_label = {metric.label: metric for metric in presentation.metrics}
     metrics = [
         Metric(
-            label="Criteria passed",
+            label="Criterion pass rate",
             value=criteria_passed,
             hint="Average share of binary rubric criteria passed",
         ),
@@ -497,7 +497,7 @@ def _public_preserved_adjudication(
     return presentation.model_copy(
         update={
             "primary_score": Metric(
-                label="All-pass runs",
+                label="Runs passed",
                 value=f"{amended_task.get('all_pass', 0)}/{retained}",
                 hint="Runs in which every rubric criterion passed",
                 tone="good" if amended_task.get("all_pass") else "neutral",
