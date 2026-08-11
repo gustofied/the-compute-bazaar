@@ -55,7 +55,7 @@ Then run an evaluation from the Terminal shell with Harbor:
 
 ```bash
 harbor run \
-  -p compute-bazaar-bench/evals/reliability-is-blind/task \
+  -p compute-bazaar-bench/evals/reliability-is-blind/harbor \
   -a AGENT \
   -m MODEL \
   -e ENVIRONMENT \

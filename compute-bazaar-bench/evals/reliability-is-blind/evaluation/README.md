@@ -1,7 +1,7 @@
 # Evaluator
 
-These tools sit around the Harbor task. They never change task reward or raw
-job history.
+These tools sit around the Harbor package in `../harbor/`. They never change
+task reward or raw job history.
 
 ## Files
 
@@ -10,13 +10,17 @@ job history.
   verifier outputs into deterministic trial and protocol reports.
 - `reliability_is_blind/engine.py`: canonical development copy of the frozen
   market engine, byte-matched to the task sidecar and verifier copies.
+- `protocols/`: frozen evaluation commitments.
+- `comparisons/`: named comparison views for the Compute Bazaar Terminal.
+- `tests/`: development, parity, sidecar, verifier, and analysis tests.
+- `PUBLISHING.md`: publication boundaries and commands.
 
 ## Analyze
 
 ```bash
-uv run python compute-bazaar-bench/evals/reliability-is-blind/evaluator/protocol.py analyze \
+uv run python compute-bazaar-bench/evals/reliability-is-blind/evaluation/protocol.py analyze \
   --manifest .secrets/reliability-is-blind-mistral-matched-20.json \
-  --commitment compute-bazaar-bench/evals/reliability-is-blind/protocols/reliability-is-blind-mistral-matched-20.commitment.json \
+  --commitment compute-bazaar-bench/evals/reliability-is-blind/evaluation/protocols/reliability-is-blind-mistral-matched-20.commitment.json \
   --jobs-dir compute-bazaar-bench/jobs/raw \
   --phase full \
   --output compute-bazaar-bench/jobs/reports/reliability-is-blind/runs/reliability-is-blind-mistral-matched-20

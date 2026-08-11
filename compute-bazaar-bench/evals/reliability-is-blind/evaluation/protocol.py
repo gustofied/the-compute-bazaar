@@ -230,7 +230,7 @@ def _harbor_command(
         "harbor",
         "run",
         "-p",
-        "compute-bazaar-bench/evals/reliability-is-blind/task",
+        "compute-bazaar-bench/evals/reliability-is-blind/harbor",
         "-a",
         str(manifest["agent"]),
     ]

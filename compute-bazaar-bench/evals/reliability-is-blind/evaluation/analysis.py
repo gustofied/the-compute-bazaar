@@ -20,7 +20,7 @@ from typing import Any, Iterable, Sequence
 
 ANALYSIS_SCHEMA_VERSION = "reliability-is-blind.analysis.v1"
 DEFAULT_MINIMUM_MATCHED_SEEDS = 20
-DEFAULT_TASK_ROOT = Path(__file__).resolve().parents[1] / "task"
+DEFAULT_TASK_ROOT = Path(__file__).resolve().parents[1] / "harbor"
 MARKET_COMMAND = re.compile(r"(?:^|[;&|]\s*)market(?:\s|$)")
 MARKET_RESET = re.compile(r"(?:^|[;&|]\s*)market\s+reset(?:\s|$)")
 

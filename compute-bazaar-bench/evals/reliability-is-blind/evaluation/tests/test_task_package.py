@@ -5,8 +5,8 @@ import tomllib
 import unittest
 
 
-EVAL_ROOT = Path(__file__).resolve().parents[1]
-TASK_ROOT = EVAL_ROOT / "task"
+EVAL_ROOT = Path(__file__).resolve().parents[2]
+TASK_ROOT = EVAL_ROOT / "harbor"
 
 
 class HarborTaskPackageTests(unittest.TestCase):
@@ -26,7 +26,7 @@ class HarborTaskPackageTests(unittest.TestCase):
 
     def test_sidecar_and_verifier_use_exact_frozen_engine_copies(self) -> None:
         canonical = (
-            EVAL_ROOT / "evaluator" / "reliability_is_blind" / "engine.py"
+            EVAL_ROOT / "evaluation" / "reliability_is_blind" / "engine.py"
         ).read_bytes()
         sidecar = (
             TASK_ROOT / "environment" / "market-sidecar" / "market_engine.py"

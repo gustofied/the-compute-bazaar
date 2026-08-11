@@ -1,0 +1,12 @@
+{
+  "schema_version": "compute-bazaar-bench.comparison-group.v1",
+  "id": "mistral-matched-20",
+  "label": "Mistral matched 20",
+  "tasks": [
+    "reliability-is-blind"
+  ],
+  "source": {
+    "kind": "reliability-is-blind-report",
+    "job": "reliability-is-blind-mistral-matched-20"
+  }
+}

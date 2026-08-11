@@ -1,6 +1,8 @@
-# Local research checkout; parity tests use the pinned fixture in dev_tests/fixtures.
+# Local research checkout; parity tests use the pinned evaluation fixture.
 references/
 .venv/
 .ruff_cache/
-/tests/
+.pytest_cache/
 __pycache__/
+*.pyc
+.DS_Store

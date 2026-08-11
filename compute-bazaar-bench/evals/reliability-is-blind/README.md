@@ -2,7 +2,7 @@
 
 **Question: Can an agent acting as a compute broker decide which supply to place into a deal when it knows what delivered in the past, but not what caused each failure?**
 
-[Run or inspect the task on Harbor.](https://hub.harborframework.com/tasks/gustofied/reliability-is-blind/latest)
+[Harbor package](harbor/) · [Run or inspect it on Harbor Hub.](https://hub.harborframework.com/tasks/gustofied/reliability-is-blind/latest)
 
 ## Initial results
 

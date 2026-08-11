@@ -13,8 +13,8 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-EVAL_ROOT = Path(__file__).resolve().parents[1]
-TASK_ROOT = EVAL_ROOT / "task"
+EVAL_ROOT = Path(__file__).resolve().parents[2]
+TASK_ROOT = EVAL_ROOT / "harbor"
 sys.path.insert(0, str(TASK_ROOT))
 
 from tests import verify  # noqa: E402

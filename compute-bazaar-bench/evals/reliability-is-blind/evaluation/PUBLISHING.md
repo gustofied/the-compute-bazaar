@@ -5,13 +5,13 @@ Reliability Is Blind is published as the Harbor task
 `gustofied/compute-bazaar-bench`, alongside the other Compute Bazaar tasks.
 
 The umbrella dataset points to task digest
-`sha256:5781edcec052d4050e4e87127fb6572063e10e9858609fb71fa652ea04520e41`.
+`sha256:f8a279f04b4db8dc419e1df3dc58137b24520ea162fe0fde48077868bd4d89a2`.
 
 ## Public Surface
 
 The task publication contains:
 
-- the Harbor package in `task/`;
+- the Harbor package in `harbor/`;
 - no raw jobs, private protocol manifests, analyzer output, or research
   checkout.
 
@@ -61,7 +61,7 @@ Authenticate, then publish the task and umbrella dataset:
 
 ```bash
 harbor auth login
-harbor publish compute-bazaar-bench/evals/reliability-is-blind/task --public
+harbor publish compute-bazaar-bench/evals/reliability-is-blind/harbor --public
 harbor publish compute-bazaar-bench --public
 ```
 

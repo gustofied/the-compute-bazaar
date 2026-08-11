@@ -10,9 +10,9 @@ import tempfile
 import unittest
 from typing import Any, Sequence
 
-EVAL_ROOT = Path(__file__).resolve().parents[1]
-EVALUATOR_ROOT = EVAL_ROOT / "evaluator"
-TASK_ROOT = EVAL_ROOT / "task"
+EVAL_ROOT = Path(__file__).resolve().parents[2]
+EVALUATOR_ROOT = EVAL_ROOT / "evaluation"
+TASK_ROOT = EVAL_ROOT / "harbor"
 BENCH_ROOT = EVAL_ROOT.parents[1]
 sys.path.insert(0, str(BENCH_ROOT))
 sys.path.insert(0, str(EVALUATOR_ROOT))
@@ -99,7 +99,7 @@ def sample_presentation() -> JobPresentation:
             ),
             links=[TaskLink(label="Harbor task", href="https://example.com/task")],
             launch=LaunchSpec(
-                package_path=("compute-bazaar-bench/evals/reliability-is-blind/task"),
+                package_path=("compute-bazaar-bench/evals/reliability-is-blind/harbor"),
                 task_id="reliability-is-blind",
             ),
         ),

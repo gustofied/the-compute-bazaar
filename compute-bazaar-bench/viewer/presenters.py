@@ -305,7 +305,7 @@ def _present_reliability_is_blind(
                 ),
             ],
             launch=LaunchSpec(
-                package_path=("compute-bazaar-bench/evals/reliability-is-blind/task"),
+                package_path=("compute-bazaar-bench/evals/reliability-is-blind/harbor"),
                 task_id="reliability-is-blind",
             ),
         ),
