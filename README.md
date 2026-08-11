@@ -166,11 +166,10 @@ compute-bazaar terminal --stop
 
 ## Eval
 
-[Compute Bazaar Bench](compute-bazaar-bench/evals) contains agent evaluations
-for compute markets.
+[Compute Bazaar Bench](https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench) is a benchmark for evaluating agents on compute-market tasks.
 
 <p align="center">
-  <a href="compute-bazaar-bench/evals"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="80%"></a>
+  <a href="https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="80%"></a>
 </p>
 
 ## Fleet
