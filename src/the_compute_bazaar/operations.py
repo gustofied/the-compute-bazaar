@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
+import os
 import sqlite3
-from contextlib import closing
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -563,19 +566,26 @@ limit 1
     def _connect(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.path.parent.chmod(0o700)
-        connection = sqlite3.connect(self.path, timeout=5)
-        connection.row_factory = sqlite3.Row
-        connection.execute("pragma foreign_keys=on")
-        connection.execute("pragma journal_mode=wal")
-        connection.execute("pragma busy_timeout=5000")
-        connection.executescript(SCHEMA)
-        _migrate(connection)
-        connection.execute(
-            "create index if not exists offer_observations_product_time "
-            "on offer_observations (market_product_key, observed_at desc)"
-        )
-        connection.execute(f"pragma user_version={SCHEMA_VERSION}")
-        connection.commit()
+        with _schema_lock(self.path):
+            connection = sqlite3.connect(self.path, timeout=5)
+            try:
+                connection.row_factory = sqlite3.Row
+                connection.execute("pragma busy_timeout=5000")
+                connection.execute("pragma foreign_keys=on")
+                connection.execute("pragma journal_mode=wal")
+                connection.executescript(SCHEMA)
+                connection.execute("begin immediate")
+                _migrate(connection)
+                connection.execute(
+                    "create index if not exists offer_observations_product_time "
+                    "on offer_observations (market_product_key, observed_at desc)"
+                )
+                connection.execute(f"pragma user_version={SCHEMA_VERSION}")
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                connection.close()
+                raise
         self.path.chmod(0o600)
         return connection
 
@@ -594,6 +604,18 @@ def _migrate(connection: sqlite3.Connection) -> None:
         )
     connection.execute("drop table if exists fleet_allocations")
     connection.execute("drop table if exists fleet_observations")
+
+
+@contextmanager
+def _schema_lock(path: Path) -> Iterator[None]:
+    lock_path = path.with_name(f".{path.name}.schema.lock")
+    descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(descriptor, "a+b") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
 def _insert(

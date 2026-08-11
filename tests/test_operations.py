@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import concurrent.futures
+import json
+import sqlite3
+import subprocess
 import tempfile
 import unittest
-import json
-import subprocess
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -21,6 +24,41 @@ from tests.test_offers import FakeRunpodClient
 
 
 class OperationalLedgerTest(unittest.TestCase):
+    def test_concurrent_connections_migrate_one_legacy_store(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "operations.sqlite3"
+            with closing(sqlite3.connect(path)) as connection, connection:
+                connection.execute(
+                    """
+create table offer_observations (
+  observation_id text primary key,
+  source_offer_id text not null,
+  observed_at text not null
+)
+"""
+                )
+                connection.execute("pragma user_version=2")
+
+            ledger = OperationalLedger(path)
+
+            def connect_and_close(_: int) -> None:
+                with closing(ledger._connect()):
+                    pass
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                list(executor.map(connect_and_close, range(16)))
+
+            with closing(sqlite3.connect(path)) as connection:
+                columns = {
+                    row[1]
+                    for row in connection.execute(
+                        "pragma table_info(offer_observations)"
+                    )
+                }
+                version = connection.execute("pragma user_version").fetchone()[0]
+            self.assertIn("market_product_key", columns)
+            self.assertEqual(version, 3)
+
     def test_market_selection_and_fleet_delivery_join_in_datafusion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
