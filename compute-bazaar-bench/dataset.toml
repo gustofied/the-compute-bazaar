@@ -1,17 +1,10 @@
 [dataset]
 name = "gustofied/compute-bazaar-bench"
 description = "A benchmark for evaluating agents on compute-market tasks."
-keywords = [
-  "compute-market",
-  "transactions",
-  "procurement",
-  "diligence",
-  "contracting",
-  "brokerage",
-  "reliability",
-]
+keywords = [ "compute-market", "transactions", "procurement", "diligence", "contracting", "brokerage", "reliability",]
 [[dataset.authors]]
 name = "Adam Sioud"
+
 
 [[tasks]]
 name = "gustofied/reliability-is-blind"
@@ -28,3 +21,4 @@ digest = "sha256:8d08b39deaf07098458a6749b036f1548a7e693aa6af6db79e299f4b157256b
 [[tasks]]
 name = "gustofied/compare-capacity-agreement-against-term-sheet"
 digest = "sha256:6685403e099868f01b61900d09ef4edb88afa954677c94a2d4d4a6b7c34dad65"
+
