@@ -1,7 +1,7 @@
 <p align="center">
   <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440"><br>
   <strong>The Compute Bazaar</strong><br>
-  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#fleet">Fleet</a> • Eval • Trade
+  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#eval">Eval</a> • <a href="#fleet">Fleet</a> • Trade
 </p>
 
 My vision is to build The Compute Bazaar as much for humans as for
@@ -163,6 +163,12 @@ Data and Eval. Stop the Terminal with:
 ```bash
 compute-bazaar terminal --stop
 ```
+
+## [Eval](compute-bazaar-bench/evals)
+
+<p align="center">
+  <a href="compute-bazaar-bench/evals"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="100%"></a>
+</p>
 
 ## Fleet
 
