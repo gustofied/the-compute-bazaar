@@ -1,7 +1,15 @@
 [dataset]
 name = "gustofied/compute-bazaar-bench"
-description = "Professional-work and agent evaluations for compute markets."
-keywords = [ "compute-market", "agents", "transactions", "diligence", "contracting",]
+description = "A benchmark for evaluating agents on compute-market tasks."
+keywords = [
+  "compute-market",
+  "transactions",
+  "procurement",
+  "diligence",
+  "contracting",
+  "brokerage",
+  "reliability",
+]
 [[dataset.authors]]
 name = "Adam Sioud"
 

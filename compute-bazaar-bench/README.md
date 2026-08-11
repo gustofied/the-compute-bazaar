@@ -2,13 +2,13 @@
 
 [Harbor dataset](https://hub.harborframework.com/datasets/gustofied/compute-bazaar-bench)
 
-A benchmark for agents working in compute markets.
+A benchmark for evaluating agents on compute-market tasks.
 
 > hey, i mix eval/evaluation/task/env, they are the same thing btw
 
 The benchmark brings together two complementary styles of environments:
 
-### Harvey-Style Professional Work
+### Compute Deal Work
 
 Using [Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark) gives this family of evaluations methodological grounding. Instead of inventing benchmark tasks from scratch, we start with task forms that already represent real professional work and test whether they transfer meaningfully into compute transactions.
 
@@ -20,9 +20,9 @@ motivate the work here, especially their interest in involving agents.
 that moves an OTC or reserved-compute transaction from initial intent toward
 executable paper.
 
-### Game-Like Environments
+### Compute Market Games
 
-Game-like environments place agents inside changing compute-market processes,
+Compute market games place agents inside changing compute-market processes,
 including compute procurement, brokerage, matching, and negotiation. They are
 more alive and interactive than closed professional-work evaluations, and their
 stateful structure makes them more adaptable for training.
