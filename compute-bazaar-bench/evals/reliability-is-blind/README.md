@@ -6,13 +6,15 @@
 
 ## Initial results
 
-An initial evaluation job ran Mistral Medium 3.5, Mistral Small 2603, and Mistral Large 2512 across 20 market seeds, producing 59 trials.
+An initial comparison ran Mistral Medium 3.5, Mistral Small 2603, and Mistral Large 2512 with OpenCode 1.18.11 across the same 20 predeclared market seeds. It produced 59 of 60 planned trials.
 
 | Model              | Books completed | Reliability target met | Failure rate in completed books |
 | ------------------ | --------------: | ---------------------: | ------------------------------: |
 | Mistral Medium 3.5 |           17/20 |                  10/20 |                            5.7% |
 | Mistral Small 2603 |           11/20 |                   2/20 |                           19.5% |
 | Mistral Large 2512 |            6/19 |                   4/19 |                            5.5% |
+
+![Reliability Is Blind results across the matched Mistral comparison](assets/results.png)
 
 Mistral Medium completed the most books and met the reliability target most often. Large's 5.5% failure rate only covers the six books it completed and should be read alongside its low completion rate.
 
