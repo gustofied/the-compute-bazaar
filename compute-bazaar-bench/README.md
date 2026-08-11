@@ -6,7 +6,7 @@ A benchmark for evaluating agents on compute-market tasks.
 
 > hey, i mix eval/evaluation/task/env, they are the same thing btw
 
-Large compute deals rarely move through a clean order book. Buyer requirements,
+Large compute deals rarely happen in a single, transparent "venue". Buyer requirements,
 supply, pricing, terms, diligence, and relationship history are spread across
 messages, calls, spreadsheets, PDFs, data rooms, and people's memory. This
 context has to be reconstructed, checked, and turned into action.

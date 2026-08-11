@@ -32,6 +32,6 @@
     }
   },
   "report": "transactions",
-  "summary_path": "evals/transactions/results/transactions.summary.json",
+  "summary_path": "evals/transactions/tooling/transactions.summary.json",
   "include_private_calibration": false
 }
