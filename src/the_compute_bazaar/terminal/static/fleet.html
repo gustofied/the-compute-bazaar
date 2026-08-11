@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="dark">
     <meta name="description" content="Compute Bazaar Fleet">
     <title>Compute Bazaar Fleet</title>
-    <link rel="stylesheet" href="/terminal-assets/fleet.css?v=20260810-8">
+    <link rel="stylesheet" href="/terminal-assets/fleet.css?v=20260811-1">
     <link rel="stylesheet" href="/terminal-assets/command.css?v=20260808-2">
     <link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2">
   </head>
@@ -128,11 +128,22 @@
                 <div id="check-list" class="check-list"></div>
               </section>
             </div>
+
+            <section class="activity-panel" aria-label="Workloads and GPU processes">
+              <div class="activity-column">
+                <header><h3>Workloads</h3><span id="workload-count">0</span></header>
+                <div class="activity-list" id="workload-list"></div>
+              </div>
+              <div class="activity-column">
+                <header><h3>GPU processes</h3><span id="process-count">0</span></header>
+                <div class="activity-list" id="process-list"></div>
+              </div>
+            </section>
           </div>
         </section>
       </main>
     </div>
     <script type="module" src="/terminal-assets/perspective/command.js?v=20260808-2"></script>
-    <script type="module" src="/terminal-assets/fleet.js?v=20260810-5"></script>
+    <script type="module" src="/terminal-assets/fleet.js?v=20260811-1"></script>
   </body>
 </html>

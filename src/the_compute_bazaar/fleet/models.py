@@ -60,6 +60,7 @@ class GpuDevice(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     index: int = Field(ge=0)
+    uuid: str | None = None
     name: str
     memory_total_mb: int = Field(ge=0)
     memory_used_mb: int = Field(default=0, ge=0)
@@ -75,6 +76,16 @@ class GpuDevice(BaseModel):
     pcie_generation_max: int | None = Field(default=None, ge=0)
     pcie_width_current: int | None = Field(default=None, ge=0)
     pcie_width_max: int | None = Field(default=None, ge=0)
+
+
+class GpuProcess(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    pid: int = Field(ge=1)
+    process_name: str
+    gpu_uuid: str | None = None
+    gpu_index: int | None = Field(default=None, ge=0)
+    memory_used_mb: int | None = Field(default=None, ge=0)
 
 
 class FleetInspection(BaseModel):
@@ -99,6 +110,7 @@ class FleetInspection(BaseModel):
     gpu_execution_status: Literal["pass", "fail", "not_tested"] = "not_tested"
     gpu_execution_detail: str | None = None
     gpus: tuple[GpuDevice, ...] = ()
+    gpu_processes: tuple[GpuProcess, ...] = ()
 
     def row(self) -> dict[str, object]:
         return {
@@ -115,6 +127,7 @@ class FleetInspection(BaseModel):
             "disk_used_gb": self.disk_used_gb,
             "disk_free_gb": self.disk_free_gb,
             "gpu_count": len(self.gpus),
+            "gpu_process_count": len(self.gpu_processes),
             "gpu_names": ", ".join(device.name for device in self.gpus),
             "driver": self.gpus[0].driver_version if self.gpus else None,
             "driver_cuda_version": self.driver_cuda_version,

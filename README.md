@@ -179,6 +179,9 @@ compute-bazaar launch run OFFER_ID \
 compute-bazaar fleet hosts
 compute-bazaar fleet inspect HOST_ID
 compute-bazaar fleet doctor HOST_ID
+compute-bazaar fleet workload run HOST_ID --name training -- python train.py
+compute-bazaar fleet workload list --host HOST_ID
+compute-bazaar fleet workload logs WORKLOAD_ID
 compute-bazaar terminal
 compute-bazaar fleet terminate HOST_ID --confirm
 ```
@@ -196,5 +199,13 @@ compute-bazaar model run gpu-launch-candidates
 The hourly run records the market. `offers list` records a direct provider read.
 `launch run` checks the provider again before spending and keeps that exact
 observation on the allocation. Fleet then records the machine and its five-second
-measurements. The hourly and direct reads use the same columns, but they run on
-their own clocks.
+measurements. Remote workloads keep running when the Terminal closes; Fleet keeps
+their process ID, state, exit code, and logs. The hourly and direct reads use the
+same columns, but they run on their own clocks.
+
+If a provider call ends before RunPod confirms whether it created a machine,
+check the recorded attempt against the provider before trying again:
+
+```bash
+compute-bazaar launch reconcile ATTEMPT_ID
+```

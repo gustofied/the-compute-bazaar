@@ -69,6 +69,28 @@ class LaunchReceipt(BaseModel):
         }
 
 
+class ReconciliationReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    attempt_id: str
+    request_id: str
+    state: str
+    observed_at: datetime
+    matched_resources: int
+    provider_resource_id: str | None = None
+    machine: FleetMachine | None = None
+    note: str
+    warnings: tuple[str, ...] = ()
+
+    def payload(self) -> dict[str, Any]:
+        return {
+            "contract": "compute-bazaar.launch-reconciliation.v1",
+            "observed_at": self.observed_at,
+            "rows": [self.machine.row()] if self.machine else [],
+            "reconciliation": self.model_dump(mode="json"),
+        }
+
+
 class RunpodExecutor:
     def __init__(
         self,
@@ -149,7 +171,9 @@ class RunpodExecutor:
             if not pod_id:
                 self.ledger.complete_provisioning_attempt(
                     attempt.attempt_id,
-                    state="uncertain",
+                    state=(
+                        "failed" if _create_was_rejected(payload) else "uncertain"
+                    ),
                     error=str(exc),
                 )
                 raise
@@ -171,45 +195,20 @@ class RunpodExecutor:
             )
             raise LaunchExecutionError(message)
 
-        self.ledger.complete_provisioning_attempt(
-            attempt.attempt_id,
-            state="succeeded",
+        allocation, machine = self._allocation_and_machine(
+            request,
+            attempt_id=attempt.attempt_id,
             provider_resource_id=pod_id,
+            provider_payload=payload,
         )
-        allocation_id = "allocation-" + hashlib.sha256(
-            f"{request.request_id}\x1f{pod_id}".encode()
-        ).hexdigest()[:16]
-        allocation = Allocation(
-            allocation_id=allocation_id,
-            request_id=request.request_id,
-            successful_attempt_id=attempt.attempt_id,
-            acquisition_connector=plan.source_connector,
-            capacity_provider=plan.capacity_provider,
-            provider_resource_id=pod_id,
-            state=_machine_state(_find_text(payload, "desiredStatus", "status")),
-            created_at=launched_at,
-            terminate_at=terminate_at,
-            updated_at=launched_at,
-        )
-        self.ledger.record_allocation(allocation)
-
-        name = str(plan.request["name"])
-        machine = FleetMachine(
-            host_id=f"runpod:{pod_id}",
-            allocation_id=allocation_id,
-            name=name,
-            state=allocation.state,
-            gpu_model=plan.gpu_model,
-            gpu_count=plan.gpu_count,
-            created_at=launched_at,
-        )
+        self.ledger.complete_allocation(attempt.attempt_id, allocation)
         self.registry.put(machine)
         receipt = LaunchReceipt(
             machine=machine,
             plan_id=plan.plan_id,
             request_id=request.request_id,
             attempt_id=attempt.attempt_id,
-            allocation_id=allocation_id,
+            allocation_id=allocation.allocation_id,
             launched_at=launched_at,
             terminate_at=terminate_at,
             max_hourly_usd=max_hourly_usd,
@@ -228,6 +227,128 @@ class RunpodExecutor:
             update={"machine": machine, "warnings": tuple(warnings)}
         )
         return receipt
+
+    def reconcile(
+        self,
+        attempt_id: str,
+        *,
+        confirm_absent: bool = False,
+    ) -> ReconciliationReceipt:
+        if not self.api_key:
+            raise LaunchExecutionError("RUNPOD_API_KEY is not configured")
+        if self.ledger is None:
+            raise LaunchExecutionError(
+                "Reconciliation requires the private operational ledger"
+            )
+        row = self.ledger.provisioning_attempt(attempt_id)
+        allocation = self.ledger.allocation_for_request(row["request_id"])
+        recover_succeeded = row["attempt_state"] == "succeeded" and allocation is None
+        if row["attempt_state"] != "uncertain" and not recover_succeeded:
+            raise LaunchExecutionError(
+                f"Provisioning attempt {attempt_id} is already {row['attempt_state']}"
+            )
+        if row["acquisition_connector"] != "runpod":
+            raise LaunchExecutionError(
+                f"Reconciliation is not implemented for {row['acquisition_connector']}"
+            )
+        request = _request_from_row(row)
+        name = str(request.provider_request.get("name") or "")
+        if not name:
+            raise LaunchExecutionError("Provisioning request has no provider name")
+        started_at = _parse_time(row["started_at"])
+        if recover_succeeded and row["provider_resource_id"]:
+            payload = self._run_payload(
+                [self.binary, "pod", "get", str(row["provider_resource_id"])],
+                timeout=30,
+            )
+            candidates = _pod_rows(payload)
+        else:
+            payload = self._run_payload(
+                [
+                    self.binary,
+                    "pod",
+                    "list",
+                    "--all",
+                    "--name",
+                    name,
+                    "--created-after",
+                    started_at.date().isoformat(),
+                ],
+                timeout=30,
+            )
+            candidates = [
+                pod
+                for pod in _pod_rows(payload)
+                if _pod_matches(pod, name=name, started_at=started_at)
+            ]
+        observed_at = datetime.now(UTC)
+        if not candidates:
+            if confirm_absent:
+                note = "No matching RunPod Pod exists; operator confirmed absence"
+                self.ledger.reconcile_attempt(
+                    attempt_id,
+                    state="failed",
+                    note=note,
+                )
+                return ReconciliationReceipt(
+                    attempt_id=attempt_id,
+                    request_id=request.request_id,
+                    state="failed",
+                    observed_at=observed_at,
+                    matched_resources=0,
+                    note=note,
+                )
+            return ReconciliationReceipt(
+                attempt_id=attempt_id,
+                request_id=request.request_id,
+                state="uncertain",
+                observed_at=observed_at,
+                matched_resources=0,
+                note="No exact provider match; use --confirm-absent only after checking RunPod",
+            )
+        if len(candidates) != 1:
+            return ReconciliationReceipt(
+                attempt_id=attempt_id,
+                request_id=request.request_id,
+                state="uncertain",
+                observed_at=observed_at,
+                matched_resources=len(candidates),
+                note="Multiple exact provider matches; reconcile in RunPod before continuing",
+            )
+
+        provider_payload = candidates[0]
+        pod_id = _find_text(provider_payload, "id", "podId", "pod_id")
+        if not pod_id:
+            raise LaunchExecutionError("Matching RunPod Pod returned no ID")
+        allocation, machine = self._allocation_and_machine(
+            request,
+            attempt_id=attempt_id,
+            provider_resource_id=pod_id,
+            provider_payload=provider_payload,
+        )
+        self.ledger.complete_allocation(
+            attempt_id,
+            allocation,
+            recover=True,
+            note="Recovered from RunPod provider state",
+        )
+        self.registry.put(machine)
+        warnings: list[str] = []
+        try:
+            machine = self.resolve_ssh(machine)
+        except (KeyError, TypeError, ValueError, LaunchExecutionError) as exc:
+            warnings.append(f"Pod recovered; SSH endpoint is not ready: {exc}")
+        return ReconciliationReceipt(
+            attempt_id=attempt_id,
+            request_id=request.request_id,
+            state="succeeded",
+            observed_at=observed_at,
+            matched_resources=1,
+            provider_resource_id=pod_id,
+            machine=machine,
+            note="Recovered one exact RunPod Pod",
+            warnings=tuple(warnings),
+        )
 
     def resolve_ssh(
         self,
@@ -283,10 +404,60 @@ class RunpodExecutor:
         self._run_json(
             [self.binary, "pod", "delete", str(allocation["provider_resource_id"])]
         )
+        terminated_at = datetime.now(UTC)
         terminated = machine.model_copy(update={"state": "terminated", "ssh": None})
         self.registry.put(terminated)
-        self.ledger.record_machine_state(terminated)
+        self.ledger.record_machine_state(terminated, occurred_at=terminated_at)
+        self.ledger.stop_host_workloads(
+            machine.host_id,
+            reason="Fleet host terminated",
+            ended_at=terminated_at,
+        )
         return terminated
+
+    def _allocation_and_machine(
+        self,
+        request: ProvisioningRequest,
+        *,
+        attempt_id: str,
+        provider_resource_id: str,
+        provider_payload: Mapping[str, Any],
+    ) -> tuple[Allocation, FleetMachine]:
+        if self.ledger is None:
+            raise LaunchExecutionError("Fleet operation requires the private ledger")
+        allocation_id = "allocation-" + hashlib.sha256(
+            f"{request.request_id}\x1f{provider_resource_id}".encode()
+        ).hexdigest()[:16]
+        state = _machine_state(
+            _find_text(
+                provider_payload,
+                "runtimeStatus",
+                "desiredStatus",
+                "status",
+            )
+        )
+        allocation = Allocation(
+            allocation_id=allocation_id,
+            request_id=request.request_id,
+            successful_attempt_id=attempt_id,
+            acquisition_connector=request.acquisition_connector,
+            capacity_provider=request.capacity_provider,
+            provider_resource_id=provider_resource_id,
+            state=state,
+            created_at=request.created_at,
+            terminate_at=request.created_at + timedelta(minutes=request.runtime_minutes),
+            updated_at=datetime.now(UTC),
+        )
+        machine = FleetMachine(
+            host_id=f"runpod:{provider_resource_id}",
+            allocation_id=allocation_id,
+            name=str(request.provider_request["name"]),
+            state=state,
+            gpu_model=request.gpu_model,
+            gpu_count=request.gpu_count,
+            created_at=request.created_at,
+        )
+        return allocation, machine
 
     def _create_command(
         self,
@@ -337,15 +508,32 @@ class RunpodExecutor:
         self,
         command: Sequence[str],
     ) -> dict[str, Any]:
+        payload = self._run_payload(command)
+        if not isinstance(payload, dict):
+            raise LaunchExecutionError("runpodctl returned a non-object response")
+        if payload.get("error"):
+            raise RunpodctlError(str(payload["error"]), payload=payload)
+        return payload
+
+    def _run_payload(
+        self,
+        command: Sequence[str],
+        *,
+        timeout: int | None = None,
+    ) -> Any:
         environment = dict(os.environ)
         environment["RUNPOD_API_KEY"] = str(self.api_key)
-        result = self.runner(
-            list(command),
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            result = self.runner(
+                list(command),
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise LaunchExecutionError("runpodctl timed out") from exc
         if result.returncode != 0:
             error_payload = _json_object(result.stderr) or _json_object(result.stdout)
             raise RunpodctlError(
@@ -353,14 +541,9 @@ class RunpodExecutor:
                 payload=error_payload,
             )
         try:
-            payload = json.loads(result.stdout)
+            return json.loads(result.stdout)
         except json.JSONDecodeError as exc:
             raise LaunchExecutionError("runpodctl returned invalid JSON") from exc
-        if not isinstance(payload, dict):
-            raise LaunchExecutionError("runpodctl returned a non-object response")
-        if payload.get("error"):
-            raise RunpodctlError(str(payload["error"]), payload=payload)
-        return payload
 
 
 def _validate_execution(
@@ -407,6 +590,71 @@ def _find_text(payload: Mapping[str, Any], *keys: str) -> str | None:
     return None
 
 
+def _create_was_rejected(payload: Mapping[str, Any]) -> bool:
+    message = str(payload.get("error", "")).lower()
+    return payload.get("code") == "graphql_error" and (
+        "no longer any instances available" in message
+        or "no instances available" in message
+    )
+
+
+def _request_from_row(row: Mapping[str, Any]) -> ProvisioningRequest:
+    return ProvisioningRequest.model_validate(
+        {
+            key: row[key]
+            for key in ProvisioningRequest.model_fields
+            if key not in {"provider_request", "state"}
+        }
+        | {
+            "provider_request": json.loads(str(row["provider_request_json"])),
+            "state": row["state"],
+        }
+    )
+
+
+def _pod_rows(payload: Any) -> list[Mapping[str, Any]]:
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, Mapping)]
+    if not isinstance(payload, Mapping):
+        return []
+    for key in ("pods", "items", "data"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [row for row in value if isinstance(row, Mapping)]
+        if isinstance(value, Mapping):
+            nested = _pod_rows(value)
+            if nested:
+                return nested
+    return [payload] if _find_text(payload, "id", "podId", "pod_id") else []
+
+
+def _pod_matches(
+    payload: Mapping[str, Any],
+    *,
+    name: str,
+    started_at: datetime,
+) -> bool:
+    if _find_text(payload, "name") != name:
+        return False
+    created = _find_text(payload, "createdAt", "created_at", "created")
+    if not created:
+        return True
+    try:
+        return _parse_time(created) >= started_at - timedelta(minutes=5)
+    except (TypeError, ValueError):
+        return False
+
+
+def _parse_time(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
 def _machine_state(value: str | None) -> str:
     normalized = (value or "").strip().lower()
     if normalized in {"running", "ready"}:
@@ -439,8 +687,11 @@ def _command_error(output: str) -> str:
 
 
 def _json_object(output: str) -> dict[str, Any] | None:
-    try:
-        payload = json.loads(output.strip())
-    except json.JSONDecodeError:
-        return None
-    return dict(payload) if isinstance(payload, dict) else None
+    for line in reversed(output.splitlines()):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return dict(payload)
+    return None

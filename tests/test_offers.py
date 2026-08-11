@@ -524,6 +524,128 @@ class OfferServiceTest(unittest.TestCase):
             self.assertEqual(calls, 1)
             self.assertEqual(attempts[0]["state"], "uncertain")
 
+    def test_provider_capacity_rejection_is_a_failed_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            identity = root / "id_ed25519"
+            identity.write_text("test", encoding="utf-8")
+            registry = FleetRegistry(root / "fleet")
+            ledger = OperationalLedger(root / "operations.sqlite3", registry=registry)
+            service = OfferService(
+                runpod_api_key="configured",
+                runpod_client=FakeRunpodClient(),
+                ledger=ledger,
+            )
+            offer = service.list_offers(providers=["runpod"]).observations[0]
+            plan = LaunchPlanner(service).plan(
+                offer.source_offer_id,
+                name="bazaar-h100-unavailable",
+                image="runpod/pytorch:latest",
+            )
+            error = {
+                "error": "There are no longer any instances available",
+                "code": "graphql_error",
+            }
+
+            def rejected(
+                command: list[str], **_: object
+            ) -> subprocess.CompletedProcess[str]:
+                stderr = "note: only the first data center is used\n" + json.dumps(error)
+                return subprocess.CompletedProcess(command, 1, "", stderr)
+
+            with self.assertRaises(LaunchExecutionError):
+                RunpodExecutor(
+                    api_key="configured",
+                    registry=registry,
+                    runner=rejected,
+                    identity_file=str(identity),
+                    ledger=ledger,
+                ).execute(
+                    plan,
+                    runtime_minutes=30,
+                    max_hourly_usd=3,
+                    confirm_spend=True,
+                )
+
+            attempt = ledger.arrow_tables()["provisioning_attempts"].to_pylist()[0]
+            self.assertEqual(attempt["state"], "failed")
+
+    def test_uncertain_create_recovers_one_exact_provider_resource(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            identity = root / "id_ed25519"
+            identity.write_text("test", encoding="utf-8")
+            registry = FleetRegistry(root / "fleet")
+            ledger = OperationalLedger(root / "operations.sqlite3", registry=registry)
+            service = OfferService(
+                runpod_api_key="configured",
+                runpod_client=FakeRunpodClient(),
+                ledger=ledger,
+            )
+            offer = service.list_offers(providers=["runpod"]).observations[0]
+            plan = LaunchPlanner(service).plan(
+                offer.source_offer_id,
+                name="bazaar-h100-recover",
+                image="runpod/pytorch:latest",
+            )
+
+            def failed_create(
+                command: list[str], **_: object
+            ) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(command, 1, "", "network lost")
+
+            executor = RunpodExecutor(
+                api_key="configured",
+                registry=registry,
+                runner=failed_create,
+                binary="runpodctl",
+                identity_file=str(identity),
+                ledger=ledger,
+            )
+            with self.assertRaises(LaunchExecutionError):
+                executor.execute(
+                    plan,
+                    runtime_minutes=30,
+                    max_hourly_usd=3,
+                    confirm_spend=True,
+                )
+            attempt_id = ledger.arrow_tables()["provisioning_attempts"].to_pylist()[
+                0
+            ]["attempt_id"]
+
+            def provider_state(
+                command: list[str], **_: object
+            ) -> subprocess.CompletedProcess[str]:
+                if command[1:3] == ["pod", "list"]:
+                    payload: object = [
+                        {
+                            "id": "pod-recovered",
+                            "name": "bazaar-h100-recover",
+                            "runtimeStatus": "RUNNING",
+                        }
+                    ]
+                else:
+                    payload = {
+                        "id": "pod-recovered",
+                        "ip": "203.0.113.11",
+                        "port": 22023,
+                        "ssh_command": "ssh root@203.0.113.11 -p 22023",
+                    }
+                return subprocess.CompletedProcess(
+                    command, 0, json.dumps(payload), ""
+                )
+
+            executor.runner = provider_state
+            receipt = executor.reconcile(attempt_id)
+
+            self.assertEqual(receipt.state, "succeeded")
+            self.assertEqual(receipt.provider_resource_id, "pod-recovered")
+            self.assertEqual(receipt.machine.ssh.host, "203.0.113.11")
+            attempts = ledger.arrow_tables()["provisioning_attempts"].to_pylist()
+            allocations = ledger.arrow_tables()["allocations"].to_pylist()
+            self.assertEqual(attempts[0]["state"], "succeeded")
+            self.assertEqual(allocations[0]["provider_resource_id"], "pod-recovered")
+
 
 if __name__ == "__main__":
     unittest.main()

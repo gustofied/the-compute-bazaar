@@ -10,7 +10,12 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
-from ..fleet import FleetMachine, FleetMonitor, FleetService
+from ..fleet import (
+    FleetMachine,
+    FleetMonitor,
+    FleetService,
+    WorkloadService,
+)
 
 
 class FleetWorkspace:
@@ -20,9 +25,28 @@ class FleetWorkspace:
         asset_root: Path,
         service: FleetService | None = None,
         monitor: FleetMonitor | None = None,
+        workloads: WorkloadService | None = None,
     ) -> None:
         self.asset_root = asset_root
         self.service = service or FleetService.local()
+        if workloads is not None:
+            self.workloads = workloads
+        elif self.service.ledger is not None:
+            self.workloads = WorkloadService(
+                registry=self.service.registry,
+                ledger=self.service.ledger,
+            )
+        else:
+            from ..operations import OperationalLedger
+
+            ledger = OperationalLedger(
+                self.service.registry.root / "operations.sqlite3",
+                registry=self.service.registry,
+            )
+            self.workloads = WorkloadService(
+                registry=self.service.registry,
+                ledger=ledger,
+            )
         interval = _monitor_interval()
         self.monitor = monitor or FleetMonitor(
             self.service,
@@ -76,6 +100,7 @@ class FleetWorkspace:
             health = state.health
             allocation = _allocation(self.service, inspection.machine)
             verification = _verification(self.service, inspection.machine.host_id)
+            workloads = self.workloads.refresh_host(host_id)
             return {
                 "contract": "compute-bazaar.fleet-host.v1",
                 "machine": _machine_payload(
@@ -108,6 +133,13 @@ class FleetWorkspace:
                     "gpu_execution_detail": inspection.gpu_execution_detail,
                 },
                 "gpus": [gpu.model_dump(mode="json") for gpu in inspection.gpus],
+                "gpu_processes": [
+                    process.model_dump(mode="json")
+                    for process in inspection.gpu_processes
+                ],
+                "workloads": [
+                    workload.model_dump(mode="json") for workload in workloads
+                ],
                 "health": health.health,
                 "health_checks": [
                     check.model_dump(mode="json") for check in health.checks

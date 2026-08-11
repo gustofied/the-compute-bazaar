@@ -18,14 +18,35 @@ if TYPE_CHECKING:
     import pyarrow as pa
 
     from .fleet.models import FleetDoctorResult, FleetInspection, FleetMachine
+    from .fleet.workloads import WorkloadRun
     from .offers import OfferBatch
     from .provisioning import Allocation, ProvisioningAttempt, ProvisioningRequest
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 5
 TELEMETRY_RETENTION = timedelta(hours=6)
 
-SCHEMA = """
+ALLOCATIONS_SCHEMA = """
+create table if not exists allocations (
+  allocation_id text primary key,
+  request_id text not null unique,
+  successful_attempt_id text not null unique,
+  acquisition_connector text not null,
+  capacity_provider text not null,
+  provider_resource_id text not null,
+  state text not null,
+  realized_price_usd_gpu_hr real,
+  realized_price_usd_instance_hr real,
+  created_at text not null,
+  terminate_at text,
+  terminated_at text,
+  updated_at text not null,
+  foreign key (request_id) references provisioning_requests(request_id),
+  foreign key (successful_attempt_id) references provisioning_attempts(attempt_id)
+);
+"""
+
+SCHEMA = f"""
 create table if not exists provider_read_batches (
   batch_id text not null,
   source_connector text not null,
@@ -127,23 +148,7 @@ create table if not exists provisioning_attempts (
   foreign key (request_id) references provisioning_requests(request_id)
 );
 
-create table if not exists allocations (
-  allocation_id text primary key,
-  request_id text not null unique,
-  successful_attempt_id text not null unique,
-  acquisition_connector text not null,
-  capacity_provider text not null,
-  provider_resource_id text not null,
-  state text not null,
-  realized_price_usd_gpu_hr real,
-  realized_price_usd_instance_hr real,
-  created_at text not null,
-  terminate_at text,
-  terminated_at text,
-  updated_at text not null,
-  foreign key (request_id) references provisioning_requests(request_id),
-  foreign key (successful_attempt_id) references provisioning_attempts(attempt_id)
-);
+{ALLOCATIONS_SCHEMA}
 
 create table if not exists fleet_telemetry (
   sample_id text primary key,
@@ -178,6 +183,28 @@ create table if not exists capacity_verifications (
 
 create index if not exists capacity_verifications_host_time
   on capacity_verifications (host_id, observed_at desc);
+
+create table if not exists workload_runs (
+  workload_id text primary key,
+  host_id text not null,
+  allocation_id text,
+  name text not null,
+  command_json text not null,
+  working_directory text not null,
+  remote_directory text not null,
+  state text not null,
+  remote_pid integer,
+  exit_code integer,
+  started_at text not null,
+  ended_at text,
+  updated_at text not null,
+  stdout_ref text not null,
+  stderr_ref text not null,
+  error text
+);
+
+create index if not exists workload_runs_host_time
+  on workload_runs (host_id, started_at desc);
 """
 
 
@@ -377,7 +404,45 @@ where attempt_id = ?
                 (state, row["request_id"]),
             )
 
-    def record_allocation(self, allocation: Allocation) -> None:
+    def provisioning_attempt(self, attempt_id: str) -> dict[str, Any]:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+select
+  attempt.attempt_id,
+  attempt.attempt_number,
+  attempt.state as attempt_state,
+  attempt.started_at,
+  attempt.completed_at,
+  attempt.provider_resource_id,
+  attempt.error,
+  request.*
+from provisioning_attempts attempt
+join provisioning_requests request using (request_id)
+where attempt.attempt_id = ?
+""",
+                (attempt_id,),
+            ).fetchone()
+        if not row:
+            raise KeyError(f"Unknown provisioning attempt: {attempt_id}")
+        return dict(row)
+
+    def allocation_for_request(self, request_id: str) -> dict[str, Any] | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "select * from allocations where request_id = ?",
+                (request_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def complete_allocation(
+        self,
+        attempt_id: str,
+        allocation: Allocation,
+        *,
+        recover: bool = False,
+        note: str | None = None,
+    ) -> None:
         with closing(self._connect()) as connection, connection:
             attempt = connection.execute(
                 """
@@ -385,24 +450,47 @@ select request_id, state, provider_resource_id
 from provisioning_attempts
 where attempt_id = ?
 """,
-                (allocation.successful_attempt_id,),
+                (attempt_id,),
             ).fetchone()
             if not attempt:
+                raise ProvisioningStateError(f"Unknown provisioning attempt: {attempt_id}")
+            allowed = {"uncertain", "succeeded"} if recover else {"pending"}
+            if attempt["state"] not in allowed:
                 raise ProvisioningStateError(
-                    f"Unknown provisioning attempt: {allocation.successful_attempt_id}"
+                    f"Provisioning attempt {attempt_id} is {attempt['state']}"
                 )
             if attempt["request_id"] != allocation.request_id:
                 raise ProvisioningStateError(
                     "Allocation request does not match its provisioning attempt"
                 )
-            if attempt["state"] != "succeeded":
-                raise ProvisioningStateError(
-                    f"Allocation attempt is {attempt['state']}, not succeeded"
-                )
-            if attempt["provider_resource_id"] != allocation.provider_resource_id:
+            provider_resource_id = attempt["provider_resource_id"]
+            if provider_resource_id and provider_resource_id != allocation.provider_resource_id:
                 raise ProvisioningStateError(
                     "Allocation resource does not match its provisioning attempt"
                 )
+            existing = connection.execute(
+                "select allocation_id from allocations where request_id = ?",
+                (allocation.request_id,),
+            ).fetchone()
+            if existing:
+                if existing["allocation_id"] == allocation.allocation_id:
+                    return
+                raise ProvisioningStateError(
+                    f"Request {allocation.request_id} already has an allocation"
+                )
+            now = _timestamp(datetime.now(UTC))
+            connection.execute(
+                """
+update provisioning_attempts
+set state = 'succeeded', completed_at = ?, provider_resource_id = ?, error = ?
+where attempt_id = ?
+""",
+                (now, allocation.provider_resource_id, note, attempt_id),
+            )
+            connection.execute(
+                "update provisioning_requests set state = 'succeeded' where request_id = ?",
+                (allocation.request_id,),
+            )
             _insert(
                 connection,
                 "allocations",
@@ -529,6 +617,58 @@ limit 1
             ).fetchone()
         return dict(row) if row else None
 
+    def record_workload(self, workload: WorkloadRun) -> None:
+        self._insert("workload_runs", [_workload_row(workload)])
+
+    def update_workload(self, workload: WorkloadRun) -> None:
+        self._insert("workload_runs", [_workload_row(workload)], replace=True)
+
+    def workload(self, workload_id: str) -> WorkloadRun:
+        from .fleet.workloads import WorkloadRun
+
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "select * from workload_runs where workload_id = ?",
+                (workload_id,),
+            ).fetchone()
+        if not row:
+            raise KeyError(f"Unknown Fleet workload: {workload_id}")
+        return WorkloadRun.model_validate(_workload_payload(dict(row)))
+
+    def workloads(self, host_id: str | None = None) -> list[WorkloadRun]:
+        from .fleet.workloads import WorkloadRun
+
+        sql = "select * from workload_runs"
+        values: tuple[str, ...] = ()
+        if host_id:
+            sql += " where host_id = ?"
+            values = (host_id,)
+        sql += " order by started_at desc, workload_id desc"
+        with closing(self._connect()) as connection:
+            rows = connection.execute(sql, values).fetchall()
+        return [
+            WorkloadRun.model_validate(_workload_payload(dict(row))) for row in rows
+        ]
+
+    def stop_host_workloads(
+        self,
+        host_id: str,
+        *,
+        reason: str,
+        ended_at: datetime | None = None,
+    ) -> int:
+        when = _timestamp(ended_at or datetime.now(UTC))
+        with closing(self._connect()) as connection, connection:
+            cursor = connection.execute(
+                """
+update workload_runs
+set state = 'stopped', ended_at = ?, updated_at = ?, error = ?
+where host_id = ? and state in ('starting', 'running', 'unknown')
+""",
+                (when, when, reason, host_id),
+            )
+        return cursor.rowcount
+
     def arrow_tables(self) -> dict[str, pa.Table]:
         import pyarrow as pa
 
@@ -540,6 +680,7 @@ limit 1
             "allocations": _allocation_schema(pa),
             "fleet_telemetry": _telemetry_schema(pa),
             "capacity_verifications": _verification_schema(pa),
+            "workload_runs": _workload_schema(pa),
         }
         with closing(self._connect()) as connection:
             tables = {
@@ -602,6 +743,13 @@ def _migrate(connection: sqlite3.Connection) -> None:
         connection.execute(
             "alter table offer_observations add column market_product_key text"
         )
+    allocation_columns = {
+        str(row["name"])
+        for row in connection.execute("pragma table_info(allocations)")
+    }
+    if allocation_columns and "request_id" not in allocation_columns:
+        connection.execute("drop table allocations")
+        connection.executescript(ALLOCATIONS_SCHEMA)
     connection.execute("drop table if exists fleet_allocations")
     connection.execute("drop table if exists fleet_observations")
 
@@ -641,6 +789,17 @@ def _insert(
 def _request_row(request: ProvisioningRequest) -> dict[str, Any]:
     row = request.model_dump(mode="python")
     row["provider_request_json"] = _json(row.pop("provider_request"))
+    return row
+
+
+def _workload_row(workload: WorkloadRun) -> dict[str, Any]:
+    row = workload.model_dump(mode="python")
+    row["command_json"] = _json(row.pop("command"))
+    return row
+
+
+def _workload_payload(row: dict[str, Any]) -> dict[str, Any]:
+    row["command"] = tuple(json.loads(str(row.pop("command_json"))))
     return row
 
 
@@ -839,6 +998,30 @@ def _verification_schema(pa: Any) -> Any:
             ("detected_gpu_count", "int"),
             ("inspection_json", "text"),
             ("checks_json", "text"),
+        ),
+    )
+
+
+def _workload_schema(pa: Any) -> Any:
+    return _schema(
+        pa,
+        (
+            ("workload_id", "text"),
+            ("host_id", "text"),
+            ("allocation_id", "text"),
+            ("name", "text"),
+            ("command_json", "text"),
+            ("working_directory", "text"),
+            ("remote_directory", "text"),
+            ("state", "text"),
+            ("remote_pid", "int"),
+            ("exit_code", "int"),
+            ("started_at", "time"),
+            ("ended_at", "time"),
+            ("updated_at", "time"),
+            ("stdout_ref", "text"),
+            ("stderr_ref", "text"),
+            ("error", "text"),
         ),
     )
 

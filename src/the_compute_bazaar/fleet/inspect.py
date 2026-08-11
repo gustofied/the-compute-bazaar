@@ -9,7 +9,8 @@ from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
 
-from .models import FleetInspection, FleetMachine, GpuDevice
+from .models import FleetInspection, FleetMachine, GpuDevice, GpuProcess
+from .ssh import ssh_command
 
 
 PROBE = r"""
@@ -77,8 +78,11 @@ else
   field gpu_execution_detail "not checked by telemetry probe"
 fi
 printf 'CBZ_GPU_BEGIN\n'
-nvidia-smi --query-gpu=index,name,memory.total,memory.used,utilization.gpu,power.draw,power.limit,temperature.gpu,temperature.gpu.tlimit,driver_version,pstate,pci.bus_id,pcie.link.gen.current,pcie.link.gen.max,pcie.link.width.current,pcie.link.width.max --format=csv,noheader,nounits 2>/dev/null || true
+nvidia-smi --query-gpu=index,uuid,name,memory.total,memory.used,utilization.gpu,power.draw,power.limit,temperature.gpu,temperature.gpu.tlimit,driver_version,pstate,pci.bus_id,pcie.link.gen.current,pcie.link.gen.max,pcie.link.width.current,pcie.link.width.max --format=csv,noheader,nounits 2>/dev/null || true
 printf 'CBZ_GPU_END\n'
+printf 'CBZ_GPU_PROCESS_BEGIN\n'
+nvidia-smi --query-compute-apps=pid,process_name,gpu_uuid,used_gpu_memory --format=csv,noheader,nounits 2>/dev/null || true
+printf 'CBZ_GPU_PROCESS_END\n'
 """.strip()
 
 
@@ -107,34 +111,11 @@ class FleetInspector:
     ) -> FleetInspection:
         if machine.ssh is None:
             raise FleetInspectError(f"Fleet host {machine.host_id} has no SSH endpoint")
-        known_hosts = self.known_hosts_file or (
-            Path(machine.ssh.identity_file).expanduser().parent
-            / "compute_bazaar_fleet_known_hosts"
+        command = ssh_command(
+            machine,
+            remote_command="sh -s",
+            known_hosts_file=self.known_hosts_file,
         )
-        known_hosts.parent.mkdir(parents=True, exist_ok=True)
-        command = [
-            "ssh",
-            "-i",
-            str(Path(machine.ssh.identity_file).expanduser()),
-            "-p",
-            str(machine.ssh.port),
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ConnectTimeout=15",
-            "-o",
-            "ControlMaster=auto",
-            "-o",
-            "ControlPersist=60",
-            "-o",
-            f"ControlPath={known_hosts.parent / 'cbz-ssh-%C'}",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            f"UserKnownHostsFile={known_hosts}",
-            f"{machine.ssh.user}@{machine.ssh.host}",
-            "sh -s",
-        ]
         result = self.runner(
             command,
             input=(f"CBZ_VERIFY_GPU_EXECUTION={int(verify_gpu_execution)}\n{PROBE}"),
@@ -157,7 +138,9 @@ def _parse_probe(
 ) -> FleetInspection:
     fields: dict[str, str] = {}
     gpu_lines: list[str] = []
+    process_lines: list[str] = []
     in_gpus = False
+    in_processes = False
     for line in output.splitlines():
         if line == "CBZ_GPU_BEGIN":
             in_gpus = True
@@ -165,9 +148,19 @@ def _parse_probe(
         if line == "CBZ_GPU_END":
             in_gpus = False
             continue
+        if line == "CBZ_GPU_PROCESS_BEGIN":
+            in_processes = True
+            continue
+        if line == "CBZ_GPU_PROCESS_END":
+            in_processes = False
+            continue
         if in_gpus:
             if line.strip():
                 gpu_lines.append(line)
+            continue
+        if in_processes:
+            if line.strip():
+                process_lines.append(line)
             continue
         if line.startswith("CBZ\t"):
             _, key, value = line.split("\t", 2)
@@ -175,26 +168,42 @@ def _parse_probe(
 
     devices: list[GpuDevice] = []
     for row in csv.reader(StringIO("\n".join(gpu_lines)), skipinitialspace=True):
-        if len(row) != 16:
+        if len(row) != 17:
             continue
         devices.append(
             GpuDevice(
                 index=_integer(row[0]) or 0,
-                name=row[1].strip(),
-                memory_total_mb=_integer(row[2]) or 0,
-                memory_used_mb=_integer(row[3]) or 0,
-                utilization_pct=_float(row[4]),
-                power_draw_w=_float(row[5]),
-                power_limit_w=_float(row[6]),
-                temperature_c=_integer(row[7]),
-                temperature_limit_c=_integer(row[8]),
-                driver_version=row[9].strip(),
-                performance_state=row[10].strip() or None,
-                pci_bus_id=row[11].strip() or None,
-                pcie_generation_current=_integer(row[12]),
-                pcie_generation_max=_integer(row[13]),
-                pcie_width_current=_integer(row[14]),
-                pcie_width_max=_integer(row[15]),
+                uuid=row[1].strip() or None,
+                name=row[2].strip(),
+                memory_total_mb=_integer(row[3]) or 0,
+                memory_used_mb=_integer(row[4]) or 0,
+                utilization_pct=_float(row[5]),
+                power_draw_w=_float(row[6]),
+                power_limit_w=_float(row[7]),
+                temperature_c=_integer(row[8]),
+                temperature_limit_c=_integer(row[9]),
+                driver_version=row[10].strip(),
+                performance_state=row[11].strip() or None,
+                pci_bus_id=row[12].strip() or None,
+                pcie_generation_current=_integer(row[13]),
+                pcie_generation_max=_integer(row[14]),
+                pcie_width_current=_integer(row[15]),
+                pcie_width_max=_integer(row[16]),
+            )
+        )
+    indexes = {device.uuid: device.index for device in devices if device.uuid}
+    processes: list[GpuProcess] = []
+    for row in csv.reader(StringIO("\n".join(process_lines)), skipinitialspace=True):
+        if len(row) != 4 or _integer(row[0]) is None:
+            continue
+        gpu_uuid = row[2].strip() or None
+        processes.append(
+            GpuProcess(
+                pid=_integer(row[0]) or 0,
+                process_name=row[1].strip(),
+                gpu_uuid=gpu_uuid,
+                gpu_index=indexes.get(gpu_uuid),
+                memory_used_mb=_integer(row[3]),
             )
         )
     return FleetInspection(
@@ -217,6 +226,7 @@ def _parse_probe(
         gpu_execution_status=fields.get("gpu_execution_status") or "not_tested",
         gpu_execution_detail=fields.get("gpu_execution_detail") or None,
         gpus=tuple(devices),
+        gpu_processes=tuple(processes),
     )
 
 

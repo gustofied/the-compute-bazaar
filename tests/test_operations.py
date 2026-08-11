@@ -37,6 +37,9 @@ create table offer_observations (
 )
 """
                 )
+                connection.execute(
+                    "create table allocations (provider_resource_id text, state text)"
+                )
                 connection.execute("pragma user_version=2")
 
             ledger = OperationalLedger(path)
@@ -55,9 +58,14 @@ create table offer_observations (
                         "pragma table_info(offer_observations)"
                     )
                 }
+                allocation_columns = {
+                    row[1]
+                    for row in connection.execute("pragma table_info(allocations)")
+                }
                 version = connection.execute("pragma user_version").fetchone()[0]
             self.assertIn("market_product_key", columns)
-            self.assertEqual(version, 3)
+            self.assertIn("request_id", allocation_columns)
+            self.assertEqual(version, 5)
 
     def test_market_selection_and_fleet_delivery_join_in_datafusion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -32,6 +32,10 @@ const elements = {
   osName: document.querySelector("#os-name"),
   kernel: document.querySelector("#kernel"),
   checks: document.querySelector("#check-list"),
+  workloadCount: document.querySelector("#workload-count"),
+  workloadList: document.querySelector("#workload-list"),
+  processCount: document.querySelector("#process-count"),
+  processList: document.querySelector("#process-list"),
   gpuLine: document.querySelector("#gpu-line"),
   vramLine: document.querySelector("#vram-line"),
   cpuLine: document.querySelector("#cpu-line"),
@@ -230,7 +234,33 @@ function renderSnapshot(payload) {
       <div><strong>${escapeHtml(check.check.replaceAll("_", " "))}</strong><small>${escapeHtml(check.detail)}</small></div>
     </div>
   `).join("");
+  renderActivity(payload);
   renderChart(machine.host_id);
+}
+
+function renderActivity(payload) {
+  const workloads = payload.workloads ?? [];
+  const processes = payload.gpu_processes ?? [];
+  elements.workloadCount.textContent = String(workloads.length);
+  elements.processCount.textContent = String(processes.length);
+  elements.workloadList.innerHTML = workloads.length
+    ? workloads.map((workload) => `
+      <div class="activity-row">
+        <strong>${escapeHtml(workload.name)}</strong>
+        <span>${escapeHtml((workload.command ?? []).join(" "))}</span>
+        <span class="activity-state ${escapeHtml(workload.state)}">${escapeHtml(workload.state)}</span>
+      </div>
+    `).join("")
+    : '<p class="activity-empty">No workloads</p>';
+  elements.processList.innerHTML = processes.length
+    ? processes.map((process) => `
+      <div class="activity-row">
+        <strong>${escapeHtml(process.process_name)}</strong>
+        <span>PID ${escapeHtml(process.pid)} · GPU ${escapeHtml(process.gpu_index ?? "—")}</span>
+        <span>${escapeHtml(process.memory_used_mb ?? "—")} MB</span>
+      </div>
+    `).join("")
+    : '<p class="activity-empty">No GPU processes</p>';
 }
 
 function renderFailure(host, message) {
@@ -244,6 +274,10 @@ function renderFailure(host, message) {
   elements.readiness.className = "readiness not_ready";
   elements.termination.textContent = countdown(host);
   elements.checks.innerHTML = `<div class="check-row fail"><span class="check-signal"></span><div><strong>SSH</strong><small>${escapeHtml(message)}</small></div></div>`;
+  elements.workloadCount.textContent = "0";
+  elements.processCount.textContent = "0";
+  elements.workloadList.innerHTML = '<p class="activity-empty">Unavailable</p>';
+  elements.processList.innerHTML = '<p class="activity-empty">Unavailable</p>';
 }
 
 function observedTime(payload) {

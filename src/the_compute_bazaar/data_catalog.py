@@ -215,6 +215,7 @@ order by ordinal_position
             "capacity_verifications": "capacity_verifications",
             "provisioning_requests": "provisioning_requests",
             "provisioning_attempts": "provisioning_attempts",
+            "workloads": "workload_runs",
         }
         for view, source in views.items():
             self.engine.create_view("fleet", view, f"select * from _local_{source}")

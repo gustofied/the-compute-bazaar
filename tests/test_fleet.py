@@ -13,6 +13,7 @@ from the_compute_bazaar.fleet import (
     FleetMonitor,
     FleetRegistry,
     FleetService,
+    GpuProcess,
     SshEndpoint,
 )
 from the_compute_bazaar.fleet.models import GpuDevice
@@ -59,8 +60,11 @@ CBZ\tdocker_version\tDocker version 27.0.0
 CBZ\tgpu_execution_status\tpass
 CBZ\tgpu_execution_detail\tPyTorch CUDA tensor operation completed
 CBZ_GPU_BEGIN
-0, NVIDIA H100 80GB HBM3, 81559, 120, 14, 80.2, 310, 31, 47, 570.86.15, P0, 00000000:01:00.0, 4, 4, 16, 16
+0, GPU-abc, NVIDIA H100 80GB HBM3, 81559, 120, 14, 80.2, 310, 31, 47, 570.86.15, P0, 00000000:01:00.0, 4, 4, 16, 16
 CBZ_GPU_END
+CBZ_GPU_PROCESS_BEGIN
+4242, python, GPU-abc, 96
+CBZ_GPU_PROCESS_END
 """
 
 
@@ -115,6 +119,18 @@ class FleetTest(unittest.TestCase):
             self.assertEqual(inspection.gpus[0].memory_total_mb, 81559)
             self.assertEqual(inspection.gpus[0].memory_used_mb, 120)
             self.assertEqual(inspection.gpus[0].utilization_pct, 14)
+            self.assertEqual(
+                inspection.gpu_processes,
+                (
+                    GpuProcess(
+                        pid=4242,
+                        process_name="python",
+                        gpu_uuid="GPU-abc",
+                        gpu_index=0,
+                        memory_used_mb=96,
+                    ),
+                ),
+            )
             self.assertEqual(inspection.cpu_count, 13.6)
             self.assertEqual(result.readiness, "ready")
             self.assertIn("StrictHostKeyChecking=accept-new", calls[0][0])
@@ -211,7 +227,7 @@ class FleetTest(unittest.TestCase):
             registry.put(selected)
             output = PROBE_OUTPUT.replace(
                 "CBZ_GPU_END",
-                "1, NVIDIA H100 80GB HBM3, 0, 0, 0, 70, 310, 32, 47, "
+                "1, GPU-def, NVIDIA H100 80GB HBM3, 0, 0, 0, 70, 310, 32, 47, "
                 "570.86.15, P0, 00000000:02:00.0, 4, 4, 8, 16\n"
                 "CBZ_GPU_END",
             )

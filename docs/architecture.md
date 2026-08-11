@@ -80,7 +80,7 @@ offer observation
   -> final provider check
   -> provider allocation
   -> Fleet machine
-  -> Fleet observations
+  -> Fleet observations and workloads
 ```
 
 `silver.current_offers` is the latest direct observation for each provider
@@ -92,3 +92,8 @@ local.
 SQL or an agent can find a candidate and prepare a launch plan. Creating a paid
 machine still requires a price ceiling, runtime deadline, and explicit
 confirmation.
+
+Fleet workloads are detached SSH process groups. Their command, PID, state, exit
+code, and local log references live in the private operational ledger. Fleet also
+reads NVIDIA compute-process rows, so the Terminal can show which processes are
+using each GPU. Host termination closes any workload records still marked active.

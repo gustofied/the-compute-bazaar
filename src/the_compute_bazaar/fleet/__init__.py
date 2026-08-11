@@ -7,10 +7,12 @@ from .models import (
     FleetHealthResult,
     FleetInspection,
     FleetMachine,
+    GpuProcess,
     SshEndpoint,
 )
 from .registry import FleetRegistry
 from .service import FleetService
+from .workloads import WorkloadError, WorkloadRun, WorkloadService
 
 __all__ = [
     "FleetDoctorResult",
@@ -23,5 +25,9 @@ __all__ = [
     "FleetMachine",
     "FleetRegistry",
     "FleetService",
+    "GpuProcess",
     "SshEndpoint",
+    "WorkloadError",
+    "WorkloadRun",
+    "WorkloadService",
 ]

@@ -49,6 +49,7 @@ blueprint_app = typer.Typer(help="Save and open Perspective views of SQL models.
 offers_app = typer.Typer(help="Read offers directly from compute providers.")
 launch_app = typer.Typer(help="Plan provider-native compute launches.")
 fleet_app = typer.Typer(help="Inspect and operate provisioned compute.")
+workload_app = typer.Typer(help="Run and inspect commands on Fleet hosts.")
 app.add_typer(data_app, name="data")
 app.add_typer(sandbox_app, name="sandbox")
 app.add_typer(model_app, name="model")
@@ -56,6 +57,7 @@ app.add_typer(blueprint_app, name="blueprint")
 app.add_typer(offers_app, name="offers")
 app.add_typer(launch_app, name="launch")
 app.add_typer(fleet_app, name="fleet")
+fleet_app.add_typer(workload_app, name="workload")
 
 
 @app.callback()
@@ -682,6 +684,38 @@ def launch_run(
     _emit(ctx, receipt.payload(), command="launch", include_source=False)
 
 
+@launch_app.command("reconcile")
+def launch_reconcile(
+    ctx: typer.Context,
+    attempt_id: Annotated[str, typer.Argument()],
+    confirm_absent: Annotated[
+        bool,
+        typer.Option(
+            "--confirm-absent",
+            help="Mark the attempt failed after checking that no matching Pod exists.",
+        ),
+    ] = False,
+) -> None:
+    """Resolve an uncertain launch against current RunPod state."""
+    from .fleet import FleetRegistry
+    from .offers import OfferService
+    from .operations import OperationalLedger, ProvisioningStateError
+    from .provider_execution import LaunchExecutionError, RunpodExecutor
+
+    registry = FleetRegistry()
+    ledger = OperationalLedger(registry=registry)
+    try:
+        service = OfferService.from_environment()
+        receipt = RunpodExecutor(
+            api_key=service.runpod_api_key,
+            registry=registry,
+            ledger=ledger,
+        ).reconcile(attempt_id, confirm_absent=confirm_absent)
+    except (KeyError, LaunchExecutionError, ProvisioningStateError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(ctx, receipt.payload(), command="launch", include_source=False)
+
+
 @fleet_app.command("hosts")
 def fleet_hosts(ctx: typer.Context) -> None:
     """List machines known to the private local Fleet registry."""
@@ -807,6 +841,108 @@ def fleet_terminate(
         command="fleet",
         include_source=False,
     )
+
+
+@workload_app.command("run")
+def fleet_workload_run(
+    ctx: typer.Context,
+    host_id: Annotated[str, typer.Argument()],
+    command: Annotated[
+        list[str],
+        typer.Argument(help="Command and arguments. Put them after --."),
+    ],
+    name: Annotated[str, typer.Option(help="Workload name.")] = "workload",
+    working_directory: Annotated[
+        str,
+        typer.Option("--cwd", help="Remote working directory."),
+    ] = "/workspace",
+) -> None:
+    """Start one durable command over SSH."""
+    from .fleet import WorkloadError, WorkloadService
+
+    try:
+        workload = WorkloadService.local().start(
+            host_id,
+            name=name,
+            command=command,
+            working_directory=working_directory,
+        )
+    except (KeyError, WorkloadError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit_workload(ctx, workload)
+
+
+@workload_app.command("list")
+def fleet_workload_list(
+    ctx: typer.Context,
+    host_id: Annotated[
+        str | None,
+        typer.Option("--host", help="Only workloads for this Fleet host."),
+    ] = None,
+) -> None:
+    """List recorded Fleet workloads."""
+    from .fleet import WorkloadService
+
+    workloads = WorkloadService.local().list(host_id)
+    _emit(
+        ctx,
+        {
+            "contract": "compute-bazaar.fleet-workloads.v1",
+            "rows": [workload.row() for workload in workloads],
+        },
+        command="workload",
+        include_source=False,
+    )
+
+
+@workload_app.command("inspect")
+def fleet_workload_inspect(
+    ctx: typer.Context,
+    workload_id: Annotated[str, typer.Argument()],
+) -> None:
+    """Refresh and show one workload."""
+    from .fleet import WorkloadError, WorkloadService
+
+    try:
+        workload = WorkloadService.local().inspect(workload_id)
+    except (KeyError, WorkloadError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit_workload(ctx, workload)
+
+
+@workload_app.command("logs")
+def fleet_workload_logs(
+    ctx: typer.Context,
+    workload_id: Annotated[str, typer.Argument()],
+    tail: Annotated[int, typer.Option(help="Maximum lines from each stream.")] = 200,
+) -> None:
+    """Refresh and print one workload's output."""
+    from .fleet import WorkloadError, WorkloadService
+
+    try:
+        payload = WorkloadService.local().logs(workload_id, tail=tail)
+    except (KeyError, WorkloadError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(ctx, payload, command="workload-logs", include_source=False)
+
+
+@workload_app.command("stop")
+def fleet_workload_stop(
+    ctx: typer.Context,
+    workload_id: Annotated[str, typer.Argument()],
+    confirm: Annotated[
+        bool,
+        typer.Option("--confirm", help="Confirm remote process termination."),
+    ] = False,
+) -> None:
+    """Stop one remote workload process group."""
+    from .fleet import WorkloadError, WorkloadService
+
+    try:
+        workload = WorkloadService.local().stop(workload_id, confirm=confirm)
+    except (KeyError, WorkloadError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit_workload(ctx, workload)
 
 
 @app.command()
@@ -1225,6 +1361,19 @@ def _limit(value: int) -> int:
     if not 1 <= value <= 1000:
         raise typer.BadParameter("limit must be between 1 and 1000")
     return value
+
+
+def _emit_workload(ctx: typer.Context, workload: Any) -> None:
+    _emit(
+        ctx,
+        {
+            "contract": "compute-bazaar.fleet-workloads.v1",
+            "rows": [workload.row()],
+            "workload": workload.model_dump(mode="json"),
+        },
+        command="workload",
+        include_source=False,
+    )
 
 
 def _emit(
