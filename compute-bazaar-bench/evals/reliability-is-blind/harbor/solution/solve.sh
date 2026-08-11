@@ -1,11 +1,6 @@
 #!/bin/sh
 set -eu
 
-# Harbor's bundled `oracle` runner executes this public-state-only,
-# highest-stake reference policy as a plumbing and completion check. It is not
-# a hidden-information Oracle or a performance ceiling. Normal evaluations do
-# not run this file: the selected first-class agent makes the same market CLI
-# calls during its own terminal trajectory.
 python3 - <<'PY'
 import json
 import subprocess

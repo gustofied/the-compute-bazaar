@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Replay and score the protected Reliability Is Blind market ledger.
-
-This verifier is intentionally deterministic and offline.  A missing or
-inconsistent ledger is an infrastructure failure: no reward file is emitted.
-A replayable but incomplete broker book is an agent outcome and receives the
-engine's fail-closed reward.
-"""
+"""Replay and score the protected Reliability Is Blind market ledger."""
 
 from __future__ import annotations
 

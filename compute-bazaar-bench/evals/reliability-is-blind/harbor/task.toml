@@ -5,17 +5,14 @@ artifacts = [
 
 [task]
 name = "gustofied/reliability-is-blind"
-description = "Place recurring compute supply into deals when only collective delivery outcomes are observable."
+description = "Choose compute suppliers across repeated deals using only collective delivery outcomes."
 authors = [{ name = "Adam Sioud" }]
-keywords = ["compute-markets", "compute-brokerage", "collective-incentives", "hidden-reliability", "sequential-decision-making"]
+keywords = ["compute-market", "compute-brokerage", "supplier-reliability", "collective-incentives", "market-game"]
 
 [metadata]
+domain = "compute-market-games"
 difficulty = "hard"
-category = "reasoning"
-tags = ["compute-market", "brokerage", "reliability", "game", "deterministic-verifier"]
-difficulty_explanation = "The broker must learn from overlapping group outcomes: failures identify the four selected suppliers but never the individual source of failure."
-solution_explanation = "The reference solution is a scripted plumbing check only; evaluated Harbor agents independently choose all 100 placements through the public market CLI."
-verification_explanation = "A protected market sidecar records the authoritative deal ledger. A collect hook finalizes it, and a separate no-network verifier replays the seeded market before calculating the exact signed reward."
+category = "compute-market"
 
 [verifier]
 timeout_sec = 60.0

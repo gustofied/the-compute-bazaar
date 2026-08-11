@@ -21,13 +21,13 @@ import analysis as rib_analysis  # noqa: E402
 import protocol as rib_protocol  # noqa: E402
 from viewer.app import (  # noqa: E402
     ASSET_ROOT,
-    _discover_run_paths,
     _evaluation_summary,
     _evals_html,
     _index_html,
     _runs_html,
     create_app,
 )
+from viewer.job_sources import discover_job_sources  # noqa: E402
 from viewer.presenters import load_job_presentation  # noqa: E402
 from viewer.schema import (  # noqa: E402
     DataTable,
@@ -582,7 +582,12 @@ class ReliabilityIsBlindAnalysisTests(unittest.TestCase):
         presentation = sample_presentation().model_copy(
             update={"agent_count": 1, "trial_count": 2}
         )
-        summary = _evaluation_summary(presentation)
+        summary = _evaluation_summary(
+            presentation.task,
+            jobs=1,
+            agent_configurations={("opencode", "sample-model")},
+            trials=presentation.trial_count,
+        )
         html = _evals_html([summary])
 
         self.assertIn("<h2>Tasks</h2>", html)
@@ -605,6 +610,7 @@ class ReliabilityIsBlindAnalysisTests(unittest.TestCase):
                 {
                     "run_id": "matched-run-001",
                     "score": Metric(label="Mean reward", value="-0.455"),
+                    "started": "4 Aug 2026, 12:00",
                     "agents": 3,
                     "trials": 59,
                     "note": "One trial is missing; interpret as exploratory.",
@@ -688,20 +694,19 @@ class ReliabilityIsBlindAnalysisTests(unittest.TestCase):
         self.assertNotIn("Attribution activated", html)
         self.assertNotIn("Matched seeds", html)
 
-    def test_results_are_discovered_by_eval_then_run(self) -> None:
+    def test_reports_are_discovered_by_task_then_job(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            run = root / "reliability-is-blind" / "runs" / "matched-run-001"
+            reports = root / "reports"
+            run = reports / "reliability-is-blind" / "runs" / "matched-run-001"
             run.mkdir(parents=True)
             (run / "protocol.json").write_text("{}")
             (run / "trials.json").write_text("[]")
 
-            discovered = _discover_run_paths(root)
+            discovered = discover_job_sources(root, reports)
 
-        self.assertEqual(
-            discovered,
-            {"reliability-is-blind": {"matched-run-001": run.resolve()}},
-        )
+        source = discovered["reliability-is-blind"]["matched-run-001"]
+        self.assertEqual(source.report_dir, run.resolve())
 
 
 if __name__ == "__main__":
