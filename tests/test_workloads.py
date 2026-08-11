@@ -29,13 +29,12 @@ class WorkloadTest(unittest.TestCase):
                 allocation_id="allocation-123",
                 name="gpu-01",
                 state="running",
-                gpu_model="H100_80GB",
-                gpu_count=1,
+                expected_gpu_model="H100_80GB",
+                expected_gpu_count=1,
                 created_at=datetime(2026, 8, 11, 8, tzinfo=UTC),
                 ssh=SshEndpoint(
-                    host="203.0.113.10",
+                    target="root@203.0.113.10",
                     port=22022,
-                    user="root",
                     identity_file=str(identity),
                 ),
             )

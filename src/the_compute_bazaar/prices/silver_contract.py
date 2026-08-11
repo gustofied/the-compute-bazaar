@@ -7,6 +7,9 @@ from dataclasses import dataclass
 
 UTC_TIMESTAMP_ARROW_TYPE = 'Timestamp(Nanosecond, Some("UTC"))'
 UTC_TIMESTAMP_DATA_TYPE = 'Timestamp(ns, "UTC")'
+NULLABLE_OFFER_DEFAULTS = {
+    "market_product_key": "arrow_cast(null, 'Utf8')",
+}
 
 
 def _text(expression: str) -> str:
@@ -377,15 +380,42 @@ SILVER_TABLE_CONTRACTS = {
 }
 
 
-def select_contract(table_name: str, columns: tuple[SilverColumn, ...]) -> str:
-    projection = ",\n      ".join(
-        f"{column.expression} as {column.name}" for column in columns
-    )
+def select_contract(
+    table_name: str,
+    columns: tuple[SilverColumn, ...],
+    *,
+    available_columns: set[str] | None = None,
+    missing_defaults: dict[str, str] | None = None,
+) -> str:
+    defaults = missing_defaults or {}
+    if available_columns is not None:
+        missing = {column.name for column in columns} - available_columns
+        unsupported = missing - set(defaults)
+        if unsupported:
+            names = ", ".join(sorted(unsupported))
+            raise ValueError(
+                f"{table_name} is missing required Silver columns: {names}"
+            )
+
+    projections: list[str] = []
+    for column in columns:
+        expression = column.expression
+        if available_columns is not None and column.name not in available_columns:
+            expression = defaults[column.name]
+        projections.append(f"{expression} as {column.name}")
+    projection = ",\n      ".join(projections)
     return f"select\n      {projection}\n    from {table_name}"
 
 
-def silver_observation_select(table_name: str) -> str:
-    return select_contract(table_name, OFFER_OBSERVATION_COLUMNS)
+def silver_observation_select(
+    table_name: str, *, available_columns: set[str] | None = None
+) -> str:
+    return select_contract(
+        table_name,
+        OFFER_OBSERVATION_COLUMNS,
+        available_columns=available_columns,
+        missing_defaults=NULLABLE_OFFER_DEFAULTS,
+    )
 
 
 def silver_market_state_select(table_name: str) -> str:

@@ -202,7 +202,7 @@ class WorkloadService:
         stdout = _tail(Path(workload.stdout_ref), tail)
         stderr = _tail(Path(workload.stderr_ref), tail)
         return {
-            "contract": "compute-bazaar.fleet-workload-logs.v1",
+            "contract": "compute-bazaar.fleet-workload-logs",
             "workload": workload.model_dump(mode="json"),
             "stdout": stdout,
             "stderr": stderr,

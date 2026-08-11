@@ -4,6 +4,8 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from the_compute_bazaar.terminal.commands import (
     LaunchPlanAction,
@@ -15,12 +17,29 @@ from the_compute_bazaar.terminal.commands import (
     SqlAction,
     resolve_command,
 )
+from the_compute_bazaar.terminal.eval_workspace import EvalWorkspace
 from the_compute_bazaar.terminal.lifecycle import _resolve_evaluation_root
 from the_compute_bazaar.terminal.server import TerminalLaunchMailbox
 from the_compute_bazaar.terminal.shell import TerminalShell
 
 
 class TerminalCommandTest(unittest.TestCase):
+    def test_terminal_stays_available_without_an_eval_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bench_root = Path(directory)
+            evaluation_root = bench_root / "jobs" / "reports"
+            (bench_root / "viewer").mkdir()
+            (bench_root / "viewer" / "app.py").touch()
+            module = SimpleNamespace(create_app=lambda *_args, **_kwargs: None)
+
+            with patch(
+                "the_compute_bazaar.terminal.eval_workspace.importlib.import_module",
+                return_value=module,
+            ):
+                workspace = EvalWorkspace.load(evaluation_root)
+
+        self.assertFalse(workspace.available)
+
     def test_relative_evaluation_root_is_project_relative(self) -> None:
         project_root = Path("/tmp/project")
 

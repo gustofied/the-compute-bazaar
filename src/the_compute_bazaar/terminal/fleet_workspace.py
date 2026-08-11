@@ -70,7 +70,7 @@ class FleetWorkspace:
         @app.get("/api/fleet/session")
         def session() -> dict[str, Any]:
             return {
-                "contract": "compute-bazaar.fleet-session.v1",
+                "contract": "compute-bazaar.fleet-session",
                 "refresh_seconds": self.monitor.interval_seconds,
                 "hosts": [
                     _machine_payload(
@@ -102,7 +102,7 @@ class FleetWorkspace:
             verification = _verification(self.service, inspection.machine.host_id)
             workloads = self.workloads.refresh_host(host_id)
             return {
-                "contract": "compute-bazaar.fleet-host.v1",
+                "contract": "compute-bazaar.fleet-host",
                 "machine": _machine_payload(
                     inspection.machine,
                     monitor_state=state,
@@ -160,11 +160,11 @@ def _machine_payload(
     payload = {
         "host_id": machine.host_id,
         "allocation_id": machine.allocation_id,
-        "provider": allocation.get("capacity_provider") if allocation else None,
+        "provider": allocation.get("capacity_provider") if allocation else "attached",
         "name": machine.name,
         "state": machine.state,
-        "gpu_model": machine.gpu_model,
-        "gpu_count": machine.gpu_count,
+        "expected_gpu_model": machine.expected_gpu_model,
+        "expected_gpu_count": machine.expected_gpu_count,
         "price_usd_gpu_hr": (
             allocation.get("selected_price_usd_gpu_hr") if allocation else None
         ),

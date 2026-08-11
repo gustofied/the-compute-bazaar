@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from .inspect import FleetInspector
+from ..prices.normalize import canonical_gpu_model
+from .inspect import FleetInspectError, FleetInspector
 from .models import (
     DoctorCheck,
     FleetDoctorResult,
     FleetHealthResult,
     FleetInspection,
     FleetMachine,
+    GpuDevice,
 )
 from .registry import FleetRegistry
 
@@ -39,6 +42,43 @@ class FleetService:
 
     def hosts(self) -> list[FleetMachine]:
         return self.registry.list()
+
+    def attach(
+        self,
+        ssh_target: str,
+        *,
+        name: str | None = None,
+        expected_gpu_model: str | None = None,
+        expected_gpu_count: int | None = None,
+    ) -> tuple[FleetInspection, FleetHealthResult]:
+        from .models import SshEndpoint
+
+        candidate = FleetMachine(
+            host_id=ssh_target,
+            name=name or ssh_target,
+            state="running",
+            expected_gpu_model=expected_gpu_model,
+            expected_gpu_count=expected_gpu_count,
+            created_at=datetime.now(UTC),
+            ssh=SshEndpoint(target=ssh_target),
+        )
+        inspection = self.inspector.inspect(candidate, verify_gpu_execution=False)
+        if not inspection.gpus:
+            raise FleetInspectError(f"No NVIDIA GPU detected on {ssh_target}")
+
+        machine = candidate.model_copy(
+            update={
+                "expected_gpu_model": expected_gpu_model
+                or _detected_gpu_model(inspection),
+                "expected_gpu_count": expected_gpu_count or len(inspection.gpus),
+            }
+        )
+        inspection = inspection.model_copy(update={"machine": machine})
+        health = self.health_inspection(inspection)
+        self.registry.put(machine)
+        if self.ledger:
+            self.ledger.record_telemetry(inspection)
+        return inspection, health
 
     def inspect(self, host_id: str) -> FleetInspection:
         inspection = self.inspector.inspect(
@@ -100,7 +140,8 @@ class FleetService:
 
 
 def _health_checks(inspection: FleetInspection) -> list[DoctorCheck]:
-    expected = inspection.machine.gpu_count
+    expected_count = inspection.machine.expected_gpu_count
+    expected_model = inspection.machine.expected_gpu_model
     detected = len(inspection.gpus)
     drivers = sorted(
         {gpu.driver_version for gpu in inspection.gpus if gpu.driver_version}
@@ -139,8 +180,38 @@ def _health_checks(inspection: FleetInspection) -> list[DoctorCheck]:
         DoctorCheck(check="ssh", status="pass", detail="read-only probe completed"),
         DoctorCheck(
             check="gpu_count",
-            status="pass" if detected >= expected else "fail",
-            detail=f"detected {detected}; expected {expected}",
+            status=(
+                "fail"
+                if not detected
+                else "warn"
+                if expected_count is not None and detected != expected_count
+                else "pass"
+            ),
+            detail=(
+                f"detected {detected}; expected {expected_count}"
+                if expected_count is not None
+                else f"detected {detected}"
+            ),
+        ),
+        DoctorCheck(
+            check="gpu_model",
+            status=(
+                "fail"
+                if not inspection.gpus
+                else "warn"
+                if expected_model
+                and not all(
+                    _gpu_model_matches(expected_model, gpu)
+                    for gpu in inspection.gpus
+                )
+                else "pass"
+            ),
+            detail=(
+                f"detected {_detected_gpu_names(inspection)}; "
+                f"expected {expected_model}"
+                if expected_model
+                else f"detected {_detected_gpu_names(inspection)}"
+            ),
         ),
         DoctorCheck(
             check="driver",
@@ -193,6 +264,40 @@ def _health_checks(inspection: FleetInspection) -> list[DoctorCheck]:
         ),
     ]
     return checks
+
+
+def _detected_gpu_model(inspection: FleetInspection) -> str | None:
+    models = {
+        canonical_gpu_model(gpu.name, gpu.memory_total_mb) or gpu.name
+        for gpu in inspection.gpus
+    }
+    return next(iter(models)) if len(models) == 1 else None
+
+
+def _detected_gpu_names(inspection: FleetInspection) -> str:
+    return ", ".join(sorted({gpu.name for gpu in inspection.gpus})) or "none"
+
+
+def _gpu_model_matches(expected: str, gpu: GpuDevice) -> bool:
+    memory = re.search(r"(\d+)\s*GB", expected.upper())
+    expected_name = re.sub(r"_X\d+$", "", expected, flags=re.IGNORECASE)
+    expected_name = re.sub(r"_\d+GB$", "", expected_name, flags=re.IGNORECASE)
+    expected_name = re.sub(
+        r"RTXPRO(\d+)B$",
+        r"RTX PRO \1",
+        expected_name,
+        flags=re.IGNORECASE,
+    )
+    expected_canonical = canonical_gpu_model(
+        expected_name,
+        int(memory.group(1)) * 1024 if memory else None,
+    )
+    detected_canonical = canonical_gpu_model(gpu.name, gpu.memory_total_mb)
+    if expected_canonical and detected_canonical:
+        return expected_canonical == detected_canonical
+    expected_key = re.sub(r"[^A-Z0-9]", "", expected.upper())
+    detected_key = re.sub(r"[^A-Z0-9]", "", gpu.name.upper())
+    return expected_key in detected_key or detected_key in expected_key
 
 
 def _gpu_execution_check(inspection: FleetInspection) -> DoctorCheck:

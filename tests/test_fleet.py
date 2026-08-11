@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from the_compute_bazaar.fleet import (
+    FleetInspectError,
     FleetInspector,
     FleetInspection,
     FleetMachine,
@@ -30,13 +31,12 @@ def machine(
         allocation_id=allocation_id,
         name="bazaar-h100-01",
         state="running",
-        gpu_model="H100_80GB",
-        gpu_count=1,
+        expected_gpu_model="H100_80GB",
+        expected_gpu_count=1,
         created_at=created_at,
         ssh=SshEndpoint(
-            host="203.0.113.10",
+            target="root@203.0.113.10",
             port=22123,
-            user="root",
             identity_file=str(identity_file),
         ),
     )
@@ -138,6 +138,92 @@ class FleetTest(unittest.TestCase):
             self.assertTrue(calls[0][1].startswith("CBZ_VERIFY_GPU_EXECUTION=0"))
             self.assertTrue(calls[1][1].startswith("CBZ_VERIFY_GPU_EXECUTION=1"))
 
+    def test_attach_uses_native_openssh_and_keeps_expectation_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            registry = FleetRegistry(root / "fleet")
+            calls: list[list[str]] = []
+
+            def fake_runner(
+                command: list[str], **_: object
+            ) -> subprocess.CompletedProcess[str]:
+                calls.append(command)
+                return subprocess.CompletedProcess(command, 0, PROBE_OUTPUT, "")
+
+            service = FleetService(
+                registry=registry,
+                inspector=FleetInspector(runner=fake_runner),
+            )
+
+            inspection, health = service.attach(
+                "gpu-singapore-01",
+                expected_gpu_model="H100",
+                expected_gpu_count=8,
+            )
+
+            attached = registry.get("gpu-singapore-01")
+            self.assertEqual(attached.ssh, SshEndpoint(target="gpu-singapore-01"))
+            self.assertEqual(attached.expected_gpu_model, "H100")
+            self.assertEqual(attached.expected_gpu_count, 8)
+            self.assertEqual(inspection.machine, attached)
+            self.assertEqual(health.health, "degraded")
+            self.assertNotIn("-i", calls[0])
+            self.assertNotIn("-p", calls[0])
+            self.assertEqual(calls[0][-2:], ["gpu-singapore-01", "sh -s"])
+
+    def test_attach_rejects_a_host_without_an_nvidia_gpu(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            registry = FleetRegistry(root / "fleet")
+            output = PROBE_OUTPUT.replace(
+                "0, GPU-abc, NVIDIA H100 80GB HBM3, 81559, 120, 14, 80.2, 310, "
+                "31, 47, 570.86.15, P0, 00000000:01:00.0, 4, 4, 16, 16\n",
+                "",
+            )
+
+            def fake_runner(
+                command: list[str], **_: object
+            ) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(command, 0, output, "")
+
+            service = FleetService(
+                registry=registry,
+                inspector=FleetInspector(runner=fake_runner),
+            )
+
+            with self.assertRaisesRegex(FleetInspectError, "No NVIDIA GPU"):
+                service.attach("cpu-only-01")
+
+            self.assertEqual(registry.list(), [])
+
+    def test_provider_model_matches_reported_nvidia_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            registry = FleetRegistry(root / "fleet")
+            output = PROBE_OUTPUT.replace(
+                "NVIDIA H100 80GB HBM3, 81559",
+                "NVIDIA RTX PRO 4500 Blackwell, 32623",
+            )
+
+            def fake_runner(
+                command: list[str], **_: object
+            ) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(command, 0, output, "")
+
+            service = FleetService(
+                registry=registry,
+                inspector=FleetInspector(runner=fake_runner),
+            )
+
+            _, health = service.attach(
+                "gpu-workstation-01",
+                expected_gpu_model="RTXPro4500B_32GB",
+                expected_gpu_count=1,
+            )
+
+            checks = {check.check: check for check in health.checks}
+            self.assertEqual(checks["gpu_model"].status, "pass")
+
     def test_monitor_is_lightweight_and_records_once(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -222,7 +308,9 @@ class FleetTest(unittest.TestCase):
     def test_one_bad_gpu_blocks_multi_gpu_readiness(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            selected = machine(root / "id_ed25519").model_copy(update={"gpu_count": 2})
+            selected = machine(root / "id_ed25519").model_copy(
+                update={"expected_gpu_count": 2}
+            )
             registry = FleetRegistry(root / "fleet")
             registry.put(selected)
             output = PROBE_OUTPUT.replace(
@@ -281,11 +369,11 @@ class FleetTest(unittest.TestCase):
         self.assertEqual(result.readiness, "degraded")
         self.assertEqual(checks["pcie_link"].status, "warn")
 
-    def test_imported_host_does_not_require_an_allocation(self) -> None:
-        imported = machine(Path("/tmp/id_ed25519"), allocation_id=None)
+    def test_attached_host_does_not_require_an_allocation(self) -> None:
+        attached = machine(Path("/tmp/id_ed25519"), allocation_id=None)
 
-        self.assertIsNone(imported.allocation_id)
-        self.assertEqual(imported.row()["host_id"], "runpod:pod-123")
+        self.assertIsNone(attached.allocation_id)
+        self.assertEqual(attached.row()["host_id"], "runpod:pod-123")
 
 
 if __name__ == "__main__":

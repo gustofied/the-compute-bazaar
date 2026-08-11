@@ -154,7 +154,7 @@ class DataWorkspace:
                     )
                 views.append(entry)
             return {
-                "contract": "compute-bazaar.data.session.v1",
+                "contract": "compute-bazaar.data.session",
                 "run": table_payload["run"],
                 "tables": table_payload["tables"],
                 "queries": queries,

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from .provisioning import Allocation, ProvisioningAttempt, ProvisioningRequest
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 TELEMETRY_RETENTION = timedelta(hours=6)
 
 ALLOCATIONS_SCHEMA = """
@@ -44,6 +44,23 @@ create table if not exists allocations (
   foreign key (request_id) references provisioning_requests(request_id),
   foreign key (successful_attempt_id) references provisioning_attempts(attempt_id)
 );
+"""
+
+CAPACITY_VERIFICATIONS_SCHEMA = """
+create table if not exists capacity_verifications (
+  verification_id text primary key,
+  host_id text not null,
+  observed_at text not null,
+  readiness text not null,
+  expected_gpu_model text,
+  expected_gpu_count integer,
+  detected_gpu_count integer not null,
+  inspection_json text not null,
+  checks_json text not null
+);
+
+create index if not exists capacity_verifications_host_time
+  on capacity_verifications (host_id, observed_at desc);
 """
 
 SCHEMA = f"""
@@ -170,19 +187,7 @@ create table if not exists fleet_telemetry (
 create index if not exists fleet_telemetry_host_time
   on fleet_telemetry (host_id, observed_at desc);
 
-create table if not exists capacity_verifications (
-  verification_id text primary key,
-  host_id text not null,
-  observed_at text not null,
-  readiness text not null,
-  expected_gpu_count integer not null,
-  detected_gpu_count integer not null,
-  inspection_json text not null,
-  checks_json text not null
-);
-
-create index if not exists capacity_verifications_host_time
-  on capacity_verifications (host_id, observed_at desc);
+{CAPACITY_VERIFICATIONS_SCHEMA}
 
 create table if not exists workload_runs (
   workload_id text primary key,
@@ -597,7 +602,8 @@ where allocation_id = ?
             "host_id": doctor.host_id,
             "observed_at": doctor.observed_at,
             "readiness": doctor.readiness,
-            "expected_gpu_count": inspection.machine.gpu_count,
+            "expected_gpu_model": inspection.machine.expected_gpu_model,
+            "expected_gpu_count": inspection.machine.expected_gpu_count,
             "detected_gpu_count": len(inspection.gpus),
             "inspection_json": _json(inspection.model_dump(mode="json")),
             "checks_json": _json(doctor.payload()),
@@ -750,6 +756,16 @@ def _migrate(connection: sqlite3.Connection) -> None:
     if allocation_columns and "request_id" not in allocation_columns:
         connection.execute("drop table allocations")
         connection.executescript(ALLOCATIONS_SCHEMA)
+    verification_columns = {
+        str(row["name"]): bool(row["notnull"])
+        for row in connection.execute("pragma table_info(capacity_verifications)")
+    }
+    if verification_columns and (
+        "expected_gpu_model" not in verification_columns
+        or verification_columns.get("expected_gpu_count")
+    ):
+        connection.execute("drop table capacity_verifications")
+        connection.executescript(CAPACITY_VERIFICATIONS_SCHEMA)
     connection.execute("drop table if exists fleet_allocations")
     connection.execute("drop table if exists fleet_observations")
 
@@ -994,6 +1010,7 @@ def _verification_schema(pa: Any) -> Any:
             ("host_id", "text"),
             ("observed_at", "time"),
             ("readiness", "text"),
+            ("expected_gpu_model", "text"),
             ("expected_gpu_count", "int"),
             ("detected_gpu_count", "int"),
             ("inspection_json", "text"),
@@ -1034,13 +1051,12 @@ def _machine_schema(pa: Any) -> Any:
             ("allocation_id", "text"),
             ("name", "text"),
             ("state", "text"),
-            ("gpu_model", "text"),
-            ("gpu_count", "int"),
+            ("expected_gpu_model", "text"),
+            ("expected_gpu_count", "int"),
             ("created_at", "time"),
             ("ssh_ready", "bool"),
-            ("ssh_host", "text"),
+            ("ssh_target", "text"),
             ("ssh_port", "int"),
-            ("ssh_user", "text"),
         ),
     )
 
@@ -1051,13 +1067,12 @@ def _machine_row(machine: FleetMachine) -> dict[str, Any]:
         "allocation_id": machine.allocation_id,
         "name": machine.name,
         "state": machine.state,
-        "gpu_model": machine.gpu_model,
-        "gpu_count": machine.gpu_count,
+        "expected_gpu_model": machine.expected_gpu_model,
+        "expected_gpu_count": machine.expected_gpu_count,
         "created_at": machine.created_at,
         "ssh_ready": machine.ssh is not None,
-        "ssh_host": machine.ssh.host if machine.ssh else None,
+        "ssh_target": machine.ssh.target if machine.ssh else None,
         "ssh_port": machine.ssh.port if machine.ssh else None,
-        "ssh_user": machine.ssh.user if machine.ssh else None,
     }
 
 

@@ -15,29 +15,36 @@ def ssh_command(
 ) -> list[str]:
     if machine.ssh is None:
         raise ValueError(f"Fleet host {machine.host_id} has no SSH endpoint")
-    identity = Path(machine.ssh.identity_file).expanduser()
-    known_hosts = known_hosts_file or identity.parent / "compute_bazaar_fleet_known_hosts"
-    known_hosts.parent.mkdir(parents=True, exist_ok=True)
-    return [
+    command = [
         "ssh",
-        "-i",
-        str(identity),
-        "-p",
-        str(machine.ssh.port),
         "-o",
         "BatchMode=yes",
         "-o",
         "ConnectTimeout=15",
-        "-o",
-        "ControlMaster=auto",
-        "-o",
-        "ControlPersist=60",
-        "-o",
-        f"ControlPath={known_hosts.parent / 'cbz-ssh-%C'}",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        f"UserKnownHostsFile={known_hosts}",
-        f"{machine.ssh.user}@{machine.ssh.host}",
-        remote_command,
     ]
+    if machine.ssh.identity_file:
+        identity = Path(machine.ssh.identity_file).expanduser()
+        known_hosts = (
+            known_hosts_file
+            or identity.parent / "compute_bazaar_fleet_known_hosts"
+        )
+        known_hosts.parent.mkdir(parents=True, exist_ok=True)
+        command.extend(
+            [
+                "-i",
+                str(identity),
+                "-o",
+                "ControlMaster=auto",
+                "-o",
+                "ControlPersist=60",
+                "-o",
+                f"ControlPath={known_hosts.parent / 'cbz-ssh-%C'}",
+                "-o",
+                "StrictHostKeyChecking=accept-new",
+                "-o",
+                f"UserKnownHostsFile={known_hosts}",
+            ]
+        )
+    if machine.ssh.port:
+        command.extend(["-p", str(machine.ssh.port)])
+    return [*command, machine.ssh.target, remote_command]

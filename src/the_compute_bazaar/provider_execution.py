@@ -375,9 +375,11 @@ class RunpodExecutor:
             update={
                 "state": "running",
                 "ssh": SshEndpoint(
-                    host=str(payload["ip"]),
+                    target=(
+                        f"{_ssh_user(str(payload.get('ssh_command') or ''))}"
+                        f"@{payload['ip']}"
+                    ),
                     port=int(payload["port"]),
-                    user=_ssh_user(str(payload.get("ssh_command") or "")),
                     identity_file=self.identity_file,
                 ),
             }
@@ -453,8 +455,8 @@ class RunpodExecutor:
             allocation_id=allocation_id,
             name=str(request.provider_request["name"]),
             state=state,
-            gpu_model=request.gpu_model,
-            gpu_count=request.gpu_count,
+            expected_gpu_model=request.gpu_model,
+            expected_gpu_count=request.gpu_count,
             created_at=request.created_at,
         )
         return allocation, machine

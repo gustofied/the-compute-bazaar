@@ -73,15 +73,17 @@ later execution system.
 
 ## Fleet
 
-The launch path is:
+Fleet has two entry paths:
 
 ```text
-offer observation
-  -> final provider check
-  -> provider allocation
-  -> Fleet machine
-  -> Fleet observations and workloads
+offer -> launch -> allocation -\
+                               -> Fleet machine -> inspect -> monitor -> workload
+existing machine -> SSH attach /
 ```
+
+SSH attachments use native OpenSSH targets, so host config, agents, and jump
+hosts remain outside Bazaar. The registry stores the target and expected NVIDIA
+hardware, while inspections store what the machine actually reports.
 
 `silver.current_offers` is the latest direct observation for each provider
 selection. `fleet.allocations` links a machine to the exact final-check row.

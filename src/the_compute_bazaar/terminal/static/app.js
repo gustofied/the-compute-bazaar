@@ -196,7 +196,7 @@ function perspectivePluginName(plugin) {
 
 function validateSession(payload) {
   const arrays = ["tables", "queries", "views", "models", "blueprints"];
-  const valid = payload?.contract === "compute-bazaar.data.session.v1"
+  const valid = payload?.contract === "compute-bazaar.data.session"
     && arrays.every((key) => Array.isArray(payload[key]));
   if (!valid) {
     throw new Error("This port is serving an older Compute Bazaar process. Stop it or run Data on another port.");

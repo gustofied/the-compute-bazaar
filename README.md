@@ -162,9 +162,19 @@ compute-bazaar terminal --stop
   <img src="assets/compute-bazaar-fleet.webp" alt="The Compute Bazaar Fleet watching a live RunPod GPU machine" width="80%">
 </p>
 
-Fleet connects to rented machines over SSH. It checks what arrived, reports
-whether the machine is ready, and monitors its GPU, CPU, memory, disk, power,
-and temperature every five seconds while the Terminal is open.
+Fleet connects to NVIDIA machines over SSH, whether Bazaar launched them or
+someone else supplied access. It checks what arrived, reports whether the
+machine is ready, and monitors its GPU, CPU, memory, disk, power, temperature,
+processes, and workloads every five seconds while the Terminal is open.
+
+Attach an existing machine through an alias in your OpenSSH config:
+
+```bash
+compute-bazaar fleet attach gpu-singapore-01 --expect H100 --count 8
+```
+
+OpenSSH resolves the host, key, agent, and any jump host. Fleet stores the alias,
+not the credentials.
 
 ```bash
 compute-bazaar offers list --provider runpod

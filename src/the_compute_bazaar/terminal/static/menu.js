@@ -5,7 +5,7 @@ async function initializeMenu() {
     const response = await fetch("/api/terminal", { cache: "no-store" });
     if (!response.ok) return;
     const payload = await response.json();
-    if (payload.contract !== "compute-bazaar.terminal.v1") return;
+    if (payload.contract !== "compute-bazaar.terminal") return;
 
     if (!payload.destinations?.eval?.available) {
       evalDestination.removeAttribute("href");

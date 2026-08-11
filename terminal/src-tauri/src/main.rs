@@ -100,7 +100,7 @@ fn backend_healthy(port: u16) -> bool {
     let mut response = String::new();
     stream.read_to_string(&mut response).is_ok()
         && response.contains("200 OK")
-        && response.contains("compute-bazaar.terminal.health.v1")
+        && response.contains("compute-bazaar.terminal.health")
 }
 
 fn wait_for_backend(child: &mut Child, port: u16) -> Result<(), BoxError> {

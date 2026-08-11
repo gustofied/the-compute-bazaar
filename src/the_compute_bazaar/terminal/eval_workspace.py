@@ -26,9 +26,16 @@ class EvalWorkspace:
         if root_text not in sys.path:
             sys.path.insert(0, root_text)
         module = importlib.import_module("viewer.app")
+        create_app = getattr(module, "create_app", None)
+        first_evaluation_url = getattr(module, "first_evaluation_url", None)
+        if not callable(create_app) or not callable(first_evaluation_url):
+            return cls()
+        first_url = first_evaluation_url(evaluation_root)
+        if first_url is None:
+            return cls()
         return cls(
-            app=module.create_app(evaluation_root, base_path="/eval"),
-            first_url=module.first_evaluation_url(evaluation_root),
+            app=create_app(evaluation_root, base_path="/eval"),
+            first_url=first_url,
         )
 
     @property

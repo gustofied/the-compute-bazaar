@@ -48,7 +48,7 @@ model_app = typer.Typer(help="Save and run reusable DataFusion SQL models.")
 blueprint_app = typer.Typer(help="Save and open Perspective views of SQL models.")
 offers_app = typer.Typer(help="Read offers directly from compute providers.")
 launch_app = typer.Typer(help="Plan provider-native compute launches.")
-fleet_app = typer.Typer(help="Inspect and operate provisioned compute.")
+fleet_app = typer.Typer(help="Attach, inspect, and operate NVIDIA compute.")
 workload_app = typer.Typer(help="Run and inspect commands on Fleet hosts.")
 app.add_typer(data_app, name="data")
 app.add_typer(sandbox_app, name="sandbox")
@@ -725,8 +725,55 @@ def fleet_hosts(ctx: typer.Context) -> None:
     _emit(
         ctx,
         {
-            "contract": "compute-bazaar.fleet-hosts.v1",
+            "contract": "compute-bazaar.fleet-hosts",
             "rows": [machine.row() for machine in machines],
+        },
+        command="fleet",
+        include_source=False,
+    )
+
+
+@fleet_app.command("attach")
+def fleet_attach(
+    ctx: typer.Context,
+    ssh_target: Annotated[
+        str,
+        typer.Argument(help="OpenSSH config host or user@host."),
+    ],
+    name: Annotated[str | None, typer.Option(help="Fleet display name.")] = None,
+    expected_gpu_model: Annotated[
+        str | None,
+        typer.Option("--expect", help="Expected NVIDIA GPU model."),
+    ] = None,
+    expected_gpu_count: Annotated[
+        int | None,
+        typer.Option("--count", min=1, help="Expected NVIDIA GPU count."),
+    ] = None,
+) -> None:
+    """Attach an existing NVIDIA machine through native OpenSSH."""
+    from .fleet import FleetInspectError, FleetService
+
+    try:
+        inspection, health = FleetService.local().attach(
+            ssh_target,
+            name=name,
+            expected_gpu_model=expected_gpu_model,
+            expected_gpu_count=expected_gpu_count,
+        )
+    except (FleetInspectError, KeyError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        ctx,
+        {
+            "contract": "compute-bazaar.fleet-attachment",
+            "observed_at": inspection.observed_at,
+            "rows": [
+                {
+                    **inspection.machine.row(),
+                    **inspection.row(),
+                    "health": health.health,
+                }
+            ],
         },
         command="fleet",
         include_source=False,
@@ -748,7 +795,7 @@ def fleet_inspect(
     _emit(
         ctx,
         {
-            "contract": "compute-bazaar.fleet-inspection.v1",
+            "contract": "compute-bazaar.fleet-inspection",
             "observed_at": inspection.observed_at,
             "rows": [inspection.row()],
             "inspection": inspection.model_dump(mode="json"),
@@ -783,7 +830,7 @@ def fleet_refresh(
     _emit(
         ctx,
         {
-            "contract": "compute-bazaar.fleet-refresh.v1",
+            "contract": "compute-bazaar.fleet-refresh",
             "rows": [refreshed.row()],
         },
         command="fleet",
@@ -835,7 +882,7 @@ def fleet_terminate(
     _emit(
         ctx,
         {
-            "contract": "compute-bazaar.fleet-termination.v1",
+            "contract": "compute-bazaar.fleet-termination",
             "rows": [terminated.row()],
         },
         command="fleet",
@@ -887,7 +934,7 @@ def fleet_workload_list(
     _emit(
         ctx,
         {
-            "contract": "compute-bazaar.fleet-workloads.v1",
+            "contract": "compute-bazaar.fleet-workloads",
             "rows": [workload.row() for workload in workloads],
         },
         command="workload",
@@ -1367,7 +1414,7 @@ def _emit_workload(ctx: typer.Context, workload: Any) -> None:
     _emit(
         ctx,
         {
-            "contract": "compute-bazaar.fleet-workloads.v1",
+            "contract": "compute-bazaar.fleet-workloads",
             "rows": [workload.row()],
             "workload": workload.model_dump(mode="json"),
         },

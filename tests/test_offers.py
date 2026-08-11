@@ -369,7 +369,7 @@ class OfferServiceTest(unittest.TestCase):
             self.assertIn("--wait", create)
             self.assertNotIn("--stop-after", create)
             self.assertEqual(receipt.machine.host_id, "runpod:pod-123")
-            self.assertEqual(receipt.machine.ssh.host, "203.0.113.10")
+            self.assertEqual(receipt.machine.ssh.target, "root@203.0.113.10")
             self.assertEqual(registry.get("runpod:pod-123"), receipt.machine)
             self.assertEqual(receipt.expected_max_cost_usd, 0.995)
             self.assertEqual(receipt.machine.allocation_id, receipt.allocation_id)
@@ -640,7 +640,7 @@ class OfferServiceTest(unittest.TestCase):
 
             self.assertEqual(receipt.state, "succeeded")
             self.assertEqual(receipt.provider_resource_id, "pod-recovered")
-            self.assertEqual(receipt.machine.ssh.host, "203.0.113.11")
+            self.assertEqual(receipt.machine.ssh.target, "root@203.0.113.11")
             attempts = ledger.arrow_tables()["provisioning_attempts"].to_pylist()
             allocations = ledger.arrow_tables()["allocations"].to_pylist()
             self.assertEqual(attempts[0]["state"], "succeeded")

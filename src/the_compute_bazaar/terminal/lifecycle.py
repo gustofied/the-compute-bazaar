@@ -499,7 +499,7 @@ def _terminal_health(url: Any) -> int | None:
             payload = json.load(response)
     except (OSError, URLError, ValueError):
         return None
-    if payload.get("contract") != "compute-bazaar.terminal.health.v1":
+    if payload.get("contract") != "compute-bazaar.terminal.health":
         return None
     pid = payload.get("pid")
     return pid if isinstance(pid, int) else None

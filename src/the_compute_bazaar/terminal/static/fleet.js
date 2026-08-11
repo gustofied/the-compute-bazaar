@@ -113,6 +113,22 @@ function gpuSummary(payload) {
   };
 }
 
+function machineGpuLabel(machine, payload = null) {
+  const devices = payload?.gpus ?? [];
+  const names = [...new Set(devices.map((gpu) => gpu.name).filter(Boolean))];
+  const count = devices.length || machine.expected_gpu_count || "—";
+  const model = names.join(", ") || machine.expected_gpu_model || "NVIDIA GPU";
+  return `${count} × ${model}`;
+}
+
+function machineSubtitle(machine, payload = null) {
+  const parts = [machineGpuLabel(machine, payload)];
+  if (Number.isFinite(Number(machine.price_usd_instance_hr))) {
+    parts.push(`$${number(machine.price_usd_instance_hr, 2)} / hr`);
+  }
+  return parts.join(" · ");
+}
+
 function activeHosts() {
   return (state.session?.hosts ?? []).filter((host) => host.ssh_ready && host.state === "running");
 }
@@ -162,7 +178,7 @@ function renderHosts() {
     return `
       <button class="host-button ${host.host_id === state.hostId ? "active" : ""} ${failed ? "fault" : ""}" type="button" data-host-id="${escapeHtml(host.host_id)}" ${host.ssh_ready && host.state === "running" ? "" : "disabled"}>
         <span class="host-name">${escapeHtml(host.name)}</span>
-        <span class="host-meta"><span>${escapeHtml(host.gpu_count)} × ${escapeHtml(host.gpu_model)}</span><span class="host-status">${escapeHtml(status)}</span></span>
+        <span class="host-meta"><span>${escapeHtml(machineGpuLabel(host, snapshot))}</span><span class="host-status">${escapeHtml(status)}</span></span>
         ${hostReading(host)}
       </button>
     `;
@@ -196,9 +212,9 @@ function renderSnapshot(payload) {
   elements.empty.hidden = true;
   elements.overview.hidden = true;
   elements.view.hidden = false;
-  elements.provider.textContent = [machine.provider || "imported", machine.state, payload.monitor?.status === "stale" ? "stale" : null].filter(Boolean).join(" / ");
+  elements.provider.textContent = [machine.provider, machine.state, payload.monitor?.status === "stale" ? "stale" : null].filter(Boolean).join(" / ");
   elements.name.textContent = machine.name;
-  elements.subtitle.textContent = `${machine.gpu_count} × ${machine.gpu_model} · $${number(machine.price_usd_instance_hr, 2)} / hr`;
+  elements.subtitle.textContent = machineSubtitle(machine, payload);
   elements.readiness.textContent = readiness.replace("_", " ");
   elements.readiness.className = `readiness ${readiness}`;
   elements.termination.textContent = countdown(machine);
@@ -269,7 +285,7 @@ function renderFailure(host, message) {
   elements.view.hidden = false;
   elements.provider.textContent = `${host.provider} / ${host.state}`;
   elements.name.textContent = host.name;
-  elements.subtitle.textContent = `${host.gpu_count} × ${host.gpu_model}`;
+  elements.subtitle.textContent = machineGpuLabel(host);
   elements.readiness.textContent = "SSH fault";
   elements.readiness.className = "readiness not_ready";
   elements.termination.textContent = countdown(host);
@@ -299,7 +315,7 @@ function overviewRow(host) {
     <button class="overview-row ${escapeHtml(status)}" type="button" role="row" data-overview-host="${escapeHtml(host.host_id)}" ${host.ssh_ready && host.state === "running" ? "" : "disabled"}>
       <span role="cell"><strong>${escapeHtml(host.name)}</strong><small>${escapeHtml(host.provider)}</small></span>
       <span role="cell" class="overview-status">${escapeHtml(status)}</span>
-      <span role="cell">${escapeHtml(host.gpu_count)} × ${escapeHtml(host.gpu_model)}</span>
+      <span role="cell">${escapeHtml(machineGpuLabel(host, payload))}</span>
       <span role="cell">${gpu ? `${number(gpu.utilization)}%` : "—"}</span>
       <span role="cell">${memory}</span>
       <span role="cell">${gpu ? `${number(gpu.temperature)}°C` : "—"}</span>

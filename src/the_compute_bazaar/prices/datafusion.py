@@ -46,6 +46,13 @@ class DataFusionEngine:
     def table_names(self) -> tuple[str, ...]:
         return tuple(sorted(self._table_refs))
 
+    def table_columns(self, table_name: str) -> tuple[str, ...]:
+        """Return the physical columns exposed by a registered table."""
+        name = _validated_table_name(table_name)
+        if name not in self._table_refs:
+            raise KeyError(f"Unknown DataFusion table: {name}")
+        return tuple(self._context.table(name).schema().names)
+
     def register_tables(self, tables: Mapping[str, str]) -> None:
         resolved = {
             _validated_table_name(name): resolve_read_uri(uri)

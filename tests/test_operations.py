@@ -65,7 +65,7 @@ create table offer_observations (
                 version = connection.execute("pragma user_version").fetchone()[0]
             self.assertIn("market_product_key", columns)
             self.assertIn("request_id", allocation_columns)
-            self.assertEqual(version, 5)
+            self.assertEqual(version, 6)
 
     def test_market_selection_and_fleet_delivery_join_in_datafusion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -2,9 +2,9 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
-const HISTORY_KEY = "compute-bazaar.terminal.command-history.v1";
-const PENDING_KEY = "compute-bazaar.terminal.pending-command.v1";
-const OPEN_KEY = "compute-bazaar.terminal.last-open.v1";
+const HISTORY_KEY = "compute-bazaar.terminal.command-history";
+const PENDING_KEY = "compute-bazaar.terminal.pending-command";
+const OPEN_KEY = "compute-bazaar.terminal.last-open";
 const MAX_HISTORY = 50;
 
 const workspace = document.body.dataset.terminalWorkspace || inferWorkspace();
@@ -452,7 +452,7 @@ async function pollTerminalOpen() {
     const response = await fetch("/api/terminal/open", { cache: "no-store" });
     if (!response.ok) return;
     const payload = await response.json();
-    const launch = payload.contract === "compute-bazaar.terminal.open.v1" ? payload.launch : null;
+    const launch = payload.contract === "compute-bazaar.terminal.open" ? payload.launch : null;
     if (!launch?.launch_id || !launch.action) return;
     if (localStorage.getItem(OPEN_KEY) === launch.launch_id) return;
     localStorage.setItem(OPEN_KEY, launch.launch_id);

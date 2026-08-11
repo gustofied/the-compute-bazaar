@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 MachineState = Literal[
@@ -20,10 +20,17 @@ MachineState = Literal[
 class SshEndpoint(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    host: str
-    port: int = Field(ge=1, le=65535)
-    user: str = "root"
-    identity_file: str
+    target: str
+    port: int | None = Field(default=None, ge=1, le=65535)
+    identity_file: str | None = None
+
+    @field_validator("target")
+    @classmethod
+    def validate_target(cls, value: str) -> str:
+        target = value.strip()
+        if not target or target.startswith("-") or any(char.isspace() for char in target):
+            raise ValueError("SSH target must be one host alias or user@host")
+        return target
 
 
 class FleetMachine(BaseModel):
@@ -33,8 +40,8 @@ class FleetMachine(BaseModel):
     allocation_id: str | None = None
     name: str
     state: MachineState
-    gpu_model: str
-    gpu_count: int = Field(ge=1)
+    expected_gpu_model: str | None = None
+    expected_gpu_count: int | None = Field(default=None, ge=1)
     created_at: datetime
     ssh: SshEndpoint | None = None
 
@@ -50,9 +57,9 @@ class FleetMachine(BaseModel):
             "allocation_id": self.allocation_id,
             "name": self.name,
             "state": self.state,
-            "gpu_model": self.gpu_model,
-            "gpu_count": self.gpu_count,
-            "ssh_host": self.ssh.host if self.ssh else None,
+            "expected_gpu_model": self.expected_gpu_model,
+            "expected_gpu_count": self.expected_gpu_count,
+            "ssh_target": self.ssh.target if self.ssh else None,
         }
 
 
@@ -154,7 +161,7 @@ class FleetDoctorResult(BaseModel):
 
     def payload(self) -> dict[str, object]:
         return {
-            "contract": "compute-bazaar.fleet-doctor.v1",
+            "contract": "compute-bazaar.fleet-doctor",
             "observed_at": self.observed_at,
             "host_id": self.host_id,
             "readiness": self.readiness,

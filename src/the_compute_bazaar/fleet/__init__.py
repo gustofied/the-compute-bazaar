@@ -1,4 +1,4 @@
-"""Operate provisioned compute as verified Fleet capacity."""
+"""Attach, inspect, monitor, and operate NVIDIA machines."""
 
 from .inspect import FleetInspectError, FleetInspector
 from .monitor import FleetMonitor, FleetMonitorState

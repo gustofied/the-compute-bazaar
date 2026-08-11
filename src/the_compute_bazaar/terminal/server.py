@@ -172,7 +172,7 @@ def create_terminal_app(
     def terminal(request: Request) -> dict[str, Any]:
         data_status = data_workspace.status()
         return {
-            "contract": "compute-bazaar.terminal.v1",
+            "contract": "compute-bazaar.terminal",
             "run": data_status["run"],
             "table_count": data_status["table_count"],
             "destinations": {
@@ -233,7 +233,7 @@ def create_terminal_app(
     @app.get("/api/terminal/open")
     def pending_open() -> dict[str, Any]:
         return {
-            "contract": "compute-bazaar.terminal.open.v1",
+            "contract": "compute-bazaar.terminal.open",
             "launch": launch_mailbox.latest(),
         }
 
@@ -249,7 +249,7 @@ def create_terminal_app(
         if payload.action.kind not in {"query", "view", "sql"}:
             raise HTTPException(status_code=400, detail="Unsupported Terminal launch")
         return {
-            "contract": "compute-bazaar.terminal.open.v1",
+            "contract": "compute-bazaar.terminal.open",
             "launch": launch_mailbox.publish(payload.action),
         }
 
@@ -279,7 +279,7 @@ def create_terminal_app(
     def health() -> dict[str, Any]:
         run = data_workspace.status()["run"]
         return {
-            "contract": "compute-bazaar.terminal.health.v1",
+            "contract": "compute-bazaar.terminal.health",
             "status": "ok",
             "pid": os.getpid(),
             "run_id": run.get("run_id"),

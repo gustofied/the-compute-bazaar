@@ -149,7 +149,12 @@ order by ordinal_position
         self.engine.register_tables(tables)
         self.engine.create_schema("silver")
         self._scheduled_offer_sql = " union all ".join(
-            silver_observation_select(f"_silver_offer_observations_{index}")
+            silver_observation_select(
+                f"_silver_offer_observations_{index}",
+                available_columns=set(
+                    self.engine.table_columns(f"_silver_offer_observations_{index}")
+                ),
+            )
             for index in range(len(provider_scope))
         )
         if not self.operations:

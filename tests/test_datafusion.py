@@ -17,6 +17,7 @@ from the_compute_bazaar.operations import OperationalLedger
 from the_compute_bazaar.portable_lake import build_portable_lake
 from the_compute_bazaar.prices.datafusion import DataFusionEngine
 from the_compute_bazaar.prices.gold import build_gold_market_tables
+from the_compute_bazaar.prices.gold_manifest import read_latest_gold_manifest
 from the_compute_bazaar.prices.ingestion import persist_provider_snapshot
 from the_compute_bazaar.prices.schemas import OfferObservation
 from the_compute_bazaar.prices.silver_contract import silver_observation_select
@@ -78,6 +79,10 @@ class DataFusionEngineTest(unittest.TestCase):
                 source_lake_root=str(lake),
                 output_root=str(portable),
             )
+            portable_manifest = read_latest_gold_manifest(str(portable))
+            for normalized_ref in portable_manifest["source_normalized_refs"].values():
+                table = pq.read_table(normalized_ref)
+                pq.write_table(table.drop(["market_product_key"]), normalized_ref)
             index = json.loads((portable / "index.json").read_text())
             self.assertEqual(index["contract"], "compute_bazaar_market_lake")
             catalog = ComputeBazaarCatalog(lake_root=str(portable))
@@ -100,6 +105,9 @@ class DataFusionEngineTest(unittest.TestCase):
             self.assertEqual(
                 {row["source_run_id"] for row in observations},
                 {"lium-market-1", "vast-market-1"},
+            )
+            self.assertEqual(
+                {row["market_product_key"] for row in observations}, {None}
             )
             self.assertEqual(benchmark["provider_count"], 2)
 
