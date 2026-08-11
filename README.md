@@ -164,10 +164,13 @@ Data and Eval. Stop the Terminal with:
 compute-bazaar terminal --stop
 ```
 
-## [Eval](compute-bazaar-bench/evals)
+## Eval
+
+[Compute Bazaar Bench](compute-bazaar-bench/evals) contains agent evaluations
+for compute markets.
 
 <p align="center">
-  <a href="compute-bazaar-bench/evals"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="100%"></a>
+  <a href="compute-bazaar-bench/evals"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="80%"></a>
 </p>
 
 ## Fleet
