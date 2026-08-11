@@ -16,9 +16,8 @@ The products and commentary from [Epilogue](https://epilogue.inc/) and
 [ComputeDesk](https://www.compute-desk.com/) around compute desks and deal flow
 motivate the work here, especially their interest in involving agents.
 
-[**transactions**](evals/transactions/README.md) evaluates professional work
-that moves an OTC or reserved-compute transaction from initial intent toward
-executable paper.
+[**transactions**](evals/transactions/README.md) evaluates agents on compute
+deal work across intake, diligence, and contracting.
 
 ### Compute Market Games
 
