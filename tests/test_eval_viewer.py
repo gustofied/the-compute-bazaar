@@ -14,11 +14,27 @@ if str(BENCH_ROOT) not in sys.path:
     sys.path.insert(0, str(BENCH_ROOT))
 
 from viewer.app import create_app, first_evaluation_url  # noqa: E402
+from viewer.comparisons import discover_comparisons  # noqa: E402
 from viewer.presenters import load_job_presentation  # noqa: E402
 from viewer.task_catalog import discover_task_definitions  # noqa: E402
 
 
 class TaskCatalogTests(unittest.TestCase):
+    def test_repository_comparisons_share_one_normalized_schema(self) -> None:
+        comparisons = discover_comparisons(BENCH_ROOT)
+
+        self.assertEqual(set(comparisons), {"mistral-matched-20", "transactions"})
+        self.assertEqual(len(comparisons["transactions"].attempts), 45)
+        self.assertEqual(len(comparisons["mistral-matched-20"].attempts), 59)
+        self.assertEqual(
+            comparisons["transactions"].provenance.generator,
+            "transactions.tooling.build-comparison.v1",
+        )
+        self.assertEqual(
+            comparisons["mistral-matched-20"].provenance.generator,
+            "reliability-is-blind.tooling.build-comparison.v1",
+        )
+
     def test_internal_adjudication_packages_are_not_launchable_tasks(self) -> None:
         with TemporaryDirectory() as temporary:
             bench_root = Path(temporary) / "bench"
@@ -307,6 +323,32 @@ class TaskCatalogTests(unittest.TestCase):
             self.assertIn("03 Feb 2026, 14:05", html)
             self.assertLess(html.index("newer-job"), html.index("older-job"))
 
+    def test_two_raw_jobs_can_be_compared_without_inventing_a_pass_rule(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temporary:
+            bench_root = Path(temporary) / "bench"
+            _write_task(bench_root, "sample-task")
+            _write_raw_job(bench_root, "sample-task", "job-a")
+            _write_raw_job(bench_root, "sample-task", "job-b")
+            (bench_root / "jobs/raw/job-b/sample-task__abc/result.json").unlink()
+
+            app = create_app(bench_root / "jobs" / "reports", bench_root=bench_root)
+            task_html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
+            comparison_html = _route_endpoint(app, "/comparisons/jobs")(
+                "sample-task", ["job-a", "job-b"]
+            )
+
+            self.assertEqual(task_html.count('type="checkbox" name="job"'), 2)
+            self.assertIn("Compare selected", task_html)
+            self.assertIn("Selected jobs", comparison_html)
+            self.assertIn("Mean Harbor reward", comparison_html)
+            self.assertIn("job-a", comparison_html)
+            self.assertIn("job-b", comparison_html)
+            self.assertIn("0.7500", comparison_html)
+            self.assertIn("In progress", comparison_html)
+            self.assertIn("No pass threshold is inferred from reward", comparison_html)
+
     def test_jobs_created_after_start_are_discovered_on_refresh(self) -> None:
         with TemporaryDirectory() as temporary:
             bench_root = Path(temporary) / "bench"
@@ -446,193 +488,171 @@ class TaskCatalogTests(unittest.TestCase):
                 "private-model-route", {item["slug"] for item in evaluations}
             )
 
-    def test_public_release_summary_powers_task_comparison_only(self) -> None:
+    def test_normalized_artifact_powers_dedicated_comparison(self) -> None:
         with TemporaryDirectory() as temporary:
             bench_root = Path(temporary) / "bench"
             _write_task(bench_root, "sample-task")
             _write_raw_job(bench_root, "sample-task", "release-job")
-            view_path = bench_root / "evals/transactions/tooling/public-view.json"
-            _write_json(
-                view_path,
+            _write_comparison(
+                bench_root,
+                "release-v1",
                 {
-                    "schema_version": "compute-bazaar-bench.public-view.v1",
-                    "release_id": "release-v1",
-                    "protocol_sha256": "a" * 64,
-                    "managed_tasks": ["sample-task"],
-                    "jobs": ["release-job"],
-                    "job_metadata": {
-                        "release-job": {
-                            "execution_origin": "fresh_native_harbor",
-                            "display_label": "Fresh native Harbor run",
-                            "score_origin": "release_grader",
-                        }
-                    },
-                    "report": "release-v1",
-                    "summary_path": (
-                        "evals/transactions/results/release-v1.summary.json"
-                    ),
-                },
-            )
-            _write_json(
-                bench_root / "evals/transactions/results/release-v1.summary.json",
-                {
-                    "schema_version": (
-                        "compute-bazaar-bench.transactions.release-summary.v1"
-                    ),
-                    "release_id": "release-v1",
-                    "protocol_sha256": "a" * 64,
-                    "rows": [
+                    "label": "Transactions",
+                    "description": "Five attempts per task.",
+                    "agents": [
                         {
+                            "id": "model-a",
+                            "label": "OpenCode 1.0 + Model A",
                             "model": "Model A",
-                            "job": "release-job",
-                            "execution_label": "Fresh Harbor run",
-                            "planned": 15,
-                            "scored": 15,
-                            "strict_all_pass": 0,
-                            "strict_all_pass_rate": 0.0,
-                            "criterion_pass_rate": 0.0,
-                            "criterion_evaluation": "not_run_output_gate",
-                            "equal_task_macro": 0.0,
-                            "tasks": {
-                                "sample-task": {
-                                    "retained": 5,
-                                    "all_pass": 0,
-                                    "semantic": {"mean": 0.0},
-                                }
-                            },
-                            "craft": {"good": 2, "mixed": 1, "poor": 0},
-                            "telemetry": {
-                                "median_agent_seconds": 12.0,
-                                "median_input_tokens": 100,
-                                "median_output_tokens": 20,
-                                "agent_cost_usd": None,
-                                "judge_cost_usd": None,
-                                "modal_cost_usd": None,
-                            },
+                            "harness": "OpenCode 1.0",
                         },
                         {
+                            "id": "model-b",
+                            "label": "OpenCode 1.0 + Model B",
                             "model": "Model B",
-                            "job": "release-job",
-                            "execution_label": "Earlier output, regraded",
-                            "planned": 15,
-                            "scored": 14,
-                            "strict_all_pass": 0,
-                            "strict_all_pass_rate": 0.0,
-                            "criterion_pass_rate": 0.7,
-                            "equal_task_macro": 0.72,
-                            "tasks": {
-                                "sample-task": {
-                                    "retained": 5,
-                                    "all_pass": 1,
-                                    "semantic": {"mean": 0.72},
-                                }
+                            "harness": "OpenCode 1.0",
+                        },
+                    ],
+                    "cells": [
+                        {
+                            "agent_id": "model-a",
+                            "task_slug": "sample-task",
+                            "primary": {
+                                "label": "strict all-pass",
+                                "value": "Not judged",
                             },
-                            "craft": {"good": 1, "mixed": 2, "poor": 1},
-                            "telemetry": {},
+                            "secondary": [
+                                {"label": "criterion coverage", "value": "—"}
+                            ],
+                            "counts": {"planned": 5, "scored": 0},
+                            "job_id": "release-job",
+                        },
+                        {
+                            "agent_id": "model-b",
+                            "task_slug": "sample-task",
+                            "primary": {
+                                "label": "strict all-pass",
+                                "value": "1/5",
+                                "raw": 0.2,
+                            },
+                            "secondary": [
+                                {
+                                    "label": "criterion coverage",
+                                    "value": "72.0%",
+                                    "raw": 0.72,
+                                }
+                            ],
+                            "counts": {"planned": 5, "scored": 5},
+                            "job_id": "release-job",
                         },
                     ],
                 },
             )
 
             app = create_app(bench_root / "jobs" / "reports", bench_root=bench_root)
-            html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
+            task_html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
+            comparison_html = _route_endpoint(app, "/comparisons/{comparison_id}")(
+                "release-v1"
+            )
+            comparison_api = _route_endpoint(app, "/api/comparisons/{comparison_id}")(
+                "release-v1"
+            )
 
-            self.assertIn("Run outcomes", html)
-            self.assertIn("OpenCode 1.0 + Model B", html)
-            self.assertIn("72.0%", html)
-            self.assertIn("1 of 5 passed", html)
-            self.assertIn("Passed", html)
-            self.assertIn("Incomplete", html)
-            self.assertIn('class="comparison-picker"', html)
-            self.assertIn(">Release v1</option>", html)
-            self.assertIn("No semantic review", html)
-            self.assertNotIn(">0.0%</strong>", html)
-            self.assertNotIn("<h2>Results</h2>", html)
-            self.assertNotIn("Document quality", html)
+            self.assertIn("Transactions", task_html)
+            self.assertIn('href="/comparisons/release-v1"', task_html)
+            self.assertNotIn("Results by task", task_html)
+            self.assertIn("<h2>Results</h2>", comparison_html)
+            self.assertIn("OpenCode 1.0 + Model B", comparison_html)
+            self.assertIn("1/5", comparison_html)
+            self.assertIn("72.0%", comparison_html)
+            self.assertIn("Not judged", comparison_html)
+            self.assertIn("Attempts counted", comparison_html)
+            self.assertIn("<summary>Method</summary>", comparison_html)
+            self.assertEqual(comparison_api["primary_metric"]["key"], "strict_all_pass")
+            self.assertEqual(len(comparison_api["agents"]), 2)
 
-    def test_generic_benchmark_chart_is_visible_on_task_page(self) -> None:
+    def test_reliability_comparison_has_a_dedicated_page(self) -> None:
         with TemporaryDirectory() as temporary:
             bench_root = Path(temporary) / "bench"
             _write_task(bench_root, "sample-task")
-            report_dir = bench_root / "jobs/reports/sample-task/runs/sample-comparison"
-            _write_json(
-                report_dir / "protocol.json",
+            _write_comparison(
+                bench_root,
+                "sample-comparison",
                 {
-                    "models": [
-                        {
-                            "model": "mistral/model-a",
-                            "observed_trials": 20,
-                            "completed_rollouts": 17,
-                            "reliability_targets_met": 10,
-                            "mean_completed_failure_rate": 0.057,
-                        }
-                    ]
-                },
-            )
-            _write_json(
-                report_dir / "trials.json",
-                [
-                    {
-                        "trial": {
-                            "agent": "opencode",
-                            "agent_version": "1.18.11",
-                            "model": "mistral/model-a",
-                        }
-                    }
-                ],
-            )
-            _write_json(
-                bench_root / "evals/sample-suite/comparisons/sample.comparison.json",
-                {
-                    "schema_version": "compute-bazaar-bench.comparison-group.v1",
-                    "id": "sample-comparison",
                     "label": "Sample comparison",
-                    "tasks": ["sample-task"],
-                    "source": {
-                        "kind": "reliability-is-blind-report",
-                        "job": "sample-comparison",
+                    "description": "Twenty matched seeds.",
+                    "primary_metric": {
+                        "key": "target",
+                        "label": "Reliability target met",
+                        "description": "Completed within the target.",
                     },
+                    "agents": [
+                        {
+                            "id": "model-a",
+                            "label": "OpenCode 1.18.11 + Model A",
+                            "model": "mistral/model-a",
+                            "harness": "OpenCode 1.18.11",
+                        }
+                    ],
+                    "cells": [
+                        {
+                            "agent_id": "model-a",
+                            "task_slug": "sample-task",
+                            "primary": {
+                                "label": "target met",
+                                "value": "10/20",
+                                "raw": 0.5,
+                            },
+                            "secondary": [
+                                {"label": "completed", "value": "17/20"},
+                                {"label": "failure rate", "value": "5.7%"},
+                            ],
+                            "counts": {"planned": 20, "observed": 20},
+                            "job_id": "sample-job",
+                        }
+                    ],
+                    "attempts": [
+                        {
+                            "agent_id": "model-a",
+                            "task_slug": "sample-task",
+                            "job_id": "sample-job",
+                            "trial_id": "sample-task__abc",
+                            "status": "Target met",
+                        }
+                    ],
                 },
             )
 
             app = create_app(bench_root / "jobs" / "reports", bench_root=bench_root)
-            html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
-
-            self.assertIn("Sample comparison", html)
-            self.assertIn("Book completion and reliability target", html)
-            self.assertIn("10/20 target met", html)
-            self.assertIn("17/20 completed", html)
-            self.assertIn("OpenCode 1.18.11 + Model A", html)
-            self.assertIn('class="benchmark-segment good"', html)
-            self.assertIn('class="benchmark-segment neutral"', html)
-            self.assertIn('class="comparison-picker"', html)
-            self.assertIn(
-                '<option value="/evals/sample-task?comparison=sample-comparison" selected>Sample comparison</option>',
-                html,
+            task_html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
+            html = _route_endpoint(app, "/comparisons/{comparison_id}")(
+                "sample-comparison"
             )
 
-            _write_json(
-                bench_root / "evals/sample-suite/comparisons/second.comparison.json",
+            self.assertIn("Sample comparison", task_html)
+            self.assertIn('href="/comparisons/sample-comparison"', task_html)
+            self.assertIn("Reliability target met", html)
+            self.assertIn("10/20", html)
+            self.assertIn("17/20", html)
+            self.assertIn("5.7%", html)
+            self.assertIn("OpenCode 1.18.11 + Model A", html)
+            self.assertIn("Attempts counted", html)
+            self.assertIn("sample-task__abc", html)
+
+            _write_comparison(
+                bench_root,
+                "second-comparison",
                 {
-                    "schema_version": "compute-bazaar-bench.comparison-group.v1",
-                    "id": "second-comparison",
                     "label": "Second comparison",
-                    "tasks": ["sample-task"],
-                    "source": {
-                        "kind": "reliability-is-blind-report",
-                        "job": "sample-comparison",
-                    },
                 },
             )
-            html = _route_endpoint(app, "/evals/{eval_slug}")(
-                "sample-task", "second-comparison"
+            html = _route_endpoint(app, "/comparisons/{comparison_id}")(
+                "second-comparison"
             )
-
-            self.assertIn('class="comparison-picker"', html)
-            self.assertIn(
-                '<option value="/evals/sample-task?comparison=second-comparison" selected>Second comparison</option>',
-                html,
-            )
+            self.assertIn("Second comparison", html)
+            index = _route_endpoint(app, "/comparisons")()
+            self.assertIn("Sample comparison", index)
+            self.assertIn("Second comparison", index)
 
     def test_one_off_job_does_not_create_a_comparison_group(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -649,9 +669,9 @@ class TaskCatalogTests(unittest.TestCase):
             html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
 
             self.assertIn("one-off-job", html)
-            self.assertNotIn('class="benchmark"', html)
+            self.assertNotIn('class="comparison-card"', html)
 
-    def test_finished_top_level_multi_agent_job_is_a_comparison(self) -> None:
+    def test_multi_agent_job_never_becomes_a_comparison_by_name(self) -> None:
         with TemporaryDirectory() as temporary:
             bench_root = Path(temporary) / "bench"
             _write_task(bench_root, "sample-task")
@@ -699,12 +719,9 @@ class TaskCatalogTests(unittest.TestCase):
             app = create_app(bench_root / "jobs" / "reports", bench_root=bench_root)
             html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
 
-            self.assertIn("DeepSeek V4 Flash 0731 vs HY3", html)
-            self.assertIn("Book completion and reliability target", html)
-            self.assertIn("OpenCode 1.0 + DeepSeek V4 Flash 0731", html)
-            self.assertIn("OpenCode 1.0 + HY3", html)
-            self.assertIn("1/1 target met", html)
-            self.assertIn("0/1 target met", html)
+            self.assertIn("deepseek-vs-hy3", html)
+            self.assertNotIn('class="comparison-card"', html)
+            self.assertNotIn("Book completion and reliability target", html)
 
     def test_legacy_raw_multi_agent_job_does_not_create_a_group(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -729,7 +746,7 @@ class TaskCatalogTests(unittest.TestCase):
             html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
 
             self.assertIn("legacy-matrix-cell", html)
-            self.assertNotIn('class="benchmark"', html)
+            self.assertNotIn('class="comparison-card"', html)
 
     def test_multi_agent_job_without_vs_name_stays_an_ordinary_job(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -755,7 +772,7 @@ class TaskCatalogTests(unittest.TestCase):
             html = _route_endpoint(app, "/evals/{eval_slug}")("sample-task")
 
             self.assertIn("multi-agent-canary", html)
-            self.assertNotIn('class="benchmark"', html)
+            self.assertNotIn('class="comparison-card"', html)
 
     def test_public_native_analysis_leads_with_strict_all_pass(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -1685,6 +1702,61 @@ def _write_raw_job(
 def _write_json(path: Path, value) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_comparison(
+    bench_root: Path, comparison_id: str, overrides: dict | None = None
+) -> None:
+    value = {
+        "schema_version": "compute-bazaar.viewer.comparison.v1",
+        "id": comparison_id,
+        "label": comparison_id.replace("-", " ").title(),
+        "description": "A named comparison.",
+        "primary_metric": {
+            "key": "strict_all_pass",
+            "label": "Strict all-pass",
+            "description": "Every requirement must pass.",
+        },
+        "secondary_metric": {
+            "key": "criterion_coverage",
+            "label": "Criterion coverage",
+            "description": "Share of requirements passed.",
+        },
+        "tasks": [{"slug": "sample-task", "label": "Sample Task"}],
+        "agents": [
+            {
+                "id": "sample-agent",
+                "label": "OpenCode + Sample Model",
+                "model": "Sample Model",
+                "harness": "OpenCode",
+            }
+        ],
+        "cells": [
+            {
+                "agent_id": "sample-agent",
+                "task_slug": "sample-task",
+                "primary": {"label": "strict all-pass", "value": "0/1"},
+                "job_id": "sample-job",
+            }
+        ],
+        "count_columns": [
+            {"key": "planned", "label": "Planned"},
+            {"key": "scored", "label": "Scored"},
+        ],
+        "telemetry_columns": [],
+        "telemetry": [],
+        "attempts": [],
+        "notes": ["Frozen comparison fixture."],
+        "provenance": {
+            "generator": "tests.fixture.v1",
+            "sources": ["jobs/sample-job"],
+        },
+    }
+    value.update(overrides or {})
+    _write_json(
+        bench_root / f"evals/sample-suite/comparisons/{comparison_id}.comparison.json",
+        value,
+    )
 
 
 def _set_trial_agent(trial_dir: Path, model_name: str) -> None:

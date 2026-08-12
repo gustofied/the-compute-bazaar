@@ -56,37 +56,104 @@ class Metric(ViewModel):
     tone: Tone = "neutral"
 
 
-class BenchmarkLegendItem(ViewModel):
+class ComparisonMetricDefinition(ViewModel):
+    key: str
     label: str
-    tone: Tone
+    description: str
+    higher_is_better: bool = True
 
 
-class BenchmarkSegment(ViewModel):
+class ComparisonTask(ViewModel):
+    slug: str
     label: str
-    value: float = Field(ge=0, le=1)
-    tone: Tone
 
 
-class BenchmarkRow(ViewModel):
-    label: str
-    value: str
-    detail: str = ""
-    segments: list[BenchmarkSegment] = Field(default_factory=list)
-
-
-class BenchmarkChart(ViewModel):
-    eyebrow: str = "Benchmark"
-    title: str
-    description: str = ""
-    rows: list[BenchmarkRow]
-    legend: list[BenchmarkLegendItem] = Field(default_factory=list)
-    footnote: str = ""
-
-
-class ComparisonGroup(ViewModel):
+class ComparisonAgent(ViewModel):
     id: str
     label: str
-    chart: BenchmarkChart
+    model: str
+    harness: str
+    execution_origin: str = ""
+
+
+class ComparisonMeasure(ViewModel):
+    label: str
+    value: str
+    raw: float | None = None
+    detail: str = ""
+    tone: Tone = "neutral"
+
+
+class ComparisonCell(ViewModel):
+    agent_id: str
+    task_slug: str | None = None
+    primary: ComparisonMeasure
+    secondary: list[ComparisonMeasure] = Field(default_factory=list)
+    counts: dict[str, int] = Field(default_factory=dict)
+    attempt_values: list[float] = Field(default_factory=list)
+    job_id: str = ""
+
+
+class ComparisonAttempt(ViewModel):
+    agent_id: str
+    task_slug: str
+    job_id: str
+    trial_id: str
+    status: str
+    tone: Tone = "neutral"
+    primary: str = ""
+    secondary: str = ""
+    duration_seconds: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
+class ComparisonCountColumn(ViewModel):
+    key: str
+    label: str
+    description: str = ""
+
+
+class ComparisonTelemetryColumn(ViewModel):
+    key: str
+    label: str
+
+
+class ComparisonTelemetryRow(ViewModel):
+    agent_id: str
+    values: dict[str, str] = Field(default_factory=dict)
+
+
+class ComparisonProvenance(ViewModel):
+    generator: str
+    sources: list[str] = Field(default_factory=list)
+
+
+class ComparisonPresentation(ViewModel):
+    schema_version: str = "compute-bazaar.viewer.comparison.v1"
+    id: str
+    label: str
+    description: str
+    primary_metric: ComparisonMetricDefinition
+    secondary_metric: ComparisonMetricDefinition | None = None
+    tasks: list[ComparisonTask]
+    agents: list[ComparisonAgent]
+    cells: list[ComparisonCell]
+    count_columns: list[ComparisonCountColumn] = Field(default_factory=list)
+    telemetry_columns: list[ComparisonTelemetryColumn] = Field(default_factory=list)
+    telemetry: list[ComparisonTelemetryRow] = Field(default_factory=list)
+    attempts: list[ComparisonAttempt] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    provenance: ComparisonProvenance
+
+
+class ComparisonReference(ViewModel):
+    id: str
+    label: str
+    description: str
+    task_slugs: list[str]
+    agent_count: int = Field(ge=0)
+    primary_metric: str
 
 
 class Notice(ViewModel):

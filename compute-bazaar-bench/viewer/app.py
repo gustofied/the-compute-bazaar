@@ -11,7 +11,7 @@ import sys
 from typing import Any, Sequence
 from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -21,7 +21,12 @@ BENCH_ROOT = Path(__file__).resolve().parents[1]
 if str(BENCH_ROOT) not in sys.path:
     sys.path.insert(0, str(BENCH_ROOT))
 
-from viewer.benchmark_charts import discover_comparison_groups  # noqa: E402
+from viewer.comparisons import (  # noqa: E402
+    build_job_comparison,
+    comparison_references,
+    discover_comparisons,
+    task_comparison_references,
+)
 from viewer.presenters import load_job_presentation  # noqa: E402
 from viewer.harbor_jobs import (  # noqa: E402
     present_harbor_job,
@@ -30,13 +35,13 @@ from viewer.harbor_jobs import (  # noqa: E402
 from viewer.job_sources import (  # noqa: E402
     JobSource,
     discover_job_sources,
-    load_public_release_summary,
 )
 from viewer.report_overlays import apply_report_overlay  # noqa: E402
 from viewer.task_catalog import discover_task_definitions  # noqa: E402
 from viewer.schema import (  # noqa: E402
-    BenchmarkChart,
-    ComparisonGroup,
+    ComparisonCell,
+    ComparisonPresentation,
+    ComparisonReference,
     DataTable,
     JobPresentation,
     Metric,
@@ -76,7 +81,10 @@ body {
   letter-spacing: 0;
 }
 a { color: inherit; text-decoration: none; }
-.topbar { height: var(--topbar-height); display: flex; align-items: center; min-width: 0; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel-deep); }
+.topbar { height: var(--topbar-height); display: flex; align-items: center; justify-content: space-between; gap: 24px; min-width: 0; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel-deep); }
+.topnav { display: flex; align-items: stretch; height: 100%; }
+.topnav a { display: inline-flex; align-items: center; padding: 0 13px; color: var(--muted); font-size: 12px; }
+.topnav a:hover, .topnav a[aria-current="page"] { color: var(--text); background: var(--panel-hover); }
 .shell { width: min(1480px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 56px; }
 .page-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
 .compute-brand {
@@ -212,89 +220,59 @@ dialog::backdrop { background: rgb(0 0 0 / 72%); }
 .metric-label { color: var(--muted); font-size: 10px; text-transform: uppercase; }
 .metric-value { margin-top: 8px; overflow-wrap: anywhere; font-size: 18px; line-height: 1.35; }
 .job-header h1 { max-width: 100%; overflow-wrap: anywhere; font-size: 20px; line-height: 1.4; }
-.benchmark { padding: 28px 0 4px; }
-.comparison-picker {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding-top: 24px;
-}
-.comparison-picker label {
-  color: var(--muted);
-  font-size: 11px;
-  text-transform: uppercase;
-}
-.comparison-picker select {
-  min-width: 250px;
-  min-height: 38px;
-  padding: 7px 34px 7px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  background: var(--panel);
-  color: var(--text);
-  font: inherit;
-}
-.benchmark-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 28px;
-  margin-bottom: 18px;
-}
-.benchmark-copy { max-width: 760px; }
-.benchmark-description {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  line-height: 1.5;
-}
-.benchmark-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px 18px; }
-.benchmark-legend-item { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
-.benchmark-swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--line-strong); }
-.benchmark-swatch.good, .benchmark-segment.good { background: var(--green); }
-.benchmark-swatch.warn, .benchmark-segment.warn { background: var(--amber); }
-.benchmark-swatch.bad, .benchmark-segment.bad { background: var(--red); }
-.benchmark-swatch.info, .benchmark-segment.info { background: var(--blue); }
-.benchmark-swatch.neutral, .benchmark-segment.neutral { background: #465049; }
-.benchmark-list { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.benchmark-row {
-  display: grid;
-  grid-template-columns: minmax(190px, 250px) minmax(260px, 1fr) minmax(210px, 260px);
-  align-items: center;
-  gap: 20px;
-  min-height: 72px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--line);
-}
-.benchmark-row:last-child { border-bottom: 0; }
-.benchmark-label { font-size: 14px; font-weight: 700; }
-.benchmark-track {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  height: 20px;
-  overflow: hidden;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: var(--panel-deep);
-}
-.benchmark-track.is-empty { border-style: dashed; }
-.benchmark-segment { height: 100%; min-width: 1px; }
-.benchmark-track-note {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  font-size: 10px;
-  text-transform: uppercase;
-}
-.benchmark-result { min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
-.benchmark-value { display: block; font-size: 16px; font-weight: 700; }
-.benchmark-detail { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.35; }
-.benchmark-footnote { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.comparison-cards { display: grid; gap: 1px; border: 1px solid var(--line); background: var(--line); }
+.comparison-card { display: grid; grid-template-columns: minmax(240px, 1fr) repeat(3, minmax(100px, auto)); gap: 18px; align-items: center; min-height: 78px; padding: 14px; background: var(--bg); }
+.comparison-card:hover { background: var(--panel-hover); }
+.comparison-card strong { display: block; margin-bottom: 5px; font-size: 15px; }
+.comparison-card-copy { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; line-height: 1.4; }
+.comparison-page-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 420px); gap: 36px; padding-bottom: 26px; border-bottom: 1px solid var(--line); }
+.comparison-page-head h1 { font-size: 28px; }
+.comparison-description { max-width: 800px; margin: 12px 0 0; color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 16px; line-height: 1.55; }
+.metric-definition { display: grid; align-content: start; gap: 5px; padding: 14px 0 14px 18px; border-left: 2px solid var(--green); }
+.metric-definition span { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.metric-definition strong { font-size: 16px; }
+.metric-definition p { margin: 0; color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; line-height: 1.45; }
+.comparison-matrix-wrap { overflow-x: auto; border: 1px solid var(--line); }
+.comparison-matrix { min-width: 960px; table-layout: fixed; }
+.comparison-matrix th:first-child { width: 260px; }
+.comparison-matrix th { position: static; }
+.comparison-matrix td { padding: 0; }
+.comparison-agent { padding: 15px 14px; }
+.comparison-agent strong { display: block; line-height: 1.35; }
+.comparison-agent span { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
+.comparison-cell { display: block; min-height: 124px; padding: 14px; border-left: 1px solid var(--line); }
+.comparison-cell:hover { background: var(--panel-hover); }
+.comparison-primary { display: block; font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.comparison-primary-label { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.comparison-secondary { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 13px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.comparison-secondary strong { color: var(--text); font-weight: 500; }
+.attempt-range { position: relative; height: 18px; margin-top: 12px; border-top: 1px solid var(--line-strong); }
+.attempt-range::before, .attempt-range::after { content: ""; position: absolute; top: -3px; width: 1px; height: 5px; background: var(--line-strong); }
+.attempt-range::before { left: 0; }
+.attempt-range::after { right: 0; }
+.attempt-dot { position: absolute; top: -4px; width: 7px; height: 7px; margin-left: -3px; border-radius: 50%; background: var(--blue); }
+.attempt-range-label { position: absolute; top: 7px; right: 0; color: var(--muted); font-size: 9px; }
+.comparison-counts { display: grid; grid-template-columns: minmax(260px, 1.5fr) repeat(var(--count-columns), minmax(80px, 0.55fr)); border: 1px solid var(--line); border-bottom: 0; }
+.comparison-counts > div { min-height: 46px; padding: 11px 12px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.comparison-counts-head { color: var(--muted); font-size: 10px; text-transform: uppercase; background: var(--panel-deep); }
+.comparison-counts-agent { font-weight: 700; }
+.comparison-notes { margin: 12px 0 0; padding-left: 18px; color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; line-height: 1.5; }
+.comparison-notes li + li { margin-top: 5px; }
+.comparison-method { border-top: 1px solid var(--line); padding-top: 14px; }
+.comparison-method summary { width: max-content; cursor: pointer; color: var(--blue); }
+.comparison-method-body { max-width: 860px; padding-top: 4px; }
+.comparison-provenance { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 14px; margin-top: 18px; color: var(--muted); }
+.comparison-provenance code { overflow-wrap: anywhere; }
+.comparison-provenance ul { margin: 0; padding-left: 18px; overflow-wrap: anywhere; }
+.job-compare { margin-top: 10px; }
+.job-compare-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 10px; }
+.job-compare-actions .button:disabled { opacity: 0.45; cursor: not-allowed; }
+.job-select-row { display: grid; grid-template-columns: 38px minmax(0, 1fr); border-bottom: 1px solid var(--line); }
+.job-select-row:last-child { border-bottom: 0; }
+.job-select-control { display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--line); background: var(--panel-deep); cursor: pointer; }
+.job-select-control input { width: 15px; height: 15px; padding: 0; accent-color: var(--green); }
+.job-select-row .eval-row { border-bottom: 0; }
+.comparison-empty { color: var(--muted); }
 .section { margin-top: 26px; }
 .section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 16px; }
 .eval-list { border: 1px solid var(--line); }
@@ -379,14 +357,13 @@ pre { overflow: auto; background: var(--panel-deep); border: 1px solid var(--lin
   .task-disclosures { grid-template-columns: 1fr; }
   .task-disclosure + .task-disclosure { border-left: 0; padding-left: 0; }
   .task-actions { width: 100%; margin-top: 0; }
-  .comparison-picker { align-items: stretch; flex-direction: column; gap: 6px; }
-  .comparison-picker select { width: 100%; min-width: 0; }
-  .benchmark-head { align-items: flex-start; flex-direction: column; gap: 12px; }
-  .benchmark-legend { justify-content: flex-start; }
-  .benchmark-row { grid-template-columns: minmax(0, 1fr) auto; gap: 9px 12px; padding: 13px 0; }
-  .benchmark-track { grid-column: 1 / -1; grid-row: 2; height: 16px; }
-  .benchmark-result { grid-column: 2; grid-row: 1; }
-  .benchmark-detail { display: none; }
+  .topnav a { padding-inline: 8px; }
+  .comparison-card { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .comparison-card > :first-child { grid-column: 1 / -1; }
+  .comparison-page-head { grid-template-columns: 1fr; gap: 20px; }
+  .metric-definition { padding-left: 12px; }
+  .comparison-counts { overflow-x: auto; grid-template-columns: minmax(190px, 1fr) repeat(var(--count-columns), minmax(76px, 0.55fr)); }
+  .job-compare-actions { align-items: flex-start; flex-direction: column; }
   .form-grid { grid-template-columns: 1fr; }
   .field.wide { grid-column: auto; }
   .detail { border-right: 0; }
@@ -434,8 +411,8 @@ def _timestamp_sort_key(value: str) -> float:
     return float("-inf") if parsed is None else parsed.timestamp()
 
 
-def _compute_bazaar_mark() -> str:
-    return """<a class="compute-brand" href="/" data-compute-embroidery role="img" aria-label="The Compute Bazaar">
+def _compute_bazaar_mark(base_path: str) -> str:
+    return f"""<a class="compute-brand" href="{_viewer_path(base_path, "/")}" data-compute-embroidery role="img" aria-label="The Compute Bazaar">
 <span class="compute-brand-fallback" aria-hidden="true"><span class="compute-brand-word the">THE</span><span class="compute-brand-word compute">COMPUTE</span><span class="compute-brand-word bazaar">BAZAAR</span></span></a>"""
 
 
@@ -450,7 +427,7 @@ def _layout(title: str, body: str, base_path: str) -> str:
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)}</title><style>{STYLE}</style><link rel="stylesheet" href="/terminal-assets/command.css?v=20260808-2"><link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2"></head>
-<body data-terminal-workspace="eval"><header class="topbar">{_compute_bazaar_mark()}</header><main class="shell">{body}</main>
+<body data-terminal-workspace="eval"><header class="topbar">{_compute_bazaar_mark(base_path)}<nav class="topnav" aria-label="Evaluation viewer"><a href="{_viewer_path(base_path, "/")}">Tasks</a><a href="{_viewer_path(base_path, "/comparisons")}">Tourneys</a></nav></header><main class="shell">{body}</main>
 <script type="module" src="/terminal-assets/perspective/command.js?v=20260808-2"></script>
 <script type="module">import {{ setupComputeTitleEmbroidery }} from "{embroidery}"; setupComputeTitleEmbroidery();</script></body></html>"""
 
@@ -639,11 +616,13 @@ def _runs_html(
     task: TaskInfo,
     runs: Sequence[dict[str, Any]],
     base_path: str = "",
-    comparison_groups: Sequence[ComparisonGroup] = (),
-    selected_comparison: str | None = None,
+    comparisons: Sequence[ComparisonReference] = (),
 ) -> str:
-    rows = "".join(
-        f"""<a class="eval-row job-row" href="{_viewer_path(base_path, f"/evals/{escape(task.slug)}/jobs/{escape(run['run_id'])}")}">
+    job_rows = []
+    selectable_runs = [run for run in runs if run.get("comparable")]
+    selectable = len(selectable_runs) >= 2
+    for run in runs:
+        card = f"""<a class="eval-row job-row" href="{_viewer_path(base_path, f"/evals/{escape(task.slug)}/jobs/{escape(run['run_id'])}")}">
 <div><span class="eval-cell-label">Job</span><div class="eval-name">{escape(run["run_id"])}</div></div>
 <div title="{escape(run["score"].hint if run["score"] else "")}"><span class="eval-cell-label">{escape(run["score"].label if run["score"] else "Score")}</span>{escape(run["score"].value if run["score"] else "—")}</div>
 <div><span class="eval-cell-label">Started UTC</span>{escape(run["started"])}</div>
@@ -651,112 +630,274 @@ def _runs_html(
 <div><span class="eval-cell-label">Trials</span>{run["trials"]}</div>
 <div><span class="eval-cell-label">{"How scored" if run.get("origin") else "Note"}</span><span class="note-preview" title="{escape(run.get("origin") or run["note"] or "No note yet")}">{escape(run.get("origin") or run["note"] or "No note yet")}</span></div>
 </a>"""
-        for run in runs
-    )
-    empty = (
-        '<div class="empty">No jobs yet.</div>'
-        if not rows
-        else f'<div class="eval-list">{rows}</div>'
-    )
-    comparison, _active_group = _comparison_html(
-        task.slug,
-        comparison_groups,
-        selected_comparison,
+        if selectable and run.get("comparable"):
+            card = (
+                '<div class="job-select-row"><label class="job-select-control" '
+                f'title="Select {escape(run["run_id"])} for comparison"><input '
+                f'type="checkbox" name="job" value="{escape(run["run_id"])}" '
+                f'aria-label="Select {escape(run["run_id"])}"></label>{card}</div>'
+            )
+        job_rows.append(card)
+    rendered_job_rows = "".join(job_rows)
+    if not rendered_job_rows:
+        jobs = '<div class="empty">No jobs yet.</div>'
+    elif not selectable:
+        jobs = f'<div class="eval-list">{rendered_job_rows}</div>'
+    else:
+        jobs = (
+            '<form class="job-compare" action="'
+            f'{_viewer_path(base_path, "/comparisons/jobs")}" method="get">'
+            f'<input type="hidden" name="task" value="{escape(task.slug)}">'
+            '<div class="job-compare-actions"><span class="muted">Select two or more jobs for a direct Harbor comparison.</span>'
+            '<button class="button" id="compare-jobs" type="submit" disabled>Compare selected</button></div>'
+            f'<div class="eval-list">{rendered_job_rows}</div></form>'
+            '<script>const compareForm=document.querySelector(".job-compare");if(compareForm){const boxes=[...compareForm.querySelectorAll("input[name=job]")];const button=document.getElementById("compare-jobs");const update=()=>button.disabled=boxes.filter(box=>box.checked).length<2;boxes.forEach(box=>box.addEventListener("change",update));}</script>'
+        )
+    comparison_section = _task_comparisons_html(
+        comparisons,
         base_path,
     )
-    body = f"""{_task_hero_html(task, base_path)}{comparison}
-<section class="section"><div class="section-head"><h2>Jobs</h2></div>{empty}</section>"""
+    body = f"""{_task_hero_html(task, base_path)}{comparison_section}
+<section class="section"><div class="section-head"><h2>Jobs</h2></div>{jobs}</section>"""
     return _layout(task.name, body, base_path)
 
 
-def _comparison_html(
-    task_slug: str,
-    groups: Sequence[ComparisonGroup],
-    selected: str | None,
+def _task_comparisons_html(
+    comparisons: Sequence[ComparisonReference], base_path: str
+) -> str:
+    if not comparisons:
+        return ""
+    cards = "".join(
+        '<a class="comparison-card" href="'
+        f'{_viewer_path(base_path, f"/comparisons/{quote(item.id, safe='')}")}">'
+        f'<div><strong>{escape(item.label)}</strong><span class="comparison-card-copy">{escape(item.description)}</span></div>'
+        f'<div><span class="eval-cell-label">Primary</span>{escape(item.primary_metric)}</div>'
+        f'<div><span class="eval-cell-label">Agents</span>{item.agent_count}</div>'
+        f'<div><span class="eval-cell-label">Tasks</span>{len(item.task_slugs)}</div></a>'
+        for item in comparisons
+    )
+    return f'<section class="section"><div class="section-head"><h2>Tourneys</h2></div><div class="comparison-cards">{cards}</div></section>'
+
+
+def _comparisons_index_html(
+    comparisons: Sequence[ComparisonReference], base_path: str
+) -> str:
+    body = (
+        '<header class="page-header"><div class="page-heading"><div class="eyebrow">Evaluations</div><h1>Tourneys</h1><p class="task-description">Agents compared across the same tasks or market seeds.</p></div></header>'
+        f"{_task_comparisons_html(comparisons, base_path)}"
+    )
+    return _layout("Tourneys", body, base_path)
+
+
+def _comparison_page_html(
+    comparison: ComparisonPresentation,
     base_path: str,
-) -> tuple[str, str | None]:
-    if not groups:
-        return "", None
-    active = next((group for group in groups if group.id == selected), groups[0])
-    options = "".join(
-        '<option '
-        f'value="{escape(_viewer_path(base_path, f"/evals/{task_slug}?comparison={quote(group.id, safe='')}"))}"'
-        f"{' selected' if group.id == active.id else ''}>"
-        f"{escape(group.label)}</option>"
-        for group in groups
-    )
-    picker = ""
-    picker = (
-        '<div class="comparison-picker">'
-        '<label for="comparison-select">Comparison</label>'
-        '<select id="comparison-select" '
-        "onchange=\"window.location.assign(this.value)\">"
-        f"{options}</select></div>"
-    )
-    return f"{picker}{_benchmark_chart_html(active.chart)}", active.id
+) -> str:
+    task_columns = comparison.tasks
+    show_overall = len(task_columns) > 1
+    cells = {(cell.agent_id, cell.task_slug): cell for cell in comparison.cells}
+    columns = ([None] if show_overall else []) + [task.slug for task in task_columns]
+    labels = {task.slug: task.label for task in task_columns}
+    if show_overall:
+        labels[None] = "Overall"
 
-
-def _benchmark_chart_html(chart: BenchmarkChart) -> str:
-    legend = "".join(
-        '<span class="benchmark-legend-item">'
-        f'<span class="benchmark-swatch {item.tone}" aria-hidden="true"></span>'
-        f"{escape(item.label)}</span>"
-        for item in chart.legend
+    headers = '<th scope="col">Agent configuration</th>' + "".join(
+        f'<th scope="col">{escape(labels[task_slug])}</th>' for task_slug in columns
     )
-    rendered_rows = []
-    for row in chart.rows:
-        rendered_segments = []
-        used = 0.0
-        segment_labels = []
-        for segment in row.segments:
-            width = min(segment.value, max(0.0, 1.0 - used))
-            used += width
-            segment_labels.append(f"{segment.label} {100 * width:.1f}%")
-            rendered_segments.append(
-                f'<span class="benchmark-segment {segment.tone}" '
-                f'style="width:{100 * width:.6f}%" title="{escape(segment.label)}">'
-                "</span>"
+    matrix_rows = []
+    for agent in comparison.agents:
+        rendered_cells = []
+        for task_slug in columns:
+            cell = cells.get((agent.id, task_slug))
+            rendered_cells.append(
+                f"<td>{_comparison_cell_html(cell, comparison, task_slug, base_path)}</td>"
             )
-        empty_class = " is-empty" if not rendered_segments else ""
-        track_note = (
-            '<span class="benchmark-track-note">No semantic review</span>'
-            if not rendered_segments
-            else ""
+        matrix_rows.append(
+            '<tr><th scope="row"><div class="comparison-agent">'
+            f"<strong>{escape(agent.label)}</strong>"
+            f"<span>{escape(agent.execution_origin)}</span></div></th>"
+            f"{''.join(rendered_cells)}</tr>"
         )
-        aria_parts = [row.label, row.value, row.detail, *segment_labels]
-        aria_label = ". ".join(part for part in aria_parts if part)
-        rendered_rows.append(
-            '<div class="benchmark-row">'
-            f'<div class="benchmark-label">{escape(row.label)}</div>'
-            f'<div class="benchmark-track{empty_class}" role="img" '
-            f'aria-label="{escape(aria_label)}">'
-            f"{''.join(rendered_segments)}{track_note}</div>"
-            '<div class="benchmark-result">'
-            f'<strong class="benchmark-value">{escape(row.value)}</strong>'
-            f'<span class="benchmark-detail">{escape(row.detail)}</span>'
-            "</div></div>"
-        )
-    description = (
-        f'<p class="benchmark-description">{escape(chart.description)}</p>'
-        if chart.description
+
+    definition = comparison.primary_metric
+    secondary_definition = (
+        '<div class="metric-definition"><span>Supporting metric</span>'
+        f"<strong>{escape(comparison.secondary_metric.label)}</strong>"
+        f"<p>{escape(comparison.secondary_metric.description)}</p></div>"
+        if comparison.secondary_metric
         else ""
     )
-    footnote = (
-        f'<p class="benchmark-footnote">{escape(chart.footnote)}</p>'
-        if chart.footnote
-        else ""
+    body = f"""<header class="comparison-page-head"><div><div class="eyebrow"><a class="info" href="{_viewer_path(base_path, "/comparisons")}">Tourneys</a></div><h1>{escape(comparison.label)}</h1><p class="comparison-description">{escape(comparison.description)}</p></div><div><div class="metric-definition"><span>Primary metric</span><strong>{escape(definition.label)}</strong><p>{escape(definition.description)}</p></div>{secondary_definition}</div></header>
+<section class="section"><div class="section-head"><h2>Results</h2></div><div class="comparison-matrix-wrap"><table class="comparison-matrix"><thead><tr>{headers}</tr></thead><tbody>{"".join(matrix_rows)}</tbody></table></div></section>
+{_comparison_counts_html(comparison)}
+{_comparison_telemetry_html(comparison)}
+{_comparison_attempts_html(comparison, base_path)}
+{_comparison_notes_html(comparison)}"""
+    return _layout(comparison.label, body, base_path)
+
+
+def _comparison_cell_html(
+    cell: ComparisonCell | None,
+    comparison: ComparisonPresentation,
+    task_slug: str | None,
+    base_path: str,
+) -> str:
+    if cell is None:
+        return '<div class="comparison-cell comparison-empty">No result</div>'
+    secondary = "".join(
+        "<span>"
+        f"{escape(measure.label)} <strong>{escape(measure.value)}</strong>"
+        f"{f' · {escape(measure.detail)}' if measure.detail else ''}</span>"
+        for measure in cell.secondary
     )
-    eyebrow = (
-        f'<div class="eyebrow">{escape(chart.eyebrow)}</div>' if chart.eyebrow else ""
+    distribution = _attempt_range_html(cell.attempt_values)
+    resolved_task = task_slug or comparison.tasks[0].slug
+    href = _viewer_path(
+        base_path,
+        f"/evals/{quote(resolved_task, safe='')}/jobs/{quote(cell.job_id, safe='')}",
     )
     return (
-        '<section class="benchmark" aria-labelledby="benchmark-title">'
-        '<div class="benchmark-head"><div class="benchmark-copy">'
-        f'{eyebrow}<h2 id="benchmark-title">{escape(chart.title)}</h2>'
-        f"{description}</div>"
-        f'<div class="benchmark-legend">{legend}</div></div>'
-        f'<div class="benchmark-list">{"".join(rendered_rows)}</div>{footnote}</section>'
+        f'<a class="comparison-cell" href="{href}">'
+        f'<strong class="comparison-primary {cell.primary.tone}">{escape(cell.primary.value)}</strong>'
+        f'<span class="comparison-primary-label">{escape(cell.primary.label)}</span>'
+        f'<div class="comparison-secondary">{secondary}</div>{distribution}</a>'
     )
+
+
+def _attempt_range_html(values: Sequence[float]) -> str:
+    clean = [float(value) for value in values if 0 <= float(value) <= 1]
+    if len(clean) < 2 or len(clean) != len(values):
+        return ""
+    dots = "".join(
+        f'<span class="attempt-dot" style="left:{100 * value:.4f}%" aria-hidden="true"></span>'
+        for value in clean
+    )
+    return (
+        '<div class="attempt-range" role="img" '
+        f'aria-label="Attempt values from {100 * min(clean):.1f}% to {100 * max(clean):.1f}%">'
+        f'{dots}<span class="attempt-range-label">{100 * min(clean):.1f}–{100 * max(clean):.1f}%</span></div>'
+    )
+
+
+def _comparison_counts_html(comparison: ComparisonPresentation) -> str:
+    if not comparison.count_columns:
+        return ""
+    aggregate = {
+        cell.agent_id: cell for cell in comparison.cells if cell.task_slug is None
+    }
+    if not aggregate and len(comparison.tasks) == 1:
+        aggregate = {
+            cell.agent_id: cell
+            for cell in comparison.cells
+            if cell.task_slug == comparison.tasks[0].slug
+        }
+    columns = len(comparison.count_columns)
+    header = '<div class="comparison-counts-head">Agent configuration</div>' + "".join(
+        f'<div class="comparison-counts-head" title="{escape(column.description)}">{escape(column.label)}</div>'
+        for column in comparison.count_columns
+    )
+    rows = []
+    for agent in comparison.agents:
+        cell = aggregate.get(agent.id)
+        values = "".join(
+            f"<div>{cell.counts.get(column.key, 0) if cell else '—'}</div>"
+            for column in comparison.count_columns
+        )
+        rows.append(
+            f'<div class="comparison-counts-agent">{escape(agent.label)}</div>{values}'
+        )
+    return f'<section class="section"><div class="section-head"><div><h2>Attempts counted</h2><span class="muted">Planned, scored, and unscored attempts.</span></div></div><div class="comparison-counts" style="--count-columns:{columns}">{header}{"".join(rows)}</div></section>'
+
+
+def _comparison_telemetry_html(comparison: ComparisonPresentation) -> str:
+    if not comparison.telemetry_columns or not comparison.telemetry:
+        return ""
+    agents = {agent.id: agent for agent in comparison.agents}
+    headers = '<th scope="col">Agent configuration</th>' + "".join(
+        f'<th scope="col" class="num">{escape(column.label)}</th>'
+        for column in comparison.telemetry_columns
+    )
+    rows = "".join(
+        "<tr>"
+        f"<td>{escape(agents[row.agent_id].label)}</td>"
+        + "".join(
+            f'<td class="num">{escape(row.values.get(column.key, "—"))}</td>'
+            for column in comparison.telemetry_columns
+        )
+        + "</tr>"
+        for row in comparison.telemetry
+        if row.agent_id in agents
+    )
+    return f'<section class="section"><div class="section-head"><div><h2>Time and tokens</h2><span class="muted">Medians for context.</span></div></div><div class="table-wrap"><table><thead><tr>{headers}</tr></thead><tbody>{rows}</tbody></table></div></section>'
+
+
+def _comparison_attempts_html(
+    comparison: ComparisonPresentation, base_path: str
+) -> str:
+    if not comparison.attempts:
+        return ""
+    agents = {agent.id: agent for agent in comparison.agents}
+    tasks = {task.slug: task.label for task in comparison.tasks}
+    rows = []
+    for attempt in comparison.attempts:
+        href = _viewer_path(
+            base_path,
+            f"/evals/{quote(attempt.task_slug, safe='')}/jobs/{quote(attempt.job_id, safe='')}/trials/{quote(attempt.trial_id, safe='')}",
+        )
+        search = " ".join(
+            (
+                agents.get(attempt.agent_id).label
+                if attempt.agent_id in agents
+                else "",
+                tasks.get(attempt.task_slug, attempt.task_slug),
+                attempt.trial_id,
+                attempt.status,
+            )
+        ).lower()
+        rows.append(
+            f'<tr data-search="{escape(search)}"><td><a class="info" href="{href}">{escape(attempt.trial_id)}</a></td>'
+            f"<td>{escape(agents.get(attempt.agent_id).label if attempt.agent_id in agents else attempt.agent_id)}</td>"
+            f"<td>{escape(tasks.get(attempt.task_slug, attempt.task_slug))}</td>"
+            f'<td><span class="tag {attempt.tone}">{escape(attempt.status)}</span></td>'
+            f'<td class="num">{escape(attempt.primary or "—")}</td>'
+            f'<td class="num">{escape(attempt.secondary or "—")}</td>'
+            f'<td class="num">{_duration_html(attempt.duration_seconds)}</td>'
+            f'<td class="num">{_integer_html(attempt.input_tokens)}</td>'
+            f'<td class="num">{_integer_html(attempt.output_tokens)}</td></tr>'
+        )
+    primary_label = escape(comparison.primary_metric.label)
+    secondary_label = escape(
+        comparison.secondary_metric.label
+        if comparison.secondary_metric
+        else "Supporting"
+    )
+    return f'<section class="section"><div class="section-head"><div><h2>Attempts</h2><span class="muted">Open a trial for its Harbor record.</span></div><input id="comparison-attempt-search" aria-label="Filter attempts" placeholder="Filter attempts"></div><div class="table-wrap"><table><thead><tr><th>Trial</th><th>Agent</th><th>Task</th><th>Status</th><th class="num">{primary_label}</th><th class="num">{secondary_label}</th><th class="num">Agent time</th><th class="num">Input</th><th class="num">Output</th></tr></thead><tbody id="comparison-attempts">{"".join(rows)}</tbody></table></div></section><script>document.getElementById("comparison-attempt-search").addEventListener("input",event=>{{const value=event.target.value.toLowerCase();document.querySelectorAll("#comparison-attempts tr").forEach(row=>row.hidden=!row.dataset.search.includes(value));}});</script>'
+
+
+def _comparison_notes_html(comparison: ComparisonPresentation) -> str:
+    notes = "".join(f"<li>{escape(note)}</li>" for note in comparison.notes)
+    sources = "".join(
+        f"<li>{escape(source)}</li>" for source in comparison.provenance.sources
+    )
+    return (
+        '<section class="section"><details class="comparison-method">'
+        '<summary>Method</summary><div class="comparison-method-body">'
+        f'<ul class="comparison-notes">{notes}</ul>'
+        f'<div class="comparison-provenance"><strong>Generated by</strong><code>{escape(comparison.provenance.generator)}</code>'
+        f"<strong>Sources</strong><ul>{sources}</ul></div></div></details></section>"
+    )
+
+
+def _duration_html(value: float | None) -> str:
+    if value is None:
+        return "—"
+    if value >= 60:
+        return f"{int(value // 60)}m {value % 60:.0f}s"
+    return f"{value:.1f}s"
+
+
+def _integer_html(value: int | None) -> str:
+    return f"{value:,}" if value is not None else "—"
 
 
 def _metric_html(metric: Metric) -> str:
@@ -967,21 +1108,15 @@ def create_app(
     root = bench_root or BENCH_ROOT
     task_definitions = discover_task_definitions(root)
     job_sources = discover_job_sources(root, results_source)
-    public_release = load_public_release_summary(root, results_source)
-    comparison_groups = discover_comparison_groups(root, public_release, job_sources)
+    comparisons = discover_comparisons(root)
     app = FastAPI(title="Compute Bazaar Evals", docs_url=None, redoc_url=None)
     app.mount("/assets", StaticFiles(directory=ASSET_ROOT), name="assets")
 
     def refresh_catalog() -> None:
-        nonlocal task_definitions, job_sources, public_release, comparison_groups
+        nonlocal task_definitions, job_sources, comparisons
         task_definitions = discover_task_definitions(root)
         job_sources = discover_job_sources(root, results_source)
-        public_release = load_public_release_summary(root, results_source)
-        comparison_groups = discover_comparison_groups(
-            root,
-            public_release,
-            job_sources,
-        )
+        comparisons = discover_comparisons(root)
 
     def job_source(eval_slug: str, run_id: str) -> JobSource:
         source = job_sources.get(eval_slug, {}).get(run_id)
@@ -1045,9 +1180,11 @@ def create_app(
                     "note": note["text"],
                     "note_updated_at": note["updated_at"],
                     "origin": origin,
+                    "comparable": True,
                 }
             else:
                 summary = _run_summary(presentation(eval_slug, run_id), note)
+                summary["comparable"] = source.raw_dir is not None
             summaries.append((summary, source.modified_at))
         summaries.sort(
             key=lambda item: (
@@ -1121,15 +1258,47 @@ def create_app(
         refresh_catalog()
         return _evals_html(evaluation_summaries(), base_path)
 
+    @app.get("/comparisons", response_class=HTMLResponse)
+    def comparisons_index() -> str:
+        refresh_catalog()
+        return _comparisons_index_html(comparison_references(comparisons), base_path)
+
+    @app.get("/comparisons/jobs", response_class=HTMLResponse)
+    def compare_jobs(
+        task: str,
+        job: list[str] = Query(default=[]),
+    ) -> str:
+        refresh_catalog()
+        if len(job) < 2:
+            raise HTTPException(status_code=422, detail="select at least two jobs")
+        selected = []
+        for job_id in dict.fromkeys(job):
+            source = job_sources.get(task, {}).get(job_id)
+            if source is None:
+                raise HTTPException(status_code=404, detail=f"job not found: {job_id}")
+            selected.append(source)
+        try:
+            comparison = build_job_comparison(task_info(task), selected)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _comparison_page_html(comparison, base_path)
+
+    @app.get("/comparisons/{comparison_id}", response_class=HTMLResponse)
+    def comparison_detail(comparison_id: str) -> str:
+        refresh_catalog()
+        comparison = comparisons.get(comparison_id)
+        if comparison is None:
+            raise HTTPException(status_code=404, detail="comparison not found")
+        return _comparison_page_html(comparison, base_path)
+
     @app.get("/evals/{eval_slug}", response_class=HTMLResponse)
-    def evaluation(eval_slug: str, comparison: str | None = None) -> str:
+    def evaluation(eval_slug: str) -> str:
         refresh_catalog()
         return _runs_html(
             task_info(eval_slug),
             run_summaries(eval_slug),
             base_path,
-            comparison_groups.get(eval_slug, ()),
-            comparison,
+            task_comparison_references(comparisons, eval_slug),
         )
 
     @app.get("/evals/{eval_slug}/jobs/{run_id}", response_class=HTMLResponse)
@@ -1157,6 +1326,19 @@ def create_app(
     def evals_api() -> list[dict[str, Any]]:
         refresh_catalog()
         return evaluation_summaries()
+
+    @app.get("/api/comparisons")
+    def comparisons_api() -> list[dict[str, Any]]:
+        refresh_catalog()
+        return [item.model_dump() for item in comparison_references(comparisons)]
+
+    @app.get("/api/comparisons/{comparison_id}")
+    def comparison_api(comparison_id: str) -> dict[str, Any]:
+        refresh_catalog()
+        comparison = comparisons.get(comparison_id)
+        if comparison is None:
+            raise HTTPException(status_code=404, detail="comparison not found")
+        return comparison.model_dump()
 
     @app.get("/api/evals/{eval_slug}/jobs")
     def runs_api(eval_slug: str) -> list[dict[str, Any]]:

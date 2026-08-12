@@ -82,6 +82,11 @@ cd compute-bazaar-bench
 harbor view jobs
 ```
 
+### Tourneys
+
+Harbor tasks are reusable on their own. A tourney separately chooses the
+agents, tasks, and attempts to compare, then reports each task's own result.
+
 ## Evaluations
 
 ### [transactions](evals/transactions/)

@@ -1,0 +1,1180 @@
+{
+  "schema_version": "compute-bazaar.viewer.comparison.v1",
+  "id": "transactions",
+  "label": "Transactions",
+  "description": "Five attempts per task across intake, diligence, and contracting.",
+  "primary_metric": {
+    "key": "strict_all_pass",
+    "label": "Strict all-pass",
+    "description": "Output integrity and every semantic criterion must pass.",
+    "higher_is_better": true
+  },
+  "secondary_metric": {
+    "key": "criterion_coverage",
+    "label": "Criterion coverage",
+    "description": "Share of semantic criteria passed.",
+    "higher_is_better": true
+  },
+  "tasks": [
+    {
+      "slug": "normalize-buyer-mandate",
+      "label": "Normalize Buyer Mandate"
+    },
+    {
+      "slug": "draft-capacity-data-room-population-plan",
+      "label": "Draft Capacity Data-Room Population Plan"
+    },
+    {
+      "slug": "compare-capacity-agreement-against-term-sheet",
+      "label": "Compare Capacity Agreement Against Term Sheet"
+    }
+  ],
+  "agents": [
+    {
+      "id": "deepseek-v4-flash-0731",
+      "label": "OpenCode 1.18.11 + DeepSeek V4 Flash 0731",
+      "model": "DeepSeek V4 Flash 0731",
+      "harness": "OpenCode 1.18.11",
+      "execution_origin": ""
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "label": "OpenCode 1.18.11 + GPT-5.6 Luna",
+      "model": "GPT-5.6 Luna",
+      "harness": "OpenCode 1.18.11",
+      "execution_origin": ""
+    },
+    {
+      "id": "glm-5.2",
+      "label": "OpenCode 1.18.11 + GLM 5.2",
+      "model": "GLM 5.2",
+      "harness": "OpenCode 1.18.11",
+      "execution_origin": ""
+    }
+  ],
+  "cells": [
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": null,
+      "primary": {
+        "label": "strict passes",
+        "value": "1/15",
+        "raw": 0.06666666666666667,
+        "detail": "",
+        "tone": "good"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "84.3%",
+          "raw": 0.8432748538011696,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 15,
+        "scored": 15,
+        "strict": 1,
+        "invalid": 0,
+        "excluded": 0
+      },
+      "attempt_values": [
+        0.8035714285714286,
+        0.8035714285714286,
+        0.7857142857142857,
+        0.7857142857142857,
+        0.7678571428571429,
+        0.9433962264150944,
+        0.9245283018867925,
+        0.8867924528301887,
+        0.9622641509433962,
+        1.0,
+        0.8064516129032258,
+        0.7903225806451613,
+        0.9193548387096774,
+        0.7419354838709677,
+        0.7741935483870968
+      ],
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001"
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "normalize-buyer-mandate",
+      "primary": {
+        "label": "strict passes",
+        "value": "0/5",
+        "raw": 0.0,
+        "detail": "",
+        "tone": "neutral"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "78.9%",
+          "raw": 0.7892857142857143,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 5,
+        "scored": 5,
+        "strict": 0,
+        "invalid": 0,
+        "excluded": 0
+      },
+      "attempt_values": [
+        0.8035714285714286,
+        0.8035714285714286,
+        0.7857142857142857,
+        0.7857142857142857,
+        0.7678571428571429
+      ],
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001"
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "primary": {
+        "label": "strict passes",
+        "value": "1/5",
+        "raw": 0.2,
+        "detail": "",
+        "tone": "good"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "94.3%",
+          "raw": 0.9433962264150944,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 5,
+        "scored": 5,
+        "strict": 1,
+        "invalid": 0,
+        "excluded": 0
+      },
+      "attempt_values": [
+        0.9433962264150944,
+        0.9245283018867925,
+        0.8867924528301887,
+        0.9622641509433962,
+        1.0
+      ],
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001"
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "primary": {
+        "label": "strict passes",
+        "value": "0/5",
+        "raw": 0.0,
+        "detail": "",
+        "tone": "neutral"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "80.6%",
+          "raw": 0.8064516129032258,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 5,
+        "scored": 5,
+        "strict": 0,
+        "invalid": 0,
+        "excluded": 0
+      },
+      "attempt_values": [
+        0.8064516129032258,
+        0.7903225806451613,
+        0.9193548387096774,
+        0.7419354838709677,
+        0.7741935483870968
+      ],
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001"
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": null,
+      "primary": {
+        "label": "strict passes",
+        "value": "1/14",
+        "raw": 0.07142857142857142,
+        "detail": "",
+        "tone": "good"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "90.0%",
+          "raw": 0.9002493765586035,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 15,
+        "scored": 14,
+        "strict": 1,
+        "invalid": 0,
+        "excluded": 1
+      },
+      "attempt_values": [
+        0.9107142857142857,
+        0.8928571428571429,
+        0.9821428571428571,
+        0.8392857142857143,
+        0.9107142857142857,
+        0.9433962264150944,
+        0.9811320754716981,
+        0.9433962264150944,
+        1.0,
+        0.6935483870967742,
+        0.8064516129032258,
+        0.9032258064516129,
+        0.8870967741935484,
+        0.9516129032258065
+      ],
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001"
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "normalize-buyer-mandate",
+      "primary": {
+        "label": "strict passes",
+        "value": "0/5",
+        "raw": 0.0,
+        "detail": "",
+        "tone": "neutral"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "90.7%",
+          "raw": 0.9071428571428571,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 5,
+        "scored": 5,
+        "strict": 0,
+        "invalid": 0,
+        "excluded": 0
+      },
+      "attempt_values": [
+        0.9107142857142857,
+        0.8928571428571429,
+        0.9821428571428571,
+        0.8392857142857143,
+        0.9107142857142857
+      ],
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001"
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "primary": {
+        "label": "strict passes",
+        "value": "1/4",
+        "raw": 0.25,
+        "detail": "",
+        "tone": "good"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "96.7%",
+          "raw": 0.9669811320754716,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 5,
+        "scored": 4,
+        "strict": 1,
+        "invalid": 0,
+        "excluded": 1
+      },
+      "attempt_values": [
+        0.9433962264150944,
+        0.9811320754716981,
+        0.9433962264150944,
+        1.0
+      ],
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001"
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "primary": {
+        "label": "strict passes",
+        "value": "0/5",
+        "raw": 0.0,
+        "detail": "",
+        "tone": "neutral"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "84.8%",
+          "raw": 0.8483870967741935,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 5,
+        "scored": 5,
+        "strict": 0,
+        "invalid": 0,
+        "excluded": 0
+      },
+      "attempt_values": [
+        0.6935483870967742,
+        0.8064516129032258,
+        0.9032258064516129,
+        0.8870967741935484,
+        0.9516129032258065
+      ],
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001"
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": null,
+      "primary": {
+        "label": "strict passes",
+        "value": "0/14",
+        "raw": 0.0,
+        "detail": "",
+        "tone": "neutral"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "92.4%",
+          "raw": 0.9243379571248423,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 15,
+        "scored": 14,
+        "strict": 0,
+        "invalid": 0,
+        "excluded": 1
+      },
+      "attempt_values": [
+        0.8571428571428571,
+        0.9107142857142857,
+        0.875,
+        0.8392857142857143,
+        0.875,
+        0.9433962264150944,
+        0.9622641509433962,
+        0.9811320754716981,
+        0.9811320754716981,
+        0.9622641509433962,
+        0.8870967741935484,
+        0.9516129032258065,
+        0.967741935483871,
+        0.9516129032258065
+      ],
+      "job_id": "transactions-comparison-v1-glm-5.2-001"
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "normalize-buyer-mandate",
+      "primary": {
+        "label": "strict passes",
+        "value": "0/5",
+        "raw": 0.0,
+        "detail": "",
+        "tone": "neutral"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "87.1%",
+          "raw": 0.8714285714285714,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 5,
+        "scored": 5,
+        "strict": 0,
+        "invalid": 0,
+        "excluded": 0
+      },
+      "attempt_values": [
+        0.8571428571428571,
+        0.9107142857142857,
+        0.875,
+        0.8392857142857143,
+        0.875
+      ],
+      "job_id": "transactions-comparison-v1-glm-5.2-001"
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "primary": {
+        "label": "strict passes",
+        "value": "0/5",
+        "raw": 0.0,
+        "detail": "",
+        "tone": "neutral"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "96.6%",
+          "raw": 0.9660377358490566,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 5,
+        "scored": 5,
+        "strict": 0,
+        "invalid": 0,
+        "excluded": 0
+      },
+      "attempt_values": [
+        0.9433962264150944,
+        0.9622641509433962,
+        0.9811320754716981,
+        0.9811320754716981,
+        0.9622641509433962
+      ],
+      "job_id": "transactions-comparison-v1-glm-5.2-001"
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "primary": {
+        "label": "strict passes",
+        "value": "0/4",
+        "raw": 0.0,
+        "detail": "",
+        "tone": "neutral"
+      },
+      "secondary": [
+        {
+          "label": "criterion coverage",
+          "value": "94.0%",
+          "raw": 0.9395161290322581,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 5,
+        "scored": 4,
+        "strict": 0,
+        "invalid": 0,
+        "excluded": 1
+      },
+      "attempt_values": [
+        0.8870967741935484,
+        0.9516129032258065,
+        0.967741935483871,
+        0.9516129032258065
+      ],
+      "job_id": "transactions-comparison-v1-glm-5.2-001"
+    }
+  ],
+  "count_columns": [
+    {
+      "key": "planned",
+      "label": "Planned",
+      "description": ""
+    },
+    {
+      "key": "scored",
+      "label": "Scored",
+      "description": ""
+    },
+    {
+      "key": "strict",
+      "label": "Strict pass",
+      "description": ""
+    },
+    {
+      "key": "invalid",
+      "label": "Invalid output",
+      "description": ""
+    },
+    {
+      "key": "excluded",
+      "label": "Excluded",
+      "description": ""
+    }
+  ],
+  "telemetry_columns": [
+    {
+      "key": "agent_time",
+      "label": "Median agent time"
+    },
+    {
+      "key": "input",
+      "label": "Median input"
+    },
+    {
+      "key": "cached",
+      "label": "Median cached"
+    },
+    {
+      "key": "output",
+      "label": "Median output"
+    }
+  ],
+  "telemetry": [
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "values": {
+        "agent_time": "5m 29s",
+        "input": "160,056",
+        "cached": "131,584",
+        "output": "8,652"
+      }
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "values": {
+        "agent_time": "1m 58s",
+        "input": "271,112",
+        "cached": "271,054",
+        "output": "7,210"
+      }
+    },
+    {
+      "agent_id": "glm-5.2",
+      "values": {
+        "agent_time": "4m 4s",
+        "input": "151,482",
+        "cached": "126,943",
+        "output": "11,641"
+      }
+    }
+  ],
+  "attempts": [
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "compare-capacity-agreement-again__8Mwxdg8",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "80.6%",
+      "duration_seconds": 397.417678,
+      "input_tokens": 131312,
+      "output_tokens": 6688
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "compare-capacity-agreement-again__AFudigJ",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "79.0%",
+      "duration_seconds": 438.275672,
+      "input_tokens": 174557,
+      "output_tokens": 11115
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "compare-capacity-agreement-again__NBDCqBe",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "91.9%",
+      "duration_seconds": 634.653665,
+      "input_tokens": 160056,
+      "output_tokens": 11123
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "compare-capacity-agreement-again__nLrh2ja",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "74.2%",
+      "duration_seconds": 747.222127,
+      "input_tokens": 280820,
+      "output_tokens": 10417
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "compare-capacity-agreement-again__qgKtnsE",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "77.4%",
+      "duration_seconds": 551.442041,
+      "input_tokens": 107449,
+      "output_tokens": 6674
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "draft-capacity-data-room-populat__Wwhw6vg",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "94.3%",
+      "duration_seconds": 583.122629,
+      "input_tokens": 498993,
+      "output_tokens": 11884
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "draft-capacity-data-room-populat__kPveMS5",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "92.5%",
+      "duration_seconds": 619.538808,
+      "input_tokens": 352640,
+      "output_tokens": 9937
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "draft-capacity-data-room-populat__p4rmB3T",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "88.7%",
+      "duration_seconds": 380.740932,
+      "input_tokens": 208289,
+      "output_tokens": 8652
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "draft-capacity-data-room-populat__xuwokdw",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "96.2%",
+      "duration_seconds": 625.134759,
+      "input_tokens": 277091,
+      "output_tokens": 13711
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "draft-capacity-data-room-populat__zeJ3Boa",
+      "status": "Strict pass",
+      "tone": "good",
+      "primary": "Pass",
+      "secondary": "100.0%",
+      "duration_seconds": 611.15412,
+      "input_tokens": 227581,
+      "output_tokens": 9274
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "normalize-buyer-mandate__HaxxNbs",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "80.4%",
+      "duration_seconds": 225.580658,
+      "input_tokens": 100605,
+      "output_tokens": 4365
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "normalize-buyer-mandate__Kv8YyfW",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "80.4%",
+      "duration_seconds": 304.640035,
+      "input_tokens": 146586,
+      "output_tokens": 5278
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "normalize-buyer-mandate__L2cG9Tt",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "78.6%",
+      "duration_seconds": 446.532475,
+      "input_tokens": 144896,
+      "output_tokens": 8402
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "normalize-buyer-mandate__fgKBvcG",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "78.6%",
+      "duration_seconds": 260.17608,
+      "input_tokens": 113522,
+      "output_tokens": 3627
+    },
+    {
+      "agent_id": "deepseek-v4-flash-0731",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "trial_id": "normalize-buyer-mandate__g8d2hxb",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "76.8%",
+      "duration_seconds": 225.766708,
+      "input_tokens": 95165,
+      "output_tokens": 4672
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "compare-capacity-agreement-again__8Yc377s",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "69.4%",
+      "duration_seconds": 549.140709,
+      "input_tokens": 493689,
+      "output_tokens": 41912
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "compare-capacity-agreement-again__DL4cWQu",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "80.6%",
+      "duration_seconds": 241.068839,
+      "input_tokens": 308618,
+      "output_tokens": 7254
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "compare-capacity-agreement-again__JRivMxf",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "90.3%",
+      "duration_seconds": 267.882463,
+      "input_tokens": 261484,
+      "output_tokens": 8865
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "compare-capacity-agreement-again__NdC2PQ2",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "88.7%",
+      "duration_seconds": 252.122968,
+      "input_tokens": 184998,
+      "output_tokens": 6362
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "compare-capacity-agreement-again__araUf2q",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "95.2%",
+      "duration_seconds": 232.486811,
+      "input_tokens": 285622,
+      "output_tokens": 7167
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "draft-capacity-data-room-populat__GRnjKok",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "94.3%",
+      "duration_seconds": 483.781734,
+      "input_tokens": 280727,
+      "output_tokens": 41739
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "draft-capacity-data-room-populat__GkcxtKV",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "98.1%",
+      "duration_seconds": 271.68392,
+      "input_tokens": 483666,
+      "output_tokens": 13033
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "draft-capacity-data-room-populat__R8LxKgJ",
+      "status": "Excluded",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "\u2014",
+      "duration_seconds": 3744.988789,
+      "input_tokens": 470524,
+      "output_tokens": 42649
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "draft-capacity-data-room-populat__Ws6XBgx",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "94.3%",
+      "duration_seconds": 494.851348,
+      "input_tokens": 557931,
+      "output_tokens": 19938
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "draft-capacity-data-room-populat__iSFUB5P",
+      "status": "Strict pass",
+      "tone": "good",
+      "primary": "Pass",
+      "secondary": "100.0%",
+      "duration_seconds": 263.585157,
+      "input_tokens": 380913,
+      "output_tokens": 11630
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "normalize-buyer-mandate__AxQsCUu",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "91.1%",
+      "duration_seconds": 282.77035,
+      "input_tokens": 261498,
+      "output_tokens": 6080
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "normalize-buyer-mandate__BUKyfvD",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "89.3%",
+      "duration_seconds": 206.4097,
+      "input_tokens": 190050,
+      "output_tokens": 5257
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "normalize-buyer-mandate__Pmca7dy",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "98.2%",
+      "duration_seconds": 225.082963,
+      "input_tokens": 173768,
+      "output_tokens": 6762
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "normalize-buyer-mandate__rwCxpyY",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "83.9%",
+      "duration_seconds": 205.886262,
+      "input_tokens": 151367,
+      "output_tokens": 6448
+    },
+    {
+      "agent_id": "gpt-5.6-luna",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-gpt-5.6-luna-001",
+      "trial_id": "normalize-buyer-mandate__sRu2xYN",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "91.1%",
+      "duration_seconds": 207.531151,
+      "input_tokens": 179897,
+      "output_tokens": 5009
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "compare-capacity-agreement-again__bA2YESL",
+      "status": "Excluded",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "\u2014",
+      "duration_seconds": 407.489016,
+      "input_tokens": 40586,
+      "output_tokens": 518
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "compare-capacity-agreement-again__jJmxG6y",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "88.7%",
+      "duration_seconds": 720.245731,
+      "input_tokens": 690088,
+      "output_tokens": 12733
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "compare-capacity-agreement-again__thJG7WD",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "95.2%",
+      "duration_seconds": 380.139672,
+      "input_tokens": 159683,
+      "output_tokens": 12195
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "compare-capacity-agreement-again__uVFG5CM",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "96.8%",
+      "duration_seconds": 362.873804,
+      "input_tokens": 126026,
+      "output_tokens": 9867
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "compare-capacity-agreement-against-term-sheet",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "compare-capacity-agreement-again__zqhJx8D",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "95.2%",
+      "duration_seconds": 470.244853,
+      "input_tokens": 288572,
+      "output_tokens": 13181
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "draft-capacity-data-room-populat__7HH8y3t",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "94.3%",
+      "duration_seconds": 252.631401,
+      "input_tokens": 213536,
+      "output_tokens": 12752
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "draft-capacity-data-room-populat__ezPyqHm",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "96.2%",
+      "duration_seconds": 1142.752124,
+      "input_tokens": 653190,
+      "output_tokens": 14741
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "draft-capacity-data-room-populat__hZedMKB",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "98.1%",
+      "duration_seconds": 329.078934,
+      "input_tokens": 174886,
+      "output_tokens": 11665
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "draft-capacity-data-room-populat__nHhBNdj",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "98.1%",
+      "duration_seconds": 390.922846,
+      "input_tokens": 272383,
+      "output_tokens": 16632
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "draft-capacity-data-room-population-plan",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "draft-capacity-data-room-populat__rzF8czU",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "96.2%",
+      "duration_seconds": 286.308295,
+      "input_tokens": 143282,
+      "output_tokens": 11618
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "normalize-buyer-mandate__LfozfNs",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "85.7%",
+      "duration_seconds": 702.80164,
+      "input_tokens": 89340,
+      "output_tokens": 6521
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "normalize-buyer-mandate__LhvrkMR",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "91.1%",
+      "duration_seconds": 264.230672,
+      "input_tokens": 119565,
+      "output_tokens": 6633
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "normalize-buyer-mandate__cgNoF6P",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "87.5%",
+      "duration_seconds": 246.707644,
+      "input_tokens": 120858,
+      "output_tokens": 8392
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "normalize-buyer-mandate__fjaqw2p",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "83.9%",
+      "duration_seconds": 464.563062,
+      "input_tokens": 79402,
+      "output_tokens": 5956
+    },
+    {
+      "agent_id": "glm-5.2",
+      "task_slug": "normalize-buyer-mandate",
+      "job_id": "transactions-comparison-v1-glm-5.2-001",
+      "trial_id": "normalize-buyer-mandate__g2FC9Ha",
+      "status": "Criteria missing",
+      "tone": "warn",
+      "primary": "Did not pass",
+      "secondary": "87.5%",
+      "duration_seconds": 240.665854,
+      "input_tokens": 106477,
+      "output_tokens": 7216
+    }
+  ],
+  "notes": [
+    "Scores come from saved Harbor outputs graded with the final checklist.",
+    "Strict all-pass is the release result; criterion coverage explains near misses.",
+    "Excluded attempts remain in the denominator and receive no semantic score.",
+    "Time and token values are medians for scored attempts."
+  ],
+  "provenance": {
+    "generator": "transactions.tooling.build-comparison.v1",
+    "sources": [
+      "evals/transactions/tooling/public-view.json",
+      "evals/transactions/tooling/transactions.summary.json",
+      "jobs/transactions-comparison-v1-deepseek-v4-flash-0731-001",
+      "jobs/transactions-comparison-v1-gpt-5.6-luna-001",
+      "jobs/transactions-comparison-v1-glm-5.2-001"
+    ]
+  }
+}

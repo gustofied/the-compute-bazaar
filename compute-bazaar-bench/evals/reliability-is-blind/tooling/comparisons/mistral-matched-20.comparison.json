@@ -1,12 +1,1080 @@
 {
-  "schema_version": "compute-bazaar-bench.comparison-group.v1",
+  "schema_version": "compute-bazaar.viewer.comparison.v1",
   "id": "mistral-matched-20",
   "label": "Mistral matched 20",
+  "description": "Twenty matched market seeds per agent across 100-deal books.",
+  "primary_metric": {
+    "key": "reliability_target",
+    "label": "Reliability target met",
+    "description": "Completed books with no more than 5% failed deliveries.",
+    "higher_is_better": true
+  },
+  "secondary_metric": {
+    "key": "failure_rate",
+    "label": "Failure rate",
+    "description": "Mean failed-delivery rate across completed books.",
+    "higher_is_better": false
+  },
   "tasks": [
-    "reliability-is-blind"
+    {
+      "slug": "reliability-is-blind",
+      "label": "Reliability Is Blind"
+    }
   ],
-  "source": {
-    "kind": "reliability-is-blind-report",
-    "job": "reliability-is-blind-mistral-matched-20"
+  "agents": [
+    {
+      "id": "mistral-mistral-medium-3-5",
+      "label": "OpenCode 1.18.11 + Mistral Medium 3.5",
+      "model": "mistral/mistral-medium-3-5",
+      "harness": "OpenCode 1.18.11",
+      "execution_origin": ""
+    },
+    {
+      "id": "mistral-mistral-small-2603",
+      "label": "OpenCode 1.18.11 + Mistral Small 2603",
+      "model": "mistral/mistral-small-2603",
+      "harness": "OpenCode 1.18.11",
+      "execution_origin": ""
+    },
+    {
+      "id": "mistral-mistral-large-2512",
+      "label": "OpenCode 1.18.11 + Mistral Large 2512",
+      "model": "mistral/mistral-large-2512",
+      "harness": "OpenCode 1.18.11",
+      "execution_origin": ""
+    }
+  ],
+  "cells": [
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "primary": {
+        "label": "books meeting target",
+        "value": "10/20",
+        "raw": 0.5,
+        "detail": "",
+        "tone": "good"
+      },
+      "secondary": [
+        {
+          "label": "completed",
+          "value": "17/20",
+          "raw": 0.85,
+          "detail": "",
+          "tone": "neutral"
+        },
+        {
+          "label": "failure rate",
+          "value": "5.7%",
+          "raw": 0.057058823529411766,
+          "detail": "",
+          "tone": "neutral"
+        },
+        {
+          "label": "mean reward",
+          "value": "-0.156",
+          "raw": -0.1563157894736842,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 20,
+        "observed": 20,
+        "completed": 17,
+        "target": 10,
+        "activated": 15,
+        "not_completed": 3
+      },
+      "attempt_values": [
+        0.0,
+        0.0,
+        0.0,
+        0.01,
+        0.0,
+        0.07,
+        0.01,
+        0.0,
+        0.01,
+        0.11,
+        0.11,
+        0.08,
+        0.06,
+        0.1,
+        0.05,
+        0.05,
+        0.31
+      ],
+      "job_id": "reliability-is-blind-mistral-matched-20"
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "primary": {
+        "label": "books meeting target",
+        "value": "2/20",
+        "raw": 0.1,
+        "detail": "",
+        "tone": "good"
+      },
+      "secondary": [
+        {
+          "label": "completed",
+          "value": "11/20",
+          "raw": 0.55,
+          "detail": "",
+          "tone": "neutral"
+        },
+        {
+          "label": "failure rate",
+          "value": "19.5%",
+          "raw": 0.19454545454545455,
+          "detail": "",
+          "tone": "neutral"
+        },
+        {
+          "label": "mean reward",
+          "value": "-0.534",
+          "raw": -0.5336842105263158,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 20,
+        "observed": 20,
+        "completed": 11,
+        "target": 2,
+        "activated": 17,
+        "not_completed": 9
+      },
+      "attempt_values": [
+        0.2,
+        0.3,
+        0.21,
+        0.03,
+        0.04,
+        0.25,
+        0.26,
+        0.28,
+        0.16,
+        0.11,
+        0.3
+      ],
+      "job_id": "reliability-is-blind-mistral-matched-20"
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "primary": {
+        "label": "books meeting target",
+        "value": "4/19",
+        "raw": 0.21052631578947367,
+        "detail": "",
+        "tone": "good"
+      },
+      "secondary": [
+        {
+          "label": "completed",
+          "value": "6/19",
+          "raw": 0.3157894736842105,
+          "detail": "",
+          "tone": "neutral"
+        },
+        {
+          "label": "failure rate",
+          "value": "5.5%",
+          "raw": 0.055,
+          "detail": "",
+          "tone": "neutral"
+        },
+        {
+          "label": "mean reward",
+          "value": "-0.686",
+          "raw": -0.6858725761772854,
+          "detail": "",
+          "tone": "neutral"
+        }
+      ],
+      "counts": {
+        "planned": 20,
+        "observed": 19,
+        "completed": 6,
+        "target": 4,
+        "activated": 9,
+        "not_completed": 13
+      },
+      "attempt_values": [
+        0.02,
+        0.01,
+        0.05,
+        0.1,
+        0.1,
+        0.05
+      ],
+      "job_id": "reliability-is-blind-mistral-matched-20"
+    }
+  ],
+  "count_columns": [
+    {
+      "key": "planned",
+      "label": "Planned",
+      "description": ""
+    },
+    {
+      "key": "observed",
+      "label": "Observed",
+      "description": ""
+    },
+    {
+      "key": "completed",
+      "label": "Completed",
+      "description": ""
+    },
+    {
+      "key": "target",
+      "label": "Target met",
+      "description": ""
+    },
+    {
+      "key": "activated",
+      "label": "Attribution activated",
+      "description": ""
+    },
+    {
+      "key": "not_completed",
+      "label": "Did not complete",
+      "description": ""
+    }
+  ],
+  "telemetry_columns": [
+    {
+      "key": "agent_time",
+      "label": "Median agent time"
+    },
+    {
+      "key": "input",
+      "label": "Median input"
+    },
+    {
+      "key": "cached",
+      "label": "Median cached"
+    },
+    {
+      "key": "output",
+      "label": "Median output"
+    }
+  ],
+  "telemetry": [
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "values": {
+        "agent_time": "45.6s",
+        "input": "123,964",
+        "cached": "73,560",
+        "output": "155"
+      }
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "values": {
+        "agent_time": "57.7s",
+        "input": "386,881",
+        "cached": "330,872",
+        "output": "1,158"
+      }
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "values": {
+        "agent_time": "1m 9s",
+        "input": "15,481",
+        "cached": "14,672",
+        "output": "405"
+      }
+    }
+  ],
+  "attempts": [
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-009",
+      "trial_id": "reliability-is-blind__2K32idb",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 24.041174,
+      "input_tokens": 15385,
+      "output_tokens": 402
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-007",
+      "trial_id": "reliability-is-blind__4DwkAFG",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "21.0%",
+      "duration_seconds": 65.108301,
+      "input_tokens": 756550,
+      "output_tokens": 2235
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-014",
+      "trial_id": "reliability-is-blind__5L6nNvA",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "11.0%",
+      "duration_seconds": 42.837544,
+      "input_tokens": 116214,
+      "output_tokens": 137
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-006",
+      "trial_id": "reliability-is-blind__5ceJe64",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "30.0%",
+      "duration_seconds": 151.632418,
+      "input_tokens": 3531384,
+      "output_tokens": 4864
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-002",
+      "trial_id": "reliability-is-blind__6FfXWYZ",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "0.0%",
+      "duration_seconds": 47.84271,
+      "input_tokens": 133723,
+      "output_tokens": 159
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-013",
+      "trial_id": "reliability-is-blind__6Y3k9To",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "55.9%",
+      "duration_seconds": 50.02698,
+      "input_tokens": 142780,
+      "output_tokens": 272
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-010",
+      "trial_id": "reliability-is-blind__ACwm6Dn",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "1.0%",
+      "duration_seconds": 36.694717,
+      "input_tokens": 116658,
+      "output_tokens": 136
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-017",
+      "trial_id": "reliability-is-blind__AuUgbvT",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "10.0%",
+      "duration_seconds": 47.230583,
+      "input_tokens": 123918,
+      "output_tokens": 223
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-001",
+      "trial_id": "reliability-is-blind__BvfzRFk",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "33.3%",
+      "duration_seconds": 17.889561,
+      "input_tokens": 90178,
+      "output_tokens": 578
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-020",
+      "trial_id": "reliability-is-blind__CCcmx9r",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "42.9%",
+      "duration_seconds": 113.742314,
+      "input_tokens": 129225,
+      "output_tokens": 1092
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-012",
+      "trial_id": "reliability-is-blind__CT4zU2t",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "26.0%",
+      "duration_seconds": 50.317092,
+      "input_tokens": 580612,
+      "output_tokens": 2369
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-005",
+      "trial_id": "reliability-is-blind__Dgj4HJd",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "0.0%",
+      "duration_seconds": 47.423275,
+      "input_tokens": 116801,
+      "output_tokens": 128
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-004",
+      "trial_id": "reliability-is-blind__F7nhbsg",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "37.5%",
+      "duration_seconds": 28.701916,
+      "input_tokens": 95185,
+      "output_tokens": 557
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-006",
+      "trial_id": "reliability-is-blind__FTab3pt",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 294.614126,
+      "input_tokens": 80789,
+      "output_tokens": 1751
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-003",
+      "trial_id": "reliability-is-blind__FWq5tug",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "0.0%",
+      "duration_seconds": 48.11733,
+      "input_tokens": 109015,
+      "output_tokens": 113
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-016",
+      "trial_id": "reliability-is-blind__G4FR2ab",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "6.0%",
+      "duration_seconds": 59.312967,
+      "input_tokens": 124010,
+      "output_tokens": 149
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-015",
+      "trial_id": "reliability-is-blind__H29MKkA",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "16.0%",
+      "duration_seconds": 36.159926,
+      "input_tokens": 64927,
+      "output_tokens": 265
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-008",
+      "trial_id": "reliability-is-blind__HMENnA7",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 3.737434,
+      "input_tokens": 7372,
+      "output_tokens": 8
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-004",
+      "trial_id": "reliability-is-blind__J6rvhT3",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "1.0%",
+      "duration_seconds": 39.494929,
+      "input_tokens": 125411,
+      "output_tokens": 155
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-008",
+      "trial_id": "reliability-is-blind__Jhy5qwz",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "2.0%",
+      "duration_seconds": 68.55551,
+      "input_tokens": 15267,
+      "output_tokens": 357
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-001",
+      "trial_id": "reliability-is-blind__KLUXk2p",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 43.919427,
+      "input_tokens": 66476,
+      "output_tokens": 884
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-009",
+      "trial_id": "reliability-is-blind__LQtd3aC",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "0.0%",
+      "duration_seconds": 30.819793,
+      "input_tokens": 126828,
+      "output_tokens": 188
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-010",
+      "trial_id": "reliability-is-blind__LuuNfF2",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "1.0%",
+      "duration_seconds": 34.978743,
+      "input_tokens": 15150,
+      "output_tokens": 314
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-015",
+      "trial_id": "reliability-is-blind__MjWscRa",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "8.0%",
+      "duration_seconds": 37.318491,
+      "input_tokens": 116144,
+      "output_tokens": 113
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-017",
+      "trial_id": "reliability-is-blind__NraNhqJ",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "10.0%",
+      "duration_seconds": 245.124843,
+      "input_tokens": 15373,
+      "output_tokens": 362
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-020",
+      "trial_id": "reliability-is-blind__T9uRgYE",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 637.650435,
+      "input_tokens": 49343,
+      "output_tokens": 620
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-003",
+      "trial_id": "reliability-is-blind__UPJnZ2p",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "26.7%",
+      "duration_seconds": 34.006319,
+      "input_tokens": 254829,
+      "output_tokens": 513
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-003",
+      "trial_id": "reliability-is-blind__UqUPJ5j",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "7.3%",
+      "duration_seconds": 1800.051862,
+      "input_tokens": 109269,
+      "output_tokens": 1020
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-018",
+      "trial_id": "reliability-is-blind__XBfGRBK",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 6.042193,
+      "input_tokens": 7372,
+      "output_tokens": 131
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-011",
+      "trial_id": "reliability-is-blind__XvtRZge",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 464.509507,
+      "input_tokens": 15051,
+      "output_tokens": 277
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-013",
+      "trial_id": "reliability-is-blind__YdjbqUh",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "28.0%",
+      "duration_seconds": 526.98672,
+      "input_tokens": 7587187,
+      "output_tokens": 4838
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-018",
+      "trial_id": "reliability-is-blind__YrHjWd9",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "5.0%",
+      "duration_seconds": 83.452632,
+      "input_tokens": 336022,
+      "output_tokens": 521
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-009",
+      "trial_id": "reliability-is-blind__Z5HZidp",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "3.0%",
+      "duration_seconds": 42.413311,
+      "input_tokens": 163067,
+      "output_tokens": 390
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-011",
+      "trial_id": "reliability-is-blind__bLm7JAh",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "31.4%",
+      "duration_seconds": 93.895056,
+      "input_tokens": 71884,
+      "output_tokens": 148
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-011",
+      "trial_id": "reliability-is-blind__cyCiWav",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "25.0%",
+      "duration_seconds": 121.554225,
+      "input_tokens": 2635736,
+      "output_tokens": 2431
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-014",
+      "trial_id": "reliability-is-blind__dQFRm6t",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "17.5%",
+      "duration_seconds": 101.804741,
+      "input_tokens": 518933,
+      "output_tokens": 1225
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-016",
+      "trial_id": "reliability-is-blind__eVmKHi8",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "100.0%",
+      "duration_seconds": 52.340571,
+      "input_tokens": 40065,
+      "output_tokens": 589
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-007",
+      "trial_id": "reliability-is-blind__fPtWGrM",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 645.944629,
+      "input_tokens": 113704,
+      "output_tokens": 550
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-010",
+      "trial_id": "reliability-is-blind__fwWtrCz",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "4.0%",
+      "duration_seconds": 309.00642,
+      "input_tokens": 3834319,
+      "output_tokens": 3323
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-016",
+      "trial_id": "reliability-is-blind__gsXBpF7",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "11.0%",
+      "duration_seconds": 68.127412,
+      "input_tokens": 776411,
+      "output_tokens": 3124
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-007",
+      "trial_id": "reliability-is-blind__gwY7P8E",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "7.0%",
+      "duration_seconds": 28.909028,
+      "input_tokens": 108258,
+      "output_tokens": 119
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-012",
+      "trial_id": "reliability-is-blind__htMYfXV",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "5.0%",
+      "duration_seconds": 354.448142,
+      "input_tokens": 225137,
+      "output_tokens": 1692
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-018",
+      "trial_id": "reliability-is-blind__hvM3nBP",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "5.0%",
+      "duration_seconds": 57.622446,
+      "input_tokens": 15330,
+      "output_tokens": 256
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-002",
+      "trial_id": "reliability-is-blind__hwwhqWG",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 15.570905,
+      "input_tokens": 15090,
+      "output_tokens": 305
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-006",
+      "trial_id": "reliability-is-blind__iu8W8qU",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "16.7%",
+      "duration_seconds": 67.048199,
+      "input_tokens": 78493,
+      "output_tokens": 174
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-013",
+      "trial_id": "reliability-is-blind__k4Vbu34",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 19.532257,
+      "input_tokens": 15101,
+      "output_tokens": 279
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-012",
+      "trial_id": "reliability-is-blind__krdM6zV",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "11.0%",
+      "duration_seconds": 34.268416,
+      "input_tokens": 116262,
+      "output_tokens": 132
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-014",
+      "trial_id": "reliability-is-blind__mJXnySv",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "10.0%",
+      "duration_seconds": 50.43934,
+      "input_tokens": 15481,
+      "output_tokens": 461
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-019",
+      "trial_id": "reliability-is-blind__mcHJkF5",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "30.0%",
+      "duration_seconds": 181.801891,
+      "input_tokens": 1716453,
+      "output_tokens": 4627
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-005",
+      "trial_id": "reliability-is-blind__mp8ZAew",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "20.0%",
+      "duration_seconds": 70.223616,
+      "input_tokens": 973869,
+      "output_tokens": 2466
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-008",
+      "trial_id": "reliability-is-blind__njNe974",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "1.0%",
+      "duration_seconds": 28.839136,
+      "input_tokens": 125151,
+      "output_tokens": 155
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-002",
+      "trial_id": "reliability-is-blind__nptgwdc",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 4.123274,
+      "input_tokens": 7372,
+      "output_tokens": 59
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-005",
+      "trial_id": "reliability-is-blind__osAsTR4",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "33.3%",
+      "duration_seconds": 140.116492,
+      "input_tokens": 53451,
+      "output_tokens": 1604
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-019",
+      "trial_id": "reliability-is-blind__qvuK6Xa",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 266.731058,
+      "input_tokens": 62295,
+      "output_tokens": 405
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-019",
+      "trial_id": "reliability-is-blind__rZtD2JK",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "5.0%",
+      "duration_seconds": 43.98573,
+      "input_tokens": 208571,
+      "output_tokens": 385
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-020",
+      "trial_id": "reliability-is-blind__sreiHrz",
+      "status": "Target missed",
+      "tone": "warn",
+      "primary": "Missed",
+      "secondary": "31.0%",
+      "duration_seconds": 73.058305,
+      "input_tokens": 415370,
+      "output_tokens": 1251
+    },
+    {
+      "agent_id": "mistral-mistral-medium-3-5",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-001",
+      "trial_id": "reliability-is-blind__tYCN4un",
+      "status": "Target met",
+      "tone": "good",
+      "primary": "Met",
+      "secondary": "0.0%",
+      "duration_seconds": 37.012791,
+      "input_tokens": 133723,
+      "output_tokens": 169
+    },
+    {
+      "agent_id": "mistral-mistral-small-2603",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-017",
+      "trial_id": "reliability-is-blind__xpYBxbr",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "26.7%",
+      "duration_seconds": 19.484349,
+      "input_tokens": 91849,
+      "output_tokens": 568
+    },
+    {
+      "agent_id": "mistral-mistral-large-2512",
+      "task_slug": "reliability-is-blind",
+      "job_id": "reliability-is-blind-mistral-matched-20-rib-015",
+      "trial_id": "reliability-is-blind__zU2RTWD",
+      "status": "Did not complete",
+      "tone": "neutral",
+      "primary": "\u2014",
+      "secondary": "0.0%",
+      "duration_seconds": 18.586771,
+      "input_tokens": 15111,
+      "output_tokens": 275
+    }
+  ],
+  "notes": [
+    "Scores come from the matched-seed Harbor run.",
+    "The primary denominator is every observed book, including books that did not finish.",
+    "Failure rate is calculated only across completed books.",
+    "Time and token values are medians across observed attempts."
+  ],
+  "provenance": {
+    "generator": "reliability-is-blind.tooling.build-comparison.v1",
+    "sources": [
+      "jobs/reports/reliability-is-blind/runs/reliability-is-blind-mistral-matched-20/protocol.json",
+      "jobs/reports/reliability-is-blind/runs/reliability-is-blind-mistral-matched-20/trials.json",
+      "evals/reliability-is-blind/tooling/protocols/reliability-is-blind-mistral-matched-20.commitment.json"
+    ]
   }
 }
