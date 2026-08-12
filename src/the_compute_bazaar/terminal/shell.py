@@ -55,6 +55,12 @@ class TerminalShell:
             except OSError as exc:
                 raise TerminalShellError("Shell input is unavailable") from exc
 
+    def open(self, *, columns: int = 120, rows: int = 32) -> None:
+        """Start the shared shell without submitting a command."""
+        with self._condition:
+            if not self._active_locked():
+                self._start_locked(columns=columns, rows=rows)
+
     def write(self, data: str) -> None:
         if not data:
             return

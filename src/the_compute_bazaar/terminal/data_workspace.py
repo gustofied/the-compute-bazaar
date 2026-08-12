@@ -41,6 +41,7 @@ class DataQuery(BaseModel):
 class AnalysisSave(BaseModel):
     title: str = Field(min_length=1, max_length=96)
     description: str = Field(default="", max_length=500)
+    markdown: str = Field(default="", max_length=20_000)
     sql: str = Field(min_length=1, max_length=MAX_SQL_LENGTH)
     limit: int = Field(default=500, ge=1, le=MAX_QUERY_LIMIT)
     viewer: Literal["perspective"]
@@ -123,8 +124,7 @@ class DataWorkspace:
                 table_payload = catalog.tables()
                 for table in table_payload["tables"]:
                     table["virtual"] = (
-                        f"{table['layer']}.{table['table_name']}"
-                        == VIRTUAL_TABLE_REF
+                        f"{table['layer']}.{table['table_name']}" == VIRTUAL_TABLE_REF
                     )
                 queries = []
                 for query in load_query_catalog():
@@ -194,6 +194,7 @@ class DataWorkspace:
                 model, blueprint = self.analyses.save_analysis(
                     title=request.title,
                     description=request.description,
+                    markdown=request.markdown,
                     sql=request.sql,
                     default_limit=request.limit,
                     viewer=request.viewer,

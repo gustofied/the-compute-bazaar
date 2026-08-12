@@ -11,6 +11,7 @@ const REQUIRED_PERSPECTIVE_PLUGINS = [
   { name: "Y Bar", tag: "perspective-viewer-charts-y-bar" },
   { name: "Y Line", tag: "perspective-viewer-charts-y-line" },
 ];
+const PRINTOUT_ROW_LIMIT = 36;
 const VIRTUAL_AVAILABILITY_TABLE = "gold.fact_gpu_availability_history";
 const VIRTUAL_DEFAULT_COLUMNS = [
   "observed_at",
@@ -70,6 +71,10 @@ const elements = {
   resultRows: document.querySelector("#result-rows"),
   resultTime: document.querySelector("#result-time"),
   resultRun: document.querySelector("#result-run"),
+  resultFileName: document.querySelector("#result-file-name"),
+  resultPrintout: document.querySelector("#result-printout"),
+  blueprintMarkdownPanel: document.querySelector("#blueprint-markdown-panel"),
+  blueprintMarkdown: document.querySelector("#blueprint-markdown"),
   viewerConfig: document.querySelector("#viewer-config"),
   viewerStage: document.querySelector("#viewer-stage"),
   viewerHost: document.querySelector("#viewer-host"),
@@ -80,6 +85,7 @@ const elements = {
   saveDialog: document.querySelector("#save-dialog"),
   saveForm: document.querySelector("#save-form"),
   viewName: document.querySelector("#view-name"),
+  viewMarkdown: document.querySelector("#view-markdown"),
   cancelSave: document.querySelector("#cancel-save"),
   toast: document.querySelector("#toast"),
 };
@@ -97,6 +103,7 @@ const state = {
   saveable: true,
   running: false,
   sqlOpen: false,
+  markdown: "",
   toastTimer: null,
 };
 
@@ -133,7 +140,81 @@ function formatCount(value) {
   return new Intl.NumberFormat().format(Number(value));
 }
 
+function setBlueprintMarkdown(markdown = "") {
+  state.markdown = String(markdown || "").trim();
+  elements.blueprintMarkdown.textContent = state.markdown;
+  elements.blueprintMarkdownPanel.hidden = !state.markdown;
+}
+
+function setPrintoutState(label, message) {
+  elements.resultFileName.textContent = label;
+  elements.resultPrintout.textContent = message;
+}
+
+function printableCell(value, type) {
+  if (value === null || value === undefined) return "NULL";
+  if ((type === "date" || type === "datetime") && !Number.isNaN(new Date(value).valueOf())) {
+    return new Date(value).toISOString().replace("T", " ").replace(".000Z", " UTC");
+  }
+  let text;
+  if (typeof value === "object") {
+    try {
+      text = JSON.stringify(value);
+    } catch {
+      text = String(value);
+    }
+  } else {
+    text = String(value);
+  }
+  text = text.replace(/[\r\n\t]+/g, " ");
+  return text.length > 32 ? `${text.slice(0, 29)}...` : text;
+}
+
+function asciiTable(rows, schema, rowCount, { truncated = false, limit = null } = {}) {
+  const columns = Object.keys(schema || {});
+  if (!columns.length) return "(no columns)";
+  const headings = columns.map((column) => (
+    column.length > 32 ? `${column.slice(0, 29)}...` : column
+  ));
+  const values = rows.map((row) => columns.map((column) => printableCell(row[column], schema[column])));
+  const widths = headings.map((column, index) => Math.min(
+    32,
+    Math.max(column.length, ...values.map((row) => row[index].length)),
+  ));
+  const numeric = columns.map((column) => ["integer", "float"].includes(schema[column]));
+  const renderRow = (row) => row.map((value, index) => (
+    numeric[index] ? value.padStart(widths[index]) : value.padEnd(widths[index])
+  )).join("  ");
+  const lines = [
+    renderRow(headings),
+    widths.map((width) => "-".repeat(width)).join("  "),
+    ...values.map(renderRow),
+    "",
+    `${formatCount(rows.length)} printed / ${formatCount(rowCount)} returned${truncated ? ` / limit ${formatCount(limit)}` : ""}`,
+  ];
+  return lines.join("\n");
+}
+
+async function renderPrintout(
+  table,
+  { label = "DATAFUSION.out", rowCount = 0, truncated = false, limit = null } = {},
+) {
+  setPrintoutState(label, "printing...");
+  let view;
+  try {
+    const schema = await table.schema();
+    view = await table.view();
+    const rows = await view.to_json({ start_row: 0, end_row: PRINTOUT_ROW_LIMIT });
+    elements.resultPrintout.textContent = asciiTable(rows, schema, rowCount, { truncated, limit });
+  } catch (error) {
+    elements.resultPrintout.textContent = `printout unavailable: ${error instanceof Error ? error.message : String(error)}`;
+  } finally {
+    if (view) await view.delete();
+  }
+}
+
 function setCatalogOpen(open) {
+  if (open) window.ComputeBazaarTerminal?.closeShell();
   elements.body.classList.toggle("catalog-open", open);
   elements.catalogToggle.setAttribute("aria-expanded", String(open));
 }
@@ -159,7 +240,7 @@ function setRunning(running) {
   state.running = running;
   elements.run.disabled = running;
   elements.save.disabled = running || !state.hasResult || !state.saveable;
-  elements.run.querySelector("span").textContent = running ? "Running" : "Run query";
+  elements.run.querySelector("span").textContent = running ? "Running" : "Run";
 }
 
 function showToast(message) {
@@ -176,17 +257,18 @@ function setActiveSource(key) {
   });
 }
 
-function setViewCopy(kind, title, description) {
+function setViewCopy(kind, title, description, markdown = "") {
   elements.viewKind.textContent = kind;
   elements.viewTitle.textContent = title;
   elements.viewDescription.textContent = description;
+  setBlueprintMarkdown(markdown);
   setResultLimit(false);
 }
 
 function setResultLimit(truncated, limit = null) {
   elements.resultLimit.hidden = !truncated;
   elements.resultLimit.textContent = truncated
-    ? `Showing the first ${formatCount(limit)} rows. Perspective filters, grouping, and sorting apply only to this result.`
+    ? `LIMIT ${formatCount(limit)} / RESULT TRUNCATED`
     : "";
 }
 
@@ -410,6 +492,7 @@ async function selectVirtualTable(tableRef) {
   setSqlOpen(false);
   closeCatalogOnMobile();
   setRunning(true);
+  setPrintoutState("DATAFUSION.out", "opening virtual table...");
   setViewerState("Opening availability history", "Reading its schema from DataFusion.");
   try {
     const schemaResponse = await fetch("/api/data/virtual/schema", { cache: "no-store" });
@@ -440,11 +523,16 @@ async function selectVirtualTable(tableRef) {
       : `${adapter.stats.elapsedMs} ms`;
     elements.resultRun.textContent = shortRunId(metadata.run?.run_id);
     elements.resultRun.title = metadata.run?.run_id || "";
+    await renderPrintout(nextTable, {
+      label: "DATAFUSION.out",
+      rowCount,
+    });
     state.hasResult = true;
     setViewerState("Ready", `${formatCount(rowCount)} rows available.`, { hidden: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Availability history unavailable", message, { error: true });
+    setPrintoutState("DATAFUSION.err", message);
     state.hasResult = false;
   } finally {
     setRunning(false);
@@ -619,6 +707,7 @@ async function selectOffers(action) {
   elements.sqlToggle.disabled = true;
   state.saveable = false;
   setRunning(true);
+  setPrintoutState("PROVIDER.out", "reading provider APIs...");
   setViewerState("Fetching offers", "Reading the provider APIs now.");
   try {
     const response = await fetch(`/api/data/offers?${params}`, { cache: "no-store" });
@@ -635,11 +724,16 @@ async function selectOffers(action) {
     elements.resultTime.textContent = `${response.headers.get("X-Compute-Bazaar-Elapsed-Ms") || "-"} ms`;
     elements.resultRun.textContent = "provider read";
     elements.resultRun.title = response.headers.get("X-Compute-Bazaar-Observed-At") || "";
+    await renderPrintout(nextTable, {
+      label: "PROVIDER.out",
+      rowCount: Number(rowCount),
+    });
     state.hasResult = true;
     setViewerState("Ready", `${formatCount(rowCount)} offers loaded.`, { hidden: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Offers unavailable", message, { error: true });
+    setPrintoutState("PROVIDER.err", message);
     state.hasResult = false;
   } finally {
     setRunning(false);
@@ -666,6 +760,7 @@ async function selectLaunchPlan(action) {
   elements.sqlToggle.disabled = true;
   state.saveable = false;
   setRunning(true);
+  setPrintoutState("REQUEST.out", "building launch plan...");
   setViewerState("Revalidating offer", "Preparing the provider request now.");
   try {
     const response = await fetch(`/api/data/launch-plan?${params}`, { cache: "no-store" });
@@ -681,11 +776,13 @@ async function selectLaunchPlan(action) {
     elements.resultTime.textContent = `${response.headers.get("X-Compute-Bazaar-Elapsed-Ms") || "-"} ms`;
     elements.resultRun.textContent = response.headers.get("X-Compute-Bazaar-Run-Id") || "draft";
     elements.resultRun.title = response.headers.get("X-Compute-Bazaar-Observed-At") || "";
+    await renderPrintout(nextTable, { label: "REQUEST.out", rowCount: 1 });
     state.hasResult = true;
     setViewerState("Ready", "Launch plan loaded. No request was submitted.", { hidden: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Launch plan unavailable", message, { error: true });
+    setPrintoutState("REQUEST.err", message);
     state.hasResult = false;
   } finally {
     setRunning(false);
@@ -712,6 +809,7 @@ async function saveCurrentAnalysis(name) {
       model_id: activeModelId,
       blueprint_id: activeBlueprintId,
       description: elements.viewDescription.textContent,
+      markdown: elements.viewMarkdown.value.trim(),
       sql: elements.editor.value.trim(),
       limit: Number(elements.limit.value),
       viewer: "perspective",
@@ -722,11 +820,17 @@ async function saveCurrentAnalysis(name) {
   const saved = await response.json();
   await refreshSessionArtifacts();
   setActiveSource(`blueprint:${saved.blueprint.blueprint_id}`);
+  setBlueprintMarkdown(saved.blueprint.markdown);
   showToast(`Saved ${name}`);
 }
 
 async function selectBlueprint(blueprint) {
-  setViewCopy("Analysis", blueprint.title, blueprint.description || blueprint.model_id);
+  setViewCopy(
+    "Analysis",
+    blueprint.title,
+    blueprint.description || blueprint.model_id,
+    blueprint.markdown,
+  );
   elements.editor.value = blueprint.sql;
   state.sourceSql = blueprint.sql.trim();
   elements.limit.value = blueprint.default_limit;
@@ -784,6 +888,7 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
   elements.limit.value = String(limit);
   if (!sql) {
     setViewerState("SQL is empty", "Write a SELECT or WITH statement before running it.", { error: true });
+    setPrintoutState("DATAFUSION.err", "SQL is empty");
     return;
   }
 
@@ -804,6 +909,7 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
 
   setRunning(true);
   setResultLimit(false);
+  setPrintoutState("DATAFUSION.out", "running query...");
   setViewerState("Running DataFusion", "Preparing the bounded Arrow result.");
   try {
     const response = await fetch("/api/data/query", {
@@ -835,11 +941,18 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
     elements.resultRun.textContent = shortRunId(runId);
     elements.resultRun.title = runId;
     setResultLimit(truncated, selectedLimit);
+    await renderPrintout(nextTable, {
+      label: "DATAFUSION.out",
+      rowCount: Number(rowCount),
+      truncated,
+      limit: Number(selectedLimit),
+    });
     state.hasResult = true;
     setViewerState("Ready", `${formatCount(rowCount)} rows loaded.`, { hidden: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Query failed", message, { error: true });
+    setPrintoutState("DATAFUSION.err", message);
     state.hasResult = false;
   } finally {
     setRunning(false);
@@ -859,7 +972,7 @@ async function restoreViewerLayout(config) {
 }
 
 function closeCatalogOnMobile() {
-  if (window.matchMedia("(max-width: 820px)").matches) setCatalogOpen(false);
+  setCatalogOpen(false);
 }
 
 async function openInitialSource() {
@@ -1003,6 +1116,10 @@ window.addEventListener("compute-bazaar:command", (event) => {
   void handleTerminalAction(event.detail.action);
 });
 
+window.addEventListener("compute-bazaar:shell", (event) => {
+  if (event.detail?.open) setCatalogOpen(false);
+});
+
 function bindEvents() {
   elements.catalogToggle.addEventListener("click", () => setCatalogOpen(true));
   elements.catalogClose.addEventListener("click", () => setCatalogOpen(false));
@@ -1077,6 +1194,7 @@ function bindEvents() {
 
   elements.save.addEventListener("click", () => {
     elements.viewName.value = elements.viewTitle.textContent || "Terminal view";
+    elements.viewMarkdown.value = state.markdown;
     elements.saveDialog.showModal();
     elements.viewName.select();
   });

@@ -1,0 +1,19 @@
+{
+  "blueprint_id": "prime-8xh100-availability",
+  "created_at": "2026-08-12T00:00:00Z",
+  "description": "When Prime Compute's 8xH100 offer was visible or off market.",
+  "model_id": "prime-8xh100-availability",
+  "viewer": "perspective",
+  "viewer_config": {
+    "columns": [
+      "available"
+    ],
+    "group_by": [
+      "observed_at"
+    ],
+    "plugin": "Y Line",
+    "settings": false
+  },
+  "title": "Prime 8xH100 availability",
+  "updated_at": "2026-08-12T00:00:00Z"
+}

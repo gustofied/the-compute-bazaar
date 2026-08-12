@@ -31,7 +31,7 @@ const root = document.createElement("section");
 root.className = "terminal-command";
 root.setAttribute("aria-label", "Terminal command");
 root.innerHTML = `
-  <section class="terminal-shell" hidden aria-label="Local shell">
+  <section class="terminal-shell" id="terminal-shell-drawer" hidden aria-label="Local shell">
     <header class="terminal-shell-head">
       <div class="terminal-shell-identity">
         <span class="terminal-shell-status">Shell</span>
@@ -64,6 +64,14 @@ root.innerHTML = `
       aria-label="Terminal command or read-only SQL"
       placeholder="SQL or command · try help"
     ></textarea>
+    <button
+      class="terminal-command-shell-toggle"
+      type="button"
+      aria-controls="terminal-shell-drawer"
+      aria-expanded="false"
+      aria-label="Toggle shell"
+      hidden
+    >Shell</button>
     <span class="terminal-command-shortcut">⌘K</span>
     <button class="terminal-command-run" type="submit">Run</button>
   </form>
@@ -83,6 +91,7 @@ const elements = {
   shellStage: root.querySelector(".terminal-shell-stage"),
   shellStatus: root.querySelector(".terminal-shell-status"),
   shellCwd: root.querySelector(".terminal-shell-cwd"),
+  shellToggle: root.querySelector(".terminal-command-shell-toggle"),
 };
 
 function takeNativeLaunchToken() {
@@ -215,6 +224,7 @@ async function loadTerminal({ refresh = false } = {}) {
   state.commands = Array.isArray(state.status.commands) ? state.status.commands : [];
   if (state.status.shell?.authorized) {
     elements.input.placeholder = "SQL, command, or shell · try help";
+    elements.shellToggle.hidden = false;
   }
   return state.status;
 }
@@ -247,9 +257,9 @@ function ensureShellTerminal() {
     theme: {
       background: "#0d1110",
       foreground: "#efede4",
-      cursor: "#91aecb",
+      cursor: "#a8c96b",
       cursorAccent: "#0d1110",
-      selectionBackground: "#91aecb55",
+      selectionBackground: "#a8c96b55",
       black: "#0d1110",
       red: "#d98770",
       green: "#b7d07b",
@@ -350,17 +360,20 @@ function renderShellSnapshot(snapshot) {
   elements.shellCwd.textContent = snapshot.cwd || "repository root";
 }
 
-async function openShell(command) {
+async function openShell(command = null) {
   ensureShellTerminal();
   elements.shell.hidden = false;
   root.classList.add("shell-open");
+  document.body.classList.add("terminal-shell-open");
+  elements.shellToggle.setAttribute("aria-expanded", "true");
+  window.dispatchEvent(new CustomEvent("compute-bazaar:shell", { detail: { open: true } }));
   closePanel();
   fitShell();
   const socket = await connectShell();
   state.shell.fit?.fit();
   socket.send(JSON.stringify({
-    type: "run",
-    command,
+    type: command ? "run" : "open",
+    ...(command ? { command } : {}),
     columns: state.shell.terminal?.cols || 120,
     rows: state.shell.terminal?.rows || 32,
   }));
@@ -370,6 +383,9 @@ async function openShell(command) {
 function closeShell() {
   elements.shell.hidden = true;
   root.classList.remove("shell-open");
+  document.body.classList.remove("terminal-shell-open");
+  elements.shellToggle.setAttribute("aria-expanded", "false");
+  window.dispatchEvent(new CustomEvent("compute-bazaar:shell", { detail: { open: false } }));
   elements.input.focus();
 }
 
@@ -505,6 +521,15 @@ elements.form.addEventListener("submit", (event) => {
 
 elements.close.addEventListener("click", closePanel);
 
+elements.shellToggle.addEventListener("click", () => {
+  if (elements.shell.hidden) {
+    void openShell().catch((error) => {
+      showMessage("Shell unavailable", error instanceof Error ? error.message : String(error), { error: true });
+    });
+  }
+  else closeShell();
+});
+
 elements.shell.addEventListener("click", (event) => {
   const button = event.target.closest("[data-shell-action]");
   if (!button) return;
@@ -560,6 +585,10 @@ document.addEventListener("keydown", (event) => {
     elements.input.focus();
     elements.input.select();
   }
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j" && !elements.shellToggle.hidden) {
+    event.preventDefault();
+    elements.shellToggle.click();
+  }
   if (event.key === "Escape" && !elements.shell.hidden) closeShell();
 });
 
@@ -573,4 +602,5 @@ window.ComputeBazaarTerminal = {
   takePendingAction,
   showMessage,
   closePanel,
+  closeShell,
 };

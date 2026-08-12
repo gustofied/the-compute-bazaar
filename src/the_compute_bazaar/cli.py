@@ -404,6 +404,10 @@ def blueprint_save(
     config: Annotated[Path, typer.Option("--config", help="Perspective JSON file.")],
     title: Annotated[str | None, typer.Option()] = None,
     description: Annotated[str, typer.Option()] = "",
+    markdown: Annotated[
+        Path | None,
+        typer.Option("--markdown", help="Optional Markdown file."),
+    ] = None,
 ) -> None:
     """Attach a Perspective layout to a saved model."""
     from .analysis_store import blueprint_payload
@@ -417,6 +421,7 @@ def blueprint_save(
             model_id=model_id,
             title=title or blueprint_id.replace("-", " ").title(),
             description=description,
+            markdown=(markdown.read_text(encoding="utf-8") if markdown else ""),
             viewer="perspective",
             viewer_config=viewer_config,
         )

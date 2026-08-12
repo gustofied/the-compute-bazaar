@@ -37,6 +37,7 @@ class TerminalCommandTest(unittest.TestCase):
             model, blueprint = store.save_analysis(
                 title="Fleet temperature",
                 description="",
+                markdown="# Fleet temperature\n\nGPU temperature by host.",
                 sql="select * from fleet.telemetry",
                 default_limit=100,
                 viewer="perspective",
@@ -51,6 +52,10 @@ class TerminalCommandTest(unittest.TestCase):
         self.assertEqual(model.tables, ("fleet.telemetry",))
         self.assertEqual(blueprint.viewer, "perspective")
         self.assertEqual(blueprint.viewer_config, {"plugin": "Datagrid"})
+        self.assertEqual(
+            blueprint.markdown,
+            "# Fleet temperature\n\nGPU temperature by host.",
+        )
         self.assertNotIn("perspective", stored)
 
     def test_external_links_are_https_without_embedded_credentials(self) -> None:
@@ -248,6 +253,18 @@ class TerminalCommandTest(unittest.TestCase):
 
 
 class TerminalShellTest(unittest.TestCase):
+    def test_shell_can_open_without_submitting_a_command(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            shell = TerminalShell(cwd=Path(directory), shell="/bin/sh")
+            try:
+                shell.open(columns=80, rows=20)
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline and not shell.snapshot()["active"]:
+                    time.sleep(0.01)
+                self.assertTrue(shell.snapshot()["active"])
+            finally:
+                shell.close()
+
     def test_shell_keeps_repository_state_between_commands(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             resolved_directory = Path(directory).resolve()

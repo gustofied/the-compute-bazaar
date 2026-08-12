@@ -1,0 +1,8 @@
+{
+  "created_at": "2026-08-12T00:00:00Z",
+  "default_limit": 500,
+  "description": "Hourly visibility of Prime Compute's 8xH100 offer.",
+  "model_id": "prime-8xh100-availability",
+  "title": "Prime 8xH100 availability",
+  "updated_at": "2026-08-12T00:00:00Z"
+}

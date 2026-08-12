@@ -350,7 +350,12 @@ async def _receive_shell_input(
             continue
         message_type = message.get("type")
         try:
-            if message_type == "run":
+            if message_type == "open":
+                shell.open(
+                    columns=_integer(message.get("columns"), 120),
+                    rows=_integer(message.get("rows"), 32),
+                )
+            elif message_type == "run":
                 shell.submit(
                     str(message.get("command") or ""),
                     columns=_integer(message.get("columns"), 120),

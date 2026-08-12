@@ -45,6 +45,7 @@ class ViewBlueprint(BaseModel):
     model_id: str
     title: str = Field(min_length=1, max_length=96)
     description: str = Field(default="", max_length=500)
+    markdown: str = Field(default="", max_length=20_000)
     viewer: Literal["perspective"]
     viewer_config: dict[str, Any]
     created_at: datetime
@@ -129,6 +130,7 @@ class AnalysisStore:
         model_id: str,
         title: str,
         description: str,
+        markdown: str = "",
         viewer: Literal["perspective"],
         viewer_config: dict[str, Any],
     ) -> ViewBlueprint:
@@ -142,6 +144,7 @@ class AnalysisStore:
             model_id=selected_model_id,
             title=title.strip(),
             description=description.strip(),
+            markdown=markdown.strip(),
             viewer=viewer,
             viewer_config=viewer_config,
             created_at=(existing or {}).get("created_at", now),
@@ -159,6 +162,7 @@ class AnalysisStore:
         *,
         title: str,
         description: str,
+        markdown: str = "",
         sql: str,
         default_limit: int,
         viewer: Literal["perspective"],
@@ -180,6 +184,7 @@ class AnalysisStore:
             model_id=selected_model_id,
             title=title,
             description=description,
+            markdown=markdown,
             viewer=viewer,
             viewer_config=viewer_config,
         )
