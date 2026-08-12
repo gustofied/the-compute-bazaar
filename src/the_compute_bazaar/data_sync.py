@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import tempfile
 from datetime import datetime, timezone
@@ -52,9 +53,14 @@ def sync_public_lake(
         tempfile.mkdtemp(prefix=f".{destination.name}-", dir=destination.parent)
     )
     backup = destination.with_name(f".{destination.name}.previous")
+    downloaded_bytes = 0
     try:
         for item in index["files"]:
             relative = _safe_relative_path(item["path"])
+            target = staging / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if _reuse_cached_file(destination / relative, target, item=item):
+                continue
             payload = _download(
                 f"{source_url}/{quote(relative.as_posix(), safe='/=._-')}"
             )
@@ -62,9 +68,8 @@ def sync_public_lake(
                 raise RuntimeError(f"Size mismatch for {relative.as_posix()}")
             if hashlib.sha256(payload).hexdigest() != item["sha256"]:
                 raise RuntimeError(f"Checksum mismatch for {relative.as_posix()}")
-            target = staging / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(payload)
+            downloaded_bytes += len(payload)
 
         (staging / "index.json").write_bytes(index_bytes)
         _write_sync_metadata(staging, source_url=source_url)
@@ -93,8 +98,27 @@ def sync_public_lake(
         "providers": index["provider_scope"],
         "history_mode": index.get("history_mode"),
         "file_count": index["file_count"],
-        "downloaded_bytes": sum(item["size"] for item in index["files"]),
+        "downloaded_bytes": downloaded_bytes,
     }
+
+
+def _reuse_cached_file(
+    source: Path,
+    target: Path,
+    *,
+    item: dict[str, Any],
+) -> bool:
+    if not source.is_file() or source.stat().st_size != item["size"]:
+        return False
+    with source.open("rb") as handle:
+        checksum = hashlib.file_digest(handle, "sha256").hexdigest()
+    if checksum != item["sha256"]:
+        return False
+    try:
+        os.link(source, target)
+    except OSError:
+        shutil.copy2(source, target)
+    return True
 
 
 def _generation_matches(root: Path, *, index: dict[str, Any]) -> bool:

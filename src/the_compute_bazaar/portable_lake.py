@@ -22,7 +22,7 @@ from .prices.gold_manifest import (
     latest_gold_manifest_ref,
     read_latest_gold_manifest,
 )
-from .prices.datafusion import DataFusionEngine
+from .prices.datafusion import DataFusionEngine, TableRef
 from .prices.manifest import latest_manifest_ref
 from .prices.schemas import to_jsonable
 from .prices.storage import (
@@ -205,39 +205,79 @@ def _copy_latest_gold(
     *,
     source_manifest: dict[str, Any],
     output_root: Path,
-) -> tuple[dict[str, str], dict[str, int]]:
-    table_refs: dict[str, str] = {}
+) -> tuple[dict[str, TableRef], dict[str, int]]:
+    table_refs: dict[str, TableRef] = {}
     row_counts: dict[str, int] = {}
     observed_date = str(source_manifest["observed_date"])
     run_id = str(source_manifest["run_id"])
     for table_name, source_ref in dict(source_manifest.get("table_refs") or {}).items():
-        rows = _portableize_lineage(
-            _sanitize_rows(
-                DataFusionEngine({str(table_name): source_ref}).query(
-                    f"select * from {table_name}"
+        name = str(table_name)
+        if isinstance(source_ref, list):
+            part_refs: list[str] = []
+            row_count = 0
+            for source_part in source_ref:
+                rows = _portable_gold_rows(
+                    table_name=name,
+                    source_ref=str(source_part),
+                    output_root=output_root,
                 )
-            ),
+                target_ref = str(
+                    output_root / _gold_part_relative(name, str(source_part))
+                )
+                write_parquet_rows(target_ref, rows)
+                part_refs.append(target_ref)
+                row_count += len(rows)
+            if not part_refs:
+                raise RuntimeError(f"Gold history table has no parts: {name}")
+            table_refs[name] = part_refs
+            row_counts[name] = row_count
+            continue
+
+        rows = _portable_gold_rows(
+            table_name=name,
+            source_ref=str(source_ref),
             output_root=output_root,
         )
-        filename = _table_filename(str(table_name), source_ref)
+        filename = _table_filename(name, str(source_ref))
         target_ref = table_partition(
             str(output_root),
-            table=f"gold/{table_name}",
+            table=f"gold/{name}",
             observed_date=observed_date,
             provider=None,
             run_id=run_id,
-            filename=filename or f"{table_name}.parquet",
+            filename=filename or f"{name}.parquet",
         )
         write_parquet_rows(target_ref, rows)
-        table_refs[str(table_name)] = target_ref
-        row_counts[str(table_name)] = len(rows)
+        table_refs[name] = target_ref
+        row_counts[name] = len(rows)
     return table_refs, row_counts
 
 
-def _table_filename(table_name: str, source_ref: Any) -> str:
-    if isinstance(source_ref, list):
-        return f"{table_name}.parquet"
-    return PurePosixPath(urlparse(str(source_ref)).path).name or f"{table_name}.parquet"
+def _portable_gold_rows(
+    *,
+    table_name: str,
+    source_ref: str,
+    output_root: Path,
+) -> list[dict[str, Any]]:
+    rows = DataFusionEngine({table_name: source_ref}).query(
+        f"select * from {table_name}"
+    )
+    return _portableize_lineage(
+        _sanitize_rows(rows),
+        output_root=output_root,
+    )
+
+
+def _gold_part_relative(table_name: str, source_ref: str) -> PurePosixPath:
+    parts = PurePosixPath(urlparse(source_ref).path).parts
+    for index, part in enumerate(parts[:-1]):
+        if part == "gold" and parts[index + 1] == table_name:
+            return PurePosixPath(*parts[index:])
+    raise RuntimeError(f"Gold history part has no canonical table path: {source_ref}")
+
+
+def _table_filename(table_name: str, source_ref: str) -> str:
+    return PurePosixPath(urlparse(source_ref).path).name or f"{table_name}.parquet"
 
 
 def _portable_gold_manifest(
@@ -245,7 +285,7 @@ def _portable_gold_manifest(
     source_manifest: dict[str, Any],
     output_root: Path,
     provider_scope: list[str],
-    table_refs: dict[str, str],
+    table_refs: dict[str, TableRef],
     row_counts: dict[str, int],
 ) -> dict[str, Any]:
     manifest = {
@@ -288,7 +328,7 @@ def _portable_gold_manifest(
         ).is_file()
     }
     manifest["table_refs"] = {
-        name: _relative(output_root, ref) for name, ref in table_refs.items()
+        name: _relative_table_ref(output_root, ref) for name, ref in table_refs.items()
     }
     manifest["row_counts"] = row_counts
     manifest["manifest_ref"] = _relative(
@@ -442,6 +482,12 @@ def _cache_control(relative_path: str) -> str:
 
 def _relative(root: Path, ref: str) -> str:
     return Path(ref).resolve().relative_to(root).as_posix()
+
+
+def _relative_table_ref(root: Path, ref: TableRef) -> str | list[str]:
+    if isinstance(ref, str):
+        return _relative(root, ref)
+    return [_relative(root, part) for part in ref]
 
 
 def main() -> None:

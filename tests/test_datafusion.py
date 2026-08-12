@@ -98,6 +98,8 @@ class DataFusionEngineTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             lake = root / "lake"
+            portable = root / "portable"
+            cache = root / "cache"
             for run, hour, price in (("1", 12, 2.5), ("2", 13, 2.75)):
                 observed_at = datetime(2026, 8, 10, hour, tzinfo=UTC)
                 persist_provider_snapshot(
@@ -141,6 +143,54 @@ class DataFusionEngineTest(unittest.TestCase):
                 if run == "1":
                     first_ref = history_refs[0]
                     first_payload = Path(first_ref).read_bytes()
+
+                build_portable_lake(
+                    source_lake_root=str(lake),
+                    output_root=str(portable),
+                )
+                portable_manifest = read_latest_gold_manifest(str(portable))
+                portable_refs = portable_manifest["table_refs"][
+                    "fact_gpu_price_index_history"
+                ]
+                self.assertIsInstance(portable_refs, list)
+                self.assertEqual(len(portable_refs), int(run))
+                index = json.loads((portable / "index.json").read_text())
+                sync = sync_public_lake(
+                    base_url=portable.as_uri(),
+                    output_root=str(cache),
+                )
+                if run == "1":
+                    first_portable_path = (
+                        Path(portable_refs[0]).resolve().relative_to(portable.resolve())
+                    )
+                    first_portable_payload = Path(portable_refs[0]).read_bytes()
+                    first_inventory = {
+                        item["path"]: item["sha256"] for item in index["files"]
+                    }
+                    self.assertEqual(
+                        sync["downloaded_bytes"],
+                        sum(item["size"] for item in index["files"]),
+                    )
+                else:
+                    self.assertEqual(
+                        Path(portable_refs[0])
+                        .resolve()
+                        .relative_to(portable.resolve()),
+                        first_portable_path,
+                    )
+                    self.assertEqual(
+                        Path(portable_refs[0]).read_bytes(), first_portable_payload
+                    )
+                    expected_download = sum(
+                        item["size"]
+                        for item in index["files"]
+                        if first_inventory.get(item["path"]) != item["sha256"]
+                    )
+                    self.assertEqual(sync["downloaded_bytes"], expected_download)
+                    self.assertLess(
+                        sync["downloaded_bytes"],
+                        sum(item["size"] for item in index["files"]),
+                    )
 
             self.assertEqual(Path(first_ref).read_bytes(), first_payload)
             self.assertEqual(gold.row_counts["fact_gpu_price_index_history"], 2)
