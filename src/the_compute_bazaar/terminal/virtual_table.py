@@ -3,26 +3,35 @@
 from __future__ import annotations
 
 import math
+from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 import pyarrow as pa
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..data_catalog import ComputeBazaarCatalog
 
 
 VIRTUAL_TABLE_REF = "gold.fact_gpu_availability_history"
 MAX_VIEWPORT_ROWS = 2_000
+MAX_COLUMNS = 128
+MAX_FILTERS = 64
+MAX_FILTER_VALUES = 256
+MAX_SORTS = 32
 
 
 class VirtualViewConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     table: Literal["gold.fact_gpu_availability_history"] = VIRTUAL_TABLE_REF
-    columns: list[str | None] = Field(default_factory=list)
-    filter: list[tuple[str, str, Any]] = Field(default_factory=list)
+    columns: list[str | None] = Field(default_factory=list, max_length=MAX_COLUMNS)
+    filter: list[tuple[str, str, Any]] = Field(
+        default_factory=list, max_length=MAX_FILTERS
+    )
     filter_op: Literal["and", "or"] = "and"
-    sort: list[tuple[str, str]] = Field(default_factory=list)
-    group_by: list[str] = Field(default_factory=list)
-    split_by: list[str] = Field(default_factory=list)
+    sort: list[tuple[str, str]] = Field(default_factory=list, max_length=MAX_SORTS)
+    group_by: list[str] = Field(default_factory=list, max_length=MAX_COLUMNS)
+    split_by: list[str] = Field(default_factory=list, max_length=MAX_COLUMNS)
     expressions: dict[str, str] = Field(default_factory=dict)
 
 
@@ -60,9 +69,7 @@ class DataFusionVirtualTable:
             raise ValueError("Viewport end must be greater than its start")
         row_count = request.end_row - request.start_row
         if row_count > MAX_VIEWPORT_ROWS:
-            raise ValueError(
-                f"Viewport cannot exceed {MAX_VIEWPORT_ROWS:,} rows"
-            )
+            raise ValueError(f"Viewport cannot exceed {MAX_VIEWPORT_ROWS:,} rows")
         selected = [column for column in request.columns if column is not None]
         if not selected:
             selected = list(self.columns)
@@ -88,15 +95,27 @@ class DataFusionVirtualTable:
 
     def _order(self, config: VirtualViewConfig) -> str:
         clauses: list[str] = []
+        sorted_columns: set[str] = set()
         for column, direction in config.sort:
             self._column(column)
             normalized = direction.strip().lower()
-            if normalized not in {"asc", "desc", "col asc", "col desc"}:
+            if normalized == "none":
+                continue
+            absolute = normalized.endswith(" abs")
+            normalized = normalized.removeprefix("col ").removesuffix(" abs")
+            if normalized not in {"asc", "desc"}:
                 raise ValueError(f"Unsupported sort direction: {direction}")
-            clauses.append(f'{_identifier(column)} {normalized.removeprefix("col ")}')
-        if "observation_id" in self.columns and not any(
-            column == "observation_id" for column, _ in config.sort
-        ):
+            expression = _identifier(column)
+            if absolute:
+                if _perspective_type(self.columns[column]) not in {
+                    "integer",
+                    "float",
+                }:
+                    raise ValueError(f"Absolute sort requires a number: {column}")
+                expression = f"abs({expression})"
+            clauses.append(f"{expression} {normalized}")
+            sorted_columns.add(column)
+        if "observation_id" in self.columns and "observation_id" not in sorted_columns:
             clauses.append('"observation_id" asc')
         return f" order by {', '.join(clauses)}" if clauses else ""
 
@@ -111,7 +130,13 @@ class DataFusionVirtualTable:
         if normalized in {"in", "not in"}:
             if not isinstance(value, list) or not value:
                 raise ValueError(f"{operator} requires a non-empty list")
-            values = ", ".join(_literal(item) for item in value)
+            if len(value) > MAX_FILTER_VALUES:
+                raise ValueError(
+                    f"{operator} cannot exceed {MAX_FILTER_VALUES:,} values"
+                )
+            values = ", ".join(
+                _typed_literal(item, self.columns[column]) for item in value
+            )
             return f"{identifier} {normalized} ({values})"
         sql_operator = {
             "==": "=",
@@ -126,7 +151,9 @@ class DataFusionVirtualTable:
         }.get(normalized)
         if not sql_operator:
             raise ValueError(f"Unsupported filter operator: {operator}")
-        return f"{identifier} {sql_operator} {_literal(value)}"
+        return (
+            f"{identifier} {sql_operator} {_typed_literal(value, self.columns[column])}"
+        )
 
     def _select(self, column: str) -> str:
         identifier = _identifier(column)
@@ -165,6 +192,59 @@ def _literal(value: Any) -> str:
     if isinstance(value, str):
         return "'" + value.replace("'", "''") + "'"
     raise ValueError(f"Unsupported filter value: {type(value).__name__}")
+
+
+def _typed_literal(value: Any, data_type: str) -> str:
+    if value is None:
+        return "null"
+    normalized = data_type.lower()
+    if normalized.startswith("timestamp"):
+        return f"to_timestamp_millis({_timestamp_millis(value)})"
+    if normalized.startswith("date"):
+        return f"date '{_date_value(value).isoformat()}'"
+    return _literal(value)
+
+
+def _timestamp_millis(value: Any) -> int:
+    if isinstance(value, bool):
+        raise ValueError(
+            "Datetime filters require an ISO timestamp or epoch milliseconds"
+        )
+    if isinstance(value, (int, float)):
+        if not math.isfinite(float(value)):
+            raise ValueError("Datetime filters must be finite")
+        return int(value)
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"Invalid datetime filter: {value}") from exc
+    else:
+        raise ValueError(
+            "Datetime filters require an ISO timestamp or epoch milliseconds"
+        )
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return int(parsed.timestamp() * 1_000)
+
+
+def _date_value(value: Any) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if not math.isfinite(float(value)):
+            raise ValueError("Date filters must be finite")
+        return datetime.fromtimestamp(float(value) / 1_000, UTC).date()
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value[:10])
+        except ValueError as exc:
+            raise ValueError(f"Invalid date filter: {value}") from exc
+    raise ValueError("Date filters require an ISO date or epoch milliseconds")
 
 
 def _perspective_type(data_type: str) -> str:

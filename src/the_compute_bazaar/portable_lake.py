@@ -22,6 +22,7 @@ from .prices.gold_manifest import (
     latest_gold_manifest_ref,
     read_latest_gold_manifest,
 )
+from .prices.datafusion import DataFusionEngine
 from .prices.manifest import latest_manifest_ref
 from .prices.schemas import to_jsonable
 from .prices.storage import (
@@ -211,10 +212,14 @@ def _copy_latest_gold(
     run_id = str(source_manifest["run_id"])
     for table_name, source_ref in dict(source_manifest.get("table_refs") or {}).items():
         rows = _portableize_lineage(
-            _sanitize_rows(read_parquet_rows(str(source_ref))),
+            _sanitize_rows(
+                DataFusionEngine({str(table_name): source_ref}).query(
+                    f"select * from {table_name}"
+                )
+            ),
             output_root=output_root,
         )
-        filename = PurePosixPath(urlparse(str(source_ref)).path).name
+        filename = _table_filename(str(table_name), source_ref)
         target_ref = table_partition(
             str(output_root),
             table=f"gold/{table_name}",
@@ -227,6 +232,12 @@ def _copy_latest_gold(
         table_refs[str(table_name)] = target_ref
         row_counts[str(table_name)] = len(rows)
     return table_refs, row_counts
+
+
+def _table_filename(table_name: str, source_ref: Any) -> str:
+    if isinstance(source_ref, list):
+        return f"{table_name}.parquet"
+    return PurePosixPath(urlparse(str(source_ref)).path).name or f"{table_name}.parquet"
 
 
 def _portable_gold_manifest(

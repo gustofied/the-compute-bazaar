@@ -68,7 +68,7 @@ def _resolve_lake_relative_refs(
     ):
         values = dict(manifest.get(field) or {})
         manifest[field] = {
-            name: _resolve_ref(root, ref) for name, ref in values.items() if ref
+            name: _resolve_table_ref(root, ref) for name, ref in values.items() if ref
         }
     manifest_ref = manifest.get("manifest_ref")
     if manifest_ref:
@@ -87,3 +87,11 @@ def _resolve_ref(root: Path, ref: Any) -> str:
     except ValueError as exc:
         raise ValueError(f"Lake reference escapes its root: {value}") from exc
     return str(resolved)
+
+
+def _resolve_table_ref(root: Path, ref: Any) -> str | list[str]:
+    if isinstance(ref, list):
+        if not ref:
+            raise ValueError("Lake table reference list must not be empty")
+        return [_resolve_ref(root, part) for part in ref]
+    return _resolve_ref(root, ref)

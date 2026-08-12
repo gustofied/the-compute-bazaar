@@ -14,10 +14,16 @@ from .gold_manifest import (
     latest_gold_manifest_ref,
     read_latest_gold_manifest,
 )
-from .datafusion import DataFusionEngine
+from .datafusion import DataFusionEngine, TableRef
 from .gold_sources import (
+    gpu_price_index_history_row,
+    history_seed_ref,
     merge_compute_market_state_history,
     merge_gpu_price_index_history,
+    normalize_compute_market_state_history,
+    normalize_gpu_price_index_history,
+    retained_history_count,
+    retained_history_refs,
     silver_source_cte,
     silver_state_cte_fragment,
     silver_state_union_fragment,
@@ -68,7 +74,7 @@ class GoldBuildResult:
     source_normalized_refs: dict[str, str]
     source_market_state_refs: dict[str, str]
     observed_date: str
-    table_refs: dict[str, str]
+    table_refs: dict[str, TableRef]
     row_counts: dict[str, int]
     manifest_ref: str
 
@@ -122,7 +128,7 @@ def build_gold_market_tables(
     source_slug = "-".join(f"{name}-{source_run_ids[name]}" for name in provider_scope)
     gold_run_id = run_id or f"gold-{source_slug}"
 
-    table_refs = {
+    table_refs: dict[str, TableRef] = {
         table_name: table_partition(
             lake_root,
             table=f"gold/{table_name}",
@@ -206,29 +212,49 @@ def build_gold_market_tables(
             },
         ),
     )
-    rows_by_table["fact_compute_market_state_history"] = (
-        merge_compute_market_state_history(
-            previous_ref=previous_gold_manifest.get("table_refs", {}).get(
-                "fact_compute_market_state_history"
-            ),
+    previous_table_refs = dict(previous_gold_manifest.get("table_refs") or {})
+    history_counts: dict[str, int] = {}
+    market_history_name = "fact_compute_market_state_history"
+    previous_market_history_ref = previous_table_refs.get(market_history_name)
+    market_history_part_ref = str(table_refs[market_history_name])
+    market_history_seed = history_seed_ref(previous_market_history_ref)
+    if market_history_seed:
+        market_history_rows = merge_compute_market_state_history(
+            previous_ref=market_history_seed,
             current_rows=rows_by_table["fact_compute_market_state"],
             methodology=MARKET_STATE_METHODOLOGY,
             retained_source_connectors=set(registered_provider_names()),
         )
+    else:
+        market_history_rows = normalize_compute_market_state_history(
+            rows_by_table["fact_compute_market_state"],
+            methodology=MARKET_STATE_METHODOLOGY,
+            retained_source_connectors=set(registered_provider_names()),
+        )
+    rows_by_table[market_history_name] = market_history_rows
+    if market_history_rows:
+        write_parquet_rows(market_history_part_ref, market_history_rows)
+    table_refs[market_history_name] = retained_history_refs(
+        previous_market_history_ref,
+        market_history_part_ref,
+        part_written=bool(market_history_rows),
+    )
+    history_counts[market_history_name] = retained_history_count(
+        previous_gold_manifest,
+        market_history_name,
+        previous_market_history_ref,
+        market_history_part_ref,
+        market_history_rows,
     )
 
-    market_state_table_names = (
-        "fact_compute_market_state",
-        "fact_compute_market_state_history",
+    write_parquet_rows(
+        str(table_refs["fact_compute_market_state"]),
+        rows_by_table["fact_compute_market_state"],
     )
-    for table_name in market_state_table_names:
-        write_parquet_rows(table_refs[table_name], rows_by_table[table_name])
     engine.register_tables(
         {
             "fact_compute_market_state": table_refs["fact_compute_market_state"],
-            "fact_compute_market_state_history": table_refs[
-                "fact_compute_market_state_history"
-            ],
+            market_history_name: table_refs[market_history_name],
         }
     )
     rows_by_table["fact_gpu_availability"] = engine.query(
@@ -237,16 +263,41 @@ def build_gold_market_tables(
             fragments={"source_table": "fact_compute_market_state"},
         )
     )
-    rows_by_table["fact_gpu_availability_history"] = engine.query(
-        gold_model_sql(
-            "fact_gpu_availability_history",
-            fragments={"source_table": "fact_compute_market_state_history"},
+    availability_history_name = "fact_gpu_availability_history"
+    previous_availability_ref = previous_table_refs.get(availability_history_name)
+    availability_history_part_ref = str(table_refs[availability_history_name])
+    if history_seed_ref(previous_availability_ref):
+        availability_history_rows = engine.query(
+            gold_model_sql(
+                availability_history_name,
+                fragments={"source_table": market_history_name},
+            )
         )
+    else:
+        availability_history_rows = list(rows_by_table["fact_gpu_availability"])
+    rows_by_table[availability_history_name] = availability_history_rows
+    if availability_history_rows:
+        write_parquet_rows(availability_history_part_ref, availability_history_rows)
+    table_refs[availability_history_name] = retained_history_refs(
+        previous_availability_ref,
+        availability_history_part_ref,
+        part_written=bool(availability_history_rows),
+    )
+    history_counts[availability_history_name] = retained_history_count(
+        previous_gold_manifest,
+        availability_history_name,
+        previous_availability_ref,
+        availability_history_part_ref,
+        availability_history_rows,
     )
 
     for table_name, rows in rows_by_table.items():
-        if table_name not in market_state_table_names:
-            write_parquet_rows(table_refs[table_name], rows)
+        if table_name not in {
+            "fact_compute_market_state",
+            market_history_name,
+            availability_history_name,
+        }:
+            write_parquet_rows(str(table_refs[table_name]), rows)
 
     engine.register_tables({"fact_gpu_listings": table_refs["fact_gpu_listings"]})
     benchmark_constituents = engine.query(
@@ -269,28 +320,57 @@ def build_gold_market_tables(
     )
     rows_by_table["fact_gpu_price_index"] = benchmark_values
     write_parquet_rows(table_refs["fact_gpu_price_index"], benchmark_values)
-    rows_by_table["fact_gpu_price_index_history"] = merge_gpu_price_index_history(
-        previous_ref=previous_gold_manifest.get("table_refs", {}).get(
-            "fact_gpu_price_index_history"
-        ),
-        current_rows=benchmark_values,
-        gold_run_id=gold_run_id,
-        gold_observed_at=gold_observed_at,
-        gold_observed_date=observed_date,
-        methodology=BENCHMARK_METHODOLOGY,
+    price_history_name = "fact_gpu_price_index_history"
+    previous_price_history_ref = previous_table_refs.get(price_history_name)
+    price_history_part_ref = str(table_refs[price_history_name])
+    if history_seed_ref(previous_price_history_ref):
+        price_history_rows = merge_gpu_price_index_history(
+            previous_ref=history_seed_ref(previous_price_history_ref),
+            current_rows=benchmark_values,
+            gold_run_id=gold_run_id,
+            gold_observed_at=gold_observed_at,
+            gold_observed_date=observed_date,
+            methodology=BENCHMARK_METHODOLOGY,
+        )
+    else:
+        price_history_rows = normalize_gpu_price_index_history(
+            [
+                gpu_price_index_history_row(
+                    row,
+                    gold_run_id=gold_run_id,
+                    gold_observed_at=gold_observed_at,
+                    gold_observed_date=observed_date,
+                )
+                for row in benchmark_values
+            ],
+            methodology=BENCHMARK_METHODOLOGY,
+        )
+    rows_by_table[price_history_name] = price_history_rows
+    if price_history_rows:
+        write_parquet_rows(price_history_part_ref, price_history_rows)
+    table_refs[price_history_name] = retained_history_refs(
+        previous_price_history_ref,
+        price_history_part_ref,
+        part_written=bool(price_history_rows),
     )
-    write_parquet_rows(
-        table_refs["fact_gpu_price_index_history"],
-        rows_by_table["fact_gpu_price_index_history"],
+    history_counts[price_history_name] = retained_history_count(
+        previous_gold_manifest,
+        price_history_name,
+        previous_price_history_ref,
+        price_history_part_ref,
+        price_history_rows,
     )
 
-    prime_frontier_rows, prime_frontier_refs = build_prime_frontier_gold_products(
-        lake_root=lake_root,
-        previous_gold_manifest=previous_gold_manifest,
-        current_listing_rows=rows_by_table["fact_gpu_listings"],
-        observed_date=observed_date,
-        gold_run_id=gold_run_id,
-        gpu_price_index_ref=table_refs["fact_gpu_price_index"],
+    prime_frontier_rows, prime_frontier_refs, prime_frontier_counts = (
+        build_prime_frontier_gold_products(
+            lake_root=lake_root,
+            previous_gold_manifest=previous_gold_manifest,
+            current_listing_rows=rows_by_table["fact_gpu_listings"],
+            observed_date=observed_date,
+            gold_run_id=gold_run_id,
+            gold_observed_at=gold_observed_at,
+            gpu_price_index_ref=table_refs["fact_gpu_price_index"],
+        )
     )
     rows_by_table.update(prime_frontier_rows)
     table_refs.update(prime_frontier_refs)
@@ -298,6 +378,8 @@ def build_gold_market_tables(
         rows_by_table.setdefault(table_name, [])
 
     row_counts = {table_name: len(rows) for table_name, rows in rows_by_table.items()}
+    row_counts.update(history_counts)
+    row_counts.update(prime_frontier_counts)
     executed_gold_models = [*CORE_GOLD_SQL_TABLES]
     if "fact_prime_frontier_offer_reference_history" in table_refs:
         executed_gold_models.append("fact_prime_frontier_offer_reference_history")
@@ -310,7 +392,7 @@ def build_gold_market_tables(
         executed_gold_models,
         methodologies={
             "fact_compute_market_state": MARKET_STATE_METHODOLOGY,
-            "fact_prime_frontier_offer_reference_history": (PRIME_FRONTIER_METHODOLOGY),
+            "fact_prime_frontier_offer_reference_history": PRIME_FRONTIER_METHODOLOGY,
             "fact_prime_frontier_offer_ladder": PRIME_FRONTIER_METHODOLOGY,
         },
     )
@@ -323,7 +405,7 @@ def build_gold_market_tables(
         table_refs=table_refs,
         row_counts=row_counts,
         sql_models=sql_models,
-        observed_at=manifest_observed_at,
+        observed_at=gold_observed_at,
     )
 
     return GoldBuildResult(
@@ -346,7 +428,7 @@ def write_gold_manifest(
     run_id: str,
     observed_date: str,
     source_manifests: dict[str, dict[str, Any]],
-    table_refs: dict[str, str],
+    table_refs: dict[str, TableRef],
     row_counts: dict[str, int],
     sql_models: dict[str, dict[str, str]] | None = None,
     observed_at: str | None = None,

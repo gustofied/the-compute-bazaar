@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .datafusion import DataFusionEngine
+from .datafusion import DataFusionEngine, TableRef
 from .sql_models import PACKAGE_ROOT, SQL_ROOT
 
 DEFAULT_QUERY_CATALOG_PATH = SQL_ROOT / "catalog.json"
@@ -191,10 +191,10 @@ def scratch_query_entry(
     return entry
 
 
-def scratch_table_refs(manifest: dict[str, Any]) -> dict[str, str]:
+def scratch_table_refs(manifest: dict[str, Any]) -> dict[str, TableRef]:
     table_refs = dict(manifest.get("table_refs") or {})
     return {
-        table_name: str(ref)
+        table_name: ref
         for table_name, ref in table_refs.items()
         if ref and table_name in SCRATCH_TABLE_ALLOWLIST
     }
@@ -202,14 +202,14 @@ def scratch_table_refs(manifest: dict[str, Any]) -> dict[str, str]:
 
 def table_refs_for_catalog_query(
     manifest: dict[str, Any], query: CatalogQuery
-) -> dict[str, str]:
+) -> dict[str, TableRef]:
     manifest_refs = dict(manifest.get("table_refs") or {})
     missing = [table for table in query.tables if not manifest_refs.get(table)]
     if missing:
         raise RuntimeError(
             f"Latest gold manifest is missing table refs for: {', '.join(missing)}"
         )
-    return {table: str(manifest_refs[table]) for table in query.tables}
+    return {table: manifest_refs[table] for table in query.tables}
 
 
 def validate_scratch_sql(sql: str) -> str:

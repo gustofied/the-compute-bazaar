@@ -208,7 +208,7 @@ def query_gold_gpu_price_index_history(
     """Read GPU Price Index history, optionally limited by market run."""
     manifest = manifest or read_latest_gold_manifest(lake_root)
     history_ref = manifest["table_refs"]["fact_gpu_price_index_history"]
-    rows = DataFusionEngine({"fact_gpu_price_index_history": str(history_ref)}).query("""
+    rows = DataFusionEngine({"fact_gpu_price_index_history": history_ref}).query("""
 select *
 from fact_gpu_price_index_history
 order by gold_observed_at, benchmark_family_id
@@ -252,7 +252,7 @@ def query_gold_gpu_availability(
         gpu_model=gpu_model,
         measurement_kind=measurement_kind,
     )
-    rows = DataFusionEngine({table_name: str(table_ref)}).query(_with_limit(sql, limit))
+    rows = DataFusionEngine({table_name: table_ref}).query(_with_limit(sql, limit))
     return {"manifest": manifest, "rows": rows}
 
 
@@ -341,7 +341,7 @@ def query_gold_prime_frontier_offer_market(
         }
     engine = DataFusionEngine(
         {
-            table_name: str(ref)
+            table_name: ref
             for table_name in (
                 "fact_prime_frontier_offer_reference_history",
                 "fact_prime_frontier_offer_ladder",

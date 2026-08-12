@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 from urllib.parse import urlparse
 
@@ -12,12 +12,13 @@ from .storage import resolve_read_uri
 
 
 TABLE_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+TableRef = str | Sequence[str]
 
 
 class DataFusionEngine:
     """Own one DataFusion session and its registered market tables."""
 
-    def __init__(self, tables: Mapping[str, str] | None = None) -> None:
+    def __init__(self, tables: Mapping[str, TableRef] | None = None) -> None:
         try:
             import pyarrow as pa
             from datafusion import SQLOptions, SessionConfig, SessionContext
@@ -38,7 +39,7 @@ class DataFusionEngine:
             .with_allow_statements(False)
         )
         self._registered_buckets: set[str] = set()
-        self._table_refs: dict[str, str] = {}
+        self._table_refs: dict[str, tuple[str, ...]] = {}
         if tables:
             self.register_tables(tables)
 
@@ -53,20 +54,30 @@ class DataFusionEngine:
             raise KeyError(f"Unknown DataFusion table: {name}")
         return tuple(self._context.table(name).schema().names)
 
-    def register_tables(self, tables: Mapping[str, str]) -> None:
+    def register_tables(self, tables: Mapping[str, TableRef]) -> None:
         resolved = {
-            _validated_table_name(name): resolve_read_uri(uri)
-            for name, uri in tables.items()
+            _validated_table_name(name): tuple(
+                resolve_read_uri(uri) for uri in _table_ref_parts(ref)
+            )
+            for name, ref in tables.items()
         }
         duplicate_names = sorted(set(resolved) & set(self._table_refs))
         if duplicate_names:
             raise ValueError(
                 f"DataFusion tables already registered: {', '.join(duplicate_names)}"
             )
-        self._register_object_stores(resolved.values())
-        for table_name, parquet_uri in resolved.items():
-            self._context.register_parquet(table_name, parquet_uri)
-            self._table_refs[table_name] = parquet_uri
+        self._register_object_stores(
+            uri for parquet_uris in resolved.values() for uri in parquet_uris
+        )
+        for table_name, parquet_uris in resolved.items():
+            if len(parquet_uris) == 1:
+                self._context.register_parquet(table_name, parquet_uris[0])
+            else:
+                frame = self._context.read_parquet(parquet_uris[0])
+                for parquet_uri in parquet_uris[1:]:
+                    frame = frame.union_by_name(self._context.read_parquet(parquet_uri))
+                self._context.register_view(table_name, frame)
+            self._table_refs[table_name] = parquet_uris
 
     def register_arrow_table(self, table_name: str, table: Any) -> None:
         name = _validated_table_name(table_name)
@@ -76,7 +87,7 @@ class DataFusionEngine:
         if not batches:
             batches = [self._arrow.RecordBatch.from_pylist([], schema=table.schema)]
         self._context.register_record_batches(name, [batches])
-        self._table_refs[name] = "memory://local"
+        self._table_refs[name] = ("memory://local",)
 
     def deregister_tables(self, table_names: Iterable[str]) -> None:
         for table_name in table_names:
@@ -164,3 +175,11 @@ def _validated_table_name(table_name: str) -> str:
     if not TABLE_NAME_PATTERN.fullmatch(table_name):
         raise ValueError(f"Invalid DataFusion table name: {table_name!r}")
     return table_name
+
+
+def _table_ref_parts(ref: TableRef) -> tuple[str, ...]:
+    values = (ref,) if isinstance(ref, str) else tuple(ref)
+    parts = tuple(str(value) for value in values if str(value))
+    if not parts:
+        raise ValueError("DataFusion table reference must not be empty")
+    return parts

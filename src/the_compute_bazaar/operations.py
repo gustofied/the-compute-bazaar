@@ -226,6 +226,7 @@ class OperationalLedger:
     ) -> None:
         self.path = (path or default_fleet_root() / "operations.sqlite3").expanduser()
         self.registry = registry or FleetRegistry(self.path.parent)
+        self._initialize()
 
     def version(self) -> tuple[int, int, int]:
         return (
@@ -270,9 +271,7 @@ limit 1
             ).fetchone()
         return str(row["observation_id"]) if row else None
 
-    def begin_provisioning(
-        self, request: ProvisioningRequest
-    ) -> ProvisioningAttempt:
+    def begin_provisioning(self, request: ProvisioningRequest) -> ProvisioningAttempt:
         from .provisioning import ProvisioningAttempt
 
         with closing(self._connect()) as connection:
@@ -458,7 +457,9 @@ where attempt_id = ?
                 (attempt_id,),
             ).fetchone()
             if not attempt:
-                raise ProvisioningStateError(f"Unknown provisioning attempt: {attempt_id}")
+                raise ProvisioningStateError(
+                    f"Unknown provisioning attempt: {attempt_id}"
+                )
             allowed = {"uncertain", "succeeded"} if recover else {"pending"}
             if attempt["state"] not in allowed:
                 raise ProvisioningStateError(
@@ -469,7 +470,10 @@ where attempt_id = ?
                     "Allocation request does not match its provisioning attempt"
                 )
             provider_resource_id = attempt["provider_resource_id"]
-            if provider_resource_id and provider_resource_id != allocation.provider_resource_id:
+            if (
+                provider_resource_id
+                and provider_resource_id != allocation.provider_resource_id
+            ):
                 raise ProvisioningStateError(
                     "Allocation resource does not match its provisioning attempt"
                 )
@@ -567,8 +571,12 @@ where allocation_id = ?
             "observed_at": inspection.observed_at,
             "gpu_count_detected": len(gpus),
             "gpu_utilization_pct": _average(gpu.utilization_pct for gpu in gpus),
-            "gpu_memory_used_mb": sum(gpu.memory_used_mb for gpu in gpus) if gpus else None,
-            "gpu_memory_total_mb": sum(gpu.memory_total_mb for gpu in gpus) if gpus else None,
+            "gpu_memory_used_mb": sum(gpu.memory_used_mb for gpu in gpus)
+            if gpus
+            else None,
+            "gpu_memory_total_mb": sum(gpu.memory_total_mb for gpu in gpus)
+            if gpus
+            else None,
             "gpu_temperature_c": max(
                 (gpu.temperature_c for gpu in gpus if gpu.temperature_c is not None),
                 default=None,
@@ -711,14 +719,14 @@ where host_id = ? and state in ('starting', 'running', 'unknown')
             _insert(connection, table, rows, ignore=ignore, replace=replace)
 
     def _connect(self) -> sqlite3.Connection:
+        return self._open_connection()
+
+    def _initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.path.parent.chmod(0o700)
         with _schema_lock(self.path):
-            connection = sqlite3.connect(self.path, timeout=5)
+            connection = self._open_connection()
             try:
-                connection.row_factory = sqlite3.Row
-                connection.execute("pragma busy_timeout=5000")
-                connection.execute("pragma foreign_keys=on")
                 connection.execute("pragma journal_mode=wal")
                 connection.executescript(SCHEMA)
                 connection.execute("begin immediate")
@@ -733,7 +741,14 @@ where host_id = ? and state in ('starting', 'running', 'unknown')
                 connection.rollback()
                 connection.close()
                 raise
+            connection.close()
         self.path.chmod(0o600)
+
+    def _open_connection(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.path, timeout=5)
+        connection.row_factory = sqlite3.Row
+        connection.execute("pragma busy_timeout=5000")
+        connection.execute("pragma foreign_keys=on")
         return connection
 
 
@@ -750,8 +765,7 @@ def _migrate(connection: sqlite3.Connection) -> None:
             "alter table offer_observations add column market_product_key text"
         )
     allocation_columns = {
-        str(row["name"])
-        for row in connection.execute("pragma table_info(allocations)")
+        str(row["name"]) for row in connection.execute("pragma table_info(allocations)")
     }
     if allocation_columns and "request_id" not in allocation_columns:
         connection.execute("drop table allocations")

@@ -13,9 +13,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v9
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
       - run: uv sync --frozen --extra terminal --group dev
       - run: uv run ruff check src tests
       - run: uv run python -m unittest discover -s tests -v
+
+  terminal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: terminal/pnpm-lock.yaml
+      - run: pnpm --dir terminal install --frozen-lockfile
+      - run: pnpm --dir terminal build

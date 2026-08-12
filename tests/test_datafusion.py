@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from pydantic import ValidationError
 
 from the_compute_bazaar.data_catalog import ComputeBazaarCatalog
 from the_compute_bazaar.data_sync import inspect_lake, sync_public_lake
@@ -19,6 +20,9 @@ from the_compute_bazaar.prices.datafusion import DataFusionEngine
 from the_compute_bazaar.prices.gold import build_gold_market_tables
 from the_compute_bazaar.prices.gold_manifest import read_latest_gold_manifest
 from the_compute_bazaar.prices.ingestion import persist_provider_snapshot
+from the_compute_bazaar.prices.offer_reference import (
+    build_prime_frontier_offer_events,
+)
 from the_compute_bazaar.prices.schemas import OfferObservation
 from the_compute_bazaar.prices.silver_contract import silver_observation_select
 from the_compute_bazaar.prices.storage import write_offer_observations_parquet
@@ -30,6 +34,121 @@ from the_compute_bazaar.terminal.virtual_table import (
 
 
 class DataFusionEngineTest(unittest.TestCase):
+    def test_prime_empty_snapshot_records_departures(self) -> None:
+        first = datetime(2026, 8, 10, 12, tzinfo=UTC)
+        second = datetime(2026, 8, 10, 13, tzinfo=UTC)
+        history = [
+            {
+                "listing_id": "prime-h200-1",
+                "provider": "verda",
+                "source_offer_id": "prime-h200-1",
+                "gpu_model": "H200_141GB",
+                "source_connector": "prime_intellect",
+                "gpu_count": 8,
+                "price_usd_gpu_hr": 3.95,
+                "is_spot": False,
+                "is_secure": True,
+                "source_availability_status": "available",
+                "observed_at": first,
+                "gold_run_id": "gold-1",
+                "gold_observed_at": first,
+            }
+        ]
+
+        events = build_prime_frontier_offer_events(
+            history,
+            snapshot_keys=[(first, "gold-1"), (second, "gold-2")],
+        )
+
+        self.assertEqual(
+            [(row["gold_run_id"], row["event_type"]) for row in events],
+            [("gold-1", "entered"), ("gold-2", "left_availability")],
+        )
+
+    def test_prime_events_treat_one_gold_run_as_one_snapshot(self) -> None:
+        observed_at = datetime(2026, 8, 10, 12, tzinfo=UTC)
+        history = [
+            {
+                "listing_id": "prime-h200-1",
+                "provider": "verda",
+                "source_offer_id": "prime-h200-1",
+                "gpu_model": "H200_141GB",
+                "source_connector": "prime_intellect",
+                "gpu_count": 8,
+                "price_usd_gpu_hr": 3.95,
+                "is_spot": False,
+                "is_secure": True,
+                "source_availability_status": "available",
+                "observed_at": observed_at,
+                "gold_run_id": "gold-1",
+                "gold_observed_at": observed_at,
+            }
+        ]
+
+        events = build_prime_frontier_offer_events(
+            history,
+            snapshot_keys=[(datetime(2026, 8, 10, 12, 5, tzinfo=UTC), "gold-1")],
+        )
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event_type"], "entered")
+        self.assertEqual(events[0]["observed_at"], "2026-08-10T12:05:00+00:00")
+
+    def test_gold_history_appends_immutable_run_parts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lake = root / "lake"
+            for run, hour, price in (("1", 12, 2.5), ("2", 13, 2.75)):
+                observed_at = datetime(2026, 8, 10, hour, tzinfo=UTC)
+                persist_provider_snapshot(
+                    provider="vast",
+                    run_id=f"vast-market-{run}",
+                    trace_id=f"market-{run}",
+                    observed_at=observed_at,
+                    lake_root=str(lake),
+                    raw_ref=str(root / "raw" / f"vast-{run}.json"),
+                    raw_payload={"provider": "vast", "offers": 1},
+                    raw_offer_count=1,
+                    normalized=[
+                        OfferObservation(
+                            provider="vast",
+                            source_offer_id="vast-h100",
+                            observed_at=observed_at,
+                            gpu_raw_name="H100 SXM",
+                            gpu_model="H100_80GB",
+                            gpu_count=1,
+                            vram_gb=80,
+                            price_usd_instance_hr=price,
+                        )
+                    ],
+                    unknown_gpu_names=[],
+                    snapshot_query={"gpu_family": "H100"},
+                    automq_bootstrap_servers=None,
+                    automq_config=None,
+                    topic_prefix="compute_bazaar.test",
+                    dry_run=True,
+                )
+                gold = build_gold_market_tables(
+                    lake_root=str(lake),
+                    providers=["vast"],
+                    run_id=f"gold-market-{run}",
+                    calculated_at=observed_at.isoformat(),
+                    manifest_observed_at=observed_at.isoformat(),
+                )
+                history_refs = gold.table_refs["fact_gpu_price_index_history"]
+                self.assertIsInstance(history_refs, list)
+                self.assertEqual(len(history_refs), int(run))
+                if run == "1":
+                    first_ref = history_refs[0]
+                    first_payload = Path(first_ref).read_bytes()
+
+            self.assertEqual(Path(first_ref).read_bytes(), first_payload)
+            self.assertEqual(gold.row_counts["fact_gpu_price_index_history"], 2)
+            rows = DataFusionEngine(
+                {"history": gold.table_refs["fact_gpu_price_index_history"]}
+            ).query("select * from history order by gold_observed_at")
+            self.assertEqual([row["benchmark_usd_gpu_hr"] for row in rows], [2.5, 2.75])
+
     def test_offer_observation_contract_builds_gold_and_portable_lake(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -289,9 +408,7 @@ order by observation_purpose
     def test_catalog_reports_truncation_only_when_more_rows_exist(self) -> None:
         catalog = object.__new__(ComputeBazaarCatalog)
         catalog.engine = DataFusionEngine()
-        catalog.engine.register_arrow_table(
-            "numbers", pa.table({"value": [1, 2, 3]})
-        )
+        catalog.engine.register_arrow_table("numbers", pa.table({"value": [1, 2, 3]}))
 
         bounded, selected_limit, has_more = catalog.query_arrow(
             "select * from numbers order by value", limit=2
@@ -316,8 +433,7 @@ order by observation_purpose
                 {
                     "observation_id": ["obs-1", "obs-2", "obs-3"],
                     "observed_at": [
-                        datetime(2026, 8, 10, hour, tzinfo=UTC)
-                        for hour in (10, 11, 12)
+                        datetime(2026, 8, 10, hour, tzinfo=UTC) for hour in (10, 11, 12)
                     ],
                     "source_connector": [
                         "prime_intellect",
@@ -325,6 +441,8 @@ order by observation_purpose
                         "prime_intellect",
                     ],
                     "available_units": [3, 4, 7],
+                    "signed_metric": [-4, 2, -7],
+                    "observed_date": [date(2026, 8, day) for day in (9, 10, 11)],
                 }
             ),
         )
@@ -357,6 +475,52 @@ order by observation_purpose
             viewport.to_pylist(),
             [{"observation_id": "obs-1", "available_units": 3}],
         )
+        absolute = virtual.data(
+            VirtualDataRequest(
+                columns=["observation_id", "signed_metric"],
+                sort=[("signed_metric", "desc abs")],
+                start_row=0,
+                end_row=3,
+            )
+        )
+        self.assertEqual(
+            [row["observation_id"] for row in absolute.to_pylist()],
+            ["obs-3", "obs-1", "obs-2"],
+        )
+        self.assertEqual(
+            virtual.size(
+                VirtualViewConfig(
+                    filter=[
+                        (
+                            "observed_at",
+                            ">=",
+                            int(
+                                datetime(2026, 8, 10, 11, tzinfo=UTC).timestamp() * 1000
+                            ),
+                        )
+                    ]
+                )
+            ),
+            2,
+        )
+        self.assertEqual(
+            virtual.size(
+                VirtualViewConfig(filter=[("observed_date", ">=", "2026-08-10")])
+            ),
+            2,
+        )
+        self.assertEqual(
+            virtual.size(VirtualViewConfig(sort=[("available_units", "none")])),
+            3,
+        )
+        with self.assertRaises(ValidationError):
+            VirtualViewConfig.model_validate(
+                {"table": "gold.fact_gpu_availability_history", "unknown": True}
+            )
+        with self.assertRaisesRegex(ValueError, "256"):
+            virtual.size(
+                VirtualViewConfig(filter=[("available_units", "in", list(range(257)))])
+            )
         with self.assertRaisesRegex(ValueError, "flat views"):
             virtual.size(VirtualViewConfig(group_by=["source_connector"]))
         with self.assertRaisesRegex(ValueError, "2,000"):

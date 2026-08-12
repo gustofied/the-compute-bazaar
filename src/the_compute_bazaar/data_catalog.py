@@ -185,7 +185,7 @@ order by ordinal_position
                 "Latest Gold manifest has empty table references: "
                 + ", ".join(sorted(missing))
             )
-        table_refs = {str(name): str(ref) for name, ref in source_refs.items()}
+        table_refs = {str(name): ref for name, ref in source_refs.items()}
         if not table_refs:
             raise RuntimeError("Latest Gold manifest has no Gold table references")
         self.engine.register_tables(

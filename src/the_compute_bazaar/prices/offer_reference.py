@@ -158,24 +158,29 @@ def normalize_prime_frontier_history(
 
 def build_prime_frontier_offer_events(
     history_rows: Iterable[Mapping[str, Any]],
+    *,
+    snapshot_keys: Iterable[tuple[Any, str]] = (),
 ) -> list[dict[str, Any]]:
     """Classify observable configuration changes without inventing fills."""
     normalized = normalize_prime_frontier_history(history_rows)
-    run_keys = sorted(
-        {
-            (
-                str(row.get("gold_observed_at") or ""),
-                str(row.get("gold_run_id") or ""),
-            )
-            for row in normalized
-        }
-    )
-    snapshots: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    run_times: dict[str, str] = {}
+    for row in normalized:
+        observed_at, run_id = _snapshot_key(
+            row.get("gold_observed_at"), row.get("gold_run_id")
+        )
+        if run_id:
+            run_times[run_id] = max(run_times.get(run_id, ""), observed_at)
+    for observed_at, run_id in snapshot_keys:
+        timestamp, normalized_run_id = _snapshot_key(observed_at, run_id)
+        if normalized_run_id:
+            run_times[normalized_run_id] = timestamp
+
+    run_keys = sorted((observed_at, run_id) for run_id, observed_at in run_times.items())
+    snapshots: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in normalized:
         snapshots[
             (
                 str(row.get("gpu_family_id") or ""),
-                str(row.get("gold_observed_at") or ""),
                 str(row.get("gold_run_id") or ""),
             )
         ].append(row)
@@ -185,7 +190,7 @@ def build_prime_frontier_offer_events(
         previous_key: tuple[str, str] | None = None
         previous_rows: dict[str, dict[str, Any]] = {}
         for observed_at, run_id in run_keys:
-            snapshot_rows = snapshots.get((product.family_id, observed_at, run_id), [])
+            snapshot_rows = snapshots.get((product.family_id, run_id), [])
             current_rows = {
                 str(row["listing_id"]): row
                 for row in snapshot_rows
@@ -267,6 +272,11 @@ def build_prime_frontier_offer_events(
             previous_rows = current_rows
             previous_key = (observed_at, run_id)
     return events
+
+
+def _snapshot_key(observed_at: Any, run_id: Any) -> tuple[str, str]:
+    timestamp = _timestamp(observed_at)
+    return (timestamp.isoformat() if timestamp else "", str(run_id or ""))
 
 
 def prime_frontier_reference_history_sql() -> str:

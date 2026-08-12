@@ -31,6 +31,44 @@ GPU_PRICE_INDEX_HISTORY_FIELDS = (
 )
 
 
+def history_seed_ref(previous_ref: Any) -> Any:
+    """Return an old cumulative object only while converting it into a seed part."""
+    return None if isinstance(previous_ref, list) else previous_ref
+
+
+def retained_history_refs(
+    previous_ref: Any,
+    part_ref: str,
+    *,
+    part_written: bool,
+) -> list[str]:
+    if isinstance(previous_ref, list):
+        refs = [str(ref) for ref in previous_ref]
+        if part_written and part_ref not in refs:
+            refs.append(part_ref)
+        return refs
+    if part_written:
+        return [part_ref]
+    return [str(previous_ref)] if previous_ref else []
+
+
+def retained_history_count(
+    previous_manifest: dict[str, Any],
+    table_name: str,
+    previous_ref: Any,
+    part_ref: str,
+    part_rows: list[dict[str, Any]],
+) -> int:
+    if isinstance(previous_ref, list):
+        previous_count = int(
+            (previous_manifest.get("row_counts") or {}).get(table_name) or 0
+        )
+        return previous_count + (0 if part_ref in previous_ref else len(part_rows))
+    if part_rows:
+        return len(part_rows)
+    return int((previous_manifest.get("row_counts") or {}).get(table_name) or 0)
+
+
 def silver_source_cte(table_names: list[str]) -> str:
     selects = [silver_observation_select(table_name) for table_name in table_names]
     return f"silver_offer_observations as ({' union all '.join(selects)})"
@@ -110,10 +148,23 @@ def merge_compute_market_state_history(
     previous_rows: list[dict[str, Any]] = []
     if previous_ref:
         previous_rows = DataFusionEngine(
-            {"fact_compute_market_state_history": str(previous_ref)}
+            {"fact_compute_market_state_history": previous_ref}
         ).query("select * from fact_compute_market_state_history")
+    return normalize_compute_market_state_history(
+        [*previous_rows, *current_rows],
+        methodology=methodology,
+        retained_source_connectors=retained_source_connectors,
+    )
+
+
+def normalize_compute_market_state_history(
+    rows: list[dict[str, Any]],
+    *,
+    methodology: str,
+    retained_source_connectors: set[str],
+) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
-    for row in [*previous_rows, *current_rows]:
+    for row in rows:
         row = dict(row)
         if str(row.get("source_connector") or "") not in retained_source_connectors:
             continue
@@ -147,7 +198,7 @@ def merge_gpu_price_index_history(
     previous_rows: list[dict[str, Any]] = []
     if previous_ref:
         previous_rows = DataFusionEngine(
-            {"fact_gpu_price_index_history": str(previous_ref)}
+            {"fact_gpu_price_index_history": previous_ref}
         ).query("select * from fact_gpu_price_index_history")
     current_history = [
         gpu_price_index_history_row(
@@ -158,8 +209,16 @@ def merge_gpu_price_index_history(
         )
         for row in current_rows
     ]
+    return normalize_gpu_price_index_history(
+        [*previous_rows, *current_history], methodology=methodology
+    )
+
+
+def normalize_gpu_price_index_history(
+    rows: list[dict[str, Any]], *, methodology: str
+) -> list[dict[str, Any]]:
     merged: dict[tuple[str, str], dict[str, Any]] = {}
-    for row in [*previous_rows, *current_history]:
+    for row in rows:
         row = gpu_price_index_history_row(row)
         row["methodology_version"] = methodology
         row["latest_observed_at"] = _timestamp(row.get("latest_observed_at"))

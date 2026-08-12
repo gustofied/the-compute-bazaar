@@ -6,12 +6,14 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pyarrow as pa
 
+import the_compute_bazaar.operations as operations
 from the_compute_bazaar.data_catalog import _market_to_fleet_sql
 from the_compute_bazaar.fleet import FleetRegistry, FleetService
 from the_compute_bazaar.fleet.models import FleetInspection, GpuDevice
@@ -24,6 +26,18 @@ from tests.test_offers import FakeRunpodClient
 
 
 class OperationalLedgerTest(unittest.TestCase):
+    def test_schema_is_initialized_once_per_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "operations.sqlite3"
+            with patch.object(
+                operations, "_migrate", wraps=operations._migrate
+            ) as migrate:
+                ledger = OperationalLedger(path)
+                with closing(ledger._connect()), closing(ledger._connect()):
+                    pass
+
+            self.assertEqual(migrate.call_count, 1)
+
     def test_concurrent_connections_migrate_one_legacy_store(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "operations.sqlite3"

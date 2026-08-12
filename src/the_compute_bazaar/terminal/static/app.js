@@ -186,7 +186,7 @@ function setViewCopy(kind, title, description) {
 function setResultLimit(truncated, limit = null) {
   elements.resultLimit.hidden = !truncated;
   elements.resultLimit.textContent = truncated
-    ? `Showing the first ${formatCount(limit)} rows. Refine the SQL for the full result.`
+    ? `Showing the first ${formatCount(limit)} rows. Perspective filters, grouping, and sorting apply only to this result.`
     : "";
 }
 
