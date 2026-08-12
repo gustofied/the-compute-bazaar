@@ -440,8 +440,10 @@ order by observation_purpose
                         "runpod",
                         "prime_intellect",
                     ],
+                    "resource_type": ["H100", "H100", "H200"],
                     "available_units": [3, 4, 7],
                     "signed_metric": [-4, 2, -7],
+                    "stock_status": ["available", "available", "limited"],
                     "observed_date": [date(2026, 8, day) for day in (9, 10, 11)],
                 }
             ),
@@ -521,8 +523,129 @@ order by observation_purpose
             virtual.size(
                 VirtualViewConfig(filter=[("available_units", "in", list(range(257)))])
             )
-        with self.assertRaisesRegex(ValueError, "flat views"):
-            virtual.size(VirtualViewConfig(group_by=["source_connector"]))
+        grouped = VirtualViewConfig(
+            columns=["available_units"],
+            filter=[("source_connector", "==", "prime_intellect")],
+            sort=[("available_units", "desc")],
+            group_by=["resource_type"],
+            aggregates={"available_units": "sum"},
+        )
+        grouped_result = virtual.data(
+            VirtualDataRequest.model_validate(
+                {**grouped.model_dump(), "start_row": 0, "end_row": 10}
+            )
+        )
+        self.assertEqual(
+            grouped_result.schema.field("__ROW_PATH_0__").type, pa.string()
+        )
+        handwritten = catalog.engine.query_arrow(
+            """
+            select
+              resource_type as "__ROW_PATH_0__",
+              sum(available_units) as available_units
+            from gold.fact_gpu_availability_history
+            where source_connector = 'prime_intellect'
+            group by resource_type
+            order by available_units desc, "__ROW_PATH_0__" asc
+            """
+        )
+
+        self.assertEqual(virtual.size(grouped), 2)
+        self.assertEqual(grouped_result.to_pylist(), handwritten.to_pylist())
+        self.assertEqual(
+            grouped_result.to_pylist(),
+            [
+                {"__ROW_PATH_0__": "H200", "available_units": 7},
+                {"__ROW_PATH_0__": "H100", "available_units": 3},
+            ],
+        )
+        all_aggregates = VirtualViewConfig(
+            columns=[
+                "available_units",
+                "signed_metric",
+                "observation_id",
+                "observed_at",
+                "observed_date",
+            ],
+            sort=[("source_connector", "asc")],
+            group_by=["source_connector"],
+            aggregates={
+                "available_units": "sum",
+                "signed_metric": "avg",
+                "observation_id": "count",
+                "observed_at": "min",
+                "observed_date": "max",
+            },
+        )
+        all_aggregate_result = virtual.data(
+            VirtualDataRequest.model_validate(
+                {**all_aggregates.model_dump(), "start_row": 0, "end_row": 10}
+            )
+        )
+        all_aggregate_expected = catalog.engine.query_arrow(
+            """
+            select
+              source_connector as "__ROW_PATH_0__",
+              sum(available_units) as available_units,
+              avg(signed_metric) as signed_metric,
+              count(observation_id) as observation_id,
+              min(observed_at) as observed_at,
+              max(observed_date) as observed_date
+            from gold.fact_gpu_availability_history
+            group by source_connector
+            order by "__ROW_PATH_0__" asc
+            """
+        )
+        self.assertEqual(
+            all_aggregate_result.to_pylist(), all_aggregate_expected.to_pylist()
+        )
+        self.assertEqual(
+            all_aggregate_result.schema.field("observed_at").type,
+            pa.timestamp("ms", tz="UTC"),
+        )
+        flat_datetimes = virtual.data(
+            VirtualDataRequest(columns=["observed_at"], start_row=0, end_row=1)
+        )
+        self.assertEqual(
+            flat_datetimes.schema.field("observed_at").type,
+            pa.timestamp("ms", tz="UTC"),
+        )
+        hidden_sort = VirtualViewConfig(
+            columns=["observation_id"],
+            group_by=["source_connector"],
+            aggregates={"observation_id": "count", "available_units": "sum"},
+            sort=[("available_units", "desc")],
+        )
+        hidden_sort_result = virtual.data(
+            VirtualDataRequest.model_validate(
+                {**hidden_sort.model_dump(), "start_row": 0, "end_row": 10}
+            )
+        )
+        self.assertEqual(
+            hidden_sort_result.to_pylist(),
+            [
+                {"__ROW_PATH_0__": "prime_intellect", "observation_id": 2},
+                {"__ROW_PATH_0__": "runpod", "observation_id": 1},
+            ],
+        )
+        group_keys_only = virtual.data(
+            VirtualDataRequest(group_by=["source_connector"], start_row=0, end_row=10)
+        )
+        self.assertEqual(group_keys_only.column_names, ["__ROW_PATH_0__"])
+        with self.assertRaisesRegex(ValueError, "numeric column"):
+            virtual.size(
+                VirtualViewConfig(
+                    columns=["stock_status"],
+                    group_by=["resource_type"],
+                    aggregates={"stock_status": "avg"},
+                )
+            )
+        with self.assertRaisesRegex(ValueError, "Split by"):
+            virtual.size(VirtualViewConfig(split_by=["source_connector"]))
+        with self.assertRaisesRegex(ValueError, "Expressions"):
+            virtual.size(
+                VirtualViewConfig(expressions={"double": "available_units * 2"})
+            )
         with self.assertRaisesRegex(ValueError, "2,000"):
             virtual.data(VirtualDataRequest(start_row=0, end_row=2_001))
 

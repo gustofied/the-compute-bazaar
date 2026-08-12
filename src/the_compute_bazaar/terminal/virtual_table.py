@@ -18,6 +18,7 @@ MAX_COLUMNS = 128
 MAX_FILTERS = 64
 MAX_FILTER_VALUES = 256
 MAX_SORTS = 32
+Aggregate = Literal["count", "sum", "avg", "min", "max"]
 
 
 class VirtualViewConfig(BaseModel):
@@ -31,6 +32,10 @@ class VirtualViewConfig(BaseModel):
     filter_op: Literal["and", "or"] = "and"
     sort: list[tuple[str, str]] = Field(default_factory=list, max_length=MAX_SORTS)
     group_by: list[str] = Field(default_factory=list, max_length=MAX_COLUMNS)
+    group_rollup_mode: Literal["flat"] = "flat"
+    aggregates: dict[str, Aggregate] = Field(
+        default_factory=dict, max_length=MAX_COLUMNS
+    )
     split_by: list[str] = Field(default_factory=list, max_length=MAX_COLUMNS)
     expressions: dict[str, str] = Field(default_factory=dict)
 
@@ -58,10 +63,19 @@ class DataFusionVirtualTable:
         }
 
     def size(self, config: VirtualViewConfig) -> int:
+        self._validate(config)
         where = self._where(config)
-        row = self.catalog.engine.query(
-            f"select count(*) as row_count from {VIRTUAL_TABLE_REF}{where}"
-        )[0]
+        if config.group_by:
+            groups = ", ".join(_identifier(column) for column in config.group_by)
+            source = (
+                f"(select {groups} from {VIRTUAL_TABLE_REF}{where} "
+                f"group by {groups}) as grouped"
+            )
+        else:
+            source = f"{VIRTUAL_TABLE_REF}{where}"
+        row = self.catalog.engine.query(f"select count(*) as row_count from {source}")[
+            0
+        ]
         return int(row["row_count"])
 
     def data(self, request: VirtualDataRequest) -> pa.Table:
@@ -70,20 +84,30 @@ class DataFusionVirtualTable:
         row_count = request.end_row - request.start_row
         if row_count > MAX_VIEWPORT_ROWS:
             raise ValueError(f"Viewport cannot exceed {MAX_VIEWPORT_ROWS:,} rows")
-        selected = [column for column in request.columns if column is not None]
-        if not selected:
-            selected = list(self.columns)
-        self._columns(selected)
-        select_sql = ", ".join(self._select(column) for column in selected)
+        self._validate(request)
+        selected = self._selected(request)
+        if request.group_by:
+            group_select = [
+                f'{_identifier(column)} as "__ROW_PATH_{index}__"'
+                for index, column in enumerate(request.group_by)
+            ]
+            value_select = [
+                self._aggregate_select(column, request) for column in selected
+            ]
+            select_sql = ", ".join([*group_select, *value_select])
+            groups = ", ".join(_identifier(column) for column in request.group_by)
+            group_sql = f" group by {groups}"
+        else:
+            select_sql = ", ".join(self._select(column) for column in selected)
+            group_sql = ""
         sql = (
             f"select {select_sql} from {VIRTUAL_TABLE_REF}"
-            f"{self._where(request)}{self._order(request)} "
+            f"{self._where(request)}{group_sql}{self._order(request, selected)} "
             f"limit {row_count} offset {request.start_row}"
         )
-        return self.catalog.engine.query_arrow(sql)
+        return _perspective_arrow(self.catalog.engine.query_arrow(sql))
 
     def _where(self, config: VirtualViewConfig) -> str:
-        self._flat(config)
         if not config.filter:
             return ""
         filters = [
@@ -93,7 +117,7 @@ class DataFusionVirtualTable:
         joiner = f" {config.filter_op} "
         return f" where {joiner.join(filters)}"
 
-    def _order(self, config: VirtualViewConfig) -> str:
+    def _order(self, config: VirtualViewConfig, selected: list[str]) -> str:
         clauses: list[str] = []
         sorted_columns: set[str] = set()
         for column, direction in config.sort:
@@ -105,17 +129,31 @@ class DataFusionVirtualTable:
             normalized = normalized.removeprefix("col ").removesuffix(" abs")
             if normalized not in {"asc", "desc"}:
                 raise ValueError(f"Unsupported sort direction: {direction}")
-            expression = _identifier(column)
+            if config.group_by and column not in config.group_by:
+                expression = (
+                    _identifier(column)
+                    if column in selected
+                    else self._aggregate_expression(column, config)
+                )
+                result_type = self._aggregate_type(column, config)
+            else:
+                expression = _identifier(column)
+                result_type = _perspective_type(self.columns[column])
             if absolute:
-                if _perspective_type(self.columns[column]) not in {
-                    "integer",
-                    "float",
-                }:
+                if result_type not in {"integer", "float"}:
                     raise ValueError(f"Absolute sort requires a number: {column}")
                 expression = f"abs({expression})"
             clauses.append(f"{expression} {normalized}")
             sorted_columns.add(column)
-        if "observation_id" in self.columns and "observation_id" not in sorted_columns:
+        if config.group_by:
+            clauses.extend(
+                f'"__ROW_PATH_{index}__" asc'
+                for index, column in enumerate(config.group_by)
+                if column not in sorted_columns
+            )
+        elif (
+            "observation_id" in self.columns and "observation_id" not in sorted_columns
+        ):
             clauses.append('"observation_id" asc')
         return f" order by {', '.join(clauses)}" if clauses else ""
 
@@ -161,9 +199,63 @@ class DataFusionVirtualTable:
             return f"cast({identifier} as varchar) as {identifier}"
         return identifier
 
-    def _flat(self, config: VirtualViewConfig) -> None:
-        if config.group_by or config.split_by or config.expressions:
-            raise ValueError("This virtual table currently supports flat views only")
+    def _selected(self, config: VirtualViewConfig) -> list[str]:
+        requested = [column for column in config.columns if column is not None]
+        if config.group_by:
+            selected = [column for column in requested if column not in config.group_by]
+        else:
+            selected = requested or list(self.columns)
+        self._columns(selected)
+        return selected
+
+    def _aggregate_select(self, column: str, config: VirtualViewConfig) -> str:
+        return f"{self._aggregate_expression(column, config)} as {_identifier(column)}"
+
+    def _aggregate_expression(self, column: str, config: VirtualViewConfig) -> str:
+        aggregate = self._aggregate(column, config)
+        return f"{aggregate}({_identifier(column)})"
+
+    def _aggregate(self, column: str, config: VirtualViewConfig) -> Aggregate:
+        aggregate = config.aggregates.get(column)
+        if aggregate is None:
+            aggregate = (
+                "sum"
+                if _perspective_type(self.columns[column]) in {"integer", "float"}
+                else "count"
+            )
+        self._validate_aggregate(column, aggregate)
+        return aggregate
+
+    def _aggregate_type(self, column: str, config: VirtualViewConfig) -> str:
+        aggregate = self._aggregate(column, config)
+        if aggregate == "count":
+            return "integer"
+        if aggregate == "avg":
+            return "float"
+        return _perspective_type(self.columns[column])
+
+    def _validate(self, config: VirtualViewConfig) -> None:
+        if config.split_by:
+            raise ValueError("Split by is not supported yet")
+        if config.expressions:
+            raise ValueError("Expressions are not supported yet")
+        if len(config.group_by) != len(set(config.group_by)):
+            raise ValueError("Group by columns must be unique")
+        self._columns(config.group_by)
+        self._columns([column for column, _ in config.sort])
+        self._selected(config)
+        for column, aggregate in config.aggregates.items():
+            self._column(column)
+            self._validate_aggregate(column, aggregate)
+
+    def _validate_aggregate(self, column: str, aggregate: Aggregate) -> None:
+        column_type = _perspective_type(self.columns[column])
+        if aggregate in {"sum", "avg"} and column_type not in {"integer", "float"}:
+            raise ValueError(f"{aggregate} requires a numeric column: {column}")
+        if aggregate in {"min", "max"} and column_type == "boolean":
+            raise ValueError(
+                f"{aggregate} is not supported for boolean column: {column}"
+            )
 
     def _columns(self, columns: list[str]) -> None:
         for column in columns:
@@ -176,6 +268,22 @@ class DataFusionVirtualTable:
 
 def _identifier(value: str) -> str:
     return f'"{value.replace(chr(34), chr(34) * 2)}"'
+
+
+def _perspective_arrow(table: pa.Table) -> pa.Table:
+    fields = [
+        pa.field(
+            field.name,
+            pa.timestamp("ms", tz=field.type.tz)
+            if pa.types.is_timestamp(field.type)
+            else field.type,
+            nullable=field.nullable,
+            metadata=field.metadata,
+        )
+        for field in table.schema
+    ]
+    schema = pa.schema(fields, metadata=table.schema.metadata)
+    return table if schema == table.schema else table.cast(schema, safe=False)
 
 
 def _literal(value: Any) -> str:

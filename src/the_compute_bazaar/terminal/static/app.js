@@ -454,13 +454,31 @@ async function selectVirtualTable(tableRef) {
 function createDataFusionVirtualAdapter(tableRef, tableSchema) {
   const views = new Map();
   const stats = { rowCount: null, elapsedMs: null };
+  const normalizeConfig = (config = {}) => ({
+    ...config,
+    group_by: config.group_by || [],
+    group_rollup_mode: "flat",
+    aggregates: config.aggregates || {},
+    split_by: [],
+    expressions: {},
+  });
+  const configFor = (viewId, update = null) => {
+    const current = normalizeConfig({
+      ...(views.get(viewId) || {}),
+      ...(update || {}),
+    });
+    views.set(viewId, current);
+    return current;
+  };
   const payload = (config = {}) => ({
     table: tableRef,
     columns: config.columns || [],
     filter: config.filter || [],
     filter_op: config.filter_op || "and",
     sort: config.sort || [],
-    group_by: [],
+    group_by: config.group_by || [],
+    group_rollup_mode: "flat",
+    aggregates: config.aggregates || {},
     split_by: [],
     expressions: {},
   });
@@ -474,9 +492,21 @@ function createDataFusionVirtualAdapter(tableRef, tableSchema) {
     return response.json();
   };
   const schemaFor = (config = {}) => {
-    const columns = (config.columns || []).filter((column) => column !== null);
-    const selected = columns.length ? columns : Object.keys(tableSchema);
-    return Object.fromEntries(selected.map((column) => [column, tableSchema[column]]));
+    const normalized = normalizeConfig(config);
+    const requested = (normalized.columns || []).filter((column) => column !== null);
+    const selected = normalized.group_by.length
+      ? requested.filter((column) => !normalized.group_by.includes(column))
+      : (requested.length ? requested : Object.keys(tableSchema));
+    return Object.fromEntries(selected.map((column) => {
+      const aggregate = normalized.aggregates[column]
+        || (["integer", "float"].includes(tableSchema[column]) ? "sum" : "count");
+      const type = normalized.group_by.length && aggregate === "count"
+        ? "integer"
+        : normalized.group_by.length && aggregate === "avg"
+          ? "float"
+          : tableSchema[column];
+      return [column, type];
+    }));
   };
   const handler = {
     getFeatures() {
@@ -485,13 +515,20 @@ function createDataFusionVirtualAdapter(tableRef, tableSchema) {
           .map((type) => [type, VIRTUAL_FILTER_OPS]),
       );
       return {
-        group_by: false,
+        group_by: true,
         split_by: false,
         sort: true,
         expressions: false,
-        group_rollup_mode: [],
+        group_rollup_mode: ["flat"],
         filter_ops: filterOps,
-        aggregates: Object.fromEntries(Object.keys(filterOps).map((type) => [type, []])),
+        aggregates: {
+          integer: ["sum", "count", "avg", "min", "max"],
+          float: ["sum", "count", "avg", "min", "max"],
+          string: ["count", "min", "max"],
+          boolean: ["count"],
+          date: ["count", "min", "max"],
+          datetime: ["count", "min", "max"],
+        },
       };
     },
     getHostedTables() {
@@ -510,24 +547,25 @@ function createDataFusionVirtualAdapter(tableRef, tableSchema) {
     },
     tableMakeView(id, viewId, config) {
       if (id !== tableRef) throw new Error(`Unknown table: ${id}`);
-      views.set(viewId, config);
+      configFor(viewId, config);
     },
     viewDelete(viewId) {
       views.delete(viewId);
     },
     viewSchema(viewId, config) {
-      return schemaFor(config || views.get(viewId));
+      return schemaFor(configFor(viewId, config));
     },
     async viewSize(viewId) {
       const result = await postJson(
         "/api/data/virtual/size",
-        payload(views.get(viewId)),
+        payload(configFor(viewId)),
       );
       stats.rowCount = result.row_count;
       stats.elapsedMs = result.elapsed_ms;
       return result.row_count;
     },
     async viewGetData(viewId, config, schema, viewport, dataSlice) {
+      const current = configFor(viewId, config);
       const allColumns = Object.keys(schema);
       const columns = allColumns.slice(
         viewport.start_col || 0,
@@ -537,7 +575,7 @@ function createDataFusionVirtualAdapter(tableRef, tableSchema) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...payload(config || views.get(viewId)),
+          ...payload(current),
           columns,
           start_row: viewport.start_row || 0,
           end_row: viewport.end_row ?? 100,
