@@ -1,4 +1,4 @@
-"""Repo-backed SQL models and Perspective blueprints."""
+"""Repo-backed SQL models and view blueprints."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,7 +20,7 @@ DEFAULT_ANALYSIS_ROOT = Path(
 )
 ARTIFACT_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 TABLE_REF_PATTERN = re.compile(
-    r"\b(?:silver|gold)\.[A-Za-z_][A-Za-z0-9_]*\b",
+    r"\b(?:silver|gold|fleet)\.[A-Za-z_][A-Za-z0-9_]*\b",
     flags=re.IGNORECASE,
 )
 
@@ -45,7 +45,8 @@ class ViewBlueprint(BaseModel):
     model_id: str
     title: str = Field(min_length=1, max_length=96)
     description: str = Field(default="", max_length=500)
-    perspective: dict[str, Any]
+    viewer: Literal["perspective"]
+    viewer_config: dict[str, Any]
     created_at: datetime
     updated_at: datetime
 
@@ -128,7 +129,8 @@ class AnalysisStore:
         model_id: str,
         title: str,
         description: str,
-        perspective: dict[str, Any],
+        viewer: Literal["perspective"],
+        viewer_config: dict[str, Any],
     ) -> ViewBlueprint:
         selected_id = _artifact_id(blueprint_id)
         selected_model_id = _artifact_id(model_id)
@@ -140,7 +142,8 @@ class AnalysisStore:
             model_id=selected_model_id,
             title=title.strip(),
             description=description.strip(),
-            perspective=perspective,
+            viewer=viewer,
+            viewer_config=viewer_config,
             created_at=(existing or {}).get("created_at", now),
             updated_at=now,
         )
@@ -158,7 +161,8 @@ class AnalysisStore:
         description: str,
         sql: str,
         default_limit: int,
-        perspective: dict[str, Any],
+        viewer: Literal["perspective"],
+        viewer_config: dict[str, Any],
         model_id: str | None = None,
         blueprint_id: str | None = None,
     ) -> tuple[AnalysisModel, ViewBlueprint]:
@@ -176,7 +180,8 @@ class AnalysisStore:
             model_id=selected_model_id,
             title=title,
             description=description,
-            perspective=perspective,
+            viewer=viewer,
+            viewer_config=viewer_config,
         )
         return model, blueprint
 

@@ -124,7 +124,8 @@ compute-bazaar terminal
 The Terminal opens with Data, Fleet, Eval, and Trade. Data is where DataFusion
 queries market data and [Perspective](https://perspective-dev.github.io) turns
 the results into tables and charts. Eval contains agent evaluation tasks, jobs,
-and trials powered by Harbor. Trade is in the works.
+and trials powered by Harbor. Trade is in the works. The Terminal currently
+supports macOS and Linux.
 
 Data can open a saved query or custom SQL as an interactive table or chart.
 

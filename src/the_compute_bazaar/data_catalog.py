@@ -39,6 +39,7 @@ class ComputeBazaarCatalog:
         self.operations = operations
         self._scheduled_offer_sql = ""
         self._gold_tables: set[str] = set()
+        self._operation_table_names: set[str] = set()
         self._register_silver()
         self._register_gold()
         if operations:
@@ -89,21 +90,25 @@ order by ordinal_position
         return {"run": self.run(), "table": table_ref, "columns": rows}
 
     def query(self, sql: str, *, limit: int = 100) -> dict[str, Any]:
-        table, selected_limit = self.query_arrow(sql, limit=limit)
+        table, selected_limit, truncated = self.query_arrow(sql, limit=limit)
         rows = table.to_pylist()
         return {
             "run": self.run(),
             "limit": selected_limit,
             "row_count": len(rows),
+            "truncated": truncated,
             "rows": rows,
         }
 
-    def query_arrow(self, sql: str, *, limit: int = 100) -> tuple[Any, int]:
+    def query_arrow(self, sql: str, *, limit: int = 100) -> tuple[Any, int, bool]:
         """Run one bounded read-only statement and return an Arrow table."""
         selected_limit = bounded_query_limit(limit)
         statement = validate_catalog_sql(sql)
-        table = self.engine.query_arrow(statement, limit=selected_limit)
-        return table, selected_limit
+        table = self.engine.query_arrow(statement, limit=selected_limit + 1)
+        truncated = table.num_rows > selected_limit
+        if truncated:
+            table = table.slice(0, selected_limit)
+        return table, selected_limit, truncated
 
     def run(self) -> dict[str, Any]:
         return {
@@ -199,7 +204,9 @@ order by ordinal_position
         assert self.operations is not None
         tables = self.operations.arrow_tables()
         for name, table in tables.items():
-            self.engine.register_arrow_table(f"_local_{name}", table)
+            local_name = f"_local_{name}"
+            self.engine.register_arrow_table(local_name, table)
+            self._operation_table_names.add(local_name)
 
         self.engine.create_view(
             "silver",
@@ -234,6 +241,31 @@ order by ordinal_position
                 "fact_market_to_fleet",
                 _market_to_fleet_sql(),
             )
+
+    def refresh_operations(self) -> None:
+        """Replace mutable operational tables without rebuilding the lake catalog."""
+        if not self.operations:
+            return
+        if (
+            "fact_gpu_price_index_history" in self._gold_tables
+            and "fact_market_to_fleet" not in self._gold_tables
+        ):
+            self.engine.drop_view("gold", "fact_market_to_fleet")
+        for view in (
+            "nodes",
+            "allocations",
+            "telemetry",
+            "capacity_verifications",
+            "provisioning_requests",
+            "provisioning_attempts",
+            "workloads",
+        ):
+            self.engine.drop_view("fleet", view)
+        for view in ("current_offers", "provider_read_batches", "offer_observations"):
+            self.engine.drop_view("silver", view)
+        self.engine.deregister_tables(self._operation_table_names)
+        self._operation_table_names.clear()
+        self._register_operations()
 
 
 def _union_all(

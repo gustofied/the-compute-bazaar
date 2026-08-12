@@ -382,7 +382,7 @@ button.catalog-item-copy {
   min-width: 0;
 }
 
-.view-copy p:last-child {
+.view-copy #view-description {
   max-width: 660px;
   margin: 4px 0 0;
   overflow: hidden;
@@ -392,6 +392,13 @@ button.catalog-item-copy {
   line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.result-limit {
+  margin: 4px 0 0;
+  color: var(--sand);
+  font-size: 9px;
+  line-height: 1.4;
 }
 
 .view-controls {
@@ -828,7 +835,7 @@ perspective-viewer {
     padding: 10px;
   }
 
-  .view-copy p:last-child {
+  .view-copy #view-description {
     display: none;
   }
 

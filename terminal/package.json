@@ -20,6 +20,13 @@
     "vite": "^7.0.0"
   },
   "pnpm": {
+    "overrides": {
+      "@perspective-dev/client": "4.5.2",
+      "@perspective-dev/server": "4.5.2",
+      "@perspective-dev/viewer": "4.5.2",
+      "@perspective-dev/viewer-charts": "4.5.2",
+      "@perspective-dev/viewer-datagrid": "4.5.2"
+    },
     "onlyBuiltDependencies": [
       "esbuild"
     ]

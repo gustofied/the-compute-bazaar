@@ -139,6 +139,7 @@ class WorkloadTest(unittest.TestCase):
                 "select * from _local_offer_observations where false"
             )
             catalog._gold_tables = set()
+            catalog._operation_table_names = set()
             catalog._register_operations()
             rows = catalog.engine.query(
                 "select name, state from fleet.workloads order by started_at"
@@ -151,6 +152,23 @@ class WorkloadTest(unittest.TestCase):
                     {"name": "server", "state": "stopped"},
                     {"name": "training-after-delete", "state": "stopped"},
                 ],
+            )
+
+            engine = catalog.engine
+            refreshed = service.start(
+                machine.host_id,
+                name="refresh-test",
+                command=("python", "refresh.py"),
+            )
+            catalog.refresh_operations()
+
+            self.assertIs(catalog.engine, engine)
+            self.assertEqual(
+                catalog.engine.query(
+                    "select state from fleet.workloads "
+                    f"where workload_id = '{refreshed.workload_id}'"
+                ),
+                [{"state": "running"}],
             )
 
 

@@ -22,6 +22,11 @@ from the_compute_bazaar.prices.ingestion import persist_provider_snapshot
 from the_compute_bazaar.prices.schemas import OfferObservation
 from the_compute_bazaar.prices.silver_contract import silver_observation_select
 from the_compute_bazaar.prices.storage import write_offer_observations_parquet
+from the_compute_bazaar.terminal.virtual_table import (
+    DataFusionVirtualTable,
+    VirtualDataRequest,
+    VirtualViewConfig,
+)
 
 
 class DataFusionEngineTest(unittest.TestCase):
@@ -280,6 +285,82 @@ order by observation_purpose
         self.assertTrue(
             pa.types.is_string(reason_type) or pa.types.is_string_view(reason_type)
         )
+
+    def test_catalog_reports_truncation_only_when_more_rows_exist(self) -> None:
+        catalog = object.__new__(ComputeBazaarCatalog)
+        catalog.engine = DataFusionEngine()
+        catalog.engine.register_arrow_table(
+            "numbers", pa.table({"value": [1, 2, 3]})
+        )
+
+        bounded, selected_limit, has_more = catalog.query_arrow(
+            "select * from numbers order by value", limit=2
+        )
+        exact, _, exact_has_more = catalog.query_arrow(
+            "select * from numbers where value < 3 order by value", limit=2
+        )
+
+        self.assertEqual(bounded.column("value").to_pylist(), [1, 2])
+        self.assertEqual(selected_limit, 2)
+        self.assertTrue(has_more)
+        self.assertEqual(exact.column("value").to_pylist(), [1, 2])
+        self.assertFalse(exact_has_more)
+
+    def test_virtual_availability_uses_datafusion_for_viewports(self) -> None:
+        catalog = object.__new__(ComputeBazaarCatalog)
+        catalog.manifest = {"run_id": "gold-test", "observed_at": None}
+        catalog.engine = DataFusionEngine()
+        catalog.engine.register_arrow_table(
+            "availability",
+            pa.table(
+                {
+                    "observation_id": ["obs-1", "obs-2", "obs-3"],
+                    "observed_at": [
+                        datetime(2026, 8, 10, hour, tzinfo=UTC)
+                        for hour in (10, 11, 12)
+                    ],
+                    "source_connector": [
+                        "prime_intellect",
+                        "runpod",
+                        "prime_intellect",
+                    ],
+                    "available_units": [3, 4, 7],
+                }
+            ),
+        )
+        catalog.engine.create_schema("gold")
+        catalog.engine.create_view(
+            "gold",
+            "fact_gpu_availability_history",
+            "select * from availability",
+        )
+        virtual = DataFusionVirtualTable(catalog)
+        config = VirtualViewConfig(
+            filter=[("source_connector", "==", "prime_intellect")],
+            sort=[("available_units", "desc")],
+        )
+
+        self.assertEqual(virtual.size(config), 2)
+        self.assertEqual(virtual.schema()["observed_at"], "datetime")
+        viewport = virtual.data(
+            VirtualDataRequest.model_validate(
+                {
+                    **config.model_dump(),
+                    "columns": ["observation_id", "available_units"],
+                    "start_row": 1,
+                    "end_row": 2,
+                }
+            )
+        )
+
+        self.assertEqual(
+            viewport.to_pylist(),
+            [{"observation_id": "obs-1", "available_units": 3}],
+        )
+        with self.assertRaisesRegex(ValueError, "flat views"):
+            virtual.size(VirtualViewConfig(group_by=["source_connector"]))
+        with self.assertRaisesRegex(ValueError, "2,000"):
+            virtual.data(VirtualDataRequest(start_row=0, end_row=2_001))
 
 
 if __name__ == "__main__":

@@ -112,6 +112,11 @@ class DataFusionEngine:
             raise ValueError("DataFusion view SQL must not be empty")
         self._context.sql(f"create view {schema}.{table} as {sql}").collect()
 
+    def drop_view(self, schema_name: str, table_name: str) -> None:
+        schema = _validated_table_name(schema_name)
+        table = _validated_table_name(table_name)
+        self._context.sql(f"drop view if exists {schema}.{table}").collect()
+
     def _register_object_stores(self, uris: Iterable[str]) -> None:
         s3_buckets = {
             urlparse(uri).netloc

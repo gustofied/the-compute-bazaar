@@ -336,7 +336,7 @@ def model_run(
             port=port,
             initial_sql=model.sql,
             initial_limit=selected_limit,
-            initial_perspective=layout.perspective if layout else None,
+            initial_perspective=layout.viewer_config if layout else None,
             evaluation_root=DEFAULT_EVALUATION_ROOT,
         )
         return
@@ -409,15 +409,16 @@ def blueprint_save(
     from .analysis_store import blueprint_payload
 
     try:
-        perspective = json.loads(config.read_text(encoding="utf-8"))
-        if not isinstance(perspective, dict):
+        viewer_config = json.loads(config.read_text(encoding="utf-8"))
+        if not isinstance(viewer_config, dict):
             raise ValueError("Perspective config must be a JSON object")
         blueprint = _analysis_store().save_blueprint(
             blueprint_id=blueprint_id,
             model_id=model_id,
             title=title or blueprint_id.replace("-", " ").title(),
             description=description,
-            perspective=perspective,
+            viewer="perspective",
+            viewer_config=viewer_config,
         )
     except (FileNotFoundError, json.JSONDecodeError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -447,7 +448,7 @@ def blueprint_open(
         port=port,
         initial_sql=model.sql,
         initial_limit=model.default_limit,
-        initial_perspective=blueprint.perspective,
+        initial_perspective=blueprint.viewer_config,
         evaluation_root=DEFAULT_EVALUATION_ROOT,
     )
 

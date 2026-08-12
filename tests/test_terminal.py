@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import time
 import unittest
@@ -9,6 +10,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
+from the_compute_bazaar.analysis_store import AnalysisStore
 from the_compute_bazaar.terminal.commands import (
     LaunchPlanAction,
     ErrorAction,
@@ -29,6 +31,28 @@ from the_compute_bazaar.terminal.shell import TerminalShell
 
 
 class TerminalCommandTest(unittest.TestCase):
+    def test_saved_analysis_tracks_fleet_and_uses_explicit_viewer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = AnalysisStore(Path(directory))
+            model, blueprint = store.save_analysis(
+                title="Fleet temperature",
+                description="",
+                sql="select * from fleet.telemetry",
+                default_limit=100,
+                viewer="perspective",
+                viewer_config={"plugin": "Datagrid"},
+            )
+            stored = json.loads(
+                (store.blueprints_root / f"{blueprint.blueprint_id}.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(model.tables, ("fleet.telemetry",))
+        self.assertEqual(blueprint.viewer, "perspective")
+        self.assertEqual(blueprint.viewer_config, {"plugin": "Datagrid"})
+        self.assertNotIn("perspective", stored)
+
     def test_external_links_are_https_without_embedded_credentials(self) -> None:
         url = "https://hub.harborframework.com/tasks/gustofied/task/latest"
 

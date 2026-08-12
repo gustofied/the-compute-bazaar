@@ -1,9 +1,9 @@
-"""DataFusion queries paired with useful Perspective layouts."""
+"""DataFusion queries paired with useful viewer layouts."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -11,7 +11,8 @@ class TerminalView:
     view_id: str
     title: str
     description: str
-    perspective: dict[str, Any]
+    viewer: Literal["perspective"]
+    viewer_config: dict[str, Any]
     kind: str = "Data"
     query_id: str | None = None
     sql: str | None = None
@@ -25,7 +26,8 @@ class TerminalView:
             "title": self.title,
             "description": self.description,
             "kind": self.kind,
-            "perspective": self.perspective,
+            "viewer": self.viewer,
+            "viewer_config": self.viewer_config,
             "sql": self.sql,
             "tables": list(self.tables),
             "default_limit": self.default_limit,
@@ -38,7 +40,8 @@ TERMINAL_VIEWS = (
         query_id="gpu_price_index_history",
         title="GPU Price Index",
         description="Daily medians of retained hourly H100, H200, B200, and B300 index values.",
-        perspective={
+        viewer="perspective",
+        viewer_config={
             "plugin": "Y Line",
             "group_by": ["observed_at"],
             "split_by": ["gpu"],
@@ -51,7 +54,8 @@ TERMINAL_VIEWS = (
         query_id="gpu_price_index",
         title="Latest GPU Index",
         description="The latest index value for each frontier GPU family.",
-        perspective={
+        viewer="perspective",
+        viewer_config={
             "plugin": "Y Bar",
             "group_by": ["benchmark_family_id"],
             "columns": ["benchmark_usd_gpu_hr"],
@@ -63,7 +67,8 @@ TERMINAL_VIEWS = (
         query_id="prime_offer_history",
         title="Prime Offer Market",
         description="Prime's lowest visible asks by GPU family through time.",
-        perspective={
+        viewer="perspective",
+        viewer_config={
             "plugin": "Y Line",
             "group_by": ["gold_observed_at"],
             "split_by": ["gpu_family_id"],
@@ -76,7 +81,8 @@ TERMINAL_VIEWS = (
         query_id="prime_offer_levels",
         title="Prime Offer Ladder",
         description="Current Prime configurations grouped by GPU-hour price level.",
-        perspective={
+        viewer="perspective",
+        viewer_config={
             "plugin": "Y Bar",
             "group_by": ["price_level_usd_gpu_hr"],
             "split_by": ["gpu_family_id"],
@@ -89,7 +95,8 @@ TERMINAL_VIEWS = (
         query_id="akash_gpu_occupancy",
         title="Akash GPU Occupancy",
         description="Rented and available share of observed Akash GPU capacity.",
-        perspective={
+        viewer="perspective",
+        viewer_config={
             "plugin": "Y Line",
             "group_by": ["observed_at"],
             "columns": ["rented_pct", "available_pct"],
@@ -101,7 +108,8 @@ TERMINAL_VIEWS = (
         query_id="provider_comparison",
         title="Provider Floors",
         description="Normalized GPU-hour prices summarized by provider and model.",
-        perspective={
+        viewer="perspective",
+        viewer_config={
             "plugin": "Datagrid",
             "columns": [
                 "gpu_model",

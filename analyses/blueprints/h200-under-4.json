@@ -3,7 +3,8 @@
   "created_at": "2026-08-08T00:00:00Z",
   "description": "Lowest visible H200 price and sub-$4 availability through time.",
   "model_id": "h200-under-4",
-  "perspective": {
+  "viewer": "perspective",
+  "viewer_config": {
     "columns": [
       "lowest_price_usd_gpu_hr"
     ],

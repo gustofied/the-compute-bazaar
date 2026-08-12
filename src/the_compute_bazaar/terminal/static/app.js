@@ -11,6 +11,31 @@ const REQUIRED_PERSPECTIVE_PLUGINS = [
   { name: "Y Bar", tag: "perspective-viewer-charts-y-bar" },
   { name: "Y Line", tag: "perspective-viewer-charts-y-line" },
 ];
+const VIRTUAL_AVAILABILITY_TABLE = "gold.fact_gpu_availability_history";
+const VIRTUAL_DEFAULT_COLUMNS = [
+  "observed_at",
+  "resource_market",
+  "provider",
+  "resource_type",
+  "total_units",
+  "available_units",
+  "rented_units",
+  "available_share",
+  "stock_status",
+  "measurement_scope",
+  "count_precision",
+];
+const VIRTUAL_FILTER_OPS = [
+  "==",
+  "!=",
+  "LIKE",
+  "IS DISTINCT FROM",
+  "IS NOT DISTINCT FROM",
+  ">=",
+  "<=",
+  ">",
+  "<",
+];
 const elements = {
   body: document.body,
   catalogPanel: document.querySelector("#catalog-panel"),
@@ -35,6 +60,7 @@ const elements = {
   viewKind: document.querySelector("#view-kind"),
   viewTitle: document.querySelector("#view-title"),
   viewDescription: document.querySelector("#view-description"),
+  resultLimit: document.querySelector("#result-limit"),
   sqlToggle: document.querySelector("#sql-toggle"),
   queryDrawer: document.querySelector("#query-drawer"),
   editor: document.querySelector("#sql-editor"),
@@ -63,6 +89,8 @@ const state = {
   perspective: null,
   worker: null,
   table: null,
+  tableOwned: false,
+  virtualClient: null,
   activeSource: null,
   sourceSql: null,
   hasResult: false,
@@ -152,6 +180,14 @@ function setViewCopy(kind, title, description) {
   elements.viewKind.textContent = kind;
   elements.viewTitle.textContent = title;
   elements.viewDescription.textContent = description;
+  setResultLimit(false);
+}
+
+function setResultLimit(truncated, limit = null) {
+  elements.resultLimit.hidden = !truncated;
+  elements.resultLimit.textContent = truncated
+    ? `Showing the first ${formatCount(limit)} rows. Refine the SQL for the full result.`
+    : "";
 }
 
 async function startPerspective() {
@@ -270,6 +306,17 @@ function renderTableList(tables, layer) {
   }).join("");
 }
 
+async function replaceTable(nextTable, { owned = true, virtualClient = null } = {}) {
+  const previousTable = state.table;
+  const previousOwned = state.tableOwned;
+  const previousClient = state.virtualClient;
+  state.table = nextTable;
+  state.tableOwned = owned;
+  state.virtualClient = virtualClient;
+  if (previousOwned && previousTable) await previousTable.delete();
+  if (previousClient) await previousClient.terminate();
+}
+
 function renderAnalyses(blueprints) {
   elements.viewCount.textContent = String(blueprints.length);
   elements.viewEmpty.hidden = blueprints.length > 0;
@@ -319,7 +366,7 @@ async function selectView(view, limit = view.default_limit) {
   setActiveSource(`view:${view.view_id}`);
   setSqlOpen(false);
   closeCatalogOnMobile();
-  await runCurrentQuery({ restoreConfig: view.perspective, preserveView: false });
+  await runCurrentQuery({ restoreConfig: view.viewer_config, preserveView: false });
 }
 
 async function selectQuery(query, limit = query.default_limit) {
@@ -335,6 +382,10 @@ async function selectQuery(query, limit = query.default_limit) {
 
 async function selectTable(table) {
   const tableRef = `${table.layer}.${table.table_name}`;
+  if (table.virtual) {
+    await selectVirtualTable(tableRef);
+    return;
+  }
   setViewCopy(`${table.layer} table`, table.table_name, `Direct inspection of ${tableRef}.`);
   elements.editor.value = `select *\nfrom ${tableRef}`;
   state.sourceSql = elements.editor.value.trim();
@@ -343,6 +394,161 @@ async function selectTable(table) {
   setSqlOpen(false);
   closeCatalogOnMobile();
   await runCurrentQuery({ restoreConfig: { plugin: "Datagrid", settings: false }, preserveView: false });
+}
+
+async function selectVirtualTable(tableRef) {
+  if (state.running) return;
+  if (tableRef !== VIRTUAL_AVAILABILITY_TABLE) {
+    throw new Error(`Virtual table is not supported: ${tableRef}`);
+  }
+  setViewCopy("Gold table", "GPU Availability History", "Full history, queried by DataFusion as you move through it.");
+  elements.editor.value = `select *\nfrom ${tableRef}`;
+  state.sourceSql = elements.editor.value.trim();
+  state.saveable = false;
+  elements.sqlToggle.disabled = true;
+  setActiveSource(`table:${tableRef}`);
+  setSqlOpen(false);
+  closeCatalogOnMobile();
+  setRunning(true);
+  setViewerState("Opening availability history", "Reading its schema from DataFusion.");
+  try {
+    const schemaResponse = await fetch("/api/data/virtual/schema", { cache: "no-store" });
+    if (!schemaResponse.ok) throw new Error(await responseError(schemaResponse));
+    const metadata = await schemaResponse.json();
+    const adapter = createDataFusionVirtualAdapter(tableRef, metadata.schema);
+    const port = await state.perspective.createMessageHandler(adapter.handler);
+    const client = await state.perspective.worker(Promise.resolve(port));
+    const nextTable = await client.open_table(tableRef);
+    try {
+      await elements.viewer.load(nextTable);
+      await elements.viewer.restore({
+        plugin: "Datagrid",
+        columns: VIRTUAL_DEFAULT_COLUMNS.filter((column) => column in metadata.schema),
+        settings: false,
+      });
+      await elements.viewer.flush();
+      await elements.viewer.resize();
+    } catch (error) {
+      await client.terminate();
+      throw error;
+    }
+    await replaceTable(nextTable, { owned: false, virtualClient: client });
+    const rowCount = adapter.stats.rowCount ?? 0;
+    elements.resultRows.textContent = formatCount(rowCount);
+    elements.resultTime.textContent = adapter.stats.elapsedMs === null
+      ? "-"
+      : `${adapter.stats.elapsedMs} ms`;
+    elements.resultRun.textContent = shortRunId(metadata.run?.run_id);
+    elements.resultRun.title = metadata.run?.run_id || "";
+    state.hasResult = true;
+    setViewerState("Ready", `${formatCount(rowCount)} rows available.`, { hidden: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setViewerState("Availability history unavailable", message, { error: true });
+    state.hasResult = false;
+  } finally {
+    setRunning(false);
+  }
+}
+
+function createDataFusionVirtualAdapter(tableRef, tableSchema) {
+  const views = new Map();
+  const stats = { rowCount: null, elapsedMs: null };
+  const payload = (config = {}) => ({
+    table: tableRef,
+    columns: config.columns || [],
+    filter: config.filter || [],
+    filter_op: config.filter_op || "and",
+    sort: config.sort || [],
+    group_by: [],
+    split_by: [],
+    expressions: {},
+  });
+  const postJson = async (path, body) => {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(await responseError(response));
+    return response.json();
+  };
+  const schemaFor = (config = {}) => {
+    const columns = (config.columns || []).filter((column) => column !== null);
+    const selected = columns.length ? columns : Object.keys(tableSchema);
+    return Object.fromEntries(selected.map((column) => [column, tableSchema[column]]));
+  };
+  const handler = {
+    getFeatures() {
+      const filterOps = Object.fromEntries(
+        ["integer", "float", "string", "boolean", "date", "datetime"]
+          .map((type) => [type, VIRTUAL_FILTER_OPS]),
+      );
+      return {
+        group_by: false,
+        split_by: false,
+        sort: true,
+        expressions: false,
+        group_rollup_mode: [],
+        filter_ops: filterOps,
+        aggregates: Object.fromEntries(Object.keys(filterOps).map((type) => [type, []])),
+      };
+    },
+    getHostedTables() {
+      return [tableRef];
+    },
+    tableSchema(id) {
+      if (id !== tableRef) throw new Error(`Unknown table: ${id}`);
+      return tableSchema;
+    },
+    async tableSize(id) {
+      if (id !== tableRef) throw new Error(`Unknown table: ${id}`);
+      const result = await postJson("/api/data/virtual/size", payload());
+      stats.rowCount = result.row_count;
+      stats.elapsedMs = result.elapsed_ms;
+      return result.row_count;
+    },
+    tableMakeView(id, viewId, config) {
+      if (id !== tableRef) throw new Error(`Unknown table: ${id}`);
+      views.set(viewId, config);
+    },
+    viewDelete(viewId) {
+      views.delete(viewId);
+    },
+    viewSchema(viewId, config) {
+      return schemaFor(config || views.get(viewId));
+    },
+    async viewSize(viewId) {
+      const result = await postJson(
+        "/api/data/virtual/size",
+        payload(views.get(viewId)),
+      );
+      stats.rowCount = result.row_count;
+      stats.elapsedMs = result.elapsed_ms;
+      return result.row_count;
+    },
+    async viewGetData(viewId, config, schema, viewport, dataSlice) {
+      const allColumns = Object.keys(schema);
+      const columns = allColumns.slice(
+        viewport.start_col || 0,
+        viewport.end_col ?? allColumns.length,
+      );
+      const response = await fetch("/api/data/virtual/data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...payload(config || views.get(viewId)),
+          columns,
+          start_row: viewport.start_row || 0,
+          end_row: viewport.end_row ?? 100,
+        }),
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      stats.elapsedMs = Number(response.headers.get("X-Compute-Bazaar-Elapsed-Ms"));
+      dataSlice.fromArrowIpc(new Uint8Array(await response.arrayBuffer()));
+    },
+  };
+  return { handler, stats };
 }
 
 async function selectScratch(sql, limit, perspective = null) {
@@ -381,13 +587,11 @@ async function selectOffers(action) {
     if (!response.ok) throw new Error(await responseError(response));
     const arrow = await response.arrayBuffer();
     const nextTable = await state.worker.table(arrow);
-    const previousTable = state.table;
     await elements.viewer.load(nextTable);
     await elements.viewer.restore({ plugin: "Datagrid", settings: false });
     await elements.viewer.flush();
     await elements.viewer.resize();
-    state.table = nextTable;
-    if (previousTable) await previousTable.delete();
+    await replaceTable(nextTable);
     const rowCount = response.headers.get("X-Compute-Bazaar-Row-Count") || "0";
     elements.resultRows.textContent = formatCount(rowCount);
     elements.resultTime.textContent = `${response.headers.get("X-Compute-Bazaar-Elapsed-Ms") || "-"} ms`;
@@ -430,13 +634,11 @@ async function selectLaunchPlan(action) {
     if (!response.ok) throw new Error(await responseError(response));
     const arrow = await response.arrayBuffer();
     const nextTable = await state.worker.table(arrow);
-    const previousTable = state.table;
     await elements.viewer.load(nextTable);
     await elements.viewer.restore({ plugin: "Datagrid", settings: false });
     await elements.viewer.flush();
     await elements.viewer.resize();
-    state.table = nextTable;
-    if (previousTable) await previousTable.delete();
+    await replaceTable(nextTable);
     elements.resultRows.textContent = "1";
     elements.resultTime.textContent = `${response.headers.get("X-Compute-Bazaar-Elapsed-Ms") || "-"} ms`;
     elements.resultRun.textContent = response.headers.get("X-Compute-Bazaar-Run-Id") || "draft";
@@ -474,7 +676,8 @@ async function saveCurrentAnalysis(name) {
       description: elements.viewDescription.textContent,
       sql: elements.editor.value.trim(),
       limit: Number(elements.limit.value),
-      perspective: config,
+      viewer: "perspective",
+      viewer_config: config,
     }),
   });
   if (!response.ok) throw new Error(await responseError(response));
@@ -492,7 +695,7 @@ async function selectBlueprint(blueprint) {
   setActiveSource(`blueprint:${blueprint.blueprint_id}`);
   setSqlOpen(false);
   closeCatalogOnMobile();
-  await runCurrentQuery({ restoreConfig: blueprint.perspective, preserveView: false });
+  await runCurrentQuery({ restoreConfig: blueprint.viewer_config, preserveView: false });
 }
 
 async function selectModel(model) {
@@ -562,7 +765,8 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
   }
 
   setRunning(true);
-  setViewerState("Running DataFusion", "Streaming the bounded result as Arrow.");
+  setResultLimit(false);
+  setViewerState("Running DataFusion", "Preparing the bounded Arrow result.");
   try {
     const response = await fetch("/api/data/query", {
       method: "POST",
@@ -573,7 +777,6 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
 
     const arrow = await response.arrayBuffer();
     const nextTable = await state.worker.table(arrow);
-    const previousTable = state.table;
     await elements.viewer.load(nextTable);
     const restored = await restoreViewerLayout(currentConfig);
     if (!restored && restoreConfig) {
@@ -581,17 +784,19 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
     }
     await elements.viewer.flush();
     await elements.viewer.resize();
-    state.table = nextTable;
+    await replaceTable(nextTable);
     state.sourceSql = sql;
-    if (previousTable) await previousTable.delete();
 
     const rowCount = response.headers.get("X-Compute-Bazaar-Row-Count") || "0";
+    const selectedLimit = response.headers.get("X-Compute-Bazaar-Query-Limit") || limit;
+    const truncated = response.headers.get("X-Compute-Bazaar-Truncated") === "true";
     const elapsed = response.headers.get("X-Compute-Bazaar-Elapsed-Ms") || "-";
     const runId = response.headers.get("X-Compute-Bazaar-Run-Id") || "unknown";
     elements.resultRows.textContent = formatCount(rowCount);
     elements.resultTime.textContent = `${elapsed} ms`;
     elements.resultRun.textContent = shortRunId(runId);
     elements.resultRun.title = runId;
+    setResultLimit(truncated, selectedLimit);
     state.hasResult = true;
     setViewerState("Ready", `${formatCount(rowCount)} rows loaded.`, { hidden: true });
   } catch (error) {

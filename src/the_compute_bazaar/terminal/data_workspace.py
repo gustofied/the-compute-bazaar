@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from threading import BoundedSemaphore, Lock
 from time import perf_counter
-from typing import Any
+from typing import Any, Literal
 
 import pyarrow as pa
 from fastapi import FastAPI, HTTPException, Query
@@ -19,6 +21,12 @@ from ..data_catalog import ComputeBazaarCatalog
 from ..operations import OperationalLedger
 from ..prices.gold_manifest import read_latest_gold_manifest
 from ..prices.query_catalog import MAX_QUERY_LIMIT, load_query_catalog
+from .virtual_table import (
+    VIRTUAL_TABLE_REF,
+    DataFusionVirtualTable,
+    VirtualDataRequest,
+    VirtualViewConfig,
+)
 from .views import TERMINAL_VIEWS
 
 
@@ -35,7 +43,8 @@ class AnalysisSave(BaseModel):
     description: str = Field(default="", max_length=500)
     sql: str = Field(min_length=1, max_length=MAX_SQL_LENGTH)
     limit: int = Field(default=500, ge=1, le=MAX_QUERY_LIMIT)
-    perspective: dict[str, Any]
+    viewer: Literal["perspective"]
+    viewer_config: dict[str, Any]
     model_id: str | None = None
     blueprint_id: str | None = None
 
@@ -53,22 +62,22 @@ class CatalogStore:
         )
         self._operations_version = self._operations.version()
 
-    def current(self) -> ComputeBazaarCatalog:
-        manifest = read_latest_gold_manifest(self._lake_root)
-        run_id = manifest.get("run_id")
-        operations_version = self._operations.version()
+    @contextmanager
+    def read(self) -> Iterator[ComputeBazaarCatalog]:
         with self._lock:
-            if (
-                run_id != self._catalog.manifest.get("run_id")
-                or operations_version != self._operations_version
-            ):
+            manifest = read_latest_gold_manifest(self._lake_root)
+            operations_version = self._operations.version()
+            if manifest.get("run_id") != self._catalog.manifest.get("run_id"):
                 self._catalog = ComputeBazaarCatalog(
                     lake_root=self._lake_root,
                     manifest=manifest,
                     operations=self._operations,
                 )
                 self._operations_version = self._operations.version()
-            return self._catalog
+            elif operations_version != self._operations_version:
+                self._catalog.refresh_operations()
+                self._operations_version = self._operations.version()
+            yield self._catalog
 
 
 class DataWorkspace:
@@ -94,7 +103,8 @@ class DataWorkspace:
         self._query_slot = BoundedSemaphore(value=1)
 
     def status(self) -> dict[str, Any]:
-        tables = self.catalogs.current().tables()
+        with self.catalogs.read() as catalog:
+            tables = catalog.tables()
         return {
             "available": True,
             "href": "/data",
@@ -109,13 +119,18 @@ class DataWorkspace:
 
         @app.get("/api/data/session")
         def session() -> dict[str, Any]:
-            catalog = self.catalogs.current()
-            table_payload = catalog.tables()
-            queries = []
-            for query in load_query_catalog():
-                entry = query.catalog_entry(catalog.manifest)
-                entry["sql"] = _qualified_gold_sql(query.sql, query.tables)
-                queries.append(entry)
+            with self.catalogs.read() as catalog:
+                table_payload = catalog.tables()
+                for table in table_payload["tables"]:
+                    table["virtual"] = (
+                        f"{table['layer']}.{table['table_name']}"
+                        == VIRTUAL_TABLE_REF
+                    )
+                queries = []
+                for query in load_query_catalog():
+                    entry = query.catalog_entry(catalog.manifest)
+                    entry["sql"] = _qualified_gold_sql(query.sql, query.tables)
+                    queries.append(entry)
             queries_by_id = {query["query_id"]: query for query in queries}
             table_refs = {
                 f"{table['layer']}.{table['table_name']}"
@@ -173,15 +188,16 @@ class DataWorkspace:
 
         @app.post("/api/data/analyses")
         def save_analysis(request: AnalysisSave) -> dict[str, Any]:
-            catalog = self.catalogs.current()
             try:
-                catalog.query_arrow(request.sql, limit=1)
+                with self.catalogs.read() as catalog:
+                    catalog.query_arrow(request.sql, limit=1)
                 model, blueprint = self.analyses.save_analysis(
                     title=request.title,
                     description=request.description,
                     sql=request.sql,
                     default_limit=request.limit,
-                    perspective=request.perspective,
+                    viewer=request.viewer,
+                    viewer_config=request.viewer_config,
                     model_id=request.model_id,
                     blueprint_id=request.blueprint_id,
                 )
@@ -202,9 +218,9 @@ class DataWorkspace:
 
         @app.get("/api/data/tables/{layer}/{table_name}")
         def describe_table(layer: str, table_name: str) -> dict[str, Any]:
-            catalog = self.catalogs.current()
             try:
-                return catalog.describe(f"{layer}.{table_name}")
+                with self.catalogs.read() as catalog:
+                    return catalog.describe(f"{layer}.{table_name}")
             except (KeyError, ValueError) as exc:
                 raise HTTPException(
                     status_code=404,
@@ -220,11 +236,12 @@ class DataWorkspace:
                 )
             started = perf_counter()
             try:
-                catalog = self.catalogs.current()
-                table, selected_limit = catalog.query_arrow(
-                    request.sql,
-                    limit=request.limit,
-                )
+                with self.catalogs.read() as catalog:
+                    table, selected_limit, truncated = catalog.query_arrow(
+                        request.sql,
+                        limit=request.limit,
+                    )
+                    run = _run_identity(catalog)
                 payload = _arrow_stream(table)
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -237,7 +254,6 @@ class DataWorkspace:
                 self._query_slot.release()
 
             elapsed_ms = round((perf_counter() - started) * 1000, 1)
-            run = _run_identity(catalog)
             return Response(
                 content=payload,
                 media_type="application/vnd.apache.arrow.stream",
@@ -247,10 +263,73 @@ class DataWorkspace:
                     "X-Compute-Bazaar-Observed-At": str(run.get("observed_at") or ""),
                     "X-Compute-Bazaar-Row-Count": str(table.num_rows),
                     "X-Compute-Bazaar-Query-Limit": str(selected_limit),
+                    "X-Compute-Bazaar-Truncated": str(truncated).lower(),
                     "X-Compute-Bazaar-Elapsed-Ms": str(elapsed_ms),
                     "X-Compute-Bazaar-Query-Hash": hashlib.sha256(
                         request.sql.encode("utf-8")
                     ).hexdigest()[:12],
+                },
+            )
+
+        @app.get("/api/data/virtual/schema")
+        def virtual_schema() -> dict[str, Any]:
+            try:
+                with self.catalogs.read() as catalog:
+                    virtual = DataFusionVirtualTable(catalog)
+                    return {
+                        "table": VIRTUAL_TABLE_REF,
+                        "schema": virtual.schema(),
+                        "run": _run_identity(catalog),
+                    }
+            except (KeyError, ValueError) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except (FileNotFoundError, RuntimeError) as exc:
+                raise HTTPException(
+                    status_code=503, detail="Data is unavailable"
+                ) from exc
+
+        @app.post("/api/data/virtual/size")
+        def virtual_size(request: VirtualViewConfig) -> dict[str, Any]:
+            started = perf_counter()
+            try:
+                with self.catalogs.read() as catalog:
+                    row_count = DataFusionVirtualTable(catalog).size(request)
+                    run = _run_identity(catalog)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except (FileNotFoundError, RuntimeError) as exc:
+                raise HTTPException(
+                    status_code=503, detail="Data is unavailable"
+                ) from exc
+            return {
+                "row_count": row_count,
+                "elapsed_ms": round((perf_counter() - started) * 1000, 1),
+                "run": run,
+            }
+
+        @app.post("/api/data/virtual/data")
+        def virtual_data(request: VirtualDataRequest) -> Response:
+            started = perf_counter()
+            try:
+                with self.catalogs.read() as catalog:
+                    table = DataFusionVirtualTable(catalog).data(request)
+                    run = _run_identity(catalog)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except (FileNotFoundError, RuntimeError) as exc:
+                raise HTTPException(
+                    status_code=503, detail="Data is unavailable"
+                ) from exc
+            elapsed_ms = round((perf_counter() - started) * 1000, 1)
+            return Response(
+                content=_arrow_stream(table),
+                media_type="application/vnd.apache.arrow.stream",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Compute-Bazaar-Run-Id": str(run.get("run_id") or ""),
+                    "X-Compute-Bazaar-Observed-At": str(run.get("observed_at") or ""),
+                    "X-Compute-Bazaar-Row-Count": str(table.num_rows),
+                    "X-Compute-Bazaar-Elapsed-Ms": str(elapsed_ms),
                 },
             )
 
