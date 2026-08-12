@@ -168,12 +168,12 @@ compute-bazaar terminal --stop
 
 [Compute Bazaar Bench](https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench) is a benchmark for evaluating agents on compute-market tasks.
 
-Tourneys compare agents across the same tasks or market seeds. They are defined
-separately, so the Harbor tasks remain reusable by anyone.
-
 <p align="center">
   <a href="https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="80%"></a>
 </p>
+
+I created something I call Tourneys, where you can compare agents on these
+tasks under the same conditions, using the same seeds, harness, and setup.
 
 ## Fleet
 

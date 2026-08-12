@@ -84,8 +84,8 @@ harbor view jobs
 
 ### Tourneys
 
-Harbor tasks are reusable on their own. A tourney separately chooses the
-agents, tasks, and attempts to compare, then reports each task's own result.
+I created something I call Tourneys, where you can compare agents on these
+tasks under the same conditions, using the same seeds, harness, and setup.
 
 ## Evaluations
 
