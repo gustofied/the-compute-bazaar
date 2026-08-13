@@ -23,6 +23,9 @@ from the_compute_bazaar.prices.ingestion import persist_provider_snapshot
 from the_compute_bazaar.prices.offer_reference import (
     build_prime_frontier_offer_events,
 )
+from the_compute_bazaar.prices.publication_chart_common import (
+    _shape_preserving_curve,
+)
 from the_compute_bazaar.prices.schemas import OfferObservation
 from the_compute_bazaar.prices.silver_contract import silver_observation_select
 from the_compute_bazaar.prices.storage import write_offer_observations_parquet
@@ -34,6 +37,23 @@ from the_compute_bazaar.terminal.virtual_table import (
 
 
 class DataFusionEngineTest(unittest.TestCase):
+    def test_publication_curve_rounds_turns_without_overshooting(self) -> None:
+        dates = [
+            datetime(2026, 8, 10, hour, tzinfo=UTC)
+            for hour in (10, 11, 12, 13)
+        ]
+        values = [3.25, 2.4, 3.25, 3.2]
+
+        smooth_dates, smooth_values = _shape_preserving_curve(dates, values)
+
+        self.assertEqual(smooth_dates[0], dates[0])
+        self.assertEqual(smooth_dates[-1], dates[-1])
+        self.assertEqual(smooth_values[0], values[0])
+        self.assertEqual(smooth_values[-1], values[-1])
+        self.assertGreater(len(smooth_values), len(values))
+        self.assertGreaterEqual(min(smooth_values), min(values))
+        self.assertLessEqual(max(smooth_values), max(values))
+
     def test_prime_empty_snapshot_records_departures(self) -> None:
         first = datetime(2026, 8, 10, 12, tzinfo=UTC)
         second = datetime(2026, 8, 10, 13, tzinfo=UTC)

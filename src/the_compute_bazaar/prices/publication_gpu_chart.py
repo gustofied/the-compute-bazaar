@@ -13,6 +13,7 @@ from .publication_chart_common import (
     IMAGE_HEIGHT,
     IMAGE_WIDTH,
     _format_usd,
+    _shape_preserving_curve,
     _visible_gpu_series,
 )
 
@@ -99,7 +100,7 @@ def render_gpu_benchmark_publication(
         parse_math=False,
     )
 
-    axes = figure.add_axes((0.050, 0.095, 0.900, 0.505), facecolor=paper)
+    axes = figure.add_axes((0.030, 0.095, 0.940, 0.505), facecolor=paper)
     if selected_rows:
         dates = [row["date"] for row in selected_rows]
         values = [row["value"] for row in selected_rows]
@@ -107,14 +108,14 @@ def render_gpu_benchmark_publication(
         if start == end:
             start -= timedelta(minutes=30)
             end += timedelta(minutes=30)
-        time_padding = (end - start) * 0.015
+        smooth_dates, smooth_values = _shape_preserving_curve(dates, values)
 
         minimum = min(values)
         maximum = max(values)
         spread = max(maximum - minimum, maximum * 0.025, 0.12)
         domain_minimum = max(0, minimum - spread * 0.2)
         domain_maximum = maximum + spread * 0.2
-        axes.set_xlim(start - time_padding, end + time_padding)
+        axes.set_xlim(start, end)
         axes.set_ylim(domain_minimum, domain_maximum)
         for tick in (
             domain_minimum,
@@ -129,8 +130,8 @@ def render_gpu_benchmark_publication(
                 zorder=0,
             )
         axes.fill_between(
-            dates,
-            values,
+            smooth_dates,
+            smooth_values,
             domain_minimum,
             color=blue,
             alpha=0.055,
@@ -138,8 +139,8 @@ def render_gpu_benchmark_publication(
             zorder=1,
         )
         axes.plot(
-            dates,
-            values,
+            smooth_dates,
+            smooth_values,
             color=blue,
             linewidth=3.5,
             solid_capstyle="round",

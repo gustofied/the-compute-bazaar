@@ -16,6 +16,7 @@ from .publication_chart_common import (
     _prime_offer_band_series,
     _prime_publication_series,
     _publication_png,
+    _shape_preserving_curve,
     _series_change,
 )
 
@@ -166,9 +167,13 @@ def render_prime_offer_shelf_publication(
             row["date"] for row in rows if row.get("benchmark") is not None
         ]
         if benchmark_dates:
-            price_axes.plot(
+            smooth_benchmark_dates, smooth_benchmarks = _shape_preserving_curve(
                 benchmark_dates,
                 benchmarks,
+            )
+            price_axes.plot(
+                smooth_benchmark_dates,
+                smooth_benchmarks,
                 color=green,
                 linewidth=1.6,
                 linestyle=(0, (3, 4)),
@@ -176,9 +181,10 @@ def render_prime_offer_shelf_publication(
                 solid_capstyle="round",
                 solid_joinstyle="round",
             )
+        smooth_dates, smooth_prices = _shape_preserving_curve(dates, prices)
         price_axes.plot(
-            dates,
-            prices,
+            smooth_dates,
+            smooth_prices,
             color=price_color,
             linewidth=3.4,
             solid_capstyle="round",

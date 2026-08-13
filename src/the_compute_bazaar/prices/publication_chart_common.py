@@ -29,6 +29,96 @@ IMAGE_WIDTH = 1200
 IMAGE_HEIGHT = 630
 
 
+def _shape_preserving_curve(
+    dates: list[datetime],
+    values: list[float],
+    *,
+    samples_per_segment: int = 10,
+) -> tuple[list[datetime], list[float]]:
+    """Interpolate observations without overshooting local highs or lows."""
+    if len(dates) != len(values):
+        raise ValueError("Curve dates and values must have the same length")
+    if len(dates) < 3:
+        return dates, values
+
+    seconds = [(date - dates[0]).total_seconds() for date in dates]
+    intervals = [right - left for left, right in zip(seconds, seconds[1:])]
+    if any(interval <= 0 for interval in intervals):
+        return dates, values
+    slopes = [
+        (right - left) / interval
+        for left, right, interval in zip(values, values[1:], intervals)
+    ]
+
+    def endpoint_derivative(
+        first_interval: float,
+        second_interval: float,
+        first_slope: float,
+        second_slope: float,
+    ) -> float:
+        derivative = (
+            (2 * first_interval + second_interval) * first_slope
+            - first_interval * second_slope
+        ) / (first_interval + second_interval)
+        if derivative * first_slope <= 0:
+            return 0.0
+        if first_slope * second_slope < 0 and abs(derivative) > 3 * abs(first_slope):
+            return 3 * first_slope
+        return derivative
+
+    derivatives = [
+        endpoint_derivative(intervals[0], intervals[1], slopes[0], slopes[1])
+    ]
+    for index in range(1, len(values) - 1):
+        previous_slope = slopes[index - 1]
+        next_slope = slopes[index]
+        if previous_slope == 0 or next_slope == 0 or previous_slope * next_slope < 0:
+            derivatives.append(0.0)
+            continue
+        previous_interval = intervals[index - 1]
+        next_interval = intervals[index]
+        first_weight = 2 * next_interval + previous_interval
+        second_weight = next_interval + 2 * previous_interval
+        derivatives.append(
+            (first_weight + second_weight)
+            / (
+                first_weight / previous_slope
+                + second_weight / next_slope
+            )
+        )
+    derivatives.append(
+        endpoint_derivative(
+            intervals[-1],
+            intervals[-2],
+            slopes[-1],
+            slopes[-2],
+        )
+    )
+
+    smooth_dates: list[datetime] = []
+    smooth_values: list[float] = []
+    resolution = max(2, samples_per_segment)
+    for index, interval in enumerate(intervals):
+        for sample in range(resolution):
+            progress = sample / resolution
+            progress_squared = progress * progress
+            progress_cubed = progress_squared * progress
+            start_weight = 2 * progress_cubed - 3 * progress_squared + 1
+            start_tangent_weight = progress_cubed - 2 * progress_squared + progress
+            end_weight = -2 * progress_cubed + 3 * progress_squared
+            end_tangent_weight = progress_cubed - progress_squared
+            smooth_dates.append(dates[index] + timedelta(seconds=interval * progress))
+            smooth_values.append(
+                start_weight * values[index]
+                + start_tangent_weight * interval * derivatives[index]
+                + end_weight * values[index + 1]
+                + end_tangent_weight * interval * derivatives[index + 1]
+            )
+    smooth_dates.append(dates[-1])
+    smooth_values.append(values[-1])
+    return smooth_dates, smooth_values
+
+
 def _visible_gpu_series(
     cards: Mapping[str, Mapping[str, Any]],
     range_id: str,
