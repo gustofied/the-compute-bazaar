@@ -18,7 +18,6 @@ from the_compute_bazaar.terminal.agents import (
     _agent_environment,
     _terminal_prompt,
 )
-from the_compute_bazaar.terminal.agent_tools import OPEN_WORKSPACE_TOOL, handle_request
 from the_compute_bazaar.terminal.commands import (
     LaunchPlanAction,
     ErrorAction,
@@ -46,7 +45,9 @@ class TerminalCommandTest(unittest.TestCase):
 
         self.assertIn("compute-bazaar tables", prompt)
         self.assertIn("compute-bazaar describe TABLE", prompt)
-        self.assertIn("open_workspace", prompt)
+        self.assertIn("compute-bazaar query QUERY_ID --terminal", prompt)
+        self.assertIn('compute-bazaar sql "SQL" --terminal', prompt)
+        self.assertNotIn("open_workspace", prompt)
         self.assertIn("Bazaar checkout", prompt)
         self.assertNotIn("repo shell", prompt)
         self.assertTrue(prompt.endswith("Show me the latest H200 price."))
@@ -56,10 +57,10 @@ class TerminalCommandTest(unittest.TestCase):
         prompt = _terminal_prompt("Read the market.", access="read")
 
         self.assertIn("This turn has Read access", prompt)
-        self.assertIn("read-only\n`compute-bazaar` commands", prompt)
-        self.assertIn("open_workspace", prompt)
-        self.assertIn("Ask for Full access only", prompt)
-        self.assertIn("Do not change files or start paid", prompt)
+        self.assertIn("Do not execute shell commands", prompt)
+        self.assertIn("switch to Full access", prompt)
+        self.assertNotIn("compute-bazaar tables", prompt)
+        self.assertNotIn("open_workspace", prompt)
 
     def test_agent_can_find_the_current_compute_bazaar_command(self) -> None:
         executable_dir = str(Path(sys.executable).parent)
@@ -109,62 +110,12 @@ class TerminalCommandTest(unittest.TestCase):
             ],
         )
 
-    def test_agent_client_has_one_terminal_tool_server(self) -> None:
+    def test_agent_client_has_no_mcp_servers(self) -> None:
         config = json.loads(
             (Path(__file__).parents[1] / "terminal" / "acp.json").read_text()
         )
 
-        self.assertEqual(len(config["mcpServers"]), 1)
-        self.assertEqual(config["mcpServers"][0]["name"], "compute-bazaar-terminal")
-        self.assertEqual(config["mcpServers"][0]["command"], "uv")
-        self.assertEqual(
-            config["mcpServers"][0]["args"],
-            ["run", "python", "-m", "the_compute_bazaar.terminal.agent_tools"],
-        )
-
-    def test_terminal_tool_lists_and_opens_workspaces(self) -> None:
-        listed = handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
-        opened: list[str] = []
-
-        called = handle_request(
-            {
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/call",
-                "params": {
-                    "name": "open_workspace",
-                    "arguments": {"workspace": "fleet"},
-                },
-            },
-            opener=lambda workspace: opened.append(workspace) or "Opened Fleet.",
-        )
-
-        assert listed is not None and called is not None
-        self.assertEqual(listed["result"]["tools"], [OPEN_WORKSPACE_TOOL])
-        self.assertEqual(opened, ["fleet"])
-        self.assertFalse(called["result"]["isError"])
-        self.assertEqual(called["result"]["structuredContent"]["workspace"], "fleet")
-
-    def test_terminal_tool_returns_the_actual_navigation_error(self) -> None:
-        def fail(_: str) -> str:
-            raise RuntimeError("Fleet did not load")
-
-        response = handle_request(
-            {
-                "jsonrpc": "2.0",
-                "id": 3,
-                "method": "tools/call",
-                "params": {
-                    "name": "open_workspace",
-                    "arguments": {"workspace": "fleet"},
-                },
-            },
-            opener=fail,
-        )
-
-        assert response is not None
-        self.assertTrue(response["result"]["isError"])
-        self.assertEqual(response["result"]["content"][0]["text"], "Fleet did not load")
+        self.assertEqual(config, {"mcpServers": []})
 
     def test_agent_session_reads_raw_acp_updates(self) -> None:
         session = AgentSession(
@@ -225,39 +176,6 @@ class TerminalCommandTest(unittest.TestCase):
             )
 
         self.assertEqual(len(session.events), 1)
-        self.assertEqual(session.events[0]["status"], "completed")
-
-    def test_terminal_workspace_tool_keeps_a_useful_title_on_completion(self) -> None:
-        session = AgentSession(
-            cwd=Path("/tmp"),
-            executable=Path("/bin/false"),
-            agent_command="codex-acp",
-        )
-        call_id = "workspace-1"
-        raw_input = {
-            "server": "compute-bazaar-terminal",
-            "tool": "open_workspace",
-            "arguments": {"workspace": "fleet"},
-        }
-
-        session._upsert_tool(
-            {
-                "toolCallId": call_id,
-                "title": "mcp.compute-bazaar-terminal.open_workspace",
-                "status": "in_progress",
-                "rawInput": raw_input,
-            }
-        )
-        session._upsert_tool(
-            {
-                "toolCallId": call_id,
-                "status": "completed",
-                "rawInput": raw_input,
-            }
-        )
-
-        self.assertEqual(len(session.events), 1)
-        self.assertEqual(session.events[0]["title"], "Open Fleet")
         self.assertEqual(session.events[0]["status"], "completed")
 
     def test_slow_agent_listener_is_resynchronized_with_a_snapshot(self) -> None:
@@ -618,6 +536,46 @@ if "prompt" in sys.argv:
         )
         self.assertEqual(session.events[1]["text"], "ACP ready")
 
+    async def test_agent_session_accepts_large_acp_tool_updates(self) -> None:
+        fake_acpx = """
+import json
+import sys
+
+if "prompt" in sys.argv:
+    update = {
+        "method": "session/update",
+        "params": {
+            "update": {
+                "sessionUpdate": "tool_call",
+                "toolCallId": "call-large",
+                "title": "Read market data",
+                "status": "completed",
+                "rawOutput": "x" * 100_000,
+            }
+        },
+    }
+    print(json.dumps(update), flush=True)
+"""
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path(sys.executable),
+            agent_command="fake-acp-agent",
+        )
+
+        with patch.object(
+            session,
+            "_command",
+            return_value=[sys.executable, "-c", fake_acpx],
+        ):
+            session.start("Read the market.", access="read")
+            assert session._task is not None
+            await session._task
+
+        self.assertEqual(session.state, "idle")
+        self.assertFalse(any(event["kind"] == "error" for event in session.events))
+        self.assertEqual(session.events[-1]["kind"], "tool")
+        self.assertEqual(session.events[-1]["status"], "completed")
+
 
 class TerminalShellTest(unittest.TestCase):
     def test_shell_can_open_without_submitting_a_command(self) -> None:
@@ -649,6 +607,32 @@ class TerminalShellTest(unittest.TestCase):
         self.assertIn("first:", output)
         self.assertIn("second:/", output)
         self.assertIn("third:/", output)
+
+    def test_shell_accepts_character_input(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            marker = root / "raw-pty.txt"
+            shell = TerminalShell(cwd=root, shell="/bin/sh")
+            try:
+                shell.open(columns=80, rows=20)
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    output = str(shell.snapshot()["output"]).rstrip()
+                    if output.endswith(("$", "#", "%")):
+                        break
+                    time.sleep(0.02)
+                else:
+                    raise AssertionError(f"PTY prompt did not become ready: {output!r}")
+                for character in "printf 'hello' > raw-pty.txt":
+                    shell.write(character)
+                shell.write("\r")
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline and not marker.exists():
+                    time.sleep(0.02)
+            finally:
+                shell.close()
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "hello")
 
     @staticmethod
     def _wait_for(shell: TerminalShell, expected: str) -> str:

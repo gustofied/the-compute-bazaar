@@ -14,6 +14,7 @@ from typing import Any
 
 MAX_EVENTS = 400
 MAX_PROMPT_LENGTH = 20_000
+ACP_STREAM_LIMIT = 4 * 1024 * 1024
 AGENT_MODEL = "gpt-5.6-terra"
 AGENT_REASONING_EFFORT = "medium"
 SESSION_NAME = "compute-bazaar-terminal-terra-medium"
@@ -23,15 +24,17 @@ TERMINAL_CONTEXT = """<compute-bazaar-terminal>
 Work in the Bazaar checkout using normal repo tools and `compute-bazaar`.
 - Inspect data with `compute-bazaar tables`, `compute-bazaar describe TABLE`, and
   `compute-bazaar sql \"SQL\"`.
-- Use `open_workspace` to open Home, Data, Fleet, or Eval in the visible Terminal.
-- Use `compute-bazaar COMMAND --help` when needed.
+- Put useful results in Data with `compute-bazaar query QUERY_ID --terminal` or
+  `compute-bazaar sql \"SQL\" --terminal`.
+Use `compute-bazaar COMMAND --help` when needed. Do not use GUI automation to
+operate the Terminal.
 </compute-bazaar-terminal>"""
 READ_TERMINAL_CONTEXT = """<compute-bazaar-terminal>
-This turn has Read access. Inspect the Bazaar checkout and use read-only
-`compute-bazaar` commands when needed. Use `open_workspace` to open Home, Data,
-Fleet, or Eval in the visible Terminal. Do not change files or start paid
-resources. Ask for Full access only when the requested work changes local or
-remote state.
+This turn has Read access.
+
+Inspect and reason about the Bazaar checkout. Do not execute shell commands or
+change local or remote state. If the request requires `compute-bazaar` or another
+command, ask the user to switch to Full access.
 </compute-bazaar-terminal>"""
 
 
@@ -189,11 +192,20 @@ class AgentSession:
                 env=_agent_environment(),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=ACP_STREAM_LIMIT,
             )
             assert self._process.stdout is not None
             assert self._process.stderr is not None
             stderr_task = asyncio.create_task(self._process.stderr.read())
-            async for line in self._process.stdout:
+            while True:
+                try:
+                    line = await self._process.stdout.readline()
+                except ValueError as exc:
+                    raise AgentSessionError(
+                        "Agent returned a message too large for the Terminal"
+                    ) from exc
+                if not line:
+                    break
                 try:
                     payload = json.loads(line)
                 except (json.JSONDecodeError, UnicodeDecodeError):
@@ -267,7 +279,7 @@ class AgentSession:
             self._emit({"kind": "error", "text": text})
 
     def _upsert_tool(self, payload: dict[str, Any]) -> None:
-        title = _tool_title(payload)
+        title = str(payload.get("title") or payload.get("name") or "Tool")
         status = str(payload.get("status") or "running")
         tool_key = str(payload.get("toolCallId") or payload.get("tool_call_id") or title)
         event_id = self._tool_events.get(tool_key)
@@ -349,16 +361,6 @@ def _error_text(payload: dict[str, Any]) -> str:
         if isinstance(message, str) and message.strip():
             return message.strip()
     return "Agent request failed"
-
-
-def _tool_title(payload: dict[str, Any]) -> str:
-    raw_input = payload.get("rawInput")
-    if isinstance(raw_input, dict) and raw_input.get("tool") == "open_workspace":
-        arguments = raw_input.get("arguments")
-        workspace = arguments.get("workspace") if isinstance(arguments, dict) else None
-        return f"Open {str(workspace).title()}" if workspace else "Open workspace"
-    value = payload.get("title") or payload.get("name")
-    return str(value) if value else ""
 
 
 def _terminal_prompt(prompt: str, *, access: str) -> str:

@@ -468,6 +468,10 @@ async def _receive_shell_input(
                     columns=_integer(message.get("columns"), 120),
                     rows=_integer(message.get("rows"), 32),
                 )
+            elif message_type == "input":
+                data = str(message.get("data") or "")
+                if len(data) <= 20_000:
+                    shell.write(data)
             elif message_type == "resize":
                 shell.resize(
                     columns=_integer(message.get("columns"), 120),

@@ -11,6 +11,7 @@ const SHELL_MIN_WIDTH = 320;
 const SHELL_MIN_WORKSPACE_WIDTH = 420;
 const MAX_AGENT_EVENTS = 400;
 const AGENT_BUSY_STATES = new Set(["starting", "working", "stopping"]);
+const BAZAAR_AGENT_GLOBALS = new Set(["/home", "/data", "/fleet", "/eval", "/trade"]);
 
 const workspace = document.body.dataset.terminalWorkspace || inferWorkspace();
 const nativeLaunchToken = takeNativeLaunchToken();
@@ -354,7 +355,7 @@ function ensureShellTerminal() {
     convertEol: true,
     cursorBlink: false,
     cursorStyle: "bar",
-    disableStdin: true,
+    disableStdin: false,
     fontFamily: '"SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace',
     fontSize: 12,
     lineHeight: 1.35,
@@ -386,6 +387,7 @@ function ensureShellTerminal() {
   const fit = new FitAddon();
   terminal.loadAddon(fit);
   terminal.open(elements.shellStage);
+  terminal.onData((data) => sendShell({ type: "input", data }));
   terminal.onResize(({ cols, rows }) => {
     sendShell({ type: "resize", columns: cols, rows });
   });
@@ -528,10 +530,11 @@ function updateSessionControls() {
   elements.interrupt.textContent = agent ? "Stop" : "^C";
   elements.clear.textContent = agent ? "New session" : "Clear";
   elements.clear.title = agent ? "Start a new agent session" : "Clear shell";
-  elements.workspace.textContent = agent ? "agent" : workspace;
+  elements.clear.disabled = Boolean(agent && agentIsBusy());
+  elements.workspace.textContent = state.shell.open ? state.activeSession : workspace;
   elements.input.placeholder = agent
     ? "Agent prompt"
-    : "SQL or command · try help";
+    : "SQL, command, or shell · try help";
   elements.input.setAttribute(
     "aria-label",
     agent ? "Agent prompt" : "Terminal command or read-only SQL",
@@ -562,7 +565,7 @@ async function activateSession(sessionId, { focus = true } = {}) {
       columns: state.shell.terminal?.cols || 120,
       rows: state.shell.terminal?.rows || 32,
     }));
-    if (focus) elements.input.focus();
+    if (focus) state.shell.terminal?.focus();
     return;
   }
   await connectAgent();
@@ -741,6 +744,10 @@ async function sendAgentPrompt(prompt) {
   }
 }
 
+function isBazaarAgentGlobal(raw) {
+  return BAZAAR_AGENT_GLOBALS.has(raw.trim().toLowerCase());
+}
+
 function savePendingAction(action, launchId = null) {
   sessionStorage.setItem(PENDING_KEY, JSON.stringify({ action, launchId }));
 }
@@ -894,7 +901,7 @@ async function submit() {
     showOptions("Terminal commands", state.commands);
     return;
   }
-  if (state.shell.open && state.activeSession !== "shell") {
+  if (state.shell.open && state.activeSession !== "shell" && !isBazaarAgentGlobal(raw)) {
     if (agentIsBusy()) return;
     saveHistory(raw);
     try {
@@ -903,6 +910,27 @@ async function submit() {
     } catch (error) {
       showMessage(
         "Agent unavailable",
+        error instanceof Error ? error.message : String(error),
+        { error: true },
+      );
+    }
+    return;
+  }
+  if (state.shell.open && state.activeSession === "shell") {
+    saveHistory(raw);
+    try {
+      const socket = await connectShell();
+      socket.send(JSON.stringify({
+        type: "run",
+        command: raw,
+        columns: state.shell.terminal?.cols || 120,
+        rows: state.shell.terminal?.rows || 32,
+      }));
+      setInput("");
+      state.shell.terminal?.focus();
+    } catch (error) {
+      showMessage(
+        "Shell unavailable",
         error instanceof Error ? error.message : String(error),
         { error: true },
       );

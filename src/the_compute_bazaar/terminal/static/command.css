@@ -146,6 +146,11 @@
   background: color-mix(in srgb, var(--terminal-command-accent) 9%, transparent);
 }
 
+.terminal-shell-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.28;
+}
+
 .terminal-shell-actions button:focus-visible {
   outline: 2px solid var(--terminal-command-accent);
   outline-offset: 1px;

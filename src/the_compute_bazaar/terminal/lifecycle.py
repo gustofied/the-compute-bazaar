@@ -485,19 +485,6 @@ def _open_in_existing_terminal(
     raise TerminalLifecycleError("The Terminal did not finish opening the request")
 
 
-def open_terminal_workspace(workspace: str) -> str:
-    """Move a running Terminal to one of its workspaces."""
-    routes = {"home": "/", "data": "/data", "fleet": "/fleet", "eval": "/eval"}
-    try:
-        href = routes[workspace]
-    except KeyError as exc:
-        raise TerminalLifecycleError(f"Unknown Terminal workspace: {workspace}") from exc
-    state = _read_state()
-    if not state or not _terminal_health(state.get("url")):
-        raise TerminalLifecycleError("Compute Bazaar Terminal is not running")
-    return _open_in_existing_terminal(state, {"kind": "navigate", "href": href})
-
-
 def _read_json(path: Path) -> dict[str, Any] | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
