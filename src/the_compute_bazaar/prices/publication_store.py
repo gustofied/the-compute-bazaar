@@ -162,8 +162,7 @@ def _live_market_card_url(
     query = urlencode(
         {
             "card": card_id,
-            "view": "share",
-            "present": "card",
+            "view": "detail",
             **dict(state),
         }
     )
@@ -221,8 +220,7 @@ def _live_gpu_url(*, article_url: str, family: str, range_id: str) -> str:
     query = urlencode(
         {
             "card": "gpu-index",
-            "view": "share",
-            "present": "card",
+            "view": "detail",
             "gpu": family,
             "range": range_id,
         }
@@ -234,8 +232,7 @@ def _live_prime_offer_url(*, article_url: str, family: str) -> str:
     query = urlencode(
         {
             "card": "prime-offer-shelf",
-            "view": "share",
-            "present": "card",
+            "view": "detail",
             "primeGpu": family,
         }
     )
