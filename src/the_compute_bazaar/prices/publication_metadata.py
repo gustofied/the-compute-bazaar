@@ -92,26 +92,22 @@ def prime_offer_publication_metadata(
     change = _series_change(rows)
     observed_label = _format_observed_date(observed_at)
     display_line = (
-        f"{family} / {value} per GPU-hour / {offers} "
+        f"{family} / {value} per GPU-hour / {offers} available "
         f"{'offer' if offers == 1 else 'offers'} / observed "
         f"{observed_label.replace(' at ', ', ')}"
     )
     return {
-        "title": (
-            f"Prime {family} GPU market | {value}/GPU-hour | "
-            f"{offers} {'offer' if offers == 1 else 'offers'}"
-        ),
+        "title": f"{family} · {value}/GPU-hour",
         "description": (
-            f"Prime {family} observed public market price at {value} per "
-            f"GPU-hour with {offers} {'offer' if offers == 1 else 'offers'}. "
-            f"{change['label']}. Observed {observed_label}."
+            f"Prime Availability · {offers} "
+            f"{'available offer' if offers == 1 else 'available offers'}"
         ),
         "image_alt": (
-            f"Prime {family} market price at {value} per GPU-hour with "
-            f"{offers} {'offer' if offers == 1 else 'offers'}"
+            f"{family} price at {value} per GPU-hour with "
+            f"{offers} available {'offer' if offers == 1 else 'offers'}"
         ),
-        "subject_label": f"Prime {family} GPU market",
-        "view_label": "Price and offers",
+        "subject_label": f"Prime {family} availability",
+        "view_label": "Price and available supply",
         "value": value,
         "observed_at": observed_at.isoformat() if observed_at else "",
         "observed_label": _format_observed(observed_at),

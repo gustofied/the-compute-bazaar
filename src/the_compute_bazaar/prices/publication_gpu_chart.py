@@ -21,6 +21,8 @@ _FONT_ROOT = Path(__file__).with_name("assets") / "fonts"
 _GEIST_REGULAR = _FONT_ROOT / "Geist-Regular.ttf"
 _GEIST_MEDIUM = _FONT_ROOT / "Geist-Medium.ttf"
 _GEIST_SEMIBOLD = _FONT_ROOT / "Geist-SemiBold.ttf"
+_RENDER_DPI = 200
+_OUTPUT_DPI = 100
 
 
 def render_gpu_benchmark_publication(
@@ -49,12 +51,12 @@ def render_gpu_benchmark_publication(
     rule = "#a7b1b3"
 
     figure = Figure(
-        figsize=(IMAGE_WIDTH / 100, IMAGE_HEIGHT / 100),
-        dpi=100,
+        figsize=(IMAGE_WIDTH / _OUTPUT_DPI, IMAGE_HEIGHT / _OUTPUT_DPI),
+        dpi=_RENDER_DPI,
         facecolor=outside,
     )
     canvas = FigureCanvasAgg(figure)
-    price_font = FontProperties(fname=_GEIST_MEDIUM, size=64)
+    price_font = FontProperties(fname=_GEIST_MEDIUM, size=60)
     family_font = FontProperties(fname=_GEIST_SEMIBOLD, size=24)
     figure.patches.extend(
         (
@@ -65,8 +67,8 @@ def render_gpu_benchmark_publication(
                 boxstyle="round,pad=0,rounding_size=0.008",
                 transform=figure.transFigure,
                 facecolor=sleeve,
-                edgecolor="#9cabb0",
-                linewidth=0.9,
+                edgecolor=blue,
+                linewidth=1.25,
                 zorder=-20,
             ),
             FancyBboxPatch(
@@ -86,21 +88,21 @@ def render_gpu_benchmark_publication(
 
     figure.text(
         0.060,
-        0.850,
+        0.855,
         selected_family,
         color=ink,
         fontproperties=family_font,
     )
     figure.text(
         0.060,
-        0.670,
+        0.705,
         _format_usd(latest["value"]) if latest else "PENDING",
         color=ink,
         fontproperties=price_font,
         parse_math=False,
     )
 
-    axes = figure.add_axes((0.030, 0.095, 0.940, 0.505), facecolor=paper)
+    axes = figure.add_axes((0.030, 0.057, 0.940, 0.593), facecolor=paper)
     if selected_rows:
         dates = [row["date"] for row in selected_rows]
         values = [row["value"] for row in selected_rows]
@@ -170,7 +172,13 @@ def render_gpu_benchmark_publication(
 
     rgb_buffer = io.BytesIO()
     with Image.open(rgba_buffer) as source:
-        source.convert("RGB").save(
+        rgb = source.convert("RGB")
+        if rgb.size != (IMAGE_WIDTH, IMAGE_HEIGHT):
+            rgb = rgb.resize(
+                (IMAGE_WIDTH, IMAGE_HEIGHT),
+                resample=Image.Resampling.LANCZOS,
+            )
+        rgb.save(
             rgb_buffer,
             format="PNG",
             optimize=True,

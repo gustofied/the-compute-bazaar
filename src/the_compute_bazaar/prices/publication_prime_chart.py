@@ -2,211 +2,202 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping
+from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
 from .publication_chart_common import (
     IMAGE_HEIGHT,
     IMAGE_WIDTH,
-    _format_axis_usd,
-    _format_observed,
     _format_usd,
-    _parse_datetime,
     _prime_offer_band_series,
     _prime_publication_series,
     _publication_png,
     _shape_preserving_curve,
-    _series_change,
+    _smooth_observation_values,
 )
+
+_FONT_ROOT = Path(__file__).with_name("assets") / "fonts"
+_GEIST_MEDIUM = _FONT_ROOT / "Geist-Medium.ttf"
+_GEIST_SEMIBOLD = _FONT_ROOT / "Geist-SemiBold.ttf"
 
 
 def render_prime_offer_shelf_publication(
     *,
     card: Mapping[str, Any],
 ) -> bytes:
-    """Render Prime price and visible-offer history on separate measures."""
+    """Render Prime price above its changing public offer shelf."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
-    from matplotlib.dates import (
-        AutoDateLocator,
-        ConciseDateFormatter,
-        HourLocator,
-    )
     from matplotlib.figure import Figure
-    from matplotlib.patches import Rectangle
-    from matplotlib.ticker import MaxNLocator
+    from matplotlib.font_manager import FontProperties
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import FancyBboxPatch
 
     rows = _prime_publication_series(card)
     family = str((card.get("data") or {}).get("family_id") or "GPU").upper()
-    paper = "#f8f5eb"
+    outside = "#ffffff"
+    sleeve = "#dbe5e9"
+    paper = "#ffffff"
     ink = "#142027"
-    muted = "#5f6f76"
-    price_color = "#315f82"
-    offer_color = "#91aecb"
-    offer_line = "#587383"
-    coral = "#a96552"
+    blue = "#315f82"
+    azure = "#91aecb"
     green = "#526c28"
+    coral = "#a96552"
     rule = "#a7b1b3"
 
     figure = Figure(
         figsize=(IMAGE_WIDTH / 100, IMAGE_HEIGHT / 100),
         dpi=100,
-        facecolor=paper,
+        facecolor=outside,
     )
     canvas = FigureCanvasAgg(figure)
-    figure.patches.append(
-        Rectangle(
-            (0.024, 0.04),
-            0.952,
-            0.92,
-            transform=figure.transFigure,
-            fill=False,
-            edgecolor=rule,
-            linewidth=1.2,
+    price_font = FontProperties(fname=_GEIST_MEDIUM, size=64)
+    family_font = FontProperties(fname=_GEIST_SEMIBOLD, size=24)
+    availability_font = FontProperties(fname=_GEIST_MEDIUM, size=16)
+    label_font = FontProperties(fname=_GEIST_SEMIBOLD, size=12)
+    figure.patches.extend(
+        (
+            FancyBboxPatch(
+                (0.020, 0.038),
+                0.960,
+                0.924,
+                boxstyle="round,pad=0,rounding_size=0.008",
+                transform=figure.transFigure,
+                facecolor=sleeve,
+                edgecolor="#9cabb0",
+                linewidth=0.9,
+                zorder=-20,
+            ),
+            FancyBboxPatch(
+                (0.030, 0.057),
+                0.940,
+                0.886,
+                boxstyle="round,pad=0,rounding_size=0.006",
+                transform=figure.transFigure,
+                facecolor=paper,
+                edgecolor="#c3ccce",
+                linewidth=0.75,
+                zorder=-10,
+            ),
         )
     )
     latest = rows[-1] if rows else None
-    observed_at = latest["date"] if latest else _parse_datetime(card.get("as_of"))
-    change = _series_change(rows)
+    available = int(latest["offers"]) if latest else 0
     figure.text(
-        0.052,
-        0.91,
-        "PRIME GPU MARKET",
-        color=muted,
-        fontsize=12,
-        fontweight=700,
-        family="sans-serif",
+        0.060,
+        0.918,
+        "PRIME AVAILABILITY",
+        color=blue,
+        fontproperties=label_font,
     )
     figure.text(
-        0.948,
-        0.91,
-        _format_observed(observed_at).upper(),
-        color=muted,
-        fontsize=10,
-        family="sans-serif",
-        horizontalalignment="right",
-    )
-    figure.text(
-        0.052,
-        0.825,
+        0.060,
+        0.835,
         family,
-        color=price_color,
-        fontsize=12,
-        fontweight=700,
-        family="sans-serif",
+        color=ink,
+        fontproperties=family_font,
     )
     figure.text(
-        0.052,
-        0.72,
+        0.060,
+        0.665,
         _format_usd(latest["price"]) if latest else "PENDING",
         color=ink,
-        fontsize=48,
-        family="serif",
+        fontproperties=price_font,
         parse_math=False,
     )
     figure.text(
-        0.225,
-        0.73,
-        "USD / GPU-HOUR",
-        color=muted,
-        fontsize=9,
-        family="sans-serif",
-    )
-    figure.text(
-        0.948,
-        0.765,
-        str(change["label"]).upper(),
-        color=coral,
-        fontsize=10,
-        fontweight=700,
-        family="sans-serif",
+        0.940,
+        0.835,
+        f"{available} AVAILABLE",
+        color=ink,
+        fontproperties=availability_font,
         horizontalalignment="right",
     )
-    figure.text(
-        0.948,
-        0.72,
-        (
-            f"{latest['offers']} "
-            f"{'OFFER' if latest and latest['offers'] == 1 else 'OFFERS'}"
-            if latest
-            else "OFFERS PENDING"
-        ),
-        color=muted,
-        fontsize=9,
-        family="sans-serif",
-        horizontalalignment="right",
-    )
-
-    price_axes = figure.add_axes((0.052, 0.345, 0.896, 0.275), facecolor=paper)
-    offer_axes = figure.add_axes((0.052, 0.16, 0.896, 0.105), facecolor=paper)
-    for axes in (price_axes, offer_axes):
-        axes.grid(axis="y", color=rule, alpha=0.25, linewidth=0.8)
-        axes.set_axisbelow(True)
-        axes.yaxis.tick_right()
-        axes.tick_params(
-            axis="both",
-            colors=muted,
-            labelsize=8,
-            length=0,
-            pad=7,
+    figure.add_artist(
+        Line2D(
+            (0.030, 0.970),
+            (0.315, 0.315),
+            transform=figure.transFigure,
+            color=rule,
+            alpha=0.44,
+            linewidth=1,
+            zorder=0,
         )
-        for spine in axes.spines.values():
-            spine.set_visible(False)
+    )
 
+    price_axes = figure.add_axes((0.030, 0.345, 0.940, 0.255), facecolor=paper)
+    offer_axes = figure.add_axes((0.030, 0.095, 0.940, 0.185), facecolor=paper)
     if rows:
         dates = [row["date"] for row in rows]
         prices = [row["price"] for row in rows]
-        benchmarks = [
-            row["benchmark"] for row in rows if row.get("benchmark") is not None
-        ]
-        price_domain = [*prices, *benchmarks]
-        minimum, maximum = min(price_domain), max(price_domain)
-        spread = max(maximum - minimum, abs(prices[-1]) * 0.12, 0.2)
-        price_axes.set_ylim(max(0, minimum - spread * 0.14), maximum + spread * 0.14)
-        benchmark_dates = [
-            row["date"] for row in rows if row.get("benchmark") is not None
-        ]
-        if benchmark_dates:
-            smooth_benchmark_dates, smooth_benchmarks = _shape_preserving_curve(
-                benchmark_dates,
-                benchmarks,
+        display_prices = _smooth_observation_values(prices)
+        start, end = dates[0], dates[-1]
+        if start == end:
+            start -= timedelta(minutes=30)
+            end += timedelta(minutes=30)
+
+        minimum = min(prices)
+        maximum = max(prices)
+        spread = max(maximum - minimum, maximum * 0.025, 0.12)
+        price_minimum = max(0, minimum - spread * 0.20)
+        price_maximum = maximum + spread * 0.20
+        price_axes.set_xlim(start, end)
+        price_axes.set_ylim(price_minimum, price_maximum)
+        for tick in (
+            price_minimum,
+            (price_minimum + price_maximum) / 2,
+            price_maximum,
+        ):
+            price_axes.axhline(
+                tick,
+                color=rule,
+                alpha=0.42,
+                linewidth=1,
+                zorder=0,
             )
-            price_axes.plot(
-                smooth_benchmark_dates,
-                smooth_benchmarks,
-                color=green,
-                linewidth=1.6,
-                linestyle=(0, (3, 4)),
-                alpha=0.72,
-                solid_capstyle="round",
-                solid_joinstyle="round",
-            )
-        smooth_dates, smooth_prices = _shape_preserving_curve(dates, prices)
+
+        smooth_dates, smooth_prices = _shape_preserving_curve(
+            dates,
+            display_prices,
+        )
+        price_axes.fill_between(
+            smooth_dates,
+            smooth_prices,
+            price_minimum,
+            color=blue,
+            alpha=0.055,
+            linewidth=0,
+            zorder=1,
+        )
         price_axes.plot(
             smooth_dates,
             smooth_prices,
-            color=price_color,
-            linewidth=3.4,
+            color=blue,
+            linewidth=3.5,
             solid_capstyle="round",
             solid_joinstyle="round",
+            zorder=2,
         )
-        price_axes.annotate(
-            _format_usd(prices[-1]),
-            xy=(dates[-1], prices[-1]),
-            xytext=(-8, 9),
-            textcoords="offset points",
-            color=price_color,
-            fontsize=9,
-            fontweight=700,
-            family="sans-serif",
-            horizontalalignment="right",
-            verticalalignment="bottom",
-            parse_math=False,
+        price_axes.plot(
+            dates[-1],
+            prices[-1],
+            marker="o",
+            markersize=7.5,
+            markerfacecolor=paper,
+            markeredgecolor=blue,
+            markeredgewidth=2.2,
+            linestyle="none",
+            clip_on=False,
+            zorder=3,
         )
+
         offer_bands = _prime_offer_band_series(card, rows)
         lower = [row["lower"] for row in offer_bands]
         lower_middle = [row["lower"] + row["middle"] for row in offer_bands]
         totals = [row["total"] for row in offer_bands]
+        offer_axes.set_xlim(start, end)
+        offer_axes.set_ylim(0, max(max(totals) * 1.10, 1))
         offer_axes.fill_between(
             dates,
             0,
@@ -221,7 +212,7 @@ def render_prime_offer_shelf_publication(
             lower,
             lower_middle,
             step="post",
-            color=offer_color,
+            color=azure,
             alpha=0.58,
             linewidth=0,
         )
@@ -238,74 +229,19 @@ def render_prime_offer_shelf_publication(
             dates,
             totals,
             where="post",
-            color=offer_line,
-            linewidth=1.2,
-            alpha=0.78,
+            color=blue,
+            linewidth=1.4,
+            alpha=0.68,
         )
-        offer_axes.set_ylim(0, max(max(totals) * 1.18, 1))
-        offer_axes.yaxis.set_major_locator(MaxNLocator(nbins=3, integer=True))
-        span_hours = max((dates[-1] - dates[0]).total_seconds() / 3600, 1)
-        locator = (
-            HourLocator(interval=max(1, math.ceil(span_hours / 5)))
-            if span_hours <= 48
-            else AutoDateLocator(minticks=4, maxticks=6)
-        )
-        offer_axes.xaxis.set_major_locator(locator)
-        offer_axes.xaxis.set_major_formatter(ConciseDateFormatter(locator))
-        offer_axes.xaxis.get_offset_text().set_visible(False)
-        price_axes.set_xlim(dates[0], dates[-1])
-        offer_axes.set_xlim(dates[0], dates[-1])
-        price_axes.set_xticks([])
-        price_axes.yaxis.set_major_locator(MaxNLocator(nbins=4))
-        price_axes.yaxis.set_major_formatter(
-            lambda value, _position: _format_axis_usd(value)
-        )
-    else:
-        price_axes.text(
-            0.5,
-            0.5,
-            "HISTORY IS STILL BEING COLLECTED",
-            transform=price_axes.transAxes,
-            color=muted,
-            fontsize=14,
-            horizontalalignment="center",
-            verticalalignment="center",
-        )
-        price_axes.set_xticks([])
-        offer_axes.set_xticks([])
+        for tick in (0, max(max(totals), 1)):
+            offer_axes.axhline(
+                tick,
+                color=rule,
+                alpha=0.30,
+                linewidth=1,
+                zorder=0,
+            )
 
-    figure.text(
-        0.052,
-        0.285,
-        "PRICE",
-        color=muted,
-        fontsize=8,
-        family="sans-serif",
-    )
-    figure.text(
-        0.052,
-        0.115,
-        "OFFERS",
-        color=muted,
-        fontsize=8,
-        family="sans-serif",
-    )
-    figure.text(
-        0.5,
-        0.09,
-        "PRICE AND OFFERS",
-        color=muted,
-        fontsize=9,
-        family="sans-serif",
-        horizontalalignment="center",
-    )
-    figure.text(
-        0.948,
-        0.09,
-        "HOURLY",
-        color=muted,
-        fontsize=9,
-        family="sans-serif",
-        horizontalalignment="right",
-    )
+    price_axes.set_axis_off()
+    offer_axes.set_axis_off()
     return _publication_png(canvas)

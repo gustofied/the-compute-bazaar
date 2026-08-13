@@ -119,6 +119,34 @@ def _shape_preserving_curve(
     return smooth_dates, smooth_values
 
 
+def _smooth_observation_values(
+    values: list[float],
+    *,
+    radius: int = 4,
+) -> list[float]:
+    """Soften isolated hourly jumps while preserving the observed endpoints."""
+    if len(values) < 3 or radius < 1:
+        return list(values)
+    radius = min(radius, 4)
+    weights = [1, 4, 7, 10, 12, 10, 7, 4, 1]
+    center = len(weights) // 2
+    smoothed: list[float] = []
+    for index in range(len(values)):
+        weighted_total = 0.0
+        weight_total = 0
+        for offset in range(-radius, radius + 1):
+            candidate = index + offset
+            if candidate < 0 or candidate >= len(values):
+                continue
+            weight_index = center + offset
+            weight = weights[weight_index] if 0 <= weight_index < len(weights) else 1
+            weighted_total += values[candidate] * weight
+            weight_total += weight
+        smoothed.append(weighted_total / weight_total)
+    smoothed[-1] = values[-1]
+    return smoothed
+
+
 def _visible_gpu_series(
     cards: Mapping[str, Mapping[str, Any]],
     range_id: str,

@@ -24,6 +24,7 @@ from .storage import write_json
 from .publication_store import (
     DEFAULT_ARTICLE_URL,
     DEFAULT_PUBLIC_DATA_BASE_URL,
+    PRIME_PUBLICATION_RENDER_PROFILE,
     _card_publication_contract,
     _join,
     _latest_card_observed_at,
@@ -56,6 +57,7 @@ def publish_prime_offer_shelf_publications(
         normalized_cards,
         public_base_url=public_base,
         article_url=live_article,
+        render_profile=PRIME_PUBLICATION_RENDER_PROFILE,
     )
     publication_rows: list[dict[str, Any]] = []
 

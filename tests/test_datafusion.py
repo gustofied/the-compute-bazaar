@@ -25,6 +25,7 @@ from the_compute_bazaar.prices.offer_reference import (
 )
 from the_compute_bazaar.prices.publication_chart_common import (
     _shape_preserving_curve,
+    _smooth_observation_values,
 )
 from the_compute_bazaar.prices.schemas import OfferObservation
 from the_compute_bazaar.prices.silver_contract import silver_observation_select
@@ -53,6 +54,15 @@ class DataFusionEngineTest(unittest.TestCase):
         self.assertGreater(len(smooth_values), len(values))
         self.assertGreaterEqual(min(smooth_values), min(values))
         self.assertLessEqual(max(smooth_values), max(values))
+
+    def test_publication_smoothing_keeps_endpoints_and_softens_spikes(self) -> None:
+        values = [3.2, 3.2, 4.4, 3.2, 3.2]
+
+        smoothed = _smooth_observation_values(values)
+
+        self.assertEqual(smoothed[-1], values[-1])
+        self.assertLess(smoothed[2], values[2])
+        self.assertGreater(smoothed[2], values[1])
 
     def test_prime_empty_snapshot_records_departures(self) -> None:
         first = datetime(2026, 8, 10, 12, tzinfo=UTC)
