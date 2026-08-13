@@ -30,6 +30,7 @@ from .storage import write_bytes, write_json
 from .publication_store import (
     DEFAULT_ARTICLE_URL,
     DEFAULT_PUBLIC_DATA_BASE_URL,
+    GPU_PUBLICATION_RENDER_PROFILE,
     _join,
     _latest_card_observed_at,
     _live_gpu_url,
@@ -60,6 +61,7 @@ def publish_gpu_benchmark_publications(
         normalized_cards,
         public_base_url=public_base,
         article_url=live_article,
+        render_profile=GPU_PUBLICATION_RENDER_PROFILE,
     )
     latest_observed_at = _latest_card_observed_at(normalized_cards)
     revision = PublicationRoute.create(

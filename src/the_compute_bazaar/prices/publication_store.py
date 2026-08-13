@@ -23,7 +23,11 @@ from .publication_page import publication_html
 from .storage import write_bytes
 
 
+# Immutable publication URLs include a render profile in their content digest.
+# Bump the relevant profile when its renderer changes so old previews stay
+# frozen while newly generated links receive the current visual treatment.
 PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_market_cards"
+GPU_PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_gpu_index_v2"
 
 DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
 
@@ -171,6 +175,7 @@ def _publication_digest(
     *,
     public_base_url: str,
     article_url: str,
+    render_profile: str = PUBLICATION_RENDER_PROFILE,
 ) -> str:
     canonical_cards = {
         family: {key: value for key, value in card.items() if key != "publication"}
@@ -179,7 +184,7 @@ def _publication_digest(
     publication_material = {
         "contract": PUBLICATION_CONTRACT,
         "route_contract": PUBLICATION_ROUTE_CONTRACT,
-        "render_profile": PUBLICATION_RENDER_PROFILE,
+        "render_profile": render_profile,
         "image_width": IMAGE_WIDTH,
         "image_height": IMAGE_HEIGHT,
         "public_base_url": public_base_url,
