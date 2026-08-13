@@ -155,7 +155,7 @@
   color: var(--terminal-command-accent);
 }
 
-.terminal-shell-actions [data-session-action="access"][data-access="write"] {
+.terminal-shell-actions [data-session-action="access"][data-access="full"] {
   color: var(--terminal-command-danger);
 }
 

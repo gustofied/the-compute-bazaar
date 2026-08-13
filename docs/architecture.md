@@ -71,9 +71,10 @@ The CLI and Terminal use the same DataFusion engine. Data is available now,
 Eval contains the Harbor evaluation viewer, and Trade remains reserved for the
 later execution system.
 
-Shell uses a local PTY. ACP is the only agent boundary. The agent works through
-the repo shell and `compute-bazaar`; `--terminal` sends typed results to Data.
-Bazaar exposes no MCP server and does not use GUI control.
+Shell is a local PTY. Agent is a Bazaar thread connected to an external agent
+over ACP. `acpx` is the internal ACP client beneath `AgentSession`, not part of
+the Terminal contract. Eval stays in Harbor. The agent works through the repo
+shell and `compute-bazaar`; Bazaar exposes no MCP server or GUI control.
 
 ## Fleet
 

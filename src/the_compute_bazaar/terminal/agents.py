@@ -111,7 +111,7 @@ class AgentSession:
             raise AgentSessionError("Prompt is empty")
         if len(prompt) > MAX_PROMPT_LENGTH:
             raise AgentSessionError("Prompt is too long")
-        if access not in {"read", "write"}:
+        if access not in {"read", "full"}:
             raise AgentSessionError("Unknown agent access mode")
         if self._task and not self._task.done():
             raise AgentSessionError("Agent is already working")
@@ -158,7 +158,7 @@ class AgentSession:
                 )
                 self._ensured = True
             self._set_state("working")
-            permission = "--approve-all" if access == "write" else "--approve-reads"
+            permission = "--approve-all" if access == "full" else "--approve-reads"
             command = [
                 *self._command(),
                 permission,
@@ -342,11 +342,18 @@ def _error_text(payload: dict[str, Any]) -> str:
 
 
 def _terminal_prompt(prompt: str) -> str:
+    if prompt.startswith("/"):
+        return prompt
     return f"{TERMINAL_CONTEXT}\n\n{prompt}"
 
 
 def _agent_environment() -> dict[str, str]:
     environment = os.environ.copy()
+    for key in (
+        "COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN",
+        "COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN",
+    ):
+        environment.pop(key, None)
     executable_dir = str(Path(sys.executable).parent)
     environment["PATH"] = os.pathsep.join(
         (executable_dir, environment.get("PATH", ""))

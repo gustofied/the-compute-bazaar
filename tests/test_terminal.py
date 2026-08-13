@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import time
@@ -47,12 +48,22 @@ class TerminalCommandTest(unittest.TestCase):
         self.assertIn("ACP is the only Terminal integration", prompt)
         self.assertIn("Do not use MCP or GUI automation", prompt)
         self.assertTrue(prompt.endswith("Show me the latest H200 price."))
+        self.assertEqual(_terminal_prompt("/login"), "/login")
 
     def test_agent_can_find_the_current_compute_bazaar_command(self) -> None:
         executable_dir = str(Path(sys.executable).parent)
-        environment = _agent_environment()
+        with patch.dict(
+            os.environ,
+            {
+                "COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN": "native-secret",
+                "COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN": "control-secret",
+            },
+        ):
+            environment = _agent_environment()
 
         self.assertEqual(environment["PATH"].split(":", 1)[0], executable_dir)
+        self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN", environment)
+        self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN", environment)
         self.assertEqual(
             json.loads(environment["CODEX_CONFIG"]),
             {
@@ -379,6 +390,76 @@ class TerminalCommandTest(unittest.TestCase):
         self.assertEqual(mailbox.latest(), published)
         self.assertEqual(published["action"]["kind"], "sql")
         self.assertEqual(published["action"]["perspective"], {"plugin": "Y Line"})
+
+
+class AgentProcessTest(unittest.IsolatedAsyncioTestCase):
+    async def test_agent_session_crosses_the_process_boundary(self) -> None:
+        fake_acpx = """
+import json
+import sys
+
+if "prompt" in sys.argv:
+    updates = (
+        {
+            "method": "session/update",
+            "params": {
+                "update": {
+                    "sessionUpdate": "agent_message_chunk",
+                    "content": {"type": "text", "text": "ACP ready"},
+                }
+            },
+        },
+        {
+            "method": "session/update",
+            "params": {
+                "update": {
+                    "sessionUpdate": "tool_call",
+                    "toolCallId": "call-1",
+                    "title": "Read market data",
+                    "status": "pending",
+                }
+            },
+        },
+        {
+            "method": "session/update",
+            "params": {
+                "update": {
+                    "sessionUpdate": "tool_call_update",
+                    "toolCallId": "call-1",
+                    "title": "Read market data",
+                    "status": "completed",
+                }
+            },
+        },
+    )
+    for update in updates:
+        print(json.dumps(update), flush=True)
+"""
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path(sys.executable),
+            agent_command="fake-acp-agent",
+        )
+
+        with patch.object(
+            session,
+            "_command",
+            return_value=[sys.executable, "-c", fake_acpx],
+        ):
+            session.start("Read the market.", access="read")
+            assert session._task is not None
+            await session._task
+
+        self.assertEqual(session.state, "idle")
+        self.assertEqual(
+            [(event["kind"], event.get("status")) for event in session.events],
+            [
+                ("message", None),
+                ("message", None),
+                ("tool", "completed"),
+            ],
+        )
+        self.assertEqual(session.events[1]["text"], "ACP ready")
 
 
 class TerminalShellTest(unittest.TestCase):

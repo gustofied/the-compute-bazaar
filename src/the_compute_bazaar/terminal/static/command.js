@@ -9,6 +9,7 @@ const SHELL_LAYOUT_KEY = "compute-bazaar.terminal.shell-layout";
 const MAX_HISTORY = 50;
 const SHELL_MIN_WIDTH = 320;
 const SHELL_MIN_WORKSPACE_WIDTH = 420;
+const BAZAAR_AGENT_GLOBALS = new Set(["/home", "/data", "/fleet", "/eval", "/trade"]);
 
 const workspace = document.body.dataset.terminalWorkspace || inferWorkspace();
 const nativeLaunchToken = takeNativeLaunchToken();
@@ -61,7 +62,7 @@ root.innerHTML = `
       <div class="terminal-shell-actions">
         <button type="button" data-session-action="access" title="Agent access" hidden>Read</button>
         <button type="button" data-session-action="interrupt" aria-label="Interrupt session" title="Interrupt session">^C</button>
-        <button type="button" data-session-action="clear" title="Clear session">Clear</button>
+        <button type="button" data-session-action="clear" title="Clear shell">Clear</button>
         <button type="button" data-session-action="close" aria-label="Close sessions" title="Close sessions">×</button>
       </div>
     </header>
@@ -131,6 +132,7 @@ const elements = {
   panels: [...root.querySelectorAll("[data-session-panel]")],
   access: root.querySelector('[data-session-action="access"]'),
   interrupt: root.querySelector('[data-session-action="interrupt"]'),
+  clear: root.querySelector('[data-session-action="clear"]'),
 };
 
 function takeNativeLaunchToken() {
@@ -513,9 +515,11 @@ function updateSessionControls() {
     ? state.agent
     : null;
   elements.access.hidden = !agent;
-  elements.access.textContent = agent?.access === "write" ? "Write" : "Read";
+  elements.access.textContent = agent?.access === "full" ? "Full access" : "Read";
   elements.access.dataset.access = agent?.access || "read";
   elements.interrupt.textContent = agent ? "Stop" : "^C";
+  elements.clear.textContent = agent ? "Clear transcript" : "Clear";
+  elements.clear.title = agent ? "Clear transcript" : "Clear shell";
   elements.workspace.textContent = state.shell.open ? state.activeSession : workspace;
   elements.input.placeholder = agent
     ? "Agent prompt"
@@ -704,6 +708,10 @@ async function sendAgentPrompt(prompt) {
   }));
 }
 
+function isBazaarAgentGlobal(raw) {
+  return BAZAAR_AGENT_GLOBALS.has(raw.trim().toLowerCase());
+}
+
 function savePendingAction(action) {
   sessionStorage.setItem(PENDING_KEY, JSON.stringify(action));
 }
@@ -809,7 +817,7 @@ async function submit() {
     showOptions("Terminal commands", state.commands);
     return;
   }
-  if (state.shell.open && state.activeSession !== "shell" && !raw.startsWith("/")) {
+  if (state.shell.open && state.activeSession !== "shell" && !isBazaarAgentGlobal(raw)) {
     saveHistory(raw);
     try {
       await sendAgentPrompt(raw);
@@ -892,7 +900,7 @@ elements.shell.addEventListener("click", (event) => {
   }
   if (action === "access" && state.activeSession !== "shell") {
     const agent = state.agent;
-    agent.access = agent.access === "read" ? "write" : "read";
+    agent.access = agent.access === "read" ? "full" : "read";
     updateSessionControls();
     return;
   }
