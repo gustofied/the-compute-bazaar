@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from datetime import UTC, date, datetime
@@ -26,6 +27,13 @@ from the_compute_bazaar.prices.offer_reference import (
 from the_compute_bazaar.prices.publication_chart_common import (
     _shape_preserving_curve,
     _smooth_observation_values,
+)
+from the_compute_bazaar.prices.publication_profiles import (
+    GPU_PUBLICATION_RENDER_PROFILE,
+)
+from the_compute_bazaar.prices.publication_store import (
+    _publication_digest,
+    _renderer_revision,
 )
 from the_compute_bazaar.prices.schemas import OfferObservation
 from the_compute_bazaar.prices.silver_contract import silver_observation_select
@@ -63,6 +71,43 @@ class DataFusionEngineTest(unittest.TestCase):
         self.assertEqual(smoothed[-1], values[-1])
         self.assertLess(smoothed[2], values[2])
         self.assertGreater(smoothed[2], values[1])
+
+    def test_publication_digest_is_profile_specific_not_commit_specific(self) -> None:
+        cards = {"H100": {"as_of": "2026-08-13T12:00:00+00:00", "series": []}}
+        original_revision = os.environ.get("COMPUTE_BAZAAR_REVISION")
+        try:
+            os.environ["COMPUTE_BAZAAR_REVISION"] = "a" * 40
+            first = _publication_digest(
+                cards,
+                public_base_url="https://bazaar.example",
+                article_url="https://example.test/article",
+                render_profile=GPU_PUBLICATION_RENDER_PROFILE,
+            )
+            os.environ["COMPUTE_BAZAAR_REVISION"] = "b" * 40
+            second = _publication_digest(
+                cards,
+                public_base_url="https://bazaar.example",
+                article_url="https://example.test/article",
+                render_profile=GPU_PUBLICATION_RENDER_PROFILE,
+            )
+        finally:
+            if original_revision is None:
+                os.environ.pop("COMPUTE_BAZAAR_REVISION", None)
+            else:
+                os.environ["COMPUTE_BAZAAR_REVISION"] = original_revision
+
+        self.assertEqual(first, second)
+
+    def test_publication_records_worker_revision(self) -> None:
+        original_revision = os.environ.get("COMPUTE_BAZAAR_REVISION")
+        try:
+            os.environ["COMPUTE_BAZAAR_REVISION"] = "e8d5744"
+            self.assertEqual(_renderer_revision(), "e8d5744")
+        finally:
+            if original_revision is None:
+                os.environ.pop("COMPUTE_BAZAAR_REVISION", None)
+            else:
+                os.environ["COMPUTE_BAZAAR_REVISION"] = original_revision
 
     def test_prime_empty_snapshot_records_departures(self) -> None:
         first = datetime(2026, 8, 10, 12, tzinfo=UTC)

@@ -173,6 +173,8 @@ def export_public_cards(
     prime_frontier_shelf_public["publications"] = {
         "manifest_path": "publications/prime-gpu-market/manifest.json",
         "revision": prime_publications["revision"],
+        "render_profile": prime_publications["render_profile"],
+        "renderer_revision": prime_publications["renderer_revision"],
         "publication_count": prime_publications["publication_count"],
     }
     for family in GPU_FAMILIES:
@@ -202,6 +204,7 @@ def export_public_cards(
             "prime_frontier_offers": len(prime_frontier_payload.get("offers", [])),
             "gpu_benchmark_cards": len(benchmark_cards),
             "gpu_publications": gpu_publications["publication_count"],
+            "prime_publications": prime_publications["publication_count"],
             "prime_frontier_cards": len(prime_cards),
         },
         "source_gold_manifest_ref": manifest.get("manifest_ref"),

@@ -37,6 +37,37 @@ group.
 
 ## Worker image
 
+Deploy through the revision-pinned helper. It archives one committed revision,
+builds that exact source on the runtime, updates only the worker service, and
+fails unless the running container reports the requested revision:
+
+```bash
+uv run python infra/windmill/deploy_worker.py \
+  --host ec2-user@RUNTIME_HOST \
+  --revision HEAD
+```
+
+Do not update `WM_WORKER_IMAGE` by hand. A Git push does not deploy the worker.
+After deploying renderer changes, run the market job once. If the workload
+renderer changed, run the StarSling job once too. Then verify all three card
+families against the exact deployed revision:
+
+```bash
+uv run python infra/aws/check_public_market.py \
+  --require-renderer-revision "$(git rev-parse HEAD)"
+```
+
+The check covers GPU index, Prime availability, and measured workload cards.
+It fails on an old render profile, missing card variant, unknown producing
+revision, or a revision that differs from the requested commit.
+
+Render profiles are content-derived from each card renderer, its shared chart
+code, metadata, page template, and fonts. Editing any of those inputs changes
+the immutable publication path automatically. Do not add manual renderer
+version numbers.
+
+The equivalent manual build is retained below for debugging only.
+
 Build from the repository root:
 
 ```bash

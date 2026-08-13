@@ -9,6 +9,7 @@ from hashlib import sha256
 from typing import Any
 from urllib.parse import urlencode
 
+from ..build_info import build_revision
 from ..contracts import (
     PUBLICATION_CONTRACT,
     PUBLICATION_ROUTE_CONTRACT,
@@ -22,13 +23,6 @@ from .publication_chart_common import (
 from .publication_page import publication_html
 from .storage import write_bytes
 
-
-# Immutable publication URLs include a render profile in their content digest.
-# Bump the relevant profile when its renderer changes so old previews stay
-# frozen while newly generated links receive the current visual treatment.
-PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_market_cards_v2"
-GPU_PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_gpu_index_v10"
-PRIME_PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_gpu_availability_v4"
 
 DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
 
@@ -50,6 +44,7 @@ def _publish_market_card_state(
     data_url: str,
     image: bytes,
     metadata: Mapping[str, Any],
+    render_profile: str,
 ) -> dict[str, Any]:
     route = PublicationRoute.create(
         card_id=card_id,
@@ -68,6 +63,8 @@ def _publish_market_card_state(
         "data_url": data_url,
         "revision": route.revision,
         "publication_id": route.publication_id,
+        "render_profile": render_profile,
+        "renderer_revision": _renderer_revision(),
         "route": route.as_dict(),
     }
     write_bytes(
@@ -97,6 +94,8 @@ def _publish_market_card_state(
         "image_url": image_url,
         "live_url": live_url,
         "revision": route.revision,
+        "render_profile": render_profile,
+        "renderer_revision": _renderer_revision(),
         "observed_at": metadata["observed_at"],
         "title": metadata["title"],
         "description": metadata["description"],
@@ -113,6 +112,7 @@ def _card_publication_contract(
     card_id: str,
     default_state: str,
     states: Mapping[str, Mapping[str, Any]],
+    render_profile: str,
 ) -> dict[str, Any]:
     return {
         "contract": PUBLICATION_CONTRACT,
@@ -120,6 +120,8 @@ def _card_publication_contract(
         "kind": "crawler_preview_live_handoff",
         "card_id": card_id,
         "default_state": default_state,
+        "render_profile": render_profile,
+        "renderer_revision": _renderer_revision(),
         "states": {key: dict(value) for key, value in states.items()},
     }
 
@@ -129,6 +131,7 @@ def _market_card_publication_digest(
     *,
     public_base_url: str,
     article_url: str,
+    render_profile: str,
 ) -> str:
     canonical_cards = {
         card_id: {key: value for key, value in card.items() if key != "publication"}
@@ -137,7 +140,7 @@ def _market_card_publication_digest(
     publication_material = {
         "contract": PUBLICATION_CONTRACT,
         "route_contract": PUBLICATION_ROUTE_CONTRACT,
-        "render_profile": PUBLICATION_RENDER_PROFILE,
+        "render_profile": render_profile,
         "image_width": IMAGE_WIDTH,
         "image_height": IMAGE_HEIGHT,
         "public_base_url": public_base_url,
@@ -175,7 +178,7 @@ def _publication_digest(
     *,
     public_base_url: str,
     article_url: str,
-    render_profile: str = PUBLICATION_RENDER_PROFILE,
+    render_profile: str,
 ) -> str:
     canonical_cards = {
         family: {key: value for key, value in card.items() if key != "publication"}
@@ -242,3 +245,8 @@ def _live_prime_offer_url(*, article_url: str, family: str) -> str:
 
 def _join(root: str, path: str) -> str:
     return "/".join([root.rstrip("/"), path.lstrip("/")])
+
+
+def _renderer_revision() -> str:
+    """Return the immutable worker revision embedded at image-build time."""
+    return build_revision()

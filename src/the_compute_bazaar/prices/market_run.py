@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from ..build_info import build_revision
 from ..contracts import MARKET_RUN_CONTRACT
 from ..portable_lake import publish_portable_lake
 from .coverage import query_frontier_coverage_ref
@@ -39,6 +40,7 @@ class MarketRunResult:
     status: str
     data_quality_status: str
     observed_at: str
+    worker_revision: str
     providers: list[str]
     successful_providers: list[str]
     failed_providers: list[str]
@@ -78,6 +80,7 @@ def run_market_hourly(
     market_run_id = run_id or new_run_id("market")
     observed_at = utc_now()
     observed_date = observed_at.date().isoformat()
+    worker_revision = build_revision()
     provider_scope = list(dict.fromkeys(providers or default_market_providers()))
     required_provider_scope = list(dict.fromkeys(required_providers or []))
     unknown_required_providers = set(required_provider_scope) - set(provider_scope)
@@ -196,6 +199,7 @@ def run_market_hourly(
             market_run_id=market_run_id,
             observed_at=observed_at.isoformat(),
             observed_date=observed_date,
+            worker_revision=worker_revision,
             provider_scope=provider_scope,
             failed_providers=failed_providers,
             checks=checks,
@@ -261,6 +265,7 @@ def run_market_hourly(
         "data_quality_status": data_quality_status,
         "observed_at": observed_at.isoformat(),
         "observed_date": observed_date,
+        "worker_revision": worker_revision,
         "providers": provider_scope,
         "successful_providers": successful_providers,
         "failed_providers": failed_providers,
@@ -308,6 +313,7 @@ def run_market_hourly(
         status=status,
         data_quality_status=data_quality_status,
         observed_at=observed_at.isoformat(),
+        worker_revision=worker_revision,
         providers=provider_scope,
         successful_providers=successful_providers,
         failed_providers=failed_providers,

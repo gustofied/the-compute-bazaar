@@ -16,6 +16,7 @@ from .publication_chart_common import (
 from .publication_metadata import (
     sandbox_workload_publication_metadata,
 )
+from .publication_profiles import WORKLOAD_PUBLICATION_RENDER_PROFILE
 from .publication_sandbox_chart import render_sandbox_workload_publication
 from .storage import write_json
 
@@ -51,6 +52,7 @@ def publish_sandbox_workload_publication(
         {"workload": workload_card},
         public_base_url=public_base,
         article_url=live_article,
+        render_profile=WORKLOAD_PUBLICATION_RENDER_PROFILE,
     )
     observed_at = _workload_observed_at(workload_card)
     link = _publish_market_card_state(
@@ -73,11 +75,13 @@ def publish_sandbox_workload_publication(
             card=workload_card,
             observed_at=observed_at,
         ),
+        render_profile=WORKLOAD_PUBLICATION_RENDER_PROFILE,
     )
     workload_card["publication"] = _card_publication_contract(
         card_id="sandbox-cost",
         default_state="cost",
         states={"cost": link},
+        render_profile=WORKLOAD_PUBLICATION_RENDER_PROFILE,
     )
     revision = PublicationRoute.create(
         card_id="sandbox-cost",
@@ -95,6 +99,8 @@ def publish_sandbox_workload_publication(
         "contract": PUBLICATION_CONTRACT,
         "route_contract": PUBLICATION_ROUTE_CONTRACT,
         "publication_type": "sandbox_workload_cost",
+        "render_profile": WORKLOAD_PUBLICATION_RENDER_PROFILE,
+        "renderer_revision": link["renderer_revision"],
         "revision": revision,
         "publication_count": len(publication_rows),
         "rows": publication_rows,
@@ -103,6 +109,8 @@ def publish_sandbox_workload_publication(
     return {
         "manifest_ref": manifest_ref,
         "revision": revision,
+        "render_profile": WORKLOAD_PUBLICATION_RENDER_PROFILE,
+        "renderer_revision": link["renderer_revision"],
         "publication_count": len(publication_rows),
         "rows": publication_rows,
     }

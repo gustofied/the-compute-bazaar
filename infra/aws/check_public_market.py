@@ -8,6 +8,12 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.request import urlopen
 
+from the_compute_bazaar.prices.publication_profiles import (
+    GPU_PUBLICATION_RENDER_PROFILE,
+    PRIME_PUBLICATION_RENDER_PROFILE,
+    WORKLOAD_PUBLICATION_RENDER_PROFILE,
+)
+
 GPU_FAMILIES = ("h100", "h200", "b200", "b300")
 
 
@@ -17,6 +23,10 @@ def main() -> None:
     parser.add_argument("--max-age-hours", type=float, default=2.5)
     parser.add_argument("--require-provider", action="append", default=[])
     parser.add_argument("--forbid-provider", action="append", default=[])
+    parser.add_argument(
+        "--require-renderer-revision",
+        help="Fail unless every publication was rendered by this Git revision",
+    )
     args = parser.parse_args()
 
     base_url = args.base_url.rstrip("/")
@@ -26,13 +36,26 @@ def main() -> None:
         family: _fetch_json(f"{base_url}/gpu-benchmark/{family}.json")
         for family in GPU_FAMILIES
     }
+    gpu_publications = _fetch_json(
+        f"{base_url}/publications/gpu-index/manifest.json"
+    )
+    prime_publications = _fetch_json(
+        f"{base_url}/publications/prime-gpu-market/manifest.json"
+    )
+    workload_publications = _fetch_json(
+        f"{base_url}/publications/sandbox-cost/manifest.json"
+    )
     summary = validate_public_market(
         market_run=market_run,
         portable_lake=portable_lake,
         cards=cards,
+        gpu_publications=gpu_publications,
+        prime_publications=prime_publications,
+        workload_publications=workload_publications,
         max_age_hours=args.max_age_hours,
         required_providers=set(args.require_provider),
         forbidden_providers=set(args.forbid_provider),
+        required_renderer_revision=args.require_renderer_revision,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
 
@@ -42,9 +65,13 @@ def validate_public_market(
     market_run: dict[str, Any],
     portable_lake: dict[str, Any],
     cards: dict[str, dict[str, Any]],
+    gpu_publications: dict[str, Any],
+    prime_publications: dict[str, Any],
+    workload_publications: dict[str, Any],
     max_age_hours: float,
     required_providers: set[str],
     forbidden_providers: set[str],
+    required_renderer_revision: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current_time = now or datetime.now(timezone.utc)
@@ -56,6 +83,14 @@ def validate_public_market(
         )
     if market_run.get("status") != "success":
         raise RuntimeError(f"Public market run status is {market_run.get('status')!r}")
+    worker_revision = str(market_run.get("worker_revision") or "")
+    if not worker_revision or worker_revision == "unknown":
+        raise RuntimeError("Public market run does not identify its worker revision")
+    if required_renderer_revision and worker_revision != required_renderer_revision:
+        raise RuntimeError(
+            f"Public market run used worker {worker_revision!r}; "
+            f"expected {required_renderer_revision!r}"
+        )
 
     market_run_id = str(market_run.get("market_run_id") or "")
     gold_run_id = str(market_run.get("gold_run_id") or "")
@@ -103,6 +138,28 @@ def validate_public_market(
                 f"{family.upper()} card does not match the current Gold run"
             )
 
+    _validate_publication_manifest(
+        gpu_publications,
+        label="GPU",
+        expected_profile=GPU_PUBLICATION_RENDER_PROFILE,
+        expected_count=12,
+        required_renderer_revision=required_renderer_revision,
+    )
+    _validate_publication_manifest(
+        prime_publications,
+        label="Prime",
+        expected_profile=PRIME_PUBLICATION_RENDER_PROFILE,
+        expected_count=2,
+        required_renderer_revision=required_renderer_revision,
+    )
+    _validate_publication_manifest(
+        workload_publications,
+        label="Workload",
+        expected_profile=WORKLOAD_PUBLICATION_RENDER_PROFILE,
+        expected_count=1,
+        required_renderer_revision=required_renderer_revision,
+    )
+
     return {
         "market_run_id": market_run_id,
         "gold_run_id": gold_run_id,
@@ -110,9 +167,50 @@ def validate_public_market(
         "observed_at": observed_at.isoformat(),
         "age_hours": round(age_hours, 3),
         "provider_count": len(providers),
+        "worker_revision": worker_revision,
         "cards": sorted(cards),
+        "gpu_publication_profile": gpu_publications.get("render_profile"),
+        "prime_publication_profile": prime_publications.get("render_profile"),
+        "workload_publication_profile": workload_publications.get("render_profile"),
+        "renderer_revisions": {
+            "gpu": gpu_publications.get("renderer_revision"),
+            "prime": prime_publications.get("renderer_revision"),
+            "workload": workload_publications.get("renderer_revision"),
+        },
         "status": "ok",
     }
+
+
+def _validate_publication_manifest(
+    manifest: dict[str, Any],
+    *,
+    label: str,
+    expected_profile: str,
+    expected_count: int,
+    required_renderer_revision: str | None,
+) -> None:
+    profile = str(manifest.get("render_profile") or "")
+    if profile != expected_profile:
+        raise RuntimeError(
+            f"{label} publications use render profile {profile!r}; "
+            f"expected {expected_profile!r}"
+        )
+    count = int(manifest.get("publication_count") or 0)
+    if count != expected_count:
+        raise RuntimeError(
+            f"{label} publication count is {count}; expected {expected_count}"
+        )
+    renderer_revision = str(manifest.get("renderer_revision") or "")
+    if not renderer_revision or renderer_revision == "unknown":
+        raise RuntimeError(f"{label} publications do not identify their renderer")
+    if (
+        required_renderer_revision
+        and renderer_revision != required_renderer_revision
+    ):
+        raise RuntimeError(
+            f"{label} publications were rendered by {renderer_revision!r}; "
+            f"expected {required_renderer_revision!r}"
+        )
 
 
 def _fetch_json(url: str) -> dict[str, Any]:

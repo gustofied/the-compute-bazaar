@@ -17,6 +17,7 @@ from .publication_chart_common import (
 from .publication_metadata import (
     prime_offer_publication_metadata,
 )
+from .publication_profiles import PRIME_PUBLICATION_RENDER_PROFILE
 from .publication_prime_chart import render_prime_offer_shelf_publication
 from .storage import write_json
 
@@ -24,7 +25,6 @@ from .storage import write_json
 from .publication_store import (
     DEFAULT_ARTICLE_URL,
     DEFAULT_PUBLIC_DATA_BASE_URL,
-    PRIME_PUBLICATION_RENDER_PROFILE,
     _card_publication_contract,
     _join,
     _latest_card_observed_at,
@@ -83,11 +83,13 @@ def publish_prime_offer_shelf_publications(
                 family=family,
                 observed_at=observed_at,
             ),
+            render_profile=PRIME_PUBLICATION_RENDER_PROFILE,
         )
         card["publication"] = _card_publication_contract(
             card_id="prime-offer-shelf",
             default_state=family,
             states={family: link},
+            render_profile=PRIME_PUBLICATION_RENDER_PROFILE,
         )
         publication_rows.append({"family_id": family, **link})
 
@@ -107,6 +109,10 @@ def publish_prime_offer_shelf_publications(
         "contract": PUBLICATION_CONTRACT,
         "route_contract": PUBLICATION_ROUTE_CONTRACT,
         "publication_type": "prime_offer_market",
+        "render_profile": PRIME_PUBLICATION_RENDER_PROFILE,
+        "renderer_revision": publication_rows[0]["renderer_revision"]
+        if publication_rows
+        else "unknown",
         "revision": revision,
         "publication_count": len(publication_rows),
         "rows": publication_rows,
@@ -115,6 +121,8 @@ def publish_prime_offer_shelf_publications(
     return {
         "manifest_ref": manifest_ref,
         "revision": revision,
+        "render_profile": PRIME_PUBLICATION_RENDER_PROFILE,
+        "renderer_revision": manifest["renderer_revision"],
         "publication_count": len(publication_rows),
         "rows": publication_rows,
     }

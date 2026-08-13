@@ -24,17 +24,18 @@ from .publication_metadata import (
     gpu_publication_metadata,
 )
 from .publication_page import publication_html
+from .publication_profiles import GPU_PUBLICATION_RENDER_PROFILE
 from .storage import write_bytes, write_json
 
 
 from .publication_store import (
     DEFAULT_ARTICLE_URL,
     DEFAULT_PUBLIC_DATA_BASE_URL,
-    GPU_PUBLICATION_RENDER_PROFILE,
     _join,
     _latest_card_observed_at,
     _live_gpu_url,
     _publication_digest,
+    _renderer_revision,
 )
 
 
@@ -106,15 +107,19 @@ def publish_gpu_benchmark_publications(
                 selected_family=family,
                 range_id=range_id,
             )
-            metadata = gpu_publication_metadata(
-                cards=normalized_cards,
-                selected_family=family,
-                range_id=range_id,
-                page_url=page_url,
-                image_url=image_url,
-                live_url=live_url,
-                route=route,
-            )
+            metadata = {
+                **gpu_publication_metadata(
+                    cards=normalized_cards,
+                    selected_family=family,
+                    range_id=range_id,
+                    page_url=page_url,
+                    image_url=image_url,
+                    live_url=live_url,
+                    route=route,
+                ),
+                "render_profile": GPU_PUBLICATION_RENDER_PROFILE,
+                "renderer_revision": _renderer_revision(),
+            }
             write_bytes(
                 image_ref,
                 image,
@@ -143,6 +148,8 @@ def publish_gpu_benchmark_publications(
                 "image_url": image_url,
                 "live_url": live_url,
                 "revision": route.revision,
+                "render_profile": GPU_PUBLICATION_RENDER_PROFILE,
+                "renderer_revision": _renderer_revision(),
                 "observed_at": metadata["observed_at"],
                 "title": metadata["title"],
                 "description": metadata["description"],
@@ -166,6 +173,8 @@ def publish_gpu_benchmark_publications(
             "kind": "frozen_chart_snapshot",
             "card_id": "gpu-index",
             "default_range": "1d",
+            "render_profile": GPU_PUBLICATION_RENDER_PROFILE,
+            "renderer_revision": _renderer_revision(),
             "ranges": range_links,
         }
 
@@ -177,6 +186,8 @@ def publish_gpu_benchmark_publications(
         "contract": PUBLICATION_CONTRACT,
         "route_contract": PUBLICATION_ROUTE_CONTRACT,
         "publication_type": "gpu_benchmark",
+        "render_profile": GPU_PUBLICATION_RENDER_PROFILE,
+        "renderer_revision": _renderer_revision(),
         "revision": revision,
         "publication_count": len(publication_rows),
         "rows": publication_rows,
@@ -185,6 +196,8 @@ def publish_gpu_benchmark_publications(
     return {
         "manifest_ref": manifest_ref,
         "revision": revision,
+        "render_profile": GPU_PUBLICATION_RENDER_PROFILE,
+        "renderer_revision": _renderer_revision(),
         "publication_count": len(publication_rows),
         "rows": publication_rows,
     }
