@@ -283,7 +283,7 @@ def model_save(
     description: Annotated[str, typer.Option()] = "",
     limit: Annotated[int, typer.Option()] = 500,
 ) -> None:
-    """Save a read-only SQL model in analyses/models."""
+    """Save a read-only SQL model locally."""
     from .analysis_store import model_payload
 
     statement = _read_sql(statement=None, sql_file=sql_file)
@@ -359,7 +359,7 @@ def model_delete(model_id: Annotated[str, typer.Argument()]) -> None:
 
 @blueprint_app.command("list")
 def blueprint_list(ctx: typer.Context) -> None:
-    """List repo-backed Perspective blueprints."""
+    """List local and bundled Perspective blueprints."""
     from .analysis_store import blueprint_payload
 
     _emit(

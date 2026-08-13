@@ -236,6 +236,48 @@ class TerminalCommandTest(unittest.TestCase):
         )
         self.assertNotIn("perspective", stored)
 
+    def test_personal_analyses_overlay_bundled_examples(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as personal_directory,
+            tempfile.TemporaryDirectory() as bundled_directory,
+        ):
+            personal_root = Path(personal_directory)
+            bundled_root = Path(bundled_directory)
+            bundled_store = AnalysisStore(bundled_root)
+            bundled_store.save_model(
+                model_id="bundled-model",
+                title="Bundled model",
+                description="",
+                sql="select 1 as value",
+                default_limit=10,
+            )
+            store = AnalysisStore(personal_root, bundled_root=bundled_root)
+
+            self.assertEqual(
+                [model.model_id for model in store.list_models()],
+                ["bundled-model"],
+            )
+            with self.assertRaisesRegex(ValueError, "Bundled model cannot be deleted"):
+                store.delete_model("bundled-model")
+
+            store.save_model(
+                model_id="personal-model",
+                title="Personal model",
+                description="",
+                sql="select 2 as value",
+            )
+
+            self.assertEqual(
+                [model.model_id for model in store.list_models()],
+                ["bundled-model", "personal-model"],
+            )
+            self.assertTrue(
+                (personal_root / "models" / "personal-model.sql").is_file()
+            )
+            self.assertFalse(
+                (bundled_root / "models" / "personal-model.sql").exists()
+            )
+
     def test_external_links_are_https_without_embedded_credentials(self) -> None:
         url = "https://hub.harborframework.com/tasks/gustofied/task/latest"
 

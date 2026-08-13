@@ -147,8 +147,8 @@ order by observed_at, gpu
 ```
 
 A market model contains reusable DataFusion SQL. Its view describes how
-Perspective displays the result. Terminal Save writes both under `analyses/`,
-where they can be rerun, shared, reviewed, or used by agents.
+Perspective displays the result. Terminal Save keeps personal models and views
+outside the Git checkout. They can be rerun or used by agents without being shared.
 
 ```bash
 compute-bazaar model list

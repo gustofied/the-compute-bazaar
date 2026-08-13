@@ -1,4 +1,4 @@
-"""Repo-backed SQL models and view blueprints."""
+"""Local SQL models and view blueprints with bundled examples."""
 
 from __future__ import annotations
 
@@ -15,9 +15,18 @@ from .prices.query_catalog import MAX_QUERY_LIMIT, validate_catalog_sql
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_ANALYSIS_ROOT = Path(
-    os.getenv("COMPUTE_BAZAAR_ANALYSIS_ROOT", PROJECT_ROOT / "analyses")
-)
+BUNDLED_ANALYSIS_ROOT = PROJECT_ROOT / "analyses"
+
+
+def default_analysis_root() -> Path:
+    configured = os.getenv("COMPUTE_BAZAAR_ANALYSIS_ROOT")
+    if configured:
+        return Path(configured).expanduser()
+    data_home = os.getenv("COMPUTE_BAZAAR_DATA_HOME")
+    if data_home:
+        return Path(data_home).expanduser() / "analyses"
+    state_home = Path(os.getenv("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+    return state_home / "compute-bazaar" / "analyses"
 ARTIFACT_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 TABLE_REF_PATTERN = re.compile(
     r"\b(?:silver|gold|fleet)\.[A-Za-z_][A-Za-z0-9_]*\b",
@@ -53,33 +62,39 @@ class ViewBlueprint(BaseModel):
 
 
 class AnalysisStore:
-    """Persist analysis artifacts as ordinary, reviewable repo files."""
+    """Read bundled examples and persist personal analyses outside the checkout."""
 
-    def __init__(self, root: Path | None = None) -> None:
-        self.root = (root or DEFAULT_ANALYSIS_ROOT).resolve()
+    def __init__(
+        self,
+        root: Path | None = None,
+        *,
+        bundled_root: Path | None = None,
+    ) -> None:
+        self.root = (root or default_analysis_root()).resolve()
+        self.bundled_root = (
+            bundled_root.resolve()
+            if bundled_root is not None
+            else BUNDLED_ANALYSIS_ROOT.resolve()
+            if root is None
+            else None
+        )
         self.models_root = self.root / "models"
         self.blueprints_root = self.root / "blueprints"
 
     def list_models(self) -> list[AnalysisModel]:
-        if not self.models_root.is_dir():
-            return []
-        return [
-            self.load_model(path.stem)
-            for path in sorted(self.models_root.glob("*.json"))
-        ]
+        return [self.load_model(model_id) for model_id in self._artifact_ids("models")]
 
     def list_blueprints(self) -> list[ViewBlueprint]:
-        if not self.blueprints_root.is_dir():
-            return []
         return [
-            self.load_blueprint(path.stem)
-            for path in sorted(self.blueprints_root.glob("*.json"))
+            self.load_blueprint(blueprint_id)
+            for blueprint_id in self._artifact_ids("blueprints")
         ]
 
     def load_model(self, model_id: str) -> AnalysisModel:
         selected_id = _artifact_id(model_id)
-        metadata = _read_json(self.models_root / f"{selected_id}.json")
-        sql = (self.models_root / f"{selected_id}.sql").read_text(encoding="utf-8")
+        root = self._artifact_root("models", selected_id, ".json")
+        metadata = _read_json(root / "models" / f"{selected_id}.json")
+        sql = (root / "models" / f"{selected_id}.sql").read_text(encoding="utf-8")
         return AnalysisModel(
             **metadata,
             sql=_analysis_sql(sql),
@@ -88,8 +103,9 @@ class AnalysisStore:
 
     def load_blueprint(self, blueprint_id: str) -> ViewBlueprint:
         selected_id = _artifact_id(blueprint_id)
+        root = self._artifact_root("blueprints", selected_id, ".json")
         blueprint = ViewBlueprint.model_validate(
-            _read_json(self.blueprints_root / f"{selected_id}.json")
+            _read_json(root / "blueprints" / f"{selected_id}.json")
         )
         self.load_model(blueprint.model_id)
         return blueprint
@@ -199,11 +215,13 @@ class AnalysisStore:
         ]
         if dependants:
             raise ValueError(f"Model {selected_id} is used by: {', '.join(dependants)}")
+        self._require_personal("models", selected_id)
         (self.models_root / f"{selected_id}.json").unlink(missing_ok=True)
         (self.models_root / f"{selected_id}.sql").unlink(missing_ok=True)
 
     def delete_blueprint(self, blueprint_id: str) -> None:
         selected_id = _artifact_id(blueprint_id)
+        self._require_personal("blueprints", selected_id)
         (self.blueprints_root / f"{selected_id}.json").unlink(missing_ok=True)
 
     def _model_metadata(self, model_id: str) -> dict[str, Any] | None:
@@ -213,6 +231,41 @@ class AnalysisStore:
     def _blueprint_metadata(self, blueprint_id: str) -> dict[str, Any] | None:
         path = self.blueprints_root / f"{blueprint_id}.json"
         return _read_json(path) if path.is_file() else None
+
+    def _artifact_ids(self, kind: Literal["models", "blueprints"]) -> list[str]:
+        roots = [self.root]
+        if self.bundled_root is not None:
+            roots.append(self.bundled_root)
+        return sorted(
+            {
+                path.stem
+                for root in roots
+                for path in (root / kind).glob("*.json")
+            }
+        )
+
+    def _artifact_root(
+        self,
+        kind: Literal["models", "blueprints"],
+        artifact_id: str,
+        suffix: str,
+    ) -> Path:
+        personal = self.root / kind / f"{artifact_id}{suffix}"
+        if personal.is_file():
+            return self.root
+        if self.bundled_root is not None:
+            bundled = self.bundled_root / kind / f"{artifact_id}{suffix}"
+            if bundled.is_file():
+                return self.bundled_root
+        raise FileNotFoundError(f"Unknown {kind[:-1]}: {artifact_id}")
+
+    def _require_personal(
+        self,
+        kind: Literal["models", "blueprints"],
+        artifact_id: str,
+    ) -> None:
+        if not (self.root / kind / f"{artifact_id}.json").is_file():
+            raise ValueError(f"Bundled {kind[:-1]} cannot be deleted: {artifact_id}")
 
 
 def model_payload(model: AnalysisModel) -> dict[str, Any]:

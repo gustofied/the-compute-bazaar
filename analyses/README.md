@@ -1,4 +1,4 @@
-# Market Models and Views
+# Bundled Market Models and Views
 
 Each market model has two linked parts:
 
@@ -14,12 +14,15 @@ compute-bazaar model run h200-under-4
 compute-bazaar blueprint open h200-under-4
 ```
 
-The Terminal **Save** action writes both files. Agents can write them separately:
+The Terminal ships these examples but does not write personal work into this folder.
+Saved models and views live in the local Compute Bazaar state directory. Agents can
+write them separately:
 
 ```bash
 compute-bazaar model save my-model --file query.sql
 compute-bazaar blueprint save my-chart --model my-model --config chart.json
 ```
 
-These are saved queries and views, not materialized Gold tables. Promote a model into
-the pipeline's Gold SQL only when its schema and meaning should become a shared contract.
+Set `COMPUTE_BAZAAR_ANALYSIS_ROOT` to choose another private location. These are saved
+queries and views, not materialized Gold tables. Promote a model into the pipeline's
+Gold SQL only when its schema and meaning should become a shared contract.
