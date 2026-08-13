@@ -69,13 +69,18 @@ class TerminalCommandTest(unittest.TestCase):
             {
                 "COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN": "native-secret",
                 "COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN": "control-secret",
+                "COMPUTE_BAZAAR_TERMINAL_PORT": "8767",
+                "COMPUTE_BAZAAR_TERMINAL_READY_FILE": "/tmp/terminal-ready.json",
+                "COMPUTE_BAZAAR_LAKE_ROOT": "/tmp/lake",
             },
         ):
             environment = _agent_environment()
 
         self.assertEqual(environment["PATH"].split(":", 1)[0], executable_dir)
-        self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN", environment)
-        self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN", environment)
+        self.assertFalse(
+            any(key.startswith("COMPUTE_BAZAAR_TERMINAL_") for key in environment)
+        )
+        self.assertEqual(environment["COMPUTE_BAZAAR_LAKE_ROOT"], "/tmp/lake")
         self.assertEqual(
             json.loads(environment["CODEX_CONFIG"]),
             {

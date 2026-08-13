@@ -355,12 +355,11 @@ def _terminal_prompt(prompt: str, *, access: str) -> str:
 
 
 def _agent_environment() -> dict[str, str]:
-    environment = os.environ.copy()
-    for key in (
-        "COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN",
-        "COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN",
-    ):
-        environment.pop(key, None)
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("COMPUTE_BAZAAR_TERMINAL_")
+    }
     executable_dir = str(Path(sys.executable).parent)
     environment["PATH"] = os.pathsep.join(
         (executable_dir, environment.get("PATH", ""))

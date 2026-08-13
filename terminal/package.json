@@ -2,6 +2,9 @@
   "name": "compute-bazaar-terminal",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "build": "vite build --config vite.config.mjs",
     "tauri": "tauri"
