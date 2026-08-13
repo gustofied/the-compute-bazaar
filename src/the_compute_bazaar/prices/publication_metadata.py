@@ -36,23 +36,11 @@ def gpu_publication_metadata(
     rows = series.get(selected_family, [])
     latest = rows[-1] if rows else None
     card = cards[selected_family]
-    coverage = card.get("coverage") or {}
     value = _format_usd(latest["value"]) if latest else "pending"
     observed_at = latest["date"].isoformat() if latest else str(card.get("as_of") or "")
-    provider_count = int(coverage.get("provider_count") or 0)
     change = _range_change(rows, range_id)
-    title_parts = [f"{selected_family} GPU Price Index", f"{value}/GPU-hour"]
-    if change["value"] is not None:
-        title_parts.append(change["label"])
-    title = " | ".join(title_parts)
-    description = (
-        f"{selected_family} observed GPU benchmark at {value} per GPU-hour, "
-        f"{change['label'].lower()}. "
-        f"Observed through {_format_observed_date(latest['date'] if latest else None)}"
-    )
-    if provider_count:
-        description += f" across {provider_count} providers"
-    description += "."
+    title = f"{selected_family} · {value}/GPU-hour"
+    description = "GPU Price Index"
     display_line = (
         f"{selected_family} / {GPU_RANGE_PRESENTATION[range_id]['label']} / "
         f"{str(change['label']).lower()} / observed "

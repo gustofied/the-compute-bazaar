@@ -27,7 +27,7 @@ from .storage import write_bytes
 # Bump the relevant profile when its renderer changes so old previews stay
 # frozen while newly generated links receive the current visual treatment.
 PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_market_cards"
-GPU_PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_gpu_index_v2"
+GPU_PUBLICATION_RENDER_PROFILE = "social_png_rgb_1200x630_gpu_index_v8"
 
 DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
 
