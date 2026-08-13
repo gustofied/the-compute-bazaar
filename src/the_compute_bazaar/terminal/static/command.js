@@ -11,7 +11,7 @@ const SHELL_MIN_WIDTH = 320;
 const SHELL_MIN_WORKSPACE_WIDTH = 420;
 const MAX_AGENT_EVENTS = 400;
 const AGENT_BUSY_STATES = new Set(["starting", "working", "stopping"]);
-const BAZAAR_AGENT_GLOBALS = new Set(["/home", "/data", "/fleet", "/eval", "/trade"]);
+const BAZAAR_GLOBALS = new Set(["/home", "/data", "/fleet", "/eval", "/trade"]);
 
 const workspace = document.body.dataset.terminalWorkspace || inferWorkspace();
 const nativeLaunchToken = takeNativeLaunchToken();
@@ -527,6 +527,7 @@ function updateSessionControls() {
   elements.access.hidden = !agent;
   elements.access.textContent = agent?.access === "full" ? "Full access" : "Read";
   elements.access.dataset.access = agent?.access || "read";
+  elements.access.disabled = Boolean(agent && agentIsBusy());
   elements.interrupt.textContent = agent ? "Stop" : "^C";
   elements.clear.textContent = agent ? "New session" : "Clear";
   elements.clear.title = agent ? "Start a new agent session" : "Clear shell";
@@ -744,8 +745,8 @@ async function sendAgentPrompt(prompt) {
   }
 }
 
-function isBazaarAgentGlobal(raw) {
-  return BAZAAR_AGENT_GLOBALS.has(raw.trim().toLowerCase());
+function isBazaarGlobal(raw) {
+  return BAZAAR_GLOBALS.has(raw.trim().toLowerCase());
 }
 
 function savePendingAction(action, launchId = null) {
@@ -901,7 +902,7 @@ async function submit() {
     showOptions("Terminal commands", state.commands);
     return;
   }
-  if (state.shell.open && state.activeSession !== "shell" && !isBazaarAgentGlobal(raw)) {
+  if (state.shell.open && state.activeSession !== "shell" && !isBazaarGlobal(raw)) {
     if (agentIsBusy()) return;
     saveHistory(raw);
     try {
@@ -916,7 +917,7 @@ async function submit() {
     }
     return;
   }
-  if (state.shell.open && state.activeSession === "shell") {
+  if (state.shell.open && state.activeSession === "shell" && !isBazaarGlobal(raw)) {
     saveHistory(raw);
     try {
       const socket = await connectShell();
@@ -1109,6 +1110,10 @@ elements.input.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  const shellHasFocus = state.shell.open
+    && state.activeSession === "shell"
+    && elements.shellStage.contains(document.activeElement);
+  if (shellHasFocus && event.ctrlKey && !event.metaKey) return;
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r") {
     event.preventDefault();
     window.location.reload();

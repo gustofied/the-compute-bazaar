@@ -408,6 +408,7 @@ def create_terminal_app(
             "contract": "compute-bazaar.terminal.health",
             "status": "ok",
             "pid": os.getpid(),
+            "project_root": str(project_root),
             "run_id": run.get("run_id"),
             "eval_available": eval_workspace.available,
             "fleet_hosts": len(fleet_workspace.service.hosts()),

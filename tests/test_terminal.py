@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
 import tempfile
 import time
 import unittest
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -16,6 +18,7 @@ from the_compute_bazaar.analysis_store import AnalysisStore
 from the_compute_bazaar.terminal.agents import (
     AgentSession,
     _agent_environment,
+    _terminate_agent_process,
     _terminal_prompt,
 )
 from the_compute_bazaar.terminal.commands import (
@@ -29,7 +32,12 @@ from the_compute_bazaar.terminal.commands import (
     resolve_command,
 )
 from the_compute_bazaar.terminal.eval_workspace import EvalWorkspace
-from the_compute_bazaar.terminal.lifecycle import _resolve_evaluation_root
+from the_compute_bazaar.terminal.lifecycle import (
+    _project_state_root,
+    _resolve_evaluation_root,
+    _terminal_health,
+    _write_state,
+)
 from the_compute_bazaar.terminal.server import (
     TerminalLaunchMailbox,
     _validated_external_url,
@@ -39,9 +47,7 @@ from the_compute_bazaar.terminal.shell import TerminalShell
 
 class TerminalCommandTest(unittest.TestCase):
     def test_agent_receives_the_terminal_data_contract(self) -> None:
-        prompt = _terminal_prompt(
-            "Show me the latest H200 price.", access="full"
-        )
+        prompt = _terminal_prompt("Show me the latest H200 price.", access="full")
 
         self.assertIn("compute-bazaar tables", prompt)
         self.assertIn("compute-bazaar describe TABLE", prompt)
@@ -270,6 +276,52 @@ class TerminalCommandTest(unittest.TestCase):
             Path("/tmp/project/compute-bazaar-bench/jobs/reports").resolve(),
         )
 
+    def test_terminal_runtime_state_is_scoped_to_the_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state_root = Path(directory) / "terminal"
+            checkout_a = Path(directory) / "checkout-a"
+            checkout_b = Path(directory) / "checkout-b"
+            with patch("the_compute_bazaar.terminal.lifecycle.STATE_ROOT", state_root):
+                self.assertNotEqual(
+                    _project_state_root(checkout_a),
+                    _project_state_root(checkout_b),
+                )
+                _write_state(
+                    mode="browser",
+                    pid=10,
+                    native_pid=10,
+                    url="http://127.0.0.1:8767",
+                    log_path=_project_state_root(checkout_a) / "terminal.log",
+                    control_token="token",
+                    project_root=checkout_a,
+                )
+                payload = json.loads(
+                    (_project_state_root(checkout_a) / "runtime.json").read_text()
+                )
+                checkout_b_state = _project_state_root(checkout_b) / "runtime.json"
+                self.assertFalse(checkout_b_state.exists())
+
+        self.assertEqual(payload["project_root"], str(checkout_a.resolve()))
+
+    def test_terminal_health_rejects_another_checkout(self) -> None:
+        checkout = Path("/tmp/checkout-a").resolve()
+        payload = json.dumps(
+            {
+                "contract": "compute-bazaar.terminal.health",
+                "pid": 42,
+                "project_root": str(checkout),
+            }
+        ).encode()
+
+        with patch(
+            "the_compute_bazaar.terminal.lifecycle.urlopen",
+            side_effect=(BytesIO(payload), BytesIO(payload)),
+        ):
+            self.assertEqual(_terminal_health("http://127.0.0.1:8767", checkout), 42)
+            self.assertIsNone(
+                _terminal_health("http://127.0.0.1:8767", Path("/tmp/checkout-b"))
+            )
+
     def test_unknown_commands_require_the_native_shell_boundary(self) -> None:
         command = "harbor run -p task"
 
@@ -449,6 +501,17 @@ class TerminalCommandTest(unittest.TestCase):
 
 
 class AgentProcessTest(unittest.IsolatedAsyncioTestCase):
+    async def test_agent_process_cleanup_reaps_a_running_child(self) -> None:
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            "import time; time.sleep(30)",
+        )
+
+        await _terminate_agent_process(process)
+
+        self.assertIsNotNone(process.returncode)
+
     async def test_new_agent_session_replaces_the_named_acp_session(self) -> None:
         session = AgentSession(
             cwd=Path("/tmp"),
@@ -575,6 +638,35 @@ if "prompt" in sys.argv:
         self.assertFalse(any(event["kind"] == "error" for event in session.events))
         self.assertEqual(session.events[-1]["kind"], "tool")
         self.assertEqual(session.events[-1]["status"], "completed")
+
+    async def test_agent_session_reaps_an_over_limit_stream(self) -> None:
+        fake_acpx = """
+import sys
+import time
+
+if "prompt" in sys.argv:
+    sys.stdout.write("x" * (5 * 1024 * 1024) + "\\n")
+    sys.stdout.flush()
+    time.sleep(30)
+"""
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path(sys.executable),
+            agent_command="fake-acp-agent",
+        )
+
+        with patch.object(
+            session,
+            "_command",
+            return_value=[sys.executable, "-c", fake_acpx],
+        ):
+            session.start("Read the market.", access="read")
+            assert session._task is not None
+            await asyncio.wait_for(session._task, timeout=5)
+
+        self.assertEqual(session.state, "error")
+        self.assertIsNone(session._process)
+        self.assertIn("too large", session.events[-1]["text"])
 
 
 class TerminalShellTest(unittest.TestCase):

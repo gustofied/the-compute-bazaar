@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import secrets
@@ -55,11 +56,12 @@ def launch_terminal(
         initial_limit=initial_limit,
         initial_perspective=initial_perspective,
     )
-    existing = _read_state()
+    state_root = _project_state_root(project_root)
+    existing = _read_state(project_root)
     if existing and existing.get("mode") == "native":
         native_pid = existing.get("native_pid")
         native_healthy = _process_alive(native_pid) and bool(
-            _terminal_health(existing.get("url"))
+            _terminal_health(existing.get("url"), project_root)
         )
         if native_healthy:
             if launch_action:
@@ -71,8 +73,8 @@ def launch_terminal(
             time.sleep(0.1)
         if _process_alive(native_pid):
             _terminate_process(native_pid)
-        _state_path().unlink(missing_ok=True)
-        (STATE_ROOT / "ready.json").unlink(missing_ok=True)
+        _state_path(project_root).unlink(missing_ok=True)
+        (state_root / "ready.json").unlink(missing_ok=True)
 
     terminal_root = project_root / "terminal"
     tauri = terminal_root / "node_modules" / ".bin" / "tauri"
@@ -86,14 +88,17 @@ def launch_terminal(
             initial_limit=initial_limit,
             initial_perspective=initial_perspective,
             evaluation_root=evaluation_root,
+            project_root=project_root,
         )
-    if existing and _terminal_health(existing.get("url")) == existing.get("pid"):
+    if existing and _terminal_health(existing.get("url"), project_root) == existing.get(
+        "pid"
+    ):
         os.kill(int(existing["pid"]), signal.SIGTERM)
-        _state_path().unlink(missing_ok=True)
+        _state_path(project_root).unlink(missing_ok=True)
 
-    STATE_ROOT.mkdir(parents=True, exist_ok=True)
-    log_path = STATE_ROOT / "terminal.log"
-    ready_path = STATE_ROOT / "ready.json"
+    state_root.mkdir(parents=True, exist_ok=True)
+    log_path = state_root / "terminal.log"
+    ready_path = state_root / "ready.json"
     ready_path.unlink(missing_ok=True)
     selected_port = _available_port(port)
     control_token = secrets.token_urlsafe(32)
@@ -141,7 +146,7 @@ def launch_terminal(
         if process.poll() is not None:
             raise TerminalLifecycleError(f"Terminal failed to start. See {log_path}")
         ready = _read_json(ready_path)
-        if ready and _terminal_health(ready.get("url")):
+        if ready and _terminal_health(ready.get("url"), project_root):
             break
         time.sleep(0.1)
     else:
@@ -156,6 +161,7 @@ def launch_terminal(
         url=str(ready["url"]),
         log_path=log_path,
         control_token=control_token,
+        project_root=project_root,
     )
     return "Compute Bazaar Terminal opened."
 
@@ -213,15 +219,17 @@ def _resolve_evaluation_root(path: Path, project_root: Path) -> Path:
 
 def stop_terminal() -> str:
     """Stop a Terminal process started by the CLI."""
-    state = _read_state()
+    project_root = PROJECT_ROOT
+    state_root = _project_state_root(project_root)
+    state = _read_state(project_root)
     if not state:
-        _state_path().unlink(missing_ok=True)
+        _state_path(project_root).unlink(missing_ok=True)
         return "Terminal is not running."
     if state.get("mode") == "native":
         launcher_pid = state.get("pid")
         native_pid = state.get("native_pid")
         if not _process_alive(launcher_pid) and not _process_alive(native_pid):
-            _state_path().unlink(missing_ok=True)
+            _state_path(project_root).unlink(missing_ok=True)
             return "Terminal is not running."
         _terminate_process_group(launcher_pid)
         deadline = time.monotonic() + 5
@@ -236,26 +244,29 @@ def stop_terminal() -> str:
             raise TerminalLifecycleError(
                 f"Terminal process {native_pid} did not stop. See {state.get('log')}"
             )
-        _state_path().unlink(missing_ok=True)
-        (STATE_ROOT / "ready.json").unlink(missing_ok=True)
+        _state_path(project_root).unlink(missing_ok=True)
+        (state_root / "ready.json").unlink(missing_ok=True)
         return "Terminal stopped."
-    if _terminal_health(state.get("url")) != state.get("pid"):
-        _state_path().unlink(missing_ok=True)
+    if _terminal_health(state.get("url"), project_root) != state.get("pid"):
+        _state_path(project_root).unlink(missing_ok=True)
         return "Terminal is not running."
     pid = int(state["pid"])
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
-        _state_path().unlink(missing_ok=True)
+        _state_path(project_root).unlink(missing_ok=True)
         return "Terminal stopped."
     deadline = time.monotonic() + 5
-    while time.monotonic() < deadline and _terminal_health(state.get("url")) == pid:
+    while (
+        time.monotonic() < deadline
+        and _terminal_health(state.get("url"), project_root) == pid
+    ):
         time.sleep(0.1)
-    if _terminal_health(state.get("url")) == pid:
+    if _terminal_health(state.get("url"), project_root) == pid:
         raise TerminalLifecycleError(
             f"Terminal process {pid} did not stop. See {state.get('log')}"
         )
-    _state_path().unlink(missing_ok=True)
+    _state_path(project_root).unlink(missing_ok=True)
     return "Terminal stopped."
 
 
@@ -269,8 +280,10 @@ def _launch_browser_terminal(
     initial_limit: int,
     initial_perspective: dict[str, Any] | None,
     evaluation_root: Path,
+    project_root: Path,
 ) -> str:
-    existing = _read_state()
+    state_root = _project_state_root(project_root)
+    existing = _read_state(project_root)
     launch_action = _launch_action(
         initial_view=initial_view,
         initial_query=initial_query,
@@ -278,7 +291,9 @@ def _launch_browser_terminal(
         initial_limit=initial_limit,
         initial_perspective=initial_perspective,
     )
-    if existing and _terminal_health(existing.get("url")) == existing.get("pid"):
+    if existing and _terminal_health(existing.get("url"), project_root) == existing.get(
+        "pid"
+    ):
         if launch_action:
             return _open_in_existing_terminal(existing, launch_action)
         else:
@@ -286,7 +301,7 @@ def _launch_browser_terminal(
 
             open_url(str(existing["url"]))
             return f"Compute Bazaar Terminal is already open: {existing['url']}"
-    _state_path().unlink(missing_ok=True)
+    _state_path(project_root).unlink(missing_ok=True)
 
     selected_port = _available_port(port)
     control_token = secrets.token_urlsafe(32)
@@ -326,10 +341,11 @@ def _launch_browser_terminal(
             )
         )
 
-    STATE_ROOT.mkdir(parents=True, exist_ok=True)
-    log_path = STATE_ROOT / "terminal.log"
+    state_root.mkdir(parents=True, exist_ok=True)
+    log_path = state_root / "terminal.log"
     environment = os.environ.copy()
     environment["COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN"] = control_token
+    environment["COMPUTE_BAZAAR_PROJECT_ROOT"] = str(project_root)
     with log_path.open("wb") as output:
         process = subprocess.Popen(
             command,
@@ -344,7 +360,7 @@ def _launch_browser_terminal(
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise TerminalLifecycleError(f"Terminal failed to start. See {log_path}")
-        if _terminal_health(url) == process.pid:
+        if _terminal_health(url, project_root) == process.pid:
             break
         time.sleep(0.1)
     else:
@@ -358,6 +374,7 @@ def _launch_browser_terminal(
         url=url,
         log_path=log_path,
         control_token=control_token,
+        project_root=project_root,
     )
     from webbrowser import open as open_url
 
@@ -365,12 +382,19 @@ def _launch_browser_terminal(
     return f"Compute Bazaar Terminal opened: {browser_url}"
 
 
-def _state_path() -> Path:
-    return STATE_ROOT / "runtime.json"
+def _project_state_root(project_root: Path = PROJECT_ROOT) -> Path:
+    identity = hashlib.sha256(str(project_root.resolve()).encode("utf-8")).hexdigest()[
+        :12
+    ]
+    return STATE_ROOT / identity
 
 
-def _read_state() -> dict[str, Any] | None:
-    return _read_json(_state_path())
+def _state_path(project_root: Path = PROJECT_ROOT) -> Path:
+    return _project_state_root(project_root) / "runtime.json"
+
+
+def _read_state(project_root: Path = PROJECT_ROOT) -> dict[str, Any] | None:
+    return _read_json(_state_path(project_root))
 
 
 def _write_state(
@@ -381,6 +405,7 @@ def _write_state(
     url: str,
     log_path: Path,
     control_token: str,
+    project_root: Path,
 ) -> None:
     payload = {
         "mode": mode,
@@ -389,11 +414,14 @@ def _write_state(
         "url": url,
         "log": str(log_path),
         "control_token": control_token,
+        "project_root": str(project_root.resolve()),
     }
-    temporary = _state_path().with_suffix(".tmp")
+    state_path = _state_path(project_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = state_path.with_suffix(".tmp")
     temporary.write_text(json.dumps(payload), encoding="utf-8")
     temporary.chmod(0o600)
-    temporary.replace(_state_path())
+    temporary.replace(state_path)
 
 
 def _launch_action(
@@ -471,12 +499,12 @@ def _open_in_existing_terminal(
                 "Lost contact with the running Terminal"
             ) from exc
         status = (
-            status_payload.get("launch")
-            if isinstance(status_payload, dict)
-            else None
+            status_payload.get("launch") if isinstance(status_payload, dict) else None
         )
         if isinstance(status, dict) and status.get("state") == "complete":
-            return str(status.get("message") or "Opened in the Compute Bazaar Terminal.")
+            return str(
+                status.get("message") or "Opened in the Compute Bazaar Terminal."
+            )
         if isinstance(status, dict) and status.get("state") == "failed":
             raise TerminalLifecycleError(
                 str(status.get("message") or "The Terminal could not open the request")
@@ -524,7 +552,7 @@ def _terminate_process(value: Any) -> None:
         return
 
 
-def _terminal_health(url: Any) -> int | None:
+def _terminal_health(url: Any, project_root: Path = PROJECT_ROOT) -> int | None:
     if not isinstance(url, str) or not url.startswith("http://127.0.0.1:"):
         return None
     try:
@@ -533,6 +561,8 @@ def _terminal_health(url: Any) -> int | None:
     except (OSError, URLError, ValueError):
         return None
     if payload.get("contract") != "compute-bazaar.terminal.health":
+        return None
+    if payload.get("project_root") != str(project_root.resolve()):
         return None
     pid = payload.get("pid")
     return pid if isinstance(pid, int) else None

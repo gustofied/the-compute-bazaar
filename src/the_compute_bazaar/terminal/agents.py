@@ -133,12 +133,14 @@ class AgentSession:
         try:
             await asyncio.wait_for(asyncio.shield(self._task), timeout=5)
         except TimeoutError:
-            if self._process and self._process.returncode is None:
-                self._process.terminate()
+            if self._process:
+                await _terminate_agent_process(self._process)
 
     async def reset(self) -> None:
         if self._task and not self._task.done():
-            raise AgentSessionError("Stop the current response before starting a new session")
+            raise AgentSessionError(
+                "Stop the current response before starting a new session"
+            )
         await self._control("sessions", "new", "--name", self.session_name)
         self._ensured = True
         self.events = []
@@ -149,18 +151,16 @@ class AgentSession:
     async def close(self) -> None:
         if self._task and not self._task.done():
             self._task.cancel()
-        if self._process and self._process.returncode is None:
-            self._process.terminate()
-            try:
-                await asyncio.wait_for(self._process.wait(), timeout=2)
-            except TimeoutError:
-                self._process.kill()
         if self._task:
             await asyncio.gather(self._task, return_exceptions=True)
+        if self._process:
+            await _terminate_agent_process(self._process)
 
     async def _run(self, prompt: str, *, access: str) -> None:
         self._emit({"kind": "message", "role": "user", "text": prompt})
         self._set_state("starting")
+        process: asyncio.subprocess.Process | None = None
+        stderr_task: asyncio.Task[bytes] | None = None
         try:
             if not self._ensured:
                 await self._control(
@@ -186,7 +186,7 @@ class AgentSession:
                 self.session_name,
                 _terminal_prompt(prompt, access=access),
             ]
-            self._process = await asyncio.create_subprocess_exec(
+            process = await asyncio.create_subprocess_exec(
                 *command,
                 cwd=self.cwd,
                 env=_agent_environment(),
@@ -194,12 +194,13 @@ class AgentSession:
                 stderr=asyncio.subprocess.PIPE,
                 limit=ACP_STREAM_LIMIT,
             )
-            assert self._process.stdout is not None
-            assert self._process.stderr is not None
-            stderr_task = asyncio.create_task(self._process.stderr.read())
+            self._process = process
+            assert process.stdout is not None
+            assert process.stderr is not None
+            stderr_task = asyncio.create_task(process.stderr.read())
             while True:
                 try:
-                    line = await self._process.stdout.readline()
+                    line = await process.stdout.readline()
                 except ValueError as exc:
                     raise AgentSessionError(
                         "Agent returned a message too large for the Terminal"
@@ -212,7 +213,7 @@ class AgentSession:
                     continue
                 self._accept(payload)
             error_output = (await stderr_task).decode("utf-8", "replace").strip()
-            return_code = await self._process.wait()
+            return_code = await process.wait()
             if return_code and error_output:
                 raise AgentSessionError(error_output[-2_000:])
             if return_code:
@@ -224,7 +225,14 @@ class AgentSession:
             self._set_state("error")
             return
         finally:
-            self._process = None
+            if process is not None:
+                await _terminate_agent_process(process)
+            if stderr_task is not None:
+                if not stderr_task.done():
+                    stderr_task.cancel()
+                await asyncio.gather(stderr_task, return_exceptions=True)
+            if self._process is process:
+                self._process = None
         self._set_state("idle")
 
     async def _control(self, *arguments: str, check: bool = True) -> None:
@@ -281,7 +289,9 @@ class AgentSession:
     def _upsert_tool(self, payload: dict[str, Any]) -> None:
         title = str(payload.get("title") or payload.get("name") or "Tool")
         status = str(payload.get("status") or "running")
-        tool_key = str(payload.get("toolCallId") or payload.get("tool_call_id") or title)
+        tool_key = str(
+            payload.get("toolCallId") or payload.get("tool_call_id") or title
+        )
         event_id = self._tool_events.get(tool_key)
         current = next(
             (event for event in self.events if event.get("id") == event_id), None
@@ -296,9 +306,11 @@ class AgentSession:
         self._broadcast({"type": "replace", "event": dict(current)})
 
     def _append_assistant(self, text: str) -> None:
-        if self.events and self.events[-1].get("kind") == "message" and self.events[
-            -1
-        ].get("role") == "assistant":
+        if (
+            self.events
+            and self.events[-1].get("kind") == "message"
+            and self.events[-1].get("role") == "assistant"
+        ):
             self.events[-1]["text"] += text
             self._broadcast(
                 {
@@ -330,6 +342,23 @@ class AgentSession:
                 queue.put_nowait(self.snapshot())
                 continue
             queue.put_nowait(message)
+
+
+async def _terminate_agent_process(process: asyncio.subprocess.Process) -> None:
+    if process.returncode is not None:
+        return
+    try:
+        process.terminate()
+    except ProcessLookupError:
+        pass
+    try:
+        await asyncio.wait_for(process.wait(), timeout=2)
+    except TimeoutError:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        await process.wait()
 
 
 def _event_text(payload: dict[str, Any]) -> str:
@@ -387,9 +416,7 @@ def _agent_environment() -> dict[str, str]:
         if not key.startswith("COMPUTE_BAZAAR_TERMINAL_")
     }
     executable_dir = str(Path(sys.executable).parent)
-    environment["PATH"] = os.pathsep.join(
-        (executable_dir, environment.get("PATH", ""))
-    )
+    environment["PATH"] = os.pathsep.join((executable_dir, environment.get("PATH", "")))
     environment["CODEX_CONFIG"] = json.dumps(
         {
             "model": AGENT_MODEL,
@@ -411,7 +438,9 @@ def _find_acpx(cwd: Path) -> Path | None:
         (
             candidate.resolve()
             for candidate in candidates
-            if candidate is not None and candidate.is_file() and os.access(candidate, os.X_OK)
+            if candidate is not None
+            and candidate.is_file()
+            and os.access(candidate, os.X_OK)
         ),
         None,
     )
