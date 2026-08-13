@@ -37,11 +37,11 @@ def render_prime_offer_shelf_publication(
     rows = _prime_publication_series(card)
     family = str((card.get("data") or {}).get("family_id") or "GPU").upper()
     outside = "#ffffff"
-    sleeve = "#dbe5e9"
+    sleeve = "#f6ead3"
     paper = "#ffffff"
     ink = "#142027"
-    blue = "#315f82"
-    azure = "#91aecb"
+    blue = "#7c5231"
+    azure = "#f3c888"
     green = "#526c28"
     coral = "#a96552"
     rule = "#a7b1b3"
@@ -54,8 +54,6 @@ def render_prime_offer_shelf_publication(
     canvas = FigureCanvasAgg(figure)
     price_font = FontProperties(fname=_GEIST_MEDIUM, size=64)
     family_font = FontProperties(fname=_GEIST_SEMIBOLD, size=24)
-    availability_font = FontProperties(fname=_GEIST_MEDIUM, size=16)
-    label_font = FontProperties(fname=_GEIST_SEMIBOLD, size=12)
     figure.patches.extend(
         (
             FancyBboxPatch(
@@ -83,36 +81,20 @@ def render_prime_offer_shelf_publication(
         )
     )
     latest = rows[-1] if rows else None
-    available = int(latest["offers"]) if latest else 0
     figure.text(
         0.060,
-        0.918,
-        "PRIME AVAILABILITY",
-        color=blue,
-        fontproperties=label_font,
-    )
-    figure.text(
-        0.060,
-        0.835,
+        0.885,
         family,
         color=ink,
         fontproperties=family_font,
     )
     figure.text(
         0.060,
-        0.665,
+        0.700,
         _format_usd(latest["price"]) if latest else "PENDING",
         color=ink,
         fontproperties=price_font,
         parse_math=False,
-    )
-    figure.text(
-        0.940,
-        0.835,
-        f"{available} AVAILABLE",
-        color=ink,
-        fontproperties=availability_font,
-        horizontalalignment="right",
     )
     figure.add_artist(
         Line2D(
@@ -126,8 +108,8 @@ def render_prime_offer_shelf_publication(
         )
     )
 
-    price_axes = figure.add_axes((0.030, 0.345, 0.940, 0.255), facecolor=paper)
-    offer_axes = figure.add_axes((0.030, 0.095, 0.940, 0.185), facecolor=paper)
+    price_axes = figure.add_axes((0.030, 0.345, 0.940, 0.285), facecolor=paper)
+    offer_axes = figure.add_axes((0.030, 0.075, 0.940, 0.205), facecolor=paper)
     if rows:
         dates = [row["date"] for row in rows]
         prices = [row["price"] for row in rows]

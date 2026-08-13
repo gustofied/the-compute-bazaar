@@ -104,14 +104,14 @@ def prime_offer_publication_metadata(
     return {
         "title": f"{family} · {value}/GPU-hour",
         "description": (
-            f"Prime Availability · {offers} "
+            f"GPU Availability · {offers} "
             f"{'available offer' if offers == 1 else 'available offers'}"
         ),
         "image_alt": (
             f"{family} price at {value} per GPU-hour with "
             f"{offers} available {'offer' if offers == 1 else 'offers'}"
         ),
-        "subject_label": f"Prime {family} availability",
+        "subject_label": f"{family} GPU availability",
         "view_label": "Price and available supply",
         "value": value,
         "observed_at": observed_at.isoformat() if observed_at else "",
