@@ -127,6 +127,9 @@ the results into tables and charts. Eval contains agent evaluation tasks, jobs,
 and trials powered by Harbor. Trade is in the works. The Terminal currently
 supports macOS and Linux.
 
+The side drawer has Shell and Agent tabs. Agent runs through ACP and uses the
+same `compute-bazaar` CLI; results opened with `--terminal` appear in Data.
+
 Data can open a saved query or custom SQL as an interactive table or chart.
 
 ```bash

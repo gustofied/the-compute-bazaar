@@ -23,7 +23,7 @@
 [hidden] { display: none !important; }
 html, body { width: 100%; min-width: 0; height: 100%; margin: 0; background: var(--bg); color: var(--text); }
 body { overflow: hidden; font-family: var(--mono); font-size: 12px; }
-body[data-terminal-workspace="fleet"] { --terminal-shell-top: 44px; --terminal-command-accent: var(--green); }
+body[data-terminal-workspace="fleet"] { --terminal-command-accent: var(--green); }
 a { color: inherit; text-decoration: none; }
 button { font: inherit; }
 button:focus-visible, a:focus-visible { outline: 1px solid var(--blue); outline-offset: -2px; }

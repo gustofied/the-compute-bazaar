@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .agents import AgentSession, AgentSessionError, AgentTerminal
 from .commands import (
     TerminalAction,
     TerminalCommandRequest,
@@ -110,6 +111,7 @@ def create_terminal_app(
     native_session = secrets.token_urlsafe(32) if native_token else None
     project_root = Path(os.getenv("COMPUTE_BAZAAR_PROJECT_ROOT", Path.cwd())).resolve()
     shell = TerminalShell(cwd=project_root) if native_token else None
+    agent = AgentTerminal(cwd=project_root) if native_token else None
     launch_mailbox = TerminalLaunchMailbox()
 
     @asynccontextmanager
@@ -119,6 +121,8 @@ def create_terminal_app(
             yield
         finally:
             fleet_workspace.stop()
+            if agent is not None:
+                await agent.close()
             if shell is not None:
                 shell.close()
 
@@ -134,6 +138,7 @@ def create_terminal_app(
     app.state.eval_workspace = eval_workspace
     app.state.fleet_workspace = fleet_workspace
     app.state.shell = shell
+    app.state.agent = agent
     app.state.launch_mailbox = launch_mailbox
 
     @app.middleware("http")
@@ -198,6 +203,7 @@ def create_terminal_app(
                 ),
                 "native_only": True,
             },
+            "agent": agent.status() if agent is not None else None,
         }
 
     @app.post("/api/terminal/session", status_code=204)
@@ -293,6 +299,36 @@ def create_terminal_app(
         for task in done | pending:
             with suppress(asyncio.CancelledError, RuntimeError, WebSocketDisconnect):
                 await task
+
+    @app.websocket("/api/terminal/agent")
+    async def terminal_agent(websocket: WebSocket) -> None:
+        if agent is None or not _valid_native_session(
+            websocket.cookies.get(NATIVE_SESSION_COOKIE), native_session
+        ):
+            await websocket.close(code=1008, reason="Native Terminal session required")
+            return
+        if not _same_origin(websocket):
+            await websocket.close(code=1008, reason="Terminal origin rejected")
+            return
+        try:
+            session = agent.connect()
+        except AgentSessionError as exc:
+            await websocket.close(code=1008, reason=str(exc))
+            return
+        await websocket.accept()
+        queue = session.subscribe()
+        await websocket.send_json(session.snapshot())
+        sender = asyncio.create_task(_send_agent_output(websocket, queue))
+        receiver = asyncio.create_task(_receive_agent_input(websocket, session))
+        done, pending = await asyncio.wait(
+            {sender, receiver}, return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending:
+            task.cancel()
+        for task in done | pending:
+            with suppress(asyncio.CancelledError, RuntimeError, WebSocketDisconnect):
+                await task
+        session.unsubscribe(queue)
 
     @app.get("/healthz")
     def health() -> dict[str, Any]:
@@ -398,6 +434,33 @@ async def _send_shell_output(
         )
         if changed is None:
             continue
+
+
+async def _receive_agent_input(websocket: WebSocket, session: AgentSession) -> None:
+    while True:
+        message = await websocket.receive_json()
+        if not isinstance(message, dict):
+            continue
+        try:
+            if message.get("type") == "prompt":
+                session.start(
+                    str(message.get("prompt") or ""),
+                    access=str(message.get("access") or "read"),
+                )
+            elif message.get("type") == "cancel":
+                await session.cancel()
+            elif message.get("type") == "clear":
+                session.clear()
+        except AgentSessionError as exc:
+            await websocket.send_json({"type": "error", "message": str(exc)})
+
+
+async def _send_agent_output(
+    websocket: WebSocket,
+    queue: asyncio.Queue[dict[str, Any]],
+) -> None:
+    while True:
+        await websocket.send_json(await queue.get())
 
 
 def _integer(value: Any, fallback: int) -> int:

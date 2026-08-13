@@ -38,7 +38,6 @@ body {
 body[data-terminal-workspace="data"] {
   --terminal-command-accent: var(--accent);
   --terminal-command-green: var(--accent);
-  --terminal-shell-top: var(--topbar-height);
 }
 
 button,
@@ -615,25 +614,25 @@ perspective-viewer[theme="Pro Dark"] {
   --inactive--color: #69736d;
   --active--color: var(--accent);
   --icon--color: #69736d;
-  --psp-charts--axis-ticks--color: #919b95;
-  --psp-charts--axis-lines--color: #46524c;
-  --psp-charts--gridline--color: #252d29;
-  --psp-charts--legend--color: #b4bcb7;
+  --psp-charts--axis-ticks--color: #b4bcb7;
+  --psp-charts--axis-lines--color: #69736d;
+  --psp-charts--gridline--color: #313131;
+  --psp-charts--legend--color: #e0ead8;
   --psp-charts--legend--background: var(--paper);
   --psp-charts--tooltip--background: #171d1a;
   --psp-charts--tooltip--border-color: #46524c;
   --psp-charts--tooltip--color: var(--text);
-  --psp-charts--series--color: rgba(168, 201, 107, 0.95);
-  --psp-charts--series-1--color: rgba(168, 201, 107, 0.95);
-  --psp-charts--series-2--color: rgba(168, 201, 107, 0.78);
-  --psp-charts--series-3--color: rgba(168, 201, 107, 0.62);
-  --psp-charts--series-4--color: rgba(168, 201, 107, 0.48);
-  --psp-charts--series-5--color: rgba(168, 201, 107, 0.34);
-  --psp-charts--series-6--color: rgba(168, 201, 107, 0.86);
-  --psp-charts--series-7--color: rgba(168, 201, 107, 0.7);
-  --psp-charts--series-8--color: rgba(168, 201, 107, 0.54);
-  --psp-charts--series-9--color: rgba(168, 201, 107, 0.4);
-  --psp-charts--series-10--color: rgba(168, 201, 107, 0.28);
+  --psp-charts--series--color: #78dce8;
+  --psp-charts--series-1--color: #78dce8;
+  --psp-charts--series-2--color: #ffd866;
+  --psp-charts--series-3--color: #ff9485;
+  --psp-charts--series-4--color: #a9dc76;
+  --psp-charts--series-5--color: #e18ee1;
+  --psp-charts--series-6--color: #49acff;
+  --psp-charts--series-7--color: #ceb068;
+  --psp-charts--series-8--color: #7bc96f;
+  --psp-charts--series-9--color: #e8836a;
+  --psp-charts--series-10--color: #c5c9d0;
 }
 
 .viewer-state {

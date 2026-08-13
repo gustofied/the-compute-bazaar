@@ -345,6 +345,13 @@ pre { overflow: auto; background: var(--panel-deep); border: 1px solid var(--lin
   .eval-row > :last-child { grid-column: 1 / -1; }
   .job-row { grid-template-columns: minmax(220px, 2fr) minmax(110px, 1fr) minmax(165px, 1.2fr) repeat(2, minmax(80px, 0.6fr)); }
 }
+body.terminal-shell-open .eval-row {
+    grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(100px, 1fr));
+}
+body.terminal-shell-open .eval-row > :last-child { grid-column: 1 / -1; }
+body.terminal-shell-open .job-row {
+  grid-template-columns: minmax(220px, 2fr) minmax(110px, 1fr) minmax(165px, 1.2fr) repeat(2, minmax(80px, 0.6fr));
+}
 @media (max-width: 640px) {
   .shell { width: min(100% - 20px, 1480px); padding-top: 18px; }
   .topbar { padding-inline: 9px; }

@@ -214,7 +214,7 @@ async function renderPrintout(
 }
 
 function setCatalogOpen(open) {
-  if (open) window.ComputeBazaarTerminal?.closeShell();
+  if (open && window.innerWidth <= 760) window.ComputeBazaarTerminal?.closeShell();
   elements.body.classList.toggle("catalog-open", open);
   elements.catalogToggle.setAttribute("aria-expanded", String(open));
 }
@@ -1117,7 +1117,7 @@ window.addEventListener("compute-bazaar:command", (event) => {
 });
 
 window.addEventListener("compute-bazaar:shell", (event) => {
-  if (event.detail?.open) setCatalogOpen(false);
+  if (event.detail?.open && window.innerWidth <= 760) setCatalogOpen(false);
 });
 
 function bindEvents() {

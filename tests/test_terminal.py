@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import time
 import unittest
@@ -11,6 +12,11 @@ from unittest.mock import patch
 from fastapi import HTTPException
 
 from the_compute_bazaar.analysis_store import AnalysisStore
+from the_compute_bazaar.terminal.agents import (
+    AgentSession,
+    _agent_environment,
+    _terminal_prompt,
+)
 from the_compute_bazaar.terminal.commands import (
     LaunchPlanAction,
     ErrorAction,
@@ -31,6 +37,129 @@ from the_compute_bazaar.terminal.shell import TerminalShell
 
 
 class TerminalCommandTest(unittest.TestCase):
+    def test_agent_receives_the_terminal_data_contract(self) -> None:
+        prompt = _terminal_prompt("Show me the latest H200 price.")
+
+        self.assertIn("compute-bazaar tables", prompt)
+        self.assertIn("compute-bazaar describe TABLE", prompt)
+        self.assertIn("compute-bazaar query QUERY_ID --terminal", prompt)
+        self.assertIn('compute-bazaar sql "SQL" --terminal', prompt)
+        self.assertIn("ACP is the only Terminal integration", prompt)
+        self.assertIn("Do not use MCP or GUI automation", prompt)
+        self.assertTrue(prompt.endswith("Show me the latest H200 price."))
+
+    def test_agent_can_find_the_current_compute_bazaar_command(self) -> None:
+        executable_dir = str(Path(sys.executable).parent)
+        environment = _agent_environment()
+
+        self.assertEqual(environment["PATH"].split(":", 1)[0], executable_dir)
+        self.assertEqual(
+            json.loads(environment["CODEX_CONFIG"]),
+            {
+                "model": "gpt-5.6-terra",
+                "model_reasoning_effort": "medium",
+            },
+        )
+
+    def test_agent_session_does_not_forward_mcp(self) -> None:
+        session = AgentSession(
+            cwd=Path("/repo"),
+            executable=Path("/repo/terminal/node_modules/.bin/acpx"),
+            agent_command="/repo/terminal/node_modules/.bin/codex-acp",
+        )
+
+        self.assertEqual(
+            session._command(),
+            [
+                "/repo/terminal/node_modules/.bin/acpx",
+                "--agent",
+                "/repo/terminal/node_modules/.bin/codex-acp",
+                "--cwd",
+                "/repo",
+                "--mcp-config",
+                "/repo/terminal/acp.json",
+            ],
+        )
+
+    def test_agent_client_has_no_mcp_servers(self) -> None:
+        config = json.loads(
+            (Path(__file__).parents[1] / "terminal" / "acp.json").read_text()
+        )
+
+        self.assertEqual(config, {"mcpServers": []})
+
+    def test_agent_session_reads_raw_acp_updates(self) -> None:
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+
+        session._accept(
+            {
+                "method": "session/update",
+                "params": {
+                    "update": {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": "Hello"},
+                    }
+                },
+            }
+        )
+        session._accept(
+            {
+                "method": "session/update",
+                "params": {
+                    "update": {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": " there"},
+                    }
+                },
+            }
+        )
+
+        self.assertEqual(len(session.events), 1)
+        self.assertEqual(session.events[0]["text"], "Hello there")
+
+    def test_agent_tool_updates_replace_the_existing_row(self) -> None:
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+
+        for update, status in (
+            ("tool_call", "pending"),
+            ("tool_call_update", "completed"),
+        ):
+            session._accept(
+                {
+                    "method": "session/update",
+                    "params": {
+                        "update": {
+                            "sessionUpdate": update,
+                            "toolCallId": "call-1",
+                            "title": "Read file",
+                            "status": status,
+                        }
+                    },
+                }
+            )
+
+        self.assertEqual(len(session.events), 1)
+        self.assertEqual(session.events[0]["status"], "completed")
+
+    def test_agent_session_reads_normalized_text_events(self) -> None:
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+
+        session._accept({"type": "text_delta", "text": "Ready"})
+
+        self.assertEqual(session.events[0]["text"], "Ready")
+
     def test_saved_analysis_tracks_fleet_and_uses_explicit_viewer(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = AnalysisStore(Path(directory))

@@ -71,6 +71,10 @@ The CLI and Terminal use the same DataFusion engine. Data is available now,
 Eval contains the Harbor evaluation viewer, and Trade remains reserved for the
 later execution system.
 
+Shell uses a local PTY. ACP is the only agent boundary. The agent works through
+the repo shell and `compute-bazaar`; `--terminal` sends typed results to Data.
+Bazaar exposes no MCP server and does not use GUI control.
+
 ## Fleet
 
 Fleet has two entry paths:

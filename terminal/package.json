@@ -7,13 +7,15 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@agentclientprotocol/codex-acp": "1.1.7",
     "@perspective-dev/client": "4.5.2",
     "@perspective-dev/server": "4.5.2",
     "@perspective-dev/viewer": "4.5.2",
     "@perspective-dev/viewer-charts": "4.5.2",
     "@perspective-dev/viewer-datagrid": "4.5.2",
     "@xterm/addon-fit": "0.10.0",
-    "@xterm/xterm": "5.5.0"
+    "@xterm/xterm": "5.5.0",
+    "acpx": "0.13.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.5",

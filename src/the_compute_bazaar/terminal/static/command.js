@@ -5,11 +5,18 @@ import "@xterm/xterm/css/xterm.css";
 const HISTORY_KEY = "compute-bazaar.terminal.command-history";
 const PENDING_KEY = "compute-bazaar.terminal.pending-command";
 const OPEN_KEY = "compute-bazaar.terminal.last-open";
+const SHELL_LAYOUT_KEY = "compute-bazaar.terminal.shell-layout";
 const MAX_HISTORY = 50;
+const SHELL_MIN_WIDTH = 320;
+const SHELL_MIN_WORKSPACE_WIDTH = 420;
 
 const workspace = document.body.dataset.terminalWorkspace || inferWorkspace();
 const nativeLaunchToken = takeNativeLaunchToken();
 const nativeBootstrap = establishNativeSession(nativeLaunchToken);
+const shellLayout = loadShellLayout();
+if (shellLayout.width) {
+  document.documentElement.style.setProperty("--terminal-shell-width", `${shellLayout.width}px`);
+}
 const state = {
   commands: [],
   history: loadHistory(),
@@ -18,12 +25,22 @@ const state = {
   status: null,
   openTimer: null,
   opening: false,
+  activeSession: shellLayout.tab,
+  agent: {
+    access: "read",
+    state: "idle",
+    events: [],
+    socket: null,
+    connectPromise: null,
+  },
   shell: {
     socket: null,
     terminal: null,
     fit: null,
     resizeObserver: null,
     connectPromise: null,
+    open: shellLayout.open,
+    width: shellLayout.width,
   },
 };
 
@@ -31,19 +48,36 @@ const root = document.createElement("section");
 root.className = "terminal-command";
 root.setAttribute("aria-label", "Terminal command");
 root.innerHTML = `
-  <section class="terminal-shell" id="terminal-shell-drawer" hidden aria-label="Local shell">
+  <section class="terminal-shell" id="terminal-shell-drawer" hidden aria-label="Terminal sessions">
     <header class="terminal-shell-head">
-      <div class="terminal-shell-identity">
-        <span class="terminal-shell-status">Shell</span>
-        <code class="terminal-shell-cwd">repository root</code>
-      </div>
+      <nav class="terminal-session-tabs" role="tablist" aria-label="Sessions">
+        <button id="terminal-session-tab-shell" type="button" role="tab" data-session-tab="shell" aria-controls="terminal-session-panel-shell" aria-selected="true">
+          <span>Shell</span><i data-session-state="idle" aria-hidden="true"></i>
+        </button>
+        <button id="terminal-session-tab-agent" type="button" role="tab" data-session-tab="agent" aria-controls="terminal-session-panel-agent" aria-selected="false" tabindex="-1">
+          <span>Agent</span><i data-session-state="idle" aria-hidden="true"></i>
+        </button>
+      </nav>
       <div class="terminal-shell-actions">
-        <button type="button" data-shell-action="interrupt">Interrupt</button>
-        <button type="button" data-shell-action="clear">Clear</button>
-        <button type="button" data-shell-action="close">Close</button>
+        <button type="button" data-session-action="access" title="Agent access" hidden>Read</button>
+        <button type="button" data-session-action="interrupt" aria-label="Interrupt session" title="Interrupt session">^C</button>
+        <button type="button" data-session-action="clear" title="Clear session">Clear</button>
+        <button type="button" data-session-action="close" aria-label="Close sessions" title="Close sessions">×</button>
       </div>
     </header>
-    <div class="terminal-shell-stage"></div>
+    <div class="terminal-session-stack">
+      <div id="terminal-session-panel-shell" class="terminal-shell-stage" data-session-panel="shell" role="tabpanel" aria-labelledby="terminal-session-tab-shell"></div>
+      <section id="terminal-session-panel-agent" class="terminal-agent-stage" data-session-panel="agent" role="tabpanel" aria-labelledby="terminal-session-tab-agent" hidden>
+        <div class="terminal-agent-transcript" role="log" aria-live="polite"></div>
+      </section>
+    </div>
+    <div
+      class="terminal-shell-resizer"
+      role="separator"
+      aria-label="Resize shell"
+      aria-orientation="vertical"
+      tabindex="0"
+    ></div>
   </section>
   <div class="terminal-command-panel" hidden>
     <div class="terminal-command-panel-head">
@@ -69,9 +103,9 @@ root.innerHTML = `
       type="button"
       aria-controls="terminal-shell-drawer"
       aria-expanded="false"
-      aria-label="Toggle shell"
+      aria-label="Toggle sessions"
       hidden
-    >Shell</button>
+    >Sessions</button>
     <span class="terminal-command-shortcut">⌘K</span>
     <button class="terminal-command-run" type="submit">Run</button>
   </form>
@@ -89,9 +123,14 @@ const elements = {
   close: root.querySelector(".terminal-command-close"),
   shell: root.querySelector(".terminal-shell"),
   shellStage: root.querySelector(".terminal-shell-stage"),
-  shellStatus: root.querySelector(".terminal-shell-status"),
-  shellCwd: root.querySelector(".terminal-shell-cwd"),
+  workspace: root.querySelector(".terminal-command-workspace"),
+  run: root.querySelector(".terminal-command-run"),
   shellToggle: root.querySelector(".terminal-command-shell-toggle"),
+  shellResizer: root.querySelector(".terminal-shell-resizer"),
+  tabs: [...root.querySelectorAll("[data-session-tab]")],
+  panels: [...root.querySelectorAll("[data-session-panel]")],
+  access: root.querySelector('[data-session-action="access"]'),
+  interrupt: root.querySelector('[data-session-action="interrupt"]'),
 };
 
 function takeNativeLaunchToken() {
@@ -139,6 +178,56 @@ function loadHistory() {
     return [];
   }
 }
+
+function loadShellLayout() {
+  try {
+    const value = JSON.parse(localStorage.getItem(SHELL_LAYOUT_KEY) || "{}");
+    return {
+      open: value.open === true,
+      width: Number.isFinite(value.width) && value.width > 0 ? value.width : null,
+      tab: ["shell", "agent"].includes(value.tab) ? value.tab : "shell",
+    };
+  } catch {
+    return { open: false, width: null, tab: "shell" };
+  }
+}
+
+function shellWidthBounds() {
+  return {
+    min: SHELL_MIN_WIDTH,
+    max: Math.max(
+      SHELL_MIN_WIDTH,
+      Math.min(900, window.innerWidth - SHELL_MIN_WORKSPACE_WIDTH),
+    ),
+  };
+}
+
+function persistShellLayout() {
+  try {
+    localStorage.setItem(SHELL_LAYOUT_KEY, JSON.stringify({
+      open: state.shell.open,
+      width: state.shell.width,
+      tab: state.activeSession,
+    }));
+  } catch {
+    // The layout still works when local storage is unavailable.
+  }
+}
+
+function setShellWidth(width, { persist = false } = {}) {
+  const bounds = shellWidthBounds();
+  const next = Math.round(Math.max(bounds.min, Math.min(bounds.max, width)));
+  state.shell.width = next;
+  document.documentElement.style.setProperty("--terminal-shell-width", `${next}px`);
+  elements.shellResizer.setAttribute("aria-valuemin", String(bounds.min));
+  elements.shellResizer.setAttribute("aria-valuemax", String(bounds.max));
+  elements.shellResizer.setAttribute("aria-valuenow", String(next));
+  elements.shellResizer.setAttribute("aria-valuetext", `${next} pixels`);
+  if (persist) persistShellLayout();
+  fitShell();
+}
+
+if (state.shell.width) setShellWidth(state.shell.width);
 
 function saveHistory(command) {
   const next = [command, ...state.history.filter((value) => value !== command)].slice(0, MAX_HISTORY);
@@ -223,9 +312,19 @@ async function loadTerminal({ refresh = false } = {}) {
   state.status = await response.json();
   state.commands = Array.isArray(state.status.commands) ? state.status.commands : [];
   if (state.status.shell?.authorized) {
-    elements.input.placeholder = "SQL, command, or shell · try help";
     elements.shellToggle.hidden = false;
   }
+  if (!state.agent.socket) {
+    state.agent.state = state.status.agent?.state || "idle";
+  }
+  elements.tabs.forEach((tab) => {
+    const sessionId = tab.dataset.sessionTab;
+    const available = sessionId === "shell"
+      ? state.status.shell?.authorized
+      : state.status.agent?.available;
+    tab.disabled = !available;
+  });
+  updateSessionControls();
   return state.status;
 }
 
@@ -294,7 +393,7 @@ function ensureShellTerminal() {
 }
 
 function fitShell() {
-  if (!state.shell.fit || elements.shell.hidden) return;
+  if (!state.shell.fit || elements.shell.hidden || state.activeSession !== "shell") return;
   requestAnimationFrame(() => {
     try {
       state.shell.fit.fit();
@@ -338,7 +437,7 @@ async function connectShell() {
     socket.addEventListener("close", () => {
       state.shell.socket = null;
       state.shell.connectPromise = null;
-      elements.shellStatus.textContent = "Shell disconnected";
+      setSessionState("shell", "error");
     });
     socket.addEventListener("error", () => {
       reject(new Error("Shell connection failed"));
@@ -356,37 +455,253 @@ function renderShellSnapshot(snapshot) {
   const terminal = ensureShellTerminal();
   if (snapshot.reset) terminal.reset();
   if (snapshot.output) terminal.write(snapshot.output);
-  elements.shellStatus.textContent = snapshot.active ? "Shell" : "Shell exited";
-  elements.shellCwd.textContent = snapshot.cwd || "repository root";
+  setSessionState("shell", snapshot.active ? "working" : "idle");
 }
 
-async function openShell(command = null) {
-  ensureShellTerminal();
-  elements.shell.hidden = false;
+async function openShell(command = null, { persist = true, focus = true } = {}) {
   root.classList.add("shell-open");
   document.body.classList.add("terminal-shell-open");
+  elements.shell.hidden = false;
+  state.shell.open = true;
+  if (!state.shell.width && window.innerWidth > 760) {
+    setShellWidth(elements.shell.getBoundingClientRect().width);
+  }
+  if (persist) persistShellLayout();
   elements.shellToggle.setAttribute("aria-expanded", "true");
   window.dispatchEvent(new CustomEvent("compute-bazaar:shell", { detail: { open: true } }));
   closePanel();
-  fitShell();
-  const socket = await connectShell();
-  state.shell.fit?.fit();
-  socket.send(JSON.stringify({
-    type: command ? "run" : "open",
-    ...(command ? { command } : {}),
-    columns: state.shell.terminal?.cols || 120,
-    rows: state.shell.terminal?.rows || 32,
-  }));
-  state.shell.terminal?.focus();
+  await activateSession(command ? "shell" : state.activeSession, { focus });
+  if (command) {
+    sendShell({
+      type: "run",
+      command,
+      columns: state.shell.terminal?.cols || 120,
+      rows: state.shell.terminal?.rows || 32,
+    });
+  }
 }
 
-function closeShell() {
+function closeShell({ persist = true } = {}) {
   elements.shell.hidden = true;
   root.classList.remove("shell-open");
   document.body.classList.remove("terminal-shell-open");
+  state.shell.open = false;
+  if (persist) persistShellLayout();
   elements.shellToggle.setAttribute("aria-expanded", "false");
   window.dispatchEvent(new CustomEvent("compute-bazaar:shell", { detail: { open: false } }));
+  elements.workspace.textContent = workspace;
+  elements.run.textContent = "Run";
+  elements.input.placeholder = state.status?.shell?.authorized
+    ? "SQL, command, or shell · try help"
+    : "SQL or command · try help";
   elements.input.focus();
+}
+
+function sessionTab(sessionId) {
+  return elements.tabs.find((tab) => tab.dataset.sessionTab === sessionId);
+}
+
+function setSessionState(sessionId, value) {
+  const tab = sessionTab(sessionId);
+  const indicator = tab?.querySelector("[data-session-state]");
+  if (indicator) indicator.dataset.sessionState = value;
+  if (sessionId === "agent") state.agent.state = value;
+}
+
+function updateSessionControls() {
+  const agent = state.shell.open && state.activeSession === "agent"
+    ? state.agent
+    : null;
+  elements.access.hidden = !agent;
+  elements.access.textContent = agent?.access === "write" ? "Write" : "Read";
+  elements.access.dataset.access = agent?.access || "read";
+  elements.interrupt.textContent = agent ? "Stop" : "^C";
+  elements.workspace.textContent = state.shell.open ? state.activeSession : workspace;
+  elements.input.placeholder = agent
+    ? "Agent prompt"
+    : "SQL, command, or shell · try help";
+  elements.input.setAttribute(
+    "aria-label",
+    agent ? "Agent prompt" : "Terminal command or read-only SQL",
+  );
+  elements.run.textContent = agent ? "Send" : "Run";
+}
+
+async function activateSession(sessionId, { focus = true } = {}) {
+  const tab = sessionTab(sessionId);
+  if (!tab || tab.disabled) return;
+  state.activeSession = sessionId;
+  elements.tabs.forEach((item) => {
+    item.setAttribute("aria-selected", String(item === tab));
+    item.tabIndex = item === tab ? 0 : -1;
+  });
+  elements.panels.forEach((panel) => {
+    panel.hidden = panel.dataset.sessionPanel !== sessionId;
+  });
+  updateSessionControls();
+  persistShellLayout();
+  if (sessionId === "shell") {
+    ensureShellTerminal();
+    const socket = await connectShell();
+    fitShell();
+    socket.send(JSON.stringify({
+      type: "open",
+      columns: state.shell.terminal?.cols || 120,
+      rows: state.shell.terminal?.rows || 32,
+    }));
+    if (focus) state.shell.terminal?.focus();
+    return;
+  }
+  await connectAgent();
+  if (focus) elements.input.focus();
+}
+
+function agentSocketUrl() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/api/terminal/agent`;
+}
+
+async function connectAgent() {
+  await loadTerminal();
+  const agent = state.agent;
+  if (agent.socket?.readyState === WebSocket.OPEN) return agent.socket;
+  if (agent.connectPromise) return agent.connectPromise;
+  agent.connectPromise = new Promise((resolve, reject) => {
+    const socket = new WebSocket(agentSocketUrl());
+    agent.socket = socket;
+    socket.addEventListener("open", () => {
+      agent.connectPromise = null;
+      resolve(socket);
+    }, { once: true });
+    socket.addEventListener("message", (event) => {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      applyAgentMessage(message);
+    });
+    socket.addEventListener("close", () => {
+      agent.socket = null;
+      agent.connectPromise = null;
+      if (agent.state === "working" || agent.state === "starting") {
+        setSessionState("agent", "error");
+      }
+    });
+    socket.addEventListener("error", () => {
+      agent.connectPromise = null;
+      reject(new Error("Agent connection failed"));
+    }, { once: true });
+  });
+  return agent.connectPromise;
+}
+
+function applyAgentMessage(message) {
+  const agent = state.agent;
+  if (message.type === "snapshot") {
+    agent.events = Array.isArray(message.events) ? message.events : [];
+    setSessionState("agent", message.state || "idle");
+    renderAgent();
+    return;
+  }
+  if (message.type === "reset") {
+    agent.events = [];
+    renderAgent();
+    return;
+  }
+  if (message.type === "state") {
+    setSessionState("agent", message.state || "idle");
+    updateSessionControls();
+    return;
+  }
+  if (message.type === "event" && message.event) {
+    agent.events.push(message.event);
+    renderAgentEvent(message.event);
+    return;
+  }
+  if (message.type === "replace" && message.event) {
+    const index = agent.events.findIndex((item) => item.id === message.event.id);
+    if (index === -1) agent.events.push(message.event);
+    else agent.events[index] = message.event;
+    renderAgent();
+    return;
+  }
+  if (message.type === "append") {
+    const event = agent.events.find((item) => item.id === message.event_id);
+    if (event) event.text = `${event.text || ""}${message.text || ""}`;
+    const node = agentPanel()?.querySelector(`[data-agent-event="${message.event_id}"] pre`);
+    if (node) node.textContent = event?.text || "";
+    scrollAgent();
+    return;
+  }
+  if (message.type === "error") {
+    const event = { kind: "error", text: message.message || "Agent request failed" };
+    agent.events.push(event);
+    renderAgentEvent(event);
+  }
+}
+
+function agentPanel() {
+  return elements.panels.find((panel) => panel.dataset.sessionPanel === "agent");
+}
+
+function renderAgent() {
+  const transcript = agentPanel()?.querySelector(".terminal-agent-transcript");
+  if (!transcript) return;
+  transcript.replaceChildren();
+  state.agent.events.forEach((event) => appendAgentEvent(transcript, event));
+  scrollAgent({ force: true });
+}
+
+function renderAgentEvent(event) {
+  const transcript = agentPanel()?.querySelector(".terminal-agent-transcript");
+  if (!transcript) return;
+  appendAgentEvent(transcript, event);
+  scrollAgent();
+}
+
+function appendAgentEvent(transcript, event) {
+  const row = document.createElement("div");
+  row.className = `terminal-agent-event ${event.kind || "notice"}`;
+  if (event.id !== undefined) row.dataset.agentEvent = String(event.id);
+  if (event.kind === "message") {
+    row.classList.add(event.role === "user" ? "user" : "assistant");
+    const content = document.createElement("pre");
+    content.textContent = event.text || "";
+    if (event.role === "user") {
+      const label = document.createElement("span");
+      label.textContent = ">";
+      row.append(label);
+    }
+    row.append(content);
+  } else if (event.kind === "tool") {
+    const status = document.createElement("span");
+    status.textContent = event.status || "running";
+    const title = document.createElement("code");
+    title.textContent = event.title || "Tool";
+    row.append(status, title);
+  } else {
+    row.textContent = event.text || "";
+  }
+  transcript.append(row);
+}
+
+function scrollAgent({ force = false } = {}) {
+  const transcript = agentPanel()?.querySelector(".terminal-agent-transcript");
+  if (!transcript) return;
+  const pinned = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 80;
+  if (force || pinned) transcript.scrollTop = transcript.scrollHeight;
+}
+
+async function sendAgentPrompt(prompt) {
+  const agent = state.agent;
+  const socket = await connectAgent();
+  socket.send(JSON.stringify({
+    type: "prompt",
+    prompt,
+    access: agent.access,
+  }));
 }
 
 function savePendingAction(action) {
@@ -489,8 +804,23 @@ function watchTerminalOpen() {
 async function submit() {
   const raw = elements.input.value.trim();
   if (!raw) {
+    if (state.shell.open && state.activeSession !== "shell") return;
     await loadTerminal();
     showOptions("Terminal commands", state.commands);
+    return;
+  }
+  if (state.shell.open && state.activeSession !== "shell" && !raw.startsWith("/")) {
+    saveHistory(raw);
+    try {
+      await sendAgentPrompt(raw);
+      setInput("");
+    } catch (error) {
+      showMessage(
+        "Agent unavailable",
+        error instanceof Error ? error.message : String(error),
+        { error: true },
+      );
+    }
     return;
   }
   if (["reload", "refresh"].includes(normalizedInput(raw))) {
@@ -530,24 +860,115 @@ elements.shellToggle.addEventListener("click", () => {
   else closeShell();
 });
 
+elements.tabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    void activateSession(tab.dataset.sessionTab).catch((error) => {
+      showMessage(
+        "Session unavailable",
+        error instanceof Error ? error.message : String(error),
+        { error: true },
+      );
+    });
+  });
+  tab.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    const available = elements.tabs.filter((item) => !item.disabled);
+    const index = available.indexOf(tab);
+    const step = event.key === "ArrowRight" ? 1 : -1;
+    const next = available[(index + step + available.length) % available.length];
+    next?.focus();
+    if (next) void activateSession(next.dataset.sessionTab, { focus: false });
+  });
+});
+
 elements.shell.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-shell-action]");
+  const button = event.target.closest("[data-session-action]");
   if (!button) return;
-  const action = button.dataset.shellAction;
+  const action = button.dataset.sessionAction;
   if (action === "close") {
     closeShell();
     return;
   }
-  if (action === "interrupt") sendShell({ type: "interrupt" });
-  if (action === "clear") {
-    state.shell.terminal?.reset();
-    sendShell({ type: "clear" });
+  if (action === "access" && state.activeSession !== "shell") {
+    const agent = state.agent;
+    agent.access = agent.access === "read" ? "write" : "read";
+    updateSessionControls();
+    return;
   }
+  if (action === "interrupt") {
+    if (state.activeSession === "shell") sendShell({ type: "interrupt" });
+    else {
+      const socket = state.agent.socket;
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "cancel" }));
+      }
+    }
+  }
+  if (action === "clear") {
+    if (state.activeSession === "shell") {
+      state.shell.terminal?.reset();
+      sendShell({ type: "clear" });
+    } else {
+      const agent = state.agent;
+      agent.events = [];
+      renderAgent();
+      if (agent.socket?.readyState === WebSocket.OPEN) {
+        agent.socket.send(JSON.stringify({ type: "clear" }));
+      }
+    }
+  }
+});
+
+let resizePointer = null;
+
+elements.shellResizer.addEventListener("pointerdown", (event) => {
+  if (window.innerWidth <= 760) return;
+  event.preventDefault();
+  resizePointer = event.pointerId;
+  elements.shellResizer.setPointerCapture(event.pointerId);
+  document.body.classList.add("terminal-shell-resizing");
+});
+
+elements.shellResizer.addEventListener("pointermove", (event) => {
+  if (event.pointerId !== resizePointer) return;
+  setShellWidth(event.clientX);
+});
+
+function finishShellResize(event) {
+  if (event.pointerId !== resizePointer) return;
+  resizePointer = null;
+  document.body.classList.remove("terminal-shell-resizing");
+  persistShellLayout();
+}
+
+elements.shellResizer.addEventListener("pointerup", finishShellResize);
+elements.shellResizer.addEventListener("pointercancel", finishShellResize);
+elements.shellResizer.addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const bounds = shellWidthBounds();
+  const current = elements.shell.getBoundingClientRect().width;
+  const width = event.key === "Home"
+    ? bounds.min
+    : event.key === "End"
+      ? bounds.max
+      : current + (event.key === "ArrowLeft" ? -24 : 24);
+  setShellWidth(width, { persist: true });
+});
+
+window.addEventListener("resize", () => {
+  if (!state.shell.width || window.innerWidth <= 760) return;
+  setShellWidth(state.shell.width);
 });
 
 elements.input.addEventListener("input", () => {
   resizeInput();
   state.historyIndex = -1;
+  if (state.shell.open && state.activeSession !== "shell") {
+    closePanel();
+    return;
+  }
   const suggestions = commandSuggestions(elements.input.value);
   if (suggestions.length) showOptions("Commands", suggestions);
   else if (!elements.input.value.trim()) closePanel();
@@ -589,10 +1010,22 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     elements.shellToggle.click();
   }
-  if (event.key === "Escape" && !elements.shell.hidden) closeShell();
+  if (
+    event.key === "Escape"
+    && !elements.shell.hidden
+    && !elements.shell.contains(document.activeElement)
+  ) closeShell();
 });
 
-void loadTerminal().then(watchTerminalOpen).catch(() => {});
+void loadTerminal().then((status) => {
+  if (sessionTab(state.activeSession)?.disabled) state.activeSession = "shell";
+  if (status.shell?.authorized && state.shell.open) {
+    void openShell(null, { persist: false, focus: false }).catch(() => {
+      closeShell({ persist: false });
+    });
+  }
+  watchTerminalOpen();
+}).catch(() => {});
 
 window.addEventListener("pagehide", () => {
   if (state.openTimer) window.clearInterval(state.openTimer);
