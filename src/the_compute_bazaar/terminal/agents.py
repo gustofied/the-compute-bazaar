@@ -15,6 +15,9 @@ from typing import Any
 MAX_EVENTS = 400
 MAX_PROMPT_LENGTH = 20_000
 ACP_STREAM_LIMIT = 4 * 1024 * 1024
+CONTROL_TIMEOUT_SECONDS = 10
+CANCEL_CONTROL_TIMEOUT_SECONDS = 3
+PROMPT_CANCEL_TIMEOUT_SECONDS = 5
 AGENT_MODEL = "gpt-5.6-terra"
 AGENT_REASONING_EFFORT = "medium"
 SESSION_NAME = "compute-bazaar-terminal-terra-medium"
@@ -129,9 +132,21 @@ class AgentSession:
         if not self._task or self._task.done():
             return
         self._set_state("stopping")
-        await self._control("cancel", "-s", self.session_name, check=False)
         try:
-            await asyncio.wait_for(asyncio.shield(self._task), timeout=5)
+            await self._control(
+                "cancel",
+                "-s",
+                self.session_name,
+                check=False,
+                timeout=CANCEL_CONTROL_TIMEOUT_SECONDS,
+            )
+        except AgentSessionError:
+            pass
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(self._task),
+                timeout=PROMPT_CANCEL_TIMEOUT_SECONDS,
+            )
         except TimeoutError:
             if self._process:
                 await _terminate_agent_process(self._process)
@@ -235,7 +250,12 @@ class AgentSession:
                 self._process = None
         self._set_state("idle")
 
-    async def _control(self, *arguments: str, check: bool = True) -> None:
+    async def _control(
+        self,
+        *arguments: str,
+        check: bool = True,
+        timeout: float = CONTROL_TIMEOUT_SECONDS,
+    ) -> None:
         process = await asyncio.create_subprocess_exec(
             *self._command(),
             "--format",
@@ -246,10 +266,19 @@ class AgentSession:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, stderr = await process.communicate()
-        if check and process.returncode:
-            message = stderr.decode("utf-8", "replace").strip()
-            raise AgentSessionError(message or "ACP session could not start")
+        try:
+            try:
+                _, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=timeout,
+                )
+            except TimeoutError as exc:
+                raise AgentSessionError("ACP control request timed out") from exc
+            if check and process.returncode:
+                message = stderr.decode("utf-8", "replace").strip()
+                raise AgentSessionError(message or "ACP session could not start")
+        finally:
+            await _terminate_agent_process(process)
 
     def _command(self) -> list[str]:
         return [

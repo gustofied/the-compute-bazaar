@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import secrets
@@ -17,6 +16,8 @@ from socket import AF_INET, SOCK_STREAM, socket
 from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
+
+from .identity import project_identity
 
 
 DEFAULT_EVALUATION_ROOT = Path("compute-bazaar-bench/jobs/reports")
@@ -383,10 +384,7 @@ def _launch_browser_terminal(
 
 
 def _project_state_root(project_root: Path = PROJECT_ROOT) -> Path:
-    identity = hashlib.sha256(str(project_root.resolve()).encode("utf-8")).hexdigest()[
-        :12
-    ]
-    return STATE_ROOT / identity
+    return STATE_ROOT / project_identity(project_root)
 
 
 def _state_path(project_root: Path = PROJECT_ROOT) -> Path:

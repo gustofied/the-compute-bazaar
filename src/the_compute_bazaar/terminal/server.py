@@ -27,6 +27,7 @@ from .commands import (
 from .data_workspace import DataWorkspace
 from .eval_workspace import EvalWorkspace
 from .fleet_workspace import FleetWorkspace
+from .identity import native_session_cookie
 from .shell import TerminalShell, TerminalShellError
 
 
@@ -52,7 +53,6 @@ EVAL_CSP = STRICT_CSP.replace(
     "script-src 'self' blob: 'wasm-unsafe-eval'",
     "script-src 'self' blob: 'unsafe-inline' 'wasm-unsafe-eval'",
 )
-NATIVE_SESSION_COOKIE = "compute_bazaar_terminal_session"
 
 
 class TerminalOpenRequest(BaseModel):
@@ -143,6 +143,7 @@ def create_terminal_app(
     control_token = os.getenv("COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN")
     native_session = secrets.token_urlsafe(32) if native_token else None
     project_root = Path(os.getenv("COMPUTE_BAZAAR_PROJECT_ROOT", Path.cwd())).resolve()
+    session_cookie = native_session_cookie(project_root)
     shell = TerminalShell(cwd=project_root) if native_token else None
     agent = AgentTerminal(cwd=project_root) if native_token else None
     launch_mailbox = TerminalLaunchMailbox()
@@ -232,7 +233,7 @@ def create_terminal_app(
             "shell": {
                 "available": shell is not None,
                 "authorized": _valid_native_session(
-                    request.cookies.get(NATIVE_SESSION_COOKIE), native_session
+                    request.cookies.get(session_cookie), native_session
                 ),
                 "native_only": True,
             },
@@ -250,7 +251,7 @@ def create_terminal_app(
         response = Response(status_code=204)
         assert native_session is not None
         response.set_cookie(
-            NATIVE_SESSION_COOKIE,
+            session_cookie,
             native_session,
             httponly=True,
             samesite="strict",
@@ -270,7 +271,7 @@ def create_terminal_app(
         return resolve_command(
             payload.command,
             shell_fallback=_valid_native_session(
-                request.cookies.get(NATIVE_SESSION_COOKIE),
+                request.cookies.get(session_cookie),
                 native_session,
             ),
         )
@@ -339,7 +340,7 @@ def create_terminal_app(
     @app.post("/api/terminal/external", status_code=204)
     def open_external(payload: ExternalOpenRequest, request: Request) -> Response:
         if not _same_http_origin(request) or not _valid_native_session(
-            request.cookies.get(NATIVE_SESSION_COOKIE), native_session
+            request.cookies.get(session_cookie), native_session
         ):
             raise HTTPException(
                 status_code=403, detail="Native Terminal session required"
@@ -352,7 +353,7 @@ def create_terminal_app(
     @app.websocket("/api/terminal/shell")
     async def terminal_shell(websocket: WebSocket) -> None:
         if shell is None or not _valid_native_session(
-            websocket.cookies.get(NATIVE_SESSION_COOKIE), native_session
+            websocket.cookies.get(session_cookie), native_session
         ):
             await websocket.close(code=1008, reason="Native Terminal session required")
             return
@@ -374,7 +375,7 @@ def create_terminal_app(
     @app.websocket("/api/terminal/agent")
     async def terminal_agent(websocket: WebSocket) -> None:
         if agent is None or not _valid_native_session(
-            websocket.cookies.get(NATIVE_SESSION_COOKIE), native_session
+            websocket.cookies.get(session_cookie), native_session
         ):
             await websocket.close(code=1008, reason="Native Terminal session required")
             return

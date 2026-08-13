@@ -17,6 +17,7 @@ from fastapi import HTTPException
 from the_compute_bazaar.analysis_store import AnalysisStore
 from the_compute_bazaar.terminal.agents import (
     AgentSession,
+    AgentSessionError,
     _agent_environment,
     _terminate_agent_process,
     _terminal_prompt,
@@ -32,6 +33,10 @@ from the_compute_bazaar.terminal.commands import (
     resolve_command,
 )
 from the_compute_bazaar.terminal.eval_workspace import EvalWorkspace
+from the_compute_bazaar.terminal.identity import (
+    native_session_cookie,
+    project_identity,
+)
 from the_compute_bazaar.terminal.lifecycle import (
     _project_state_root,
     _resolve_evaluation_root,
@@ -345,6 +350,23 @@ class TerminalCommandTest(unittest.TestCase):
 
         self.assertEqual(payload["project_root"], str(checkout_a.resolve()))
 
+    def test_terminal_session_cookie_is_scoped_to_the_checkout(self) -> None:
+        checkout_a = Path("/tmp/checkout-a")
+        checkout_b = Path("/tmp/checkout-b")
+
+        self.assertEqual(
+            _project_state_root(checkout_a).name,
+            project_identity(checkout_a),
+        )
+        self.assertEqual(
+            native_session_cookie(checkout_a),
+            f"compute_bazaar_terminal_session_{project_identity(checkout_a)}",
+        )
+        self.assertNotEqual(
+            native_session_cookie(checkout_a),
+            native_session_cookie(checkout_b),
+        )
+
     def test_terminal_health_rejects_another_checkout(self) -> None:
         checkout = Path("/tmp/checkout-a").resolve()
         payload = json.dumps(
@@ -552,6 +574,59 @@ class AgentProcessTest(unittest.IsolatedAsyncioTestCase):
 
         await _terminate_agent_process(process)
 
+        self.assertIsNotNone(process.returncode)
+
+    async def test_agent_control_timeout_reaps_its_child(self) -> None:
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            "import time; time.sleep(30)",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+
+        with patch(
+            "the_compute_bazaar.terminal.agents.asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=process),
+        ):
+            with self.assertRaisesRegex(AgentSessionError, "timed out"):
+                await session._control("sessions", "ensure", timeout=0.01)
+
+        self.assertIsNotNone(process.returncode)
+
+    async def test_agent_cancel_falls_back_when_control_times_out(self) -> None:
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            "import time; time.sleep(30)",
+        )
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+        session._process = process
+        session._task = asyncio.create_task(process.wait())
+
+        with (
+            patch.object(
+                session,
+                "_control",
+                new=AsyncMock(side_effect=AgentSessionError("timed out")),
+            ),
+            patch(
+                "the_compute_bazaar.terminal.agents.PROMPT_CANCEL_TIMEOUT_SECONDS",
+                0.01,
+            ),
+        ):
+            await session.cancel()
+
+        await asyncio.wait_for(session._task, timeout=1)
         self.assertIsNotNone(process.returncode)
 
     async def test_new_agent_session_replaces_the_named_acp_session(self) -> None:
