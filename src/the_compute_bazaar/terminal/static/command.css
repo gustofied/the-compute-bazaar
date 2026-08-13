@@ -430,6 +430,16 @@ body.terminal-command-enabled .terminal-menu {
   background: color-mix(in srgb, var(--terminal-command-accent) 10%, transparent);
 }
 
+.terminal-command-run:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.terminal-command-run:disabled:hover {
+  border-color: var(--terminal-command-line);
+  background: transparent;
+}
+
 .terminal-command-run:focus-visible,
 .terminal-command-shell-toggle:focus-visible,
 .terminal-command-input:focus-visible,

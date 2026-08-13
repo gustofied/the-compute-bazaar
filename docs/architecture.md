@@ -74,7 +74,8 @@ later execution system.
 Shell is a local PTY. Agent is a Bazaar thread connected to an external agent
 over ACP. `acpx` is the internal ACP client beneath `AgentSession`, not part of
 the Terminal contract. Eval stays in Harbor. The agent works through the repo
-shell and `compute-bazaar`; Bazaar exposes no MCP server or GUI control.
+checkout using normal repo tools and `compute-bazaar`; Bazaar exposes no MCP
+server or GUI control.
 
 ## Fleet
 

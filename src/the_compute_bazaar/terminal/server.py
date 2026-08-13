@@ -452,6 +452,7 @@ async def _receive_agent_input(websocket: WebSocket, session: AgentSession) -> N
             elif message.get("type") == "clear":
                 session.clear()
         except AgentSessionError as exc:
+            await websocket.send_json(session.snapshot())
             await websocket.send_json({"type": "error", "message": str(exc)})
 
 

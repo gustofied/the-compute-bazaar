@@ -9,6 +9,8 @@ const SHELL_LAYOUT_KEY = "compute-bazaar.terminal.shell-layout";
 const MAX_HISTORY = 50;
 const SHELL_MIN_WIDTH = 320;
 const SHELL_MIN_WORKSPACE_WIDTH = 420;
+const MAX_AGENT_EVENTS = 400;
+const AGENT_BUSY_STATES = new Set(["starting", "working", "stopping"]);
 const BAZAAR_AGENT_GLOBALS = new Set(["/home", "/data", "/fleet", "/eval", "/trade"]);
 
 const workspace = document.body.dataset.terminalWorkspace || inferWorkspace();
@@ -30,6 +32,7 @@ const state = {
   agent: {
     access: "read",
     state: "idle",
+    submitting: false,
     events: [],
     socket: null,
     connectPromise: null,
@@ -316,7 +319,7 @@ async function loadTerminal({ refresh = false } = {}) {
   if (state.status.shell?.authorized) {
     elements.shellToggle.hidden = false;
   }
-  if (!state.agent.socket) {
+  if (!state.agent.socket && !agentIsBusy()) {
     state.agent.state = state.status.agent?.state || "idle";
   }
   elements.tabs.forEach((tab) => {
@@ -507,7 +510,14 @@ function setSessionState(sessionId, value) {
   const tab = sessionTab(sessionId);
   const indicator = tab?.querySelector("[data-session-state]");
   if (indicator) indicator.dataset.sessionState = value;
-  if (sessionId === "agent") state.agent.state = value;
+  if (sessionId === "agent") {
+    state.agent.state = value;
+    updateSessionControls();
+  }
+}
+
+function agentIsBusy() {
+  return state.agent.submitting || AGENT_BUSY_STATES.has(state.agent.state);
 }
 
 function updateSessionControls() {
@@ -529,6 +539,7 @@ function updateSessionControls() {
     agent ? "Agent prompt" : "Terminal command or read-only SQL",
   );
   elements.run.textContent = agent ? "Send" : "Run";
+  elements.run.disabled = Boolean(agent && agentIsBusy());
 }
 
 async function activateSession(sessionId, { focus = true } = {}) {
@@ -587,11 +598,12 @@ async function connectAgent() {
       applyAgentMessage(message);
     });
     socket.addEventListener("close", () => {
+      const wasBusy = agentIsBusy();
       agent.socket = null;
       agent.connectPromise = null;
-      if (agent.state === "working" || agent.state === "starting") {
-        setSessionState("agent", "error");
-      }
+      agent.submitting = false;
+      if (wasBusy) setSessionState("agent", "error");
+      else updateSessionControls();
     });
     socket.addEventListener("error", () => {
       agent.connectPromise = null;
@@ -604,7 +616,7 @@ async function connectAgent() {
 function applyAgentMessage(message) {
   const agent = state.agent;
   if (message.type === "snapshot") {
-    agent.events = Array.isArray(message.events) ? message.events : [];
+    agent.events = Array.isArray(message.events) ? message.events.slice(-MAX_AGENT_EVENTS) : [];
     setSessionState("agent", message.state || "idle");
     renderAgent();
     return;
@@ -615,19 +627,21 @@ function applyAgentMessage(message) {
     return;
   }
   if (message.type === "state") {
+    agent.submitting = false;
     setSessionState("agent", message.state || "idle");
-    updateSessionControls();
     return;
   }
   if (message.type === "event" && message.event) {
     agent.events.push(message.event);
-    renderAgentEvent(message.event);
+    if (trimAgentEvents()) renderAgent();
+    else renderAgentEvent(message.event);
     return;
   }
   if (message.type === "replace" && message.event) {
     const index = agent.events.findIndex((item) => item.id === message.event.id);
     if (index === -1) agent.events.push(message.event);
     else agent.events[index] = message.event;
+    trimAgentEvents();
     renderAgent();
     return;
   }
@@ -640,10 +654,20 @@ function applyAgentMessage(message) {
     return;
   }
   if (message.type === "error") {
+    agent.submitting = false;
     const event = { kind: "error", text: message.message || "Agent request failed" };
     agent.events.push(event);
-    renderAgentEvent(event);
+    if (trimAgentEvents()) renderAgent();
+    else renderAgentEvent(event);
+    updateSessionControls();
   }
+}
+
+function trimAgentEvents() {
+  const overflow = state.agent.events.length - MAX_AGENT_EVENTS;
+  if (overflow <= 0) return false;
+  state.agent.events.splice(0, overflow);
+  return true;
 }
 
 function agentPanel() {
@@ -700,12 +724,23 @@ function scrollAgent({ force = false } = {}) {
 
 async function sendAgentPrompt(prompt) {
   const agent = state.agent;
-  const socket = await connectAgent();
-  socket.send(JSON.stringify({
-    type: "prompt",
-    prompt,
-    access: agent.access,
-  }));
+  if (agentIsBusy()) {
+    throw new Error("Agent is already working");
+  }
+  agent.submitting = true;
+  updateSessionControls();
+  try {
+    const socket = await connectAgent();
+    socket.send(JSON.stringify({
+      type: "prompt",
+      prompt,
+      access: agent.access,
+    }));
+  } catch (error) {
+    agent.submitting = false;
+    setSessionState("agent", "error");
+    throw error;
+  }
 }
 
 function isBazaarAgentGlobal(raw) {
@@ -818,6 +853,7 @@ async function submit() {
     return;
   }
   if (state.shell.open && state.activeSession !== "shell" && !isBazaarAgentGlobal(raw)) {
+    if (agentIsBusy()) return;
     saveHistory(raw);
     try {
       await sendAgentPrompt(raw);

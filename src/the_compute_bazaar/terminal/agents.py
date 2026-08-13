@@ -20,14 +20,20 @@ SESSION_NAME = "compute-bazaar-terminal-terra-medium"
 ACP_CONFIG = Path("terminal/acp.json")
 DEFAULT_ACP_AGENT = Path("terminal/node_modules/.bin/codex-acp")
 TERMINAL_CONTEXT = """<compute-bazaar-terminal>
-ACP is the only Terminal integration. Work through the repo shell and
-`compute-bazaar` directly.
+ACP is the only Terminal integration. Work in the Bazaar checkout using normal
+repo tools and `compute-bazaar` directly.
 - Inspect data with `compute-bazaar tables`, `compute-bazaar describe TABLE`, and
   `compute-bazaar sql \"SQL\"`.
 - Open a result in Data with `compute-bazaar query QUERY_ID --terminal` or
   `compute-bazaar sql \"SQL\" --terminal`.
 Use `compute-bazaar COMMAND --help` when needed. Do not use MCP or GUI automation
 to operate the Terminal.
+</compute-bazaar-terminal>"""
+READ_TERMINAL_CONTEXT = """<compute-bazaar-terminal>
+ACP is the only Terminal integration. This turn has Read access: inspect and
+reason about the Bazaar checkout, but do not run shell commands. If the request
+requires `compute-bazaar` or another command, ask the user to switch the Agent
+to Full access. Do not use MCP or GUI automation to operate the Terminal.
 </compute-bazaar-terminal>"""
 
 
@@ -102,7 +108,7 @@ class AgentSession:
         return {
             "type": "snapshot",
             "state": self.state,
-            "events": self.events,
+            "events": [dict(event) for event in self.events],
         }
 
     def start(self, prompt: str, *, access: str = "read") -> None:
@@ -171,7 +177,7 @@ class AgentSession:
                 "prompt",
                 "-s",
                 SESSION_NAME,
-                _terminal_prompt(prompt),
+                _terminal_prompt(prompt, access=access),
             ]
             self._process = await asyncio.create_subprocess_exec(
                 *command,
@@ -303,10 +309,10 @@ class AgentSession:
     def _broadcast(self, message: dict[str, Any]) -> None:
         for queue in tuple(self._listeners):
             if queue.full():
-                try:
+                while not queue.empty():
                     queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
+                queue.put_nowait(self.snapshot())
+                continue
             queue.put_nowait(message)
 
 
@@ -341,10 +347,11 @@ def _error_text(payload: dict[str, Any]) -> str:
     return "Agent request failed"
 
 
-def _terminal_prompt(prompt: str) -> str:
+def _terminal_prompt(prompt: str, *, access: str) -> str:
     if prompt.startswith("/"):
         return prompt
-    return f"{TERMINAL_CONTEXT}\n\n{prompt}"
+    context = TERMINAL_CONTEXT if access == "full" else READ_TERMINAL_CONTEXT
+    return f"{context}\n\n{prompt}"
 
 
 def _agent_environment() -> dict[str, str]:

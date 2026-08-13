@@ -39,7 +39,9 @@ from the_compute_bazaar.terminal.shell import TerminalShell
 
 class TerminalCommandTest(unittest.TestCase):
     def test_agent_receives_the_terminal_data_contract(self) -> None:
-        prompt = _terminal_prompt("Show me the latest H200 price.")
+        prompt = _terminal_prompt(
+            "Show me the latest H200 price.", access="full"
+        )
 
         self.assertIn("compute-bazaar tables", prompt)
         self.assertIn("compute-bazaar describe TABLE", prompt)
@@ -47,8 +49,18 @@ class TerminalCommandTest(unittest.TestCase):
         self.assertIn('compute-bazaar sql "SQL" --terminal', prompt)
         self.assertIn("ACP is the only Terminal integration", prompt)
         self.assertIn("Do not use MCP or GUI automation", prompt)
+        self.assertIn("Bazaar checkout", prompt)
+        self.assertNotIn("repo shell", prompt)
         self.assertTrue(prompt.endswith("Show me the latest H200 price."))
-        self.assertEqual(_terminal_prompt("/login"), "/login")
+        self.assertEqual(_terminal_prompt("/login", access="read"), "/login")
+
+    def test_read_agent_does_not_receive_shell_instructions(self) -> None:
+        prompt = _terminal_prompt("Read the market.", access="read")
+
+        self.assertIn("This turn has Read access", prompt)
+        self.assertIn("ask the user to switch the Agent", prompt)
+        self.assertIn("to Full access", prompt)
+        self.assertNotIn("compute-bazaar tables", prompt)
 
     def test_agent_can_find_the_current_compute_bazaar_command(self) -> None:
         executable_dir = str(Path(sys.executable).parent)
@@ -159,6 +171,20 @@ class TerminalCommandTest(unittest.TestCase):
 
         self.assertEqual(len(session.events), 1)
         self.assertEqual(session.events[0]["status"], "completed")
+
+    def test_slow_agent_listener_is_resynchronized_with_a_snapshot(self) -> None:
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+        queue = session.subscribe()
+
+        for index in range(257):
+            session._emit({"kind": "notice", "text": str(index)})
+
+        self.assertEqual(queue.qsize(), 1)
+        self.assertEqual(queue.get_nowait(), session.snapshot())
 
     def test_agent_session_reads_normalized_text_events(self) -> None:
         session = AgentSession(
