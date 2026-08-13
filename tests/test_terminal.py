@@ -41,6 +41,7 @@ from the_compute_bazaar.terminal.lifecycle import (
     _project_state_root,
     _resolve_evaluation_root,
     _terminal_health,
+    _uses_lake,
     _write_state,
 )
 from the_compute_bazaar.terminal.server import (
@@ -340,6 +341,7 @@ class TerminalCommandTest(unittest.TestCase):
                     url="http://127.0.0.1:8767",
                     log_path=_project_state_root(checkout_a) / "terminal.log",
                     control_token="token",
+                    lake_root="/tmp/lake-a",
                     project_root=checkout_a,
                 )
                 payload = json.loads(
@@ -349,6 +351,14 @@ class TerminalCommandTest(unittest.TestCase):
                 self.assertFalse(checkout_b_state.exists())
 
         self.assertEqual(payload["project_root"], str(checkout_a.resolve()))
+        self.assertEqual(payload["lake_root"], "/tmp/lake-a")
+
+    def test_terminal_reuses_only_the_selected_lake(self) -> None:
+        state = {"lake_root": "/tmp/lake-a"}
+
+        self.assertTrue(_uses_lake(state, "/tmp/lake-a"))
+        self.assertFalse(_uses_lake(state, "/tmp/lake-b"))
+        self.assertFalse(_uses_lake({}, "/tmp/lake-a"))
 
     def test_terminal_session_cookie_is_scoped_to_the_checkout(self) -> None:
         checkout_a = Path("/tmp/checkout-a")

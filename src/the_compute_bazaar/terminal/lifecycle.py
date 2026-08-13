@@ -64,7 +64,7 @@ def launch_terminal(
         native_healthy = _process_alive(native_pid) and bool(
             _terminal_health(existing.get("url"), project_root)
         )
-        if native_healthy:
+        if native_healthy and _uses_lake(existing, lake_root):
             if launch_action:
                 return _open_in_existing_terminal(existing, launch_action)
             return "Compute Bazaar Terminal is already open."
@@ -162,6 +162,7 @@ def launch_terminal(
         url=str(ready["url"]),
         log_path=log_path,
         control_token=control_token,
+        lake_root=lake_root,
         project_root=project_root,
     )
     return "Compute Bazaar Terminal opened."
@@ -295,13 +296,25 @@ def _launch_browser_terminal(
     if existing and _terminal_health(existing.get("url"), project_root) == existing.get(
         "pid"
     ):
-        if launch_action:
-            return _open_in_existing_terminal(existing, launch_action)
-        else:
+        if _uses_lake(existing, lake_root):
+            if launch_action:
+                return _open_in_existing_terminal(existing, launch_action)
             from webbrowser import open as open_url
 
             open_url(str(existing["url"]))
             return f"Compute Bazaar Terminal is already open: {existing['url']}"
+        os.kill(int(existing["pid"]), signal.SIGTERM)
+        deadline = time.monotonic() + 5
+        while (
+            time.monotonic() < deadline
+            and _terminal_health(existing.get("url"), project_root)
+            == existing.get("pid")
+        ):
+            time.sleep(0.1)
+        if _terminal_health(existing.get("url"), project_root) == existing.get("pid"):
+            raise TerminalLifecycleError(
+                f"Terminal process {existing['pid']} did not stop. See {existing.get('log')}"
+            )
     _state_path(project_root).unlink(missing_ok=True)
 
     selected_port = _available_port(port)
@@ -375,6 +388,7 @@ def _launch_browser_terminal(
         url=url,
         log_path=log_path,
         control_token=control_token,
+        lake_root=lake_root,
         project_root=project_root,
     )
     from webbrowser import open as open_url
@@ -403,6 +417,7 @@ def _write_state(
     url: str,
     log_path: Path,
     control_token: str,
+    lake_root: str,
     project_root: Path,
 ) -> None:
     payload = {
@@ -412,6 +427,7 @@ def _write_state(
         "url": url,
         "log": str(log_path),
         "control_token": control_token,
+        "lake_root": lake_root,
         "project_root": str(project_root.resolve()),
     }
     state_path = _state_path(project_root)
@@ -420,6 +436,10 @@ def _write_state(
     temporary.write_text(json.dumps(payload), encoding="utf-8")
     temporary.chmod(0o600)
     temporary.replace(state_path)
+
+
+def _uses_lake(state: dict[str, Any], lake_root: str) -> bool:
+    return state.get("lake_root") == lake_root
 
 
 def _launch_action(

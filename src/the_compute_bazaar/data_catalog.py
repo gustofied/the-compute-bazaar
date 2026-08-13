@@ -1,9 +1,10 @@
-"""One DataFusion catalog for market data and Fleet operations."""
+"""DataFusion catalog for market data and Fleet operations."""
 
 from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from .operations import OperationalLedger
@@ -266,6 +267,29 @@ order by ordinal_position
         self.engine.deregister_tables(self._operation_table_names)
         self._operation_table_names.clear()
         self._register_operations()
+
+
+def open_catalog(*, lake_root: str, operations: OperationalLedger | None = None) -> Any:
+    from .market.catalog import market_manifest_ref
+
+    if "://" not in lake_root and Path(market_manifest_ref(lake_root)).is_file():
+        from .market.catalog import MarketCatalog
+
+        return MarketCatalog.from_lake(lake_root)
+    manifest = read_latest_gold_manifest(lake_root.rstrip("/"))
+    return ComputeBazaarCatalog(
+        lake_root=lake_root,
+        manifest=manifest,
+        operations=operations,
+    )
+
+
+def read_catalog_manifest(lake_root: str) -> dict[str, Any]:
+    from .market.catalog import market_manifest_ref, read_market_manifest
+
+    if "://" not in lake_root and Path(market_manifest_ref(lake_root)).is_file():
+        return read_market_manifest(lake_root)
+    return read_latest_gold_manifest(lake_root.rstrip("/"))
 
 
 def _union_all(

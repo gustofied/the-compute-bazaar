@@ -43,6 +43,7 @@ app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 data_app = typer.Typer(help="Inspect or update the local public lake.")
+market_app = typer.Typer(help="Read market sources into a local lake.")
 sandbox_app = typer.Typer(help="Maintain StarSling workload costs.")
 model_app = typer.Typer(help="Save and run reusable DataFusion SQL models.")
 blueprint_app = typer.Typer(help="Save and open Perspective views of SQL models.")
@@ -51,6 +52,7 @@ launch_app = typer.Typer(help="Plan provider-native compute launches.")
 fleet_app = typer.Typer(help="Attach, inspect, and operate NVIDIA compute.")
 workload_app = typer.Typer(help="Run and inspect commands on Fleet hosts.")
 app.add_typer(data_app, name="data")
+app.add_typer(market_app, name="market")
 app.add_typer(sandbox_app, name="sandbox")
 app.add_typer(model_app, name="model")
 app.add_typer(blueprint_app, name="blueprint")
@@ -116,6 +118,47 @@ def data_sync(
         ctx,
         sync_public_lake(base_url=url, output_root=output_root),
         command="data",
+        include_source=False,
+    )
+
+
+@market_app.command("ingest")
+def market_ingest(
+    ctx: typer.Context,
+    source: Annotated[str, typer.Argument()],
+    output_root: Annotated[
+        str | None,
+        typer.Option(help="Local market-lake directory."),
+    ] = None,
+) -> None:
+    """Read one source and publish a queryable local generation."""
+    import os
+
+    from .market import (
+        MarketLake,
+        MarketPipeline,
+        default_market_lake_root,
+        default_registry,
+        publish_generation,
+    )
+
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+    root = output_root or default_market_lake_root()
+    lake = MarketLake(root)
+    result = MarketPipeline(lake).run(
+        default_registry.build(source, environment=os.environ)
+    )
+    if result.run.status != "complete":
+        raise typer.BadParameter(result.run.error or f"{source} read failed")
+    _emit(
+        ctx,
+        publish_generation(lake, result),
+        command="market",
         include_source=False,
     )
 
@@ -1057,6 +1100,10 @@ def serve_api(
 @app.command("terminal")
 def serve_terminal(
     ctx: typer.Context,
+    lake: Annotated[
+        str | None,
+        typer.Argument(help="Use lake2 to open the new market lake."),
+    ] = None,
     port: Annotated[int, typer.Option(min=1, max=65535)] = 8767,
     view: Annotated[
         str | None,
@@ -1099,6 +1146,16 @@ def serve_terminal(
     ] = None,
 ) -> None:
     """Open the Compute Bazaar Terminal."""
+    if lake:
+        if lake != "lake2":
+            raise typer.BadParameter("Unknown lake. Use lake2 or omit it.")
+        from .market import default_market_lake_root
+
+        state = _state(ctx)
+        ctx.find_root().obj = CLIState(
+            lake=resolve_lake_root(default_market_lake_root()),
+            output_format=state.output_format,
+        )
     if stop:
         _stop_terminal()
         return
@@ -1360,12 +1417,12 @@ def _service(ctx: typer.Context) -> Any:
 
 
 def _catalog(ctx: typer.Context) -> Any:
-    from .data_catalog import ComputeBazaarCatalog
+    from .data_catalog import open_catalog
     from .operations import OperationalLedger
 
     state = _state(ctx)
     _require_lake(state.lake)
-    return ComputeBazaarCatalog(
+    return open_catalog(
         lake_root=state.lake.root,
         operations=OperationalLedger(),
     )
@@ -1386,8 +1443,11 @@ def _offers() -> Any:
 def _require_lake(lake: LakeSelection) -> None:
     if "://" in lake.root:
         return
-    manifest = Path(lake.root) / "_manifests" / "gold_market" / "latest.json"
-    if manifest.is_file():
+    manifests = (
+        Path(lake.root) / "_manifests" / "market" / "latest.json",
+        Path(lake.root) / "_manifests" / "gold_market" / "latest.json",
+    )
+    if any(manifest.is_file() for manifest in manifests):
         return
     if lake.kind == "public_cache":
         message = "No public lake is synced. Run: compute-bazaar data sync"

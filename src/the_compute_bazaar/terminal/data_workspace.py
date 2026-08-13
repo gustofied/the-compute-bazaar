@@ -17,9 +17,8 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from ..analysis_store import AnalysisStore, blueprint_payload, model_payload
-from ..data_catalog import ComputeBazaarCatalog
+from ..data_catalog import open_catalog, read_catalog_manifest
 from ..operations import OperationalLedger
-from ..prices.gold_manifest import read_latest_gold_manifest
 from ..prices.query_catalog import MAX_QUERY_LIMIT, load_query_catalog
 from .virtual_table import (
     VIRTUAL_TABLE_REF,
@@ -27,7 +26,7 @@ from .virtual_table import (
     VirtualDataRequest,
     VirtualViewConfig,
 )
-from .views import TERMINAL_VIEWS
+from .views import terminal_views
 
 
 MAX_SQL_LENGTH = 10_000
@@ -55,28 +54,38 @@ class CatalogStore:
 
     def __init__(self, lake_root: str) -> None:
         self._lake_root = lake_root
-        self._operations = OperationalLedger()
+        manifest = read_catalog_manifest(lake_root)
+        self._operations = (
+            None if manifest.get("catalog_kind") == "market" else OperationalLedger()
+        )
         self._lock = Lock()
-        self._catalog = ComputeBazaarCatalog(
+        self._catalog = open_catalog(
             lake_root=lake_root,
             operations=self._operations,
         )
-        self._operations_version = self._operations.version()
+        self._operations_version = (
+            self._operations.version() if self._operations else None
+        )
 
     @contextmanager
-    def read(self) -> Iterator[ComputeBazaarCatalog]:
+    def read(self) -> Iterator[Any]:
         with self._lock:
-            manifest = read_latest_gold_manifest(self._lake_root)
-            operations_version = self._operations.version()
+            manifest = read_catalog_manifest(self._lake_root)
+            operations_version = (
+                self._operations.version() if self._operations else None
+            )
             if manifest.get("run_id") != self._catalog.manifest.get("run_id"):
-                self._catalog = ComputeBazaarCatalog(
+                self._catalog = open_catalog(
                     lake_root=self._lake_root,
-                    manifest=manifest,
                     operations=self._operations,
                 )
-                self._operations_version = self._operations.version()
+                self._operations_version = (
+                    self._operations.version() if self._operations else None
+                )
             elif operations_version != self._operations_version:
-                self._catalog.refresh_operations()
+                refresh = getattr(self._catalog, "refresh_operations", None)
+                if refresh:
+                    refresh()
                 self._operations_version = self._operations.version()
             yield self._catalog
 
@@ -130,7 +139,8 @@ class DataWorkspace:
                 for query in load_query_catalog():
                     entry = query.catalog_entry(catalog.manifest)
                     entry["sql"] = _qualified_gold_sql(query.sql, query.tables)
-                    queries.append(entry)
+                    if entry["available"]:
+                        queries.append(entry)
             queries_by_id = {query["query_id"]: query for query in queries}
             table_refs = {
                 f"{table['layer']}.{table['table_name']}"
@@ -143,19 +153,22 @@ class DataWorkspace:
                 missing = sorted(set(model.tables) - table_refs)
                 entry["available"] = not missing
                 entry["missing_tables"] = missing
-                models.append(entry)
-                models_by_id[model.model_id] = entry
+                if entry["available"]:
+                    models.append(entry)
+                    models_by_id[model.model_id] = entry
             blueprints = []
             for blueprint in self.analyses.list_blueprints():
                 entry = blueprint_payload(blueprint)
-                model = models_by_id[blueprint.model_id]
+                model = models_by_id.get(blueprint.model_id)
+                if model is None:
+                    continue
                 entry["available"] = model["available"]
                 entry["missing_tables"] = model["missing_tables"]
                 entry["sql"] = model["sql"]
                 entry["default_limit"] = model["default_limit"]
                 blueprints.append(entry)
             views = []
-            for blueprint in TERMINAL_VIEWS:
+            for blueprint in terminal_views(catalog.manifest):
                 entry = blueprint.as_dict()
                 query = queries_by_id.get(blueprint.query_id or "")
                 if query:
@@ -167,7 +180,8 @@ class DataWorkspace:
                         blueprint.sql
                         and all(table in table_refs for table in blueprint.tables)
                     )
-                views.append(entry)
+                if entry["available"]:
+                    views.append(entry)
             return {
                 "contract": "compute-bazaar.data.session",
                 "run": table_payload["run"],
@@ -456,7 +470,7 @@ def _launch_payload(
     return None
 
 
-def _run_identity(catalog: ComputeBazaarCatalog) -> dict[str, Any]:
+def _run_identity(catalog: Any) -> dict[str, Any]:
     return {
         "run_id": catalog.manifest.get("run_id"),
         "observed_at": catalog.manifest.get("observed_at"),
