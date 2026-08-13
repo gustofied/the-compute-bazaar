@@ -7,6 +7,7 @@ import unittest
 from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -108,6 +109,13 @@ class DataFusionEngineTest(unittest.TestCase):
                 os.environ.pop("COMPUTE_BAZAAR_REVISION", None)
             else:
                 os.environ["COMPUTE_BAZAAR_REVISION"] = original_revision
+
+    def test_embedded_worker_revision_wins_over_job_environment(self) -> None:
+        with (
+            patch("the_compute_bazaar.build_info.BUILD_REVISION", "a" * 40),
+            patch.dict(os.environ, {"COMPUTE_BAZAAR_REVISION": "b" * 40}),
+        ):
+            self.assertEqual(_renderer_revision(), "a" * 40)
 
     def test_prime_empty_snapshot_records_departures(self) -> None:
         first = datetime(2026, 8, 10, 12, tzinfo=UTC)

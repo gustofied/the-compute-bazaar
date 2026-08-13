@@ -13,7 +13,10 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/compute-bazaar/.venv
 COPY README.md pyproject.toml uv.lock ./
 COPY src ./src
 
-RUN uv python install 3.13 \
+RUN printf '"""Build-time revision embedded by Docker."""\n\nBUILD_REVISION = "%s"\n' \
+        "${COMPUTE_BAZAAR_REVISION}" \
+        > src/the_compute_bazaar/_build_revision.py \
+    && uv python install 3.13 \
     && uv sync --frozen --no-dev --extra worker --no-editable --python 3.13
 
 ENV PYTHON_PATH=/opt/compute-bazaar/.venv/bin/python

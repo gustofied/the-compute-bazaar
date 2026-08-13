@@ -65,8 +65,14 @@ def main() -> None:
         "sudo docker inspect windmill-windmill_worker-1 "
         "--format '{{range .Config.Env}}{{println .}}{{end}}' "
         "| grep -Fx \"COMPUTE_BAZAAR_REVISION=$revision\"; "
+        "runtime=$(sudo docker exec windmill-windmill_worker-1 "
+        "/opt/compute-bazaar/.venv/bin/python -c "
+        "'from the_compute_bazaar.build_info import build_revision; "
+        "print(build_revision())'); "
+        "test \"$runtime\" = \"$revision\"; "
         "sudo docker compose ps windmill_worker; "
-        "printf 'deployed_revision=%s\\n' \"$actual\""
+        "printf 'deployed_revision=%s\\nruntime_revision=%s\\n' "
+        "\"$actual\" \"$runtime\""
     )
     subprocess.run(
         ["ssh", "-i", identity, "-o", "BatchMode=yes", args.host, deploy],
