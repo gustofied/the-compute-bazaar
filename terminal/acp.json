@@ -1,1 +1,10 @@
-{"mcpServers":[]}
+{
+  "mcpServers": [
+    {
+      "name": "compute-bazaar-terminal",
+      "command": "uv",
+      "args": ["run", "python", "-m", "the_compute_bazaar.terminal.agent_tools"],
+      "env": []
+    }
+  ]
+}

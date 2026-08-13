@@ -59,29 +59,62 @@ class TerminalOpenRequest(BaseModel):
     action: TerminalAction
 
 
+class TerminalOpenCompletion(BaseModel):
+    message: str | None = None
+    error: str | None = None
+
+
 class ExternalOpenRequest(BaseModel):
     url: str
 
 
 class TerminalLaunchMailbox:
-    """Retain the latest local CLI handoff for the open Terminal window."""
+    """Retain recent local CLI handoffs until the Terminal completes them."""
 
     def __init__(self) -> None:
         self._lock = Lock()
-        self._latest: dict[str, Any] | None = None
+        self._latest_id: str | None = None
+        self._launches: dict[str, dict[str, Any]] = {}
 
     def publish(self, action: TerminalAction) -> dict[str, Any]:
         launch = {
             "launch_id": secrets.token_urlsafe(12),
             "action": action.model_dump(exclude_none=True),
+            "state": "pending",
+            "message": None,
         }
         with self._lock:
-            self._latest = launch
-        return launch
+            self._latest_id = launch["launch_id"]
+            self._launches[launch["launch_id"]] = launch
+            while len(self._launches) > 20:
+                self._launches.pop(next(iter(self._launches)))
+        return dict(launch)
 
     def latest(self) -> dict[str, Any] | None:
         with self._lock:
-            return dict(self._latest) if self._latest else None
+            launch = self._launches.get(self._latest_id or "")
+            return dict(launch) if launch else None
+
+    def get(self, launch_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            launch = self._launches.get(launch_id)
+            return dict(launch) if launch else None
+
+    def complete(
+        self,
+        launch_id: str,
+        *,
+        message: str | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            launch = self._launches.get(launch_id)
+            if launch is None:
+                return None
+            if launch["state"] == "pending":
+                launch["state"] = "failed" if error else "complete"
+                launch["message"] = error or message
+            return dict(launch)
 
 
 def create_terminal_app(
@@ -258,12 +291,50 @@ def create_terminal_app(
             request.headers.get("x-compute-bazaar-control"), control_token
         ):
             raise HTTPException(status_code=403, detail="Terminal control rejected")
-        if payload.action.kind not in {"query", "view", "sql"}:
+        if payload.action.kind not in {
+            "blueprint",
+            "catalog",
+            "describe",
+            "model",
+            "navigate",
+            "query",
+            "sql",
+            "table",
+            "view",
+        }:
             raise HTTPException(status_code=400, detail="Unsupported Terminal launch")
         return {
             "contract": "compute-bazaar.terminal.open",
             "launch": launch_mailbox.publish(payload.action),
         }
+
+    @app.get("/api/terminal/open/{launch_id}")
+    def terminal_open_status(launch_id: str, request: Request) -> dict[str, Any]:
+        if not _valid_native_session(
+            request.headers.get("x-compute-bazaar-control"), control_token
+        ):
+            raise HTTPException(status_code=403, detail="Terminal control rejected")
+        launch = launch_mailbox.get(launch_id)
+        if launch is None:
+            raise HTTPException(status_code=404, detail="Terminal request not found")
+        return {"contract": "compute-bazaar.terminal.open", "launch": launch}
+
+    @app.post("/api/terminal/open/{launch_id}/complete")
+    def complete_terminal_open(
+        launch_id: str,
+        payload: TerminalOpenCompletion,
+        request: Request,
+    ) -> dict[str, Any]:
+        if not _same_http_origin(request):
+            raise HTTPException(status_code=403, detail="Terminal origin rejected")
+        launch = launch_mailbox.complete(
+            launch_id,
+            message=payload.message,
+            error=payload.error,
+        )
+        if launch is None:
+            raise HTTPException(status_code=404, detail="Terminal request not found")
+        return {"contract": "compute-bazaar.terminal.open", "launch": launch}
 
     @app.post("/api/terminal/external", status_code=204)
     def open_external(payload: ExternalOpenRequest, request: Request) -> Response:
@@ -397,10 +468,6 @@ async def _receive_shell_input(
                     columns=_integer(message.get("columns"), 120),
                     rows=_integer(message.get("rows"), 32),
                 )
-            elif message_type == "input":
-                data = str(message.get("data") or "")
-                if len(data) <= 20_000:
-                    shell.write(data)
             elif message_type == "resize":
                 shell.resize(
                     columns=_integer(message.get("columns"), 120),
@@ -449,8 +516,8 @@ async def _receive_agent_input(websocket: WebSocket, session: AgentSession) -> N
                 )
             elif message.get("type") == "cancel":
                 await session.cancel()
-            elif message.get("type") == "clear":
-                session.clear()
+            elif message.get("type") == "new":
+                await session.reset()
         except AgentSessionError as exc:
             await websocket.send_json(session.snapshot())
             await websocket.send_json({"type": "error", "message": str(exc)})

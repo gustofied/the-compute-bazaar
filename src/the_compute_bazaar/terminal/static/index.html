@@ -7,7 +7,7 @@
     <title>Compute Bazaar Data</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath fill='%2391aecb' d='M1 1h5v5H1z'/%3E%3Cpath fill='%23b7d07b' d='M8 1h5v5H8z'/%3E%3Cpath fill='%23efede4' d='M1 8h5v5H1z'/%3E%3Cpath fill='%23f3c888' d='M8 8h5v5H8z'/%3E%3C/svg%3E">
     <link rel="stylesheet" href="/terminal-assets/perspective/app.css?v=20260812-1">
-    <link rel="stylesheet" href="/terminal-assets/app.css?v=20260813-1">
+    <link rel="stylesheet" href="/terminal-assets/app.css?v=20260813-2">
     <link rel="stylesheet" href="/terminal-assets/command.css?v=20260812-1">
     <link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2">
   </head>
@@ -24,24 +24,21 @@
           aria-controls="catalog-panel"
           aria-expanded="false"
         >
-          Catalog
+          Browse
         </button>
       </header>
 
       <main class="workspace">
-        <aside class="catalog-panel" id="catalog-panel" aria-label="Data catalog">
+        <aside class="catalog-panel" id="catalog-panel" aria-label="Browse market data">
           <div class="panel-heading">
-            <div>
-              <p class="eyebrow">DataFusion</p>
-              <h1>Data</h1>
-            </div>
+            <h1>Data</h1>
             <button class="mobile-close" id="catalog-close" type="button">Close</button>
           </div>
 
-          <nav class="catalog-scroll" aria-label="Views, queries, and tables">
+          <nav class="catalog-scroll" aria-label="Market views, models, queries, and data">
             <section class="catalog-section" aria-labelledby="terminal-view-heading">
               <button class="section-heading" type="button" aria-expanded="true">
-                <span id="terminal-view-heading">Views</span>
+                <span id="terminal-view-heading">Market views</span>
                 <span id="terminal-view-count">0</span>
               </button>
               <div class="catalog-list terminal-view-list" id="terminal-view-list"></div>
@@ -49,16 +46,16 @@
 
             <section class="catalog-section" aria-labelledby="view-heading">
               <button class="section-heading" type="button" aria-expanded="true">
-                <span id="view-heading">Analyses</span>
+                <span id="view-heading">Saved views</span>
                 <span id="view-count">0</span>
               </button>
               <div class="catalog-list" id="view-list"></div>
-              <p class="catalog-empty" id="view-empty">No analysis blueprints saved.</p>
+              <p class="catalog-empty" id="view-empty">No saved views.</p>
             </section>
 
             <section class="catalog-section" aria-labelledby="model-heading">
               <button class="section-heading" type="button" aria-expanded="false">
-                <span id="model-heading">SQL models</span>
+                <span id="model-heading">Market models</span>
                 <span id="model-count">0</span>
               </button>
               <div class="catalog-list" id="model-list"></div>
@@ -66,7 +63,7 @@
 
             <section class="catalog-section" aria-labelledby="saved-query-heading">
               <button class="section-heading" type="button" aria-expanded="false">
-                <span id="saved-query-heading">SQL queries</span>
+                <span id="saved-query-heading">Queries</span>
                 <span id="query-count">0</span>
               </button>
               <div class="catalog-list" id="query-list"></div>
@@ -74,7 +71,7 @@
 
             <section class="catalog-section" aria-labelledby="gold-heading">
               <button class="section-heading" type="button" aria-expanded="false">
-                <span id="gold-heading">Gold tables</span>
+                <span id="gold-heading">Market data</span>
                 <span id="gold-count">0</span>
               </button>
               <div class="catalog-list" id="gold-list"></div>
@@ -82,7 +79,7 @@
 
             <section class="catalog-section" aria-labelledby="silver-heading">
               <button class="section-heading" type="button" aria-expanded="false">
-                <span id="silver-heading">Silver tables</span>
+                <span id="silver-heading">Observations</span>
                 <span id="silver-count">0</span>
               </button>
               <div class="catalog-list" id="silver-list"></div>
@@ -96,26 +93,26 @@
           </footer>
         </aside>
 
-        <button class="catalog-scrim" id="catalog-scrim" type="button" aria-label="Close data catalog"></button>
+        <button class="catalog-scrim" id="catalog-scrim" type="button" aria-label="Close market data browser"></button>
 
         <section class="view-workspace" aria-label="Data result viewer">
           <article class="analysis-document">
             <header class="view-header">
               <div class="view-copy">
-                <p class="eyebrow" id="view-kind">Data view</p>
-                <h2 id="view-title">Opening catalog</h2>
-                <p id="view-description">Loading the market-data catalog.</p>
+                <p class="eyebrow" id="view-kind">Market view</p>
+                <h2 id="view-title">Opening Data</h2>
+                <p id="view-description">Loading market data.</p>
               </div>
               <div class="view-controls">
-                <dl class="result-meta" aria-live="polite">
-                  <div><dt>Rows</dt><dd id="result-rows">-</dd></div>
-                  <div><dt>Query</dt><dd id="result-time">-</dd></div>
-                  <div><dt>Run</dt><dd id="result-run">-</dd></div>
+                <dl class="result-meta" id="result-meta" aria-live="polite" hidden>
+                  <div><dt>Rows</dt><dd id="result-rows"></dd></div>
+                  <div><dt>Time</dt><dd id="result-time"></dd></div>
+                  <div><dt>Snapshot</dt><dd id="result-run"></dd></div>
                 </dl>
                 <div class="view-actions">
-                  <button class="text-button" id="sql-toggle" type="button" aria-controls="query-drawer" aria-expanded="false">SQL</button>
-                  <button class="text-button" id="save-view" type="button" disabled>Save</button>
-                  <button class="text-button" id="viewer-config" type="button" disabled>View</button>
+                  <button class="text-button" id="sql-toggle" type="button" aria-controls="query-drawer" aria-expanded="false">Query</button>
+                  <button class="text-button" id="save-view" type="button" disabled>Save view</button>
+                  <button class="text-button" id="viewer-config" type="button" disabled>Configure</button>
                 </div>
               </div>
             </header>
@@ -123,10 +120,10 @@
             <section class="query-drawer" id="query-drawer" aria-hidden="true">
               <div class="query-drawer-inner">
                 <div class="query-toolbar">
-                  <span>DataFusion SQL</span>
+                  <span>SQL query</span>
                   <div>
                     <label class="limit-control">
-                      <span>Rows</span>
+                      <span>Limit</span>
                       <input id="query-limit" type="number" min="1" max="1000" value="500" inputmode="numeric">
                     </label>
                     <button class="run-button" id="run-query" type="button">
@@ -150,14 +147,14 @@
               <div class="viewer-host" id="viewer-host"></div>
               <div class="viewer-state" id="viewer-state">
                 <span class="state-signal" aria-hidden="true"></span>
-                <p id="viewer-state-title">Starting Perspective</p>
-                <span id="viewer-state-detail">Preparing the Arrow viewer.</span>
+                <p id="viewer-state-title">Opening data</p>
+                <span id="viewer-state-detail">Preparing the view.</span>
               </div>
             </div>
 
             <section class="source-file result-file" aria-labelledby="result-file-name">
               <header class="source-file-heading">
-                <strong id="result-file-name">DATAFUSION.out</strong>
+                <strong id="result-file-name">query.out</strong>
                 <span class="result-limit" id="result-limit" hidden></span>
               </header>
               <pre class="result-printout" id="result-printout" tabindex="0">waiting for query</pre>
@@ -176,8 +173,8 @@
 
     <dialog class="save-dialog" id="save-dialog">
       <form method="dialog" id="save-form">
-        <p class="eyebrow">Analysis</p>
-        <h2>Save analysis</h2>
+        <p class="eyebrow">Saved view</p>
+        <h2>Save view</h2>
         <label for="view-name">Name</label>
         <input id="view-name" name="view-name" maxlength="64" required autocomplete="off">
         <label for="view-markdown">README.md <span>(optional)</span></label>
@@ -190,7 +187,7 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/terminal-assets/perspective/command.js?v=20260812-1"></script>
-    <script type="module" src="/terminal-assets/perspective/app.js?v=20260812-3"></script>
+    <script type="module" src="/terminal-assets/perspective/command.js?v=20260813-2"></script>
+    <script type="module" src="/terminal-assets/perspective/app.js?v=20260813-2"></script>
   </body>
 </html>

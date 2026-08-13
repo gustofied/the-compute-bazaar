@@ -61,17 +61,6 @@ class TerminalShell:
             if not self._active_locked():
                 self._start_locked(columns=columns, rows=rows)
 
-    def write(self, data: str) -> None:
-        if not data:
-            return
-        with self._condition:
-            if not self._active_locked() or self._master_fd is None:
-                raise TerminalShellError("Shell is not running")
-            try:
-                os.write(self._master_fd, data.encode())
-            except OSError as exc:
-                raise TerminalShellError("Shell input is unavailable") from exc
-
     def interrupt(self) -> None:
         with self._condition:
             pid = self._process.pid if self._active_locked() else None

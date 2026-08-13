@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import shlex
@@ -10,7 +11,6 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Any
-
 
 MAX_EVENTS = 400
 MAX_PROMPT_LENGTH = 20_000
@@ -20,20 +20,18 @@ SESSION_NAME = "compute-bazaar-terminal-terra-medium"
 ACP_CONFIG = Path("terminal/acp.json")
 DEFAULT_ACP_AGENT = Path("terminal/node_modules/.bin/codex-acp")
 TERMINAL_CONTEXT = """<compute-bazaar-terminal>
-ACP is the only Terminal integration. Work in the Bazaar checkout using normal
-repo tools and `compute-bazaar` directly.
+Work in the Bazaar checkout using normal repo tools and `compute-bazaar`.
 - Inspect data with `compute-bazaar tables`, `compute-bazaar describe TABLE`, and
   `compute-bazaar sql \"SQL\"`.
-- Open a result in Data with `compute-bazaar query QUERY_ID --terminal` or
-  `compute-bazaar sql \"SQL\" --terminal`.
-Use `compute-bazaar COMMAND --help` when needed. Do not use MCP or GUI automation
-to operate the Terminal.
+- Use `open_workspace` to open Home, Data, Fleet, or Eval in the visible Terminal.
+- Use `compute-bazaar COMMAND --help` when needed.
 </compute-bazaar-terminal>"""
 READ_TERMINAL_CONTEXT = """<compute-bazaar-terminal>
-ACP is the only Terminal integration. This turn has Read access: inspect and
-reason about the Bazaar checkout, but do not run shell commands. If the request
-requires `compute-bazaar` or another command, ask the user to switch the Agent
-to Full access. Do not use MCP or GUI automation to operate the Terminal.
+This turn has Read access. Inspect the Bazaar checkout and use read-only
+`compute-bazaar` commands when needed. Use `open_workspace` to open Home, Data,
+Fleet, or Eval in the visible Terminal. Do not change files or start paid
+resources. Ask for Full access only when the requested work changes local or
+remote state.
 </compute-bazaar-terminal>"""
 
 
@@ -87,6 +85,7 @@ class AgentSession:
         self.cwd = cwd
         self.executable = executable
         self.agent_command = agent_command
+        self.session_name = _session_name(cwd)
         self.state = "idle"
         self.events: list[dict[str, Any]] = []
         self._listeners: set[asyncio.Queue[dict[str, Any]]] = set()
@@ -127,17 +126,22 @@ class AgentSession:
         if not self._task or self._task.done():
             return
         self._set_state("stopping")
-        await self._control("cancel", "-s", SESSION_NAME, check=False)
+        await self._control("cancel", "-s", self.session_name, check=False)
         try:
             await asyncio.wait_for(asyncio.shield(self._task), timeout=5)
         except TimeoutError:
             if self._process and self._process.returncode is None:
                 self._process.terminate()
 
-    def clear(self) -> None:
+    async def reset(self) -> None:
+        if self._task and not self._task.done():
+            raise AgentSessionError("Stop the current response before starting a new session")
+        await self._control("sessions", "new", "--name", self.session_name)
+        self._ensured = True
         self.events = []
         self._tool_events = {}
         self._broadcast({"type": "reset"})
+        self._set_state("idle")
 
     async def close(self) -> None:
         if self._task and not self._task.done():
@@ -160,7 +164,7 @@ class AgentSession:
                     "sessions",
                     "ensure",
                     "--name",
-                    SESSION_NAME,
+                    self.session_name,
                 )
                 self._ensured = True
             self._set_state("working")
@@ -176,7 +180,7 @@ class AgentSession:
                 "--suppress-reads",
                 "prompt",
                 "-s",
-                SESSION_NAME,
+                self.session_name,
                 _terminal_prompt(prompt, access=access),
             ]
             self._process = await asyncio.create_subprocess_exec(
@@ -263,7 +267,7 @@ class AgentSession:
             self._emit({"kind": "error", "text": text})
 
     def _upsert_tool(self, payload: dict[str, Any]) -> None:
-        title = str(payload.get("title") or payload.get("name") or "Tool")
+        title = _tool_title(payload)
         status = str(payload.get("status") or "running")
         tool_key = str(payload.get("toolCallId") or payload.get("tool_call_id") or title)
         event_id = self._tool_events.get(tool_key)
@@ -272,11 +276,11 @@ class AgentSession:
         )
         if current is None:
             emitted = self._emit(
-                {"kind": "tool", "title": title, "status": status}
+                {"kind": "tool", "title": title or "Tool", "status": status}
             )
             self._tool_events[tool_key] = int(emitted["id"])
             return
-        current.update(title=title, status=status)
+        current.update(title=title or current.get("title") or "Tool", status=status)
         self._broadcast({"type": "replace", "event": dict(current)})
 
     def _append_assistant(self, text: str) -> None:
@@ -347,11 +351,31 @@ def _error_text(payload: dict[str, Any]) -> str:
     return "Agent request failed"
 
 
+def _tool_title(payload: dict[str, Any]) -> str:
+    raw_input = payload.get("rawInput")
+    if isinstance(raw_input, dict) and raw_input.get("tool") == "open_workspace":
+        arguments = raw_input.get("arguments")
+        workspace = arguments.get("workspace") if isinstance(arguments, dict) else None
+        return f"Open {str(workspace).title()}" if workspace else "Open workspace"
+    value = payload.get("title") or payload.get("name")
+    return str(value) if value else ""
+
+
 def _terminal_prompt(prompt: str, *, access: str) -> str:
     if prompt.startswith("/"):
         return prompt
     context = TERMINAL_CONTEXT if access == "full" else READ_TERMINAL_CONTEXT
     return f"{context}\n\n{prompt}"
+
+
+def _session_name(cwd: Path) -> str:
+    config_path = cwd / ACP_CONFIG
+    config = config_path.read_bytes() if config_path.is_file() else b""
+    contract = b"\0".join(
+        (config, AGENT_MODEL.encode(), AGENT_REASONING_EFFORT.encode())
+    )
+    fingerprint = hashlib.sha256(contract).hexdigest()[:10]
+    return f"{SESSION_NAME}-{fingerprint}"
 
 
 def _agent_environment() -> dict[str, str]:

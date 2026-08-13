@@ -8,7 +8,7 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
@@ -18,6 +18,7 @@ from the_compute_bazaar.terminal.agents import (
     _agent_environment,
     _terminal_prompt,
 )
+from the_compute_bazaar.terminal.agent_tools import OPEN_WORKSPACE_TOOL, handle_request
 from the_compute_bazaar.terminal.commands import (
     LaunchPlanAction,
     ErrorAction,
@@ -45,10 +46,7 @@ class TerminalCommandTest(unittest.TestCase):
 
         self.assertIn("compute-bazaar tables", prompt)
         self.assertIn("compute-bazaar describe TABLE", prompt)
-        self.assertIn("compute-bazaar query QUERY_ID --terminal", prompt)
-        self.assertIn('compute-bazaar sql "SQL" --terminal', prompt)
-        self.assertIn("ACP is the only Terminal integration", prompt)
-        self.assertIn("Do not use MCP or GUI automation", prompt)
+        self.assertIn("open_workspace", prompt)
         self.assertIn("Bazaar checkout", prompt)
         self.assertNotIn("repo shell", prompt)
         self.assertTrue(prompt.endswith("Show me the latest H200 price."))
@@ -58,9 +56,10 @@ class TerminalCommandTest(unittest.TestCase):
         prompt = _terminal_prompt("Read the market.", access="read")
 
         self.assertIn("This turn has Read access", prompt)
-        self.assertIn("ask the user to switch the Agent", prompt)
-        self.assertIn("to Full access", prompt)
-        self.assertNotIn("compute-bazaar tables", prompt)
+        self.assertIn("read-only\n`compute-bazaar` commands", prompt)
+        self.assertIn("open_workspace", prompt)
+        self.assertIn("Ask for Full access only", prompt)
+        self.assertIn("Do not change files or start paid", prompt)
 
     def test_agent_can_find_the_current_compute_bazaar_command(self) -> None:
         executable_dir = str(Path(sys.executable).parent)
@@ -77,9 +76,10 @@ class TerminalCommandTest(unittest.TestCase):
             environment = _agent_environment()
 
         self.assertEqual(environment["PATH"].split(":", 1)[0], executable_dir)
-        self.assertFalse(
-            any(key.startswith("COMPUTE_BAZAAR_TERMINAL_") for key in environment)
-        )
+        self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN", environment)
+        self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN", environment)
+        self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_PORT", environment)
+        self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_READY_FILE", environment)
         self.assertEqual(environment["COMPUTE_BAZAAR_LAKE_ROOT"], "/tmp/lake")
         self.assertEqual(
             json.loads(environment["CODEX_CONFIG"]),
@@ -89,7 +89,7 @@ class TerminalCommandTest(unittest.TestCase):
             },
         )
 
-    def test_agent_session_does_not_forward_mcp(self) -> None:
+    def test_agent_session_loads_the_terminal_tool_config(self) -> None:
         session = AgentSession(
             cwd=Path("/repo"),
             executable=Path("/repo/terminal/node_modules/.bin/acpx"),
@@ -109,12 +109,62 @@ class TerminalCommandTest(unittest.TestCase):
             ],
         )
 
-    def test_agent_client_has_no_mcp_servers(self) -> None:
+    def test_agent_client_has_one_terminal_tool_server(self) -> None:
         config = json.loads(
             (Path(__file__).parents[1] / "terminal" / "acp.json").read_text()
         )
 
-        self.assertEqual(config, {"mcpServers": []})
+        self.assertEqual(len(config["mcpServers"]), 1)
+        self.assertEqual(config["mcpServers"][0]["name"], "compute-bazaar-terminal")
+        self.assertEqual(config["mcpServers"][0]["command"], "uv")
+        self.assertEqual(
+            config["mcpServers"][0]["args"],
+            ["run", "python", "-m", "the_compute_bazaar.terminal.agent_tools"],
+        )
+
+    def test_terminal_tool_lists_and_opens_workspaces(self) -> None:
+        listed = handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+        opened: list[str] = []
+
+        called = handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "open_workspace",
+                    "arguments": {"workspace": "fleet"},
+                },
+            },
+            opener=lambda workspace: opened.append(workspace) or "Opened Fleet.",
+        )
+
+        assert listed is not None and called is not None
+        self.assertEqual(listed["result"]["tools"], [OPEN_WORKSPACE_TOOL])
+        self.assertEqual(opened, ["fleet"])
+        self.assertFalse(called["result"]["isError"])
+        self.assertEqual(called["result"]["structuredContent"]["workspace"], "fleet")
+
+    def test_terminal_tool_returns_the_actual_navigation_error(self) -> None:
+        def fail(_: str) -> str:
+            raise RuntimeError("Fleet did not load")
+
+        response = handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "open_workspace",
+                    "arguments": {"workspace": "fleet"},
+                },
+            },
+            opener=fail,
+        )
+
+        assert response is not None
+        self.assertTrue(response["result"]["isError"])
+        self.assertEqual(response["result"]["content"][0]["text"], "Fleet did not load")
 
     def test_agent_session_reads_raw_acp_updates(self) -> None:
         session = AgentSession(
@@ -175,6 +225,39 @@ class TerminalCommandTest(unittest.TestCase):
             )
 
         self.assertEqual(len(session.events), 1)
+        self.assertEqual(session.events[0]["status"], "completed")
+
+    def test_terminal_workspace_tool_keeps_a_useful_title_on_completion(self) -> None:
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+        call_id = "workspace-1"
+        raw_input = {
+            "server": "compute-bazaar-terminal",
+            "tool": "open_workspace",
+            "arguments": {"workspace": "fleet"},
+        }
+
+        session._upsert_tool(
+            {
+                "toolCallId": call_id,
+                "title": "mcp.compute-bazaar-terminal.open_workspace",
+                "status": "in_progress",
+                "rawInput": raw_input,
+            }
+        )
+        session._upsert_tool(
+            {
+                "toolCallId": call_id,
+                "status": "completed",
+                "rawInput": raw_input,
+            }
+        )
+
+        self.assertEqual(len(session.events), 1)
+        self.assertEqual(session.events[0]["title"], "Open Fleet")
         self.assertEqual(session.events[0]["status"], "completed")
 
     def test_slow_agent_listener_is_resynchronized_with_a_snapshot(self) -> None:
@@ -408,7 +491,7 @@ class TerminalCommandTest(unittest.TestCase):
 
         self.assertIsInstance(action, ErrorAction)
 
-    def test_runtime_launch_mailbox_retains_one_typed_action(self) -> None:
+    def test_runtime_launch_mailbox_tracks_typed_action_completion(self) -> None:
         mailbox = TerminalLaunchMailbox()
         action = SqlAction(
             sql="select * from gold.fact_gpu_price_index",
@@ -421,9 +504,52 @@ class TerminalCommandTest(unittest.TestCase):
         self.assertEqual(mailbox.latest(), published)
         self.assertEqual(published["action"]["kind"], "sql")
         self.assertEqual(published["action"]["perspective"], {"plugin": "Y Line"})
+        self.assertEqual(published["state"], "pending")
+
+        completed = mailbox.complete(
+            published["launch_id"],
+            message="Opened query in Data.",
+        )
+
+        assert completed is not None
+        self.assertEqual(completed["state"], "complete")
+        self.assertEqual(completed["message"], "Opened query in Data.")
+
+    def test_runtime_launch_mailbox_keeps_failures_with_their_request(self) -> None:
+        mailbox = TerminalLaunchMailbox()
+        first = mailbox.publish(QueryAction(query_id="first", limit=500))
+        second = mailbox.publish(QueryAction(query_id="second", limit=500))
+
+        failed = mailbox.complete(first["launch_id"], error="Unknown query: first")
+
+        assert failed is not None
+        self.assertEqual(failed["state"], "failed")
+        self.assertEqual(failed["message"], "Unknown query: first")
+        pending = mailbox.get(second["launch_id"])
+        assert pending is not None
+        self.assertEqual(pending["state"], "pending")
 
 
 class AgentProcessTest(unittest.IsolatedAsyncioTestCase):
+    async def test_new_agent_session_replaces_the_named_acp_session(self) -> None:
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+        session.events = [{"kind": "message", "text": "old"}]
+        session._tool_events = {"call-1": 0}
+
+        with patch.object(session, "_control", new=AsyncMock()) as control:
+            await session.reset()
+
+        control.assert_awaited_once_with(
+            "sessions", "new", "--name", session.session_name
+        )
+        self.assertEqual(session.events, [])
+        self.assertEqual(session._tool_events, {})
+        self.assertTrue(session._ensured)
+
     async def test_agent_session_crosses_the_process_boundary(self) -> None:
         fake_acpx = """
 import json

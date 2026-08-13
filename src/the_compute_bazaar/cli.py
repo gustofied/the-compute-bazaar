@@ -29,6 +29,13 @@ class ChartType(str, Enum):
     BAR = "bar"
 
 
+class TerminalWorkspace(str, Enum):
+    HOME = "home"
+    DATA = "data"
+    FLEET = "fleet"
+    EVAL = "eval"
+
+
 @dataclass(frozen=True)
 class CLIState:
     lake: LakeSelection
@@ -1133,6 +1140,20 @@ def serve_terminal(
         initial_perspective=initial_perspective,
         evaluation_root=evaluation_root,
     )
+
+
+@app.command("open")
+def open_terminal(
+    workspace: Annotated[TerminalWorkspace, typer.Argument()],
+) -> None:
+    """Open a workspace in the running Terminal."""
+    from .terminal.lifecycle import TerminalLifecycleError, open_terminal_workspace
+
+    try:
+        message = open_terminal_workspace(workspace.value)
+    except TerminalLifecycleError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(message)
 
 
 def _launch_native_terminal(

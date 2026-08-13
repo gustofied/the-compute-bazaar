@@ -11,7 +11,6 @@ const SHELL_MIN_WIDTH = 320;
 const SHELL_MIN_WORKSPACE_WIDTH = 420;
 const MAX_AGENT_EVENTS = 400;
 const AGENT_BUSY_STATES = new Set(["starting", "working", "stopping"]);
-const BAZAAR_AGENT_GLOBALS = new Set(["/home", "/data", "/fleet", "/eval", "/trade"]);
 
 const workspace = document.body.dataset.terminalWorkspace || inferWorkspace();
 const nativeLaunchToken = takeNativeLaunchToken();
@@ -162,6 +161,7 @@ async function establishNativeSession(token) {
 
 function inferWorkspace() {
   if (window.location.pathname.startsWith("/data")) return "data";
+  if (window.location.pathname.startsWith("/fleet")) return "fleet";
   if (window.location.pathname.startsWith("/eval")) return "eval";
   return "terminal";
 }
@@ -352,8 +352,9 @@ function ensureShellTerminal() {
   const terminal = new Terminal({
     allowProposedApi: false,
     convertEol: true,
-    cursorBlink: true,
+    cursorBlink: false,
     cursorStyle: "bar",
+    disableStdin: true,
     fontFamily: '"SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace',
     fontSize: 12,
     lineHeight: 1.35,
@@ -385,7 +386,6 @@ function ensureShellTerminal() {
   const fit = new FitAddon();
   terminal.loadAddon(fit);
   terminal.open(elements.shellStage);
-  terminal.onData((data) => sendShell({ type: "input", data }));
   terminal.onResize(({ cols, rows }) => {
     sendShell({ type: "resize", columns: cols, rows });
   });
@@ -496,9 +496,7 @@ function closeShell({ persist = true } = {}) {
   window.dispatchEvent(new CustomEvent("compute-bazaar:shell", { detail: { open: false } }));
   elements.workspace.textContent = workspace;
   elements.run.textContent = "Run";
-  elements.input.placeholder = state.status?.shell?.authorized
-    ? "SQL, command, or shell · try help"
-    : "SQL or command · try help";
+  elements.input.placeholder = "SQL or command · try help";
   elements.input.focus();
 }
 
@@ -528,12 +526,12 @@ function updateSessionControls() {
   elements.access.textContent = agent?.access === "full" ? "Full access" : "Read";
   elements.access.dataset.access = agent?.access || "read";
   elements.interrupt.textContent = agent ? "Stop" : "^C";
-  elements.clear.textContent = agent ? "Clear transcript" : "Clear";
-  elements.clear.title = agent ? "Clear transcript" : "Clear shell";
-  elements.workspace.textContent = state.shell.open ? state.activeSession : workspace;
+  elements.clear.textContent = agent ? "New session" : "Clear";
+  elements.clear.title = agent ? "Start a new agent session" : "Clear shell";
+  elements.workspace.textContent = agent ? "agent" : workspace;
   elements.input.placeholder = agent
     ? "Agent prompt"
-    : "SQL, command, or shell · try help";
+    : "SQL or command · try help";
   elements.input.setAttribute(
     "aria-label",
     agent ? "Agent prompt" : "Terminal command or read-only SQL",
@@ -564,7 +562,7 @@ async function activateSession(sessionId, { focus = true } = {}) {
       columns: state.shell.terminal?.cols || 120,
       rows: state.shell.terminal?.rows || 32,
     }));
-    if (focus) state.shell.terminal?.focus();
+    if (focus) elements.input.focus();
     return;
   }
   await connectAgent();
@@ -743,12 +741,8 @@ async function sendAgentPrompt(prompt) {
   }
 }
 
-function isBazaarAgentGlobal(raw) {
-  return BAZAAR_AGENT_GLOBALS.has(raw.trim().toLowerCase());
-}
-
-function savePendingAction(action) {
-  sessionStorage.setItem(PENDING_KEY, JSON.stringify(action));
+function savePendingAction(action, launchId = null) {
+  sessionStorage.setItem(PENDING_KEY, JSON.stringify({ action, launchId }));
 }
 
 function takePendingAction() {
@@ -762,12 +756,46 @@ function takePendingAction() {
   }
 }
 
-function sendToData(action) {
-  const detail = { action, handled: false };
+async function sendToData(action, launchId = null) {
+  const detail = { action, handled: false, completion: null };
   window.dispatchEvent(new CustomEvent("compute-bazaar:command", { detail }));
-  if (detail.handled) return;
-  savePendingAction(action);
+  if (detail.handled) {
+    await detail.completion;
+    return { deferred: false };
+  }
+  savePendingAction(action, launchId);
   window.location.assign("/data");
+  return { deferred: true };
+}
+
+async function completeTerminalOpen(launchId, { message = null, error = null } = {}) {
+  if (!launchId) return;
+  const response = await fetch(`/api/terminal/open/${encodeURIComponent(launchId)}/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, error }),
+  });
+  if (!response.ok) throw new Error("Could not report the Terminal result");
+}
+
+function actionSuccessMessage(action) {
+  switch (action?.kind) {
+    case "navigate": {
+      const destination = action.href === "/" ? "Terminal" : action.href.split("/").filter(Boolean)[0];
+      return `Opened ${destination.charAt(0).toUpperCase()}${destination.slice(1)}.`;
+    }
+    case "query": return `Opened ${action.query_id} in Data.`;
+    case "view": return `Opened ${action.view_id} in Data.`;
+    case "model": return `Opened ${action.model_id} in Data.`;
+    case "blueprint": return `Opened ${action.blueprint_id} in Data.`;
+    case "table": return `Opened ${action.table_ref} in Data.`;
+    case "describe": return `Opened ${action.table_ref} schema in Data.`;
+    case "offers": return "Opened current offers in Data.";
+    case "launch-plan": return "Opened the launch plan in Data.";
+    case "catalog": return "Opened Browse in Data.";
+    case "sql": return "Opened query in Data.";
+    default: return "Opened in the Compute Bazaar Terminal.";
+  }
 }
 
 async function showStatus() {
@@ -787,53 +815,67 @@ async function showStatus() {
   }
 }
 
-async function execute(action) {
-  if (!action) return;
+async function execute(action, { launchId = null } = {}) {
+  if (!action) return { deferred: false };
   switch (action.kind) {
     case "help":
       await loadTerminal();
       showOptions("Terminal commands", state.commands);
-      return;
+      return { deferred: false };
     case "clear":
       setInput("");
       closePanel();
-      return;
+      return { deferred: false };
     case "navigate":
+      if (launchId) {
+        await completeTerminalOpen(launchId, {
+          message: actionSuccessMessage(action),
+        });
+      }
       window.location.assign(action.href);
-      return;
+      return { deferred: Boolean(launchId) };
     case "locked":
       showMessage("Trade is locked", "Execution will live here later. Data and Eval are available now.");
-      return;
+      return { deferred: false };
     case "status":
       await showStatus();
-      return;
+      return { deferred: false };
     case "shell":
       await openShell(action.command);
-      return;
+      return { deferred: false };
     case "error":
       showMessage("Command not understood", action.message, { error: true });
-      return;
+      return { deferred: false };
     default:
       closePanel();
-      sendToData(action);
+      return sendToData(action, launchId);
   }
 }
 
 async function pollTerminalOpen() {
-  if (state.opening || document.visibilityState === "hidden") return;
+  if (state.opening) return;
   state.opening = true;
+  let launchId = null;
   try {
     const response = await fetch("/api/terminal/open", { cache: "no-store" });
     if (!response.ok) return;
     const payload = await response.json();
     const launch = payload.contract === "compute-bazaar.terminal.open" ? payload.launch : null;
-    if (!launch?.launch_id || !launch.action) return;
+    if (!launch?.launch_id || !launch.action || launch.state !== "pending") return;
+    launchId = launch.launch_id;
     if (localStorage.getItem(OPEN_KEY) === launch.launch_id) return;
     localStorage.setItem(OPEN_KEY, launch.launch_id);
     window.focus();
-    await execute(launch.action);
-  } catch {
-    // The local process may be stopping or reloading.
+    const result = await execute(launch.action, { launchId: launch.launch_id });
+    if (!result?.deferred) {
+      await completeTerminalOpen(launch.launch_id, {
+        message: actionSuccessMessage(launch.action),
+      });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await completeTerminalOpen(launchId, { error: message }).catch(() => {});
+    showMessage("Could not open", message, { error: true });
   } finally {
     state.opening = false;
   }
@@ -852,7 +894,7 @@ async function submit() {
     showOptions("Terminal commands", state.commands);
     return;
   }
-  if (state.shell.open && state.activeSession !== "shell" && !isBazaarAgentGlobal(raw)) {
+  if (state.shell.open && state.activeSession !== "shell") {
     if (agentIsBusy()) return;
     saveHistory(raw);
     try {
@@ -954,12 +996,11 @@ elements.shell.addEventListener("click", (event) => {
       state.shell.terminal?.reset();
       sendShell({ type: "clear" });
     } else {
-      const agent = state.agent;
-      agent.events = [];
-      renderAgent();
-      if (agent.socket?.readyState === WebSocket.OPEN) {
-        agent.socket.send(JSON.stringify({ type: "clear" }));
-      }
+      void connectAgent().then((socket) => {
+        socket.send(JSON.stringify({ type: "new" }));
+      }).catch((error) => {
+        showMessage("Agent unavailable", error instanceof Error ? error.message : String(error), { error: true });
+      });
     }
   }
 });
@@ -1077,6 +1118,8 @@ window.addEventListener("pagehide", () => {
 
 window.ComputeBazaarTerminal = {
   takePendingAction,
+  completeTerminalOpen,
+  actionSuccessMessage,
   showMessage,
   closePanel,
   closeShell,

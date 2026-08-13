@@ -68,6 +68,7 @@ const elements = {
   limit: document.querySelector("#query-limit"),
   run: document.querySelector("#run-query"),
   save: document.querySelector("#save-view"),
+  resultMeta: document.querySelector("#result-meta"),
   resultRows: document.querySelector("#result-rows"),
   resultTime: document.querySelector("#result-time"),
   resultRun: document.querySelector("#result-run"),
@@ -197,7 +198,7 @@ function asciiTable(rows, schema, rowCount, { truncated = false, limit = null } 
 
 async function renderPrintout(
   table,
-  { label = "DATAFUSION.out", rowCount = 0, truncated = false, limit = null } = {},
+  { label = "query.out", rowCount = 0, truncated = false, limit = null } = {},
 ) {
   setPrintoutState(label, "printing...");
   let view;
@@ -263,12 +264,26 @@ function setViewCopy(kind, title, description, markdown = "") {
   elements.viewDescription.textContent = description;
   setBlueprintMarkdown(markdown);
   setResultLimit(false);
+  showResultMeta(false);
+}
+
+function showResultMeta(show = true) {
+  elements.resultMeta.hidden = !show;
+}
+
+function reportCommandError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  window.ComputeBazaarTerminal?.showMessage("Could not open", message, { error: true });
+}
+
+function runUiAction(action) {
+  void Promise.resolve().then(action).catch(reportCommandError);
 }
 
 function setResultLimit(truncated, limit = null) {
   elements.resultLimit.hidden = !truncated;
   elements.resultLimit.textContent = truncated
-    ? `LIMIT ${formatCount(limit)} / RESULT TRUNCATED`
+    ? `Showing first ${formatCount(limit)} rows`
     : "";
 }
 
@@ -334,7 +349,6 @@ function renderViews(views) {
     >
       <span class="view-index">${String(index + 1).padStart(2, "0")}</span>
       <span class="catalog-item-copy">
-        <span class="view-kind-label">${escapeHtml(view.kind || "Market")}</span>
         <strong>${escapeHtml(view.title)}</strong>
         <small>${escapeHtml(view.description)}</small>
       </span>
@@ -358,7 +372,6 @@ function renderQueryList(queries, views) {
         <strong>${escapeHtml(query.title)}</strong>
         <small>${escapeHtml(query.description)}</small>
       </span>
-      <span class="item-count">SQL</span>
     </button>
   `).join("");
 }
@@ -427,7 +440,6 @@ function renderModels(models) {
         <strong>${escapeHtml(model.title)}</strong>
         <small>${escapeHtml(model.description || model.model_id)}</small>
       </span>
-      <span class="item-count">SQL</span>
     </button>
   `).join("");
 }
@@ -441,7 +453,7 @@ function stripTransientConfig(config) {
 }
 
 async function selectView(view, limit = view.default_limit) {
-  setViewCopy(`${view.kind || "Market"} view`, view.title, view.description);
+  setViewCopy("Market view", view.title, view.description);
   elements.editor.value = view.sql;
   state.sourceSql = view.sql.trim();
   elements.limit.value = limit;
@@ -452,7 +464,7 @@ async function selectView(view, limit = view.default_limit) {
 }
 
 async function selectQuery(query, limit = query.default_limit) {
-  setViewCopy("Saved SQL", query.title, query.description || "Saved DataFusion query.");
+  setViewCopy("Query", query.title, query.description || "Saved query.");
   elements.editor.value = query.sql;
   state.sourceSql = query.sql.trim();
   elements.limit.value = limit;
@@ -468,7 +480,8 @@ async function selectTable(table) {
     await selectVirtualTable(tableRef);
     return;
   }
-  setViewCopy(`${table.layer} table`, table.table_name, `Direct inspection of ${tableRef}.`);
+  const kind = table.layer === "gold" ? "Market data" : "Observations";
+  setViewCopy(kind, table.table_name, tableRef);
   elements.editor.value = `select *\nfrom ${tableRef}`;
   state.sourceSql = elements.editor.value.trim();
   elements.limit.value = Math.min(Number(elements.limit.value) || 100, 500);
@@ -479,11 +492,11 @@ async function selectTable(table) {
 }
 
 async function selectVirtualTable(tableRef) {
-  if (state.running) return;
+  if (state.running) throw new Error("Another result is still loading");
   if (tableRef !== VIRTUAL_AVAILABILITY_TABLE) {
     throw new Error(`Virtual table is not supported: ${tableRef}`);
   }
-  setViewCopy("Gold table", "GPU Availability History", "Full history, queried by DataFusion as you move through it.");
+  setViewCopy("Market data", "GPU Availability History", "Full availability history.");
   elements.editor.value = `select *\nfrom ${tableRef}`;
   state.sourceSql = elements.editor.value.trim();
   state.saveable = false;
@@ -492,8 +505,8 @@ async function selectVirtualTable(tableRef) {
   setSqlOpen(false);
   closeCatalogOnMobile();
   setRunning(true);
-  setPrintoutState("DATAFUSION.out", "opening virtual table...");
-  setViewerState("Opening availability history", "Reading its schema from DataFusion.");
+  setPrintoutState("query.out", "opening availability history...");
+  setViewerState("Opening availability history", "Reading the table schema.");
   try {
     const schemaResponse = await fetch("/api/data/virtual/schema", { cache: "no-store" });
     if (!schemaResponse.ok) throw new Error(await responseError(schemaResponse));
@@ -523,8 +536,9 @@ async function selectVirtualTable(tableRef) {
       : `${adapter.stats.elapsedMs} ms`;
     elements.resultRun.textContent = shortRunId(metadata.run?.run_id);
     elements.resultRun.title = metadata.run?.run_id || "";
+    showResultMeta();
     await renderPrintout(nextTable, {
-      label: "DATAFUSION.out",
+      label: "query.out",
       rowCount,
     });
     state.hasResult = true;
@@ -532,8 +546,10 @@ async function selectVirtualTable(tableRef) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Availability history unavailable", message, { error: true });
-    setPrintoutState("DATAFUSION.err", message);
+    setPrintoutState("query.err", message);
+    showResultMeta(false);
     state.hasResult = false;
+    throw error;
   } finally {
     setRunning(false);
   }
@@ -678,7 +694,7 @@ function createDataFusionVirtualAdapter(tableRef, tableSchema) {
 }
 
 async function selectScratch(sql, limit, perspective = null) {
-  setViewCopy("Scratch SQL", "Query result", "A bounded read-only DataFusion result.");
+  setViewCopy("Query", "Query", "Read-only result.");
   elements.editor.value = sql;
   state.sourceSql = sql.trim();
   elements.limit.value = limit;
@@ -691,14 +707,14 @@ async function selectScratch(sql, limit, perspective = null) {
 }
 
 async function selectOffers(action) {
-  if (state.running) return;
+  if (state.running) throw new Error("Another result is still loading");
   const params = new URLSearchParams({ limit: String(action.limit || 100) });
   if (action.provider) params.set("provider", action.provider);
   if (action.gpu_model) params.set("gpu_model", action.gpu_model);
   if (action.offer_id) params.set("offer_id", action.offer_id);
   if (action.include_unavailable) params.set("include_unavailable", "true");
   setViewCopy(
-    "Provider data",
+    "Live offers",
     action.offer_id ? "Offer" : "Current offers",
     "Fetched directly from RunPod and Verda.",
   );
@@ -707,7 +723,7 @@ async function selectOffers(action) {
   elements.sqlToggle.disabled = true;
   state.saveable = false;
   setRunning(true);
-  setPrintoutState("PROVIDER.out", "reading provider APIs...");
+  setPrintoutState("offers.out", "reading provider APIs...");
   setViewerState("Fetching offers", "Reading the provider APIs now.");
   try {
     const response = await fetch(`/api/data/offers?${params}`, { cache: "no-store" });
@@ -724,8 +740,9 @@ async function selectOffers(action) {
     elements.resultTime.textContent = `${response.headers.get("X-Compute-Bazaar-Elapsed-Ms") || "-"} ms`;
     elements.resultRun.textContent = "provider read";
     elements.resultRun.title = response.headers.get("X-Compute-Bazaar-Observed-At") || "";
+    showResultMeta();
     await renderPrintout(nextTable, {
-      label: "PROVIDER.out",
+      label: "offers.out",
       rowCount: Number(rowCount),
     });
     state.hasResult = true;
@@ -733,15 +750,17 @@ async function selectOffers(action) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Offers unavailable", message, { error: true });
-    setPrintoutState("PROVIDER.err", message);
+    setPrintoutState("offers.err", message);
+    showResultMeta(false);
     state.hasResult = false;
+    throw error;
   } finally {
     setRunning(false);
   }
 }
 
 async function selectLaunchPlan(action) {
-  if (state.running) return;
+  if (state.running) throw new Error("Another result is still loading");
   const params = new URLSearchParams({
     offer_id: action.offer_id,
     disk_gb: String(action.disk_gb || 50),
@@ -751,7 +770,7 @@ async function selectLaunchPlan(action) {
   if (action.image) params.set("image", action.image);
   if (action.ssh_key_id) params.set("ssh_key_id", action.ssh_key_id);
   setViewCopy(
-    "Provider request",
+    "Launch",
     "Launch plan",
     "Revalidated against the provider. Nothing has been created.",
   );
@@ -760,7 +779,7 @@ async function selectLaunchPlan(action) {
   elements.sqlToggle.disabled = true;
   state.saveable = false;
   setRunning(true);
-  setPrintoutState("REQUEST.out", "building launch plan...");
+  setPrintoutState("launch.out", "building launch plan...");
   setViewerState("Revalidating offer", "Preparing the provider request now.");
   try {
     const response = await fetch(`/api/data/launch-plan?${params}`, { cache: "no-store" });
@@ -776,14 +795,17 @@ async function selectLaunchPlan(action) {
     elements.resultTime.textContent = `${response.headers.get("X-Compute-Bazaar-Elapsed-Ms") || "-"} ms`;
     elements.resultRun.textContent = response.headers.get("X-Compute-Bazaar-Run-Id") || "draft";
     elements.resultRun.title = response.headers.get("X-Compute-Bazaar-Observed-At") || "";
-    await renderPrintout(nextTable, { label: "REQUEST.out", rowCount: 1 });
+    showResultMeta();
+    await renderPrintout(nextTable, { label: "launch.out", rowCount: 1 });
     state.hasResult = true;
     setViewerState("Ready", "Launch plan loaded. No request was submitted.", { hidden: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Launch plan unavailable", message, { error: true });
-    setPrintoutState("REQUEST.err", message);
+    setPrintoutState("launch.err", message);
+    showResultMeta(false);
     state.hasResult = false;
+    throw error;
   } finally {
     setRunning(false);
   }
@@ -826,7 +848,7 @@ async function saveCurrentAnalysis(name) {
 
 async function selectBlueprint(blueprint) {
   setViewCopy(
-    "Analysis",
+    "Saved view",
     blueprint.title,
     blueprint.description || blueprint.model_id,
     blueprint.markdown,
@@ -841,7 +863,7 @@ async function selectBlueprint(blueprint) {
 }
 
 async function selectModel(model) {
-  setViewCopy("SQL model", model.title, model.description || model.model_id);
+  setViewCopy("Market model", model.title, model.description || model.model_id);
   elements.editor.value = model.sql;
   state.sourceSql = model.sql.trim();
   elements.limit.value = model.default_limit;
@@ -857,12 +879,12 @@ async function deleteAnalysis(id) {
   if (!response.ok) throw new Error(await responseError(response));
   await refreshSessionArtifacts();
   if (state.activeSource === `blueprint:${id}`) setActiveSource(null);
-  showToast(blueprint ? `Deleted ${blueprint.title}` : "Deleted analysis");
+  showToast(blueprint ? `Deleted ${blueprint.title}` : "Deleted view");
 }
 
 async function refreshSessionArtifacts() {
   const response = await fetch("/api/data/session", { cache: "no-store" });
-  if (!response.ok) throw new Error("Could not refresh analysis artifacts");
+  if (!response.ok) throw new Error("Could not refresh saved views");
   const next = validateSession(await response.json());
   state.session.models = next.models;
   state.session.blueprints = next.blueprints;
@@ -880,7 +902,7 @@ async function responseError(response) {
 }
 
 async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {}) {
-  if (state.running) return;
+  if (state.running) throw new Error("Another result is still loading");
   const sql = elements.editor.value.trim();
   state.saveable = true;
   elements.sqlToggle.disabled = false;
@@ -888,13 +910,14 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
   elements.limit.value = String(limit);
   if (!sql) {
     setViewerState("SQL is empty", "Write a SELECT or WITH statement before running it.", { error: true });
-    setPrintoutState("DATAFUSION.err", "SQL is empty");
-    return;
+    setPrintoutState("query.err", "SQL is empty");
+    showResultMeta(false);
+    throw new Error("SQL is empty");
   }
 
   const sourceChanged = Boolean(state.activeSource && state.sourceSql !== sql);
   if (sourceChanged) {
-    setViewCopy("Scratch SQL", "Query result", "A bounded read-only DataFusion result.");
+    setViewCopy("Query", "Query", "Read-only result.");
     setActiveSource(null);
   }
 
@@ -909,8 +932,8 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
 
   setRunning(true);
   setResultLimit(false);
-  setPrintoutState("DATAFUSION.out", "running query...");
-  setViewerState("Running DataFusion", "Preparing the bounded Arrow result.");
+  setPrintoutState("query.out", "running query...");
+  setViewerState("Running query", "Preparing the result.");
   try {
     const response = await fetch("/api/data/query", {
       method: "POST",
@@ -940,9 +963,10 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
     elements.resultTime.textContent = `${elapsed} ms`;
     elements.resultRun.textContent = shortRunId(runId);
     elements.resultRun.title = runId;
+    showResultMeta();
     setResultLimit(truncated, selectedLimit);
     await renderPrintout(nextTable, {
-      label: "DATAFUSION.out",
+      label: "query.out",
       rowCount: Number(rowCount),
       truncated,
       limit: Number(selectedLimit),
@@ -952,8 +976,10 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Query failed", message, { error: true });
-    setPrintoutState("DATAFUSION.err", message);
+    setPrintoutState("query.err", message);
+    showResultMeta(false);
     state.hasResult = false;
+    throw error;
   } finally {
     setRunning(false);
   }
@@ -1032,8 +1058,7 @@ function findTable(tableRef) {
 }
 
 async function handleTerminalAction(action) {
-  try {
-    switch (action.kind) {
+  switch (action.kind) {
       case "catalog":
         catalogSection(action.section);
         return;
@@ -1089,7 +1114,7 @@ async function handleTerminalAction(action) {
         const layer = table.layer.replaceAll("'", "''");
         const tableName = table.table_name.replaceAll("'", "''");
         await selectScratch(`select column_name, data_type, is_nullable\nfrom information_schema.columns\nwhere table_schema = '${layer}' and table_name = '${tableName}'\norder by ordinal_position`, 500);
-        setViewCopy("Table schema", `${table.layer}.${table.table_name}`, "Columns registered in the current DataFusion catalog.");
+        setViewCopy("Schema", `${table.layer}.${table.table_name}`, "Columns in this table.");
         return;
       }
       case "sql":
@@ -1101,19 +1126,15 @@ async function handleTerminalAction(action) {
       case "launch-plan":
         await selectLaunchPlan(action);
         return;
-      default:
-        throw new Error("This command is not available in Data.");
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    window.ComputeBazaarTerminal?.showMessage("Command failed", message, { error: true });
+    default:
+      throw new Error("This command is not available in Data.");
   }
 }
 
 window.addEventListener("compute-bazaar:command", (event) => {
   if (!event.detail?.action || !state.session) return;
   event.detail.handled = true;
-  void handleTerminalAction(event.detail.action);
+  event.detail.completion = handleTerminalAction(event.detail.action);
 });
 
 window.addEventListener("compute-bazaar:shell", (event) => {
@@ -1137,14 +1158,14 @@ function bindEvents() {
     const item = event.target.closest("[data-terminal-view-id]");
     if (!item) return;
     const view = state.session.views.find((candidate) => candidate.view_id === item.dataset.terminalViewId);
-    if (view) void selectView(view);
+    if (view) runUiAction(() => selectView(view));
   });
 
   elements.queryList.addEventListener("click", (event) => {
     const item = event.target.closest("[data-query-id]");
     if (!item) return;
     const query = state.session.queries.find((candidate) => candidate.query_id === item.dataset.queryId);
-    if (query) void selectQuery(query);
+    if (query) runUiAction(() => selectQuery(query));
   });
 
   const tableHandler = (event) => {
@@ -1153,7 +1174,7 @@ function bindEvents() {
     const table = state.session.tables.find(
       (candidate) => `${candidate.layer}.${candidate.table_name}` === item.dataset.tableRef,
     );
-    if (table) void selectTable(table);
+    if (table) runUiAction(() => selectTable(table));
   };
   elements.goldList.addEventListener("click", tableHandler);
   elements.silverList.addEventListener("click", tableHandler);
@@ -1171,7 +1192,7 @@ function bindEvents() {
     const blueprint = state.session.blueprints.find(
       (candidate) => candidate.blueprint_id === loadButton.dataset.blueprintId,
     );
-    if (blueprint) void selectBlueprint(blueprint);
+    if (blueprint) runUiAction(() => selectBlueprint(blueprint));
   });
 
   elements.modelList.addEventListener("click", (event) => {
@@ -1180,15 +1201,15 @@ function bindEvents() {
     const model = state.session.models.find(
       (candidate) => candidate.model_id === item.dataset.modelId,
     );
-    if (model) void selectModel(model);
+    if (model) runUiAction(() => selectModel(model));
   });
 
-  elements.run.addEventListener("click", () => void runCurrentQuery());
-  elements.viewerConfig.addEventListener("click", () => void elements.viewer.toggleConfig());
+  elements.run.addEventListener("click", () => runUiAction(() => runCurrentQuery()));
+  elements.viewerConfig.addEventListener("click", () => runUiAction(() => elements.viewer.toggleConfig()));
   elements.editor.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
-      void runCurrentQuery();
+      runUiAction(() => runCurrentQuery());
     }
   });
 
@@ -1216,9 +1237,10 @@ function bindEvents() {
 async function initialize() {
   bindEvents();
   setSqlOpen(false);
+  let pending = null;
   try {
     const sessionResponse = await fetch("/api/data/session", { cache: "no-store" });
-    if (!sessionResponse.ok) throw new Error("Could not open the local data catalog");
+    if (!sessionResponse.ok) throw new Error("Could not open market data");
     state.session = validateSession(await sessionResponse.json());
     renderViews(state.session.views);
     renderAnalyses(state.session.blueprints);
@@ -1232,12 +1254,30 @@ async function initialize() {
     elements.runId.title = run.run_id || "";
     elements.observedAt.textContent = formatObservedAt(run.observed_at);
     await startPerspective();
-    const pendingAction = window.ComputeBazaarTerminal?.takePendingAction();
-    if (pendingAction) await handleTerminalAction(pendingAction);
-    else await openInitialSource();
+    pending = window.ComputeBazaarTerminal?.takePendingAction();
+    if (!pending?.action) {
+      await openInitialSource();
+      return;
+    }
+    try {
+      await handleTerminalAction(pending.action);
+      await window.ComputeBazaarTerminal?.completeTerminalOpen(pending.launchId, {
+        message: window.ComputeBazaarTerminal?.actionSuccessMessage(pending.action),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await window.ComputeBazaarTerminal?.completeTerminalOpen(
+        pending.launchId,
+        { error: message },
+      ).catch(() => {});
+      reportCommandError(error);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Terminal unavailable", message, { error: true });
+    setPrintoutState("query.err", message);
+    showResultMeta(false);
+    reportCommandError(error);
   }
 }
 

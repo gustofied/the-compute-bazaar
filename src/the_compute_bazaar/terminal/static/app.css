@@ -325,14 +325,6 @@ button.catalog-item-copy {
   text-overflow: ellipsis;
 }
 
-.view-kind-label {
-  display: block;
-  margin-bottom: 3px;
-  color: var(--accent);
-  font-size: 8px;
-  text-transform: uppercase;
-}
-
 .catalog-item strong {
   color: var(--text);
   font-size: 11px;

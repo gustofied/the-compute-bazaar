@@ -19,6 +19,9 @@ from urllib.request import Request, urlopen
 
 
 DEFAULT_EVALUATION_ROOT = Path("compute-bazaar-bench/jobs/reports")
+PROJECT_ROOT = Path(
+    os.getenv("COMPUTE_BAZAAR_PROJECT_ROOT", Path(__file__).resolve().parents[3])
+).resolve()
 STATE_ROOT = (
     Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache"))
     / "compute-bazaar"
@@ -43,9 +46,8 @@ def launch_terminal(
 ) -> str:
     """Open the native Terminal, falling back to its browser surface."""
     _terminal_runtime()
-    project_root = Path(__file__).resolve().parents[3]
+    project_root = PROJECT_ROOT
     evaluation_root = _resolve_evaluation_root(evaluation_root, project_root)
-    existing = _read_state()
     launch_action = _launch_action(
         initial_view=initial_view,
         initial_query=initial_query,
@@ -53,6 +55,7 @@ def launch_terminal(
         initial_limit=initial_limit,
         initial_perspective=initial_perspective,
     )
+    existing = _read_state()
     if existing and existing.get("mode") == "native":
         native_pid = existing.get("native_pid")
         native_healthy = _process_alive(native_pid) and bool(
@@ -60,8 +63,7 @@ def launch_terminal(
         )
         if native_healthy:
             if launch_action:
-                _open_in_existing_terminal(existing, launch_action)
-                return "Opened in the running Compute Bazaar Terminal."
+                return _open_in_existing_terminal(existing, launch_action)
             return "Compute Bazaar Terminal is already open."
         _terminate_process_group(existing.get("pid"))
         deadline = time.monotonic() + 5
@@ -173,7 +175,7 @@ def run_terminal(
 ) -> None:
     """Run the Terminal server in the foreground."""
     uvicorn, create_terminal_app = _terminal_runtime()
-    project_root = Path(__file__).resolve().parents[3]
+    project_root = PROJECT_ROOT
     evaluation_root = _resolve_evaluation_root(evaluation_root, project_root)
     selected_port = _available_port(port)
     url = f"http://127.0.0.1:{selected_port}"
@@ -278,8 +280,7 @@ def _launch_browser_terminal(
     )
     if existing and _terminal_health(existing.get("url")) == existing.get("pid"):
         if launch_action:
-            _open_in_existing_terminal(existing, launch_action)
-            return "Opened in the running Compute Bazaar Terminal."
+            return _open_in_existing_terminal(existing, launch_action)
         else:
             from webbrowser import open as open_url
 
@@ -424,7 +425,7 @@ def _launch_action(
 def _open_in_existing_terminal(
     state: dict[str, Any],
     action: dict[str, Any],
-) -> None:
+) -> str:
     url = state.get("url")
     control_token = state.get("control_token")
     if not isinstance(url, str) or not isinstance(control_token, str):
@@ -446,10 +447,55 @@ def _open_in_existing_terminal(
                 raise TerminalLifecycleError(
                     "The running Terminal rejected the command"
                 )
+            payload = json.load(response)
     except (OSError, URLError, ValueError) as exc:
         raise TerminalLifecycleError(
             "Could not send the command to the running Terminal"
         ) from exc
+    launch = payload.get("launch") if isinstance(payload, dict) else None
+    launch_id = launch.get("launch_id") if isinstance(launch, dict) else None
+    if not isinstance(launch_id, str):
+        raise TerminalLifecycleError("The running Terminal returned an invalid request")
+
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        status_request = Request(
+            f"{url}/api/terminal/open/{launch_id}",
+            headers={"X-Compute-Bazaar-Control": control_token},
+        )
+        try:
+            with urlopen(status_request, timeout=2) as response:
+                status_payload = json.load(response)
+        except (OSError, URLError, ValueError) as exc:
+            raise TerminalLifecycleError(
+                "Lost contact with the running Terminal"
+            ) from exc
+        status = (
+            status_payload.get("launch")
+            if isinstance(status_payload, dict)
+            else None
+        )
+        if isinstance(status, dict) and status.get("state") == "complete":
+            return str(status.get("message") or "Opened in the Compute Bazaar Terminal.")
+        if isinstance(status, dict) and status.get("state") == "failed":
+            raise TerminalLifecycleError(
+                str(status.get("message") or "The Terminal could not open the request")
+            )
+        time.sleep(0.1)
+    raise TerminalLifecycleError("The Terminal did not finish opening the request")
+
+
+def open_terminal_workspace(workspace: str) -> str:
+    """Move a running Terminal to one of its workspaces."""
+    routes = {"home": "/", "data": "/data", "fleet": "/fleet", "eval": "/eval"}
+    try:
+        href = routes[workspace]
+    except KeyError as exc:
+        raise TerminalLifecycleError(f"Unknown Terminal workspace: {workspace}") from exc
+    state = _read_state()
+    if not state or not _terminal_health(state.get("url")):
+        raise TerminalLifecycleError("Compute Bazaar Terminal is not running")
+    return _open_in_existing_terminal(state, {"kind": "navigate", "href": href})
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
