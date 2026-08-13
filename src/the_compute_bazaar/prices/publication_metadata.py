@@ -39,8 +39,13 @@ def gpu_publication_metadata(
     value = _format_usd(latest["value"]) if latest else "pending"
     observed_at = latest["date"].isoformat() if latest else str(card.get("as_of") or "")
     change = _range_change(rows, range_id)
-    title = f"{selected_family} · {value}/GPU-hour"
-    description = "GPU Price Index"
+    title = (
+        f"{selected_family} GPU Price Index · {value}/GPU-hour · "
+        f"{change['label']}"
+    )
+    description = (
+        f"Observed {_format_observed_date(latest['date'] if latest else None)}."
+    )
     display_line = (
         f"{selected_family} / {GPU_RANGE_PRESENTATION[range_id]['label']} / "
         f"{str(change['label']).lower()} / observed "

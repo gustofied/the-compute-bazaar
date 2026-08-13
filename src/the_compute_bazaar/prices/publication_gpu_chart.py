@@ -43,8 +43,8 @@ def render_gpu_benchmark_publication(
         raise ValueError(f"Unknown GPU publication range: {range_id}")
 
     selected_rows = _visible_gpu_series(cards, range_id).get(selected_family, [])
-    outside = "#ffffff"
-    sleeve = "#dbe5e9"
+    outside = "#efede4"
+    sleeve = "#91aecb"
     paper = "#ffffff"
     ink = "#142027"
     blue = "#315f82"
@@ -56,30 +56,30 @@ def render_gpu_benchmark_publication(
         facecolor=outside,
     )
     canvas = FigureCanvasAgg(figure)
-    price_font = FontProperties(fname=_GEIST_MEDIUM, size=60)
+    price_font = FontProperties(fname=_GEIST_MEDIUM, size=56)
     family_font = FontProperties(fname=_GEIST_SEMIBOLD, size=24)
     figure.patches.extend(
         (
             FancyBboxPatch(
-                (0.020, 0.038),
-                0.960,
-                0.924,
+                (0.018, 0.034),
+                0.964,
+                0.932,
                 boxstyle="round,pad=0,rounding_size=0.008",
                 transform=figure.transFigure,
                 facecolor=sleeve,
                 edgecolor=blue,
-                linewidth=1.25,
+                linewidth=1.35,
                 zorder=-20,
             ),
             FancyBboxPatch(
-                (0.030, 0.057),
-                0.940,
-                0.886,
+                (0.034, 0.064),
+                0.932,
+                0.872,
                 boxstyle="round,pad=0,rounding_size=0.006",
                 transform=figure.transFigure,
                 facecolor=paper,
-                edgecolor="#c3ccce",
-                linewidth=0.75,
+                edgecolor="#315f82",
+                linewidth=0.8,
                 zorder=-10,
             ),
         )
@@ -90,19 +90,19 @@ def render_gpu_benchmark_publication(
         0.060,
         0.855,
         selected_family,
-        color=ink,
+        color=blue,
         fontproperties=family_font,
     )
     figure.text(
         0.060,
-        0.705,
+        0.710,
         _format_usd(latest["value"]) if latest else "PENDING",
         color=ink,
         fontproperties=price_font,
         parse_math=False,
     )
 
-    axes = figure.add_axes((0.030, 0.057, 0.940, 0.593), facecolor=paper)
+    axes = figure.add_axes((0.034, 0.064, 0.932, 0.586), facecolor=paper)
     if selected_rows:
         dates = [row["date"] for row in selected_rows]
         values = [row["value"] for row in selected_rows]
