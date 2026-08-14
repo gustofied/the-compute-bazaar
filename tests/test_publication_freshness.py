@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import unittest
 
-from infra.aws.check_public_market import _validate_publication_manifest
+from infra.aws.check_public_market import (
+    _validate_market_cohort,
+    _validate_publication_manifest,
+)
 from the_compute_bazaar.prices.publication_profiles import (
     GPU_PUBLICATION_RENDER_PROFILE,
     PRIME_PUBLICATION_RENDER_PROFILE,
@@ -11,6 +14,75 @@ from the_compute_bazaar.prices.publication_profiles import (
 
 
 class PublicationFreshnessTest(unittest.TestCase):
+    def test_degraded_optional_provider_is_healthy_with_quorum(self) -> None:
+        market_run = {
+            "providers": [*(f"provider-{index}" for index in range(12)), "optional"],
+            "successful_providers": [f"provider-{index}" for index in range(12)],
+            "failed_providers": ["optional"],
+            "data_quality": {
+                "cohort": {
+                    "status": "degraded",
+                    "minimum_successful_providers": 12,
+                    "required_providers": [],
+                }
+            },
+        }
+
+        providers, failed, status = _validate_market_cohort(
+            market_run,
+            required_providers=set(),
+            forbidden_providers=set(),
+            minimum_provider_count=12,
+        )
+
+        self.assertEqual(len(providers), 12)
+        self.assertEqual(failed, {"optional"})
+        self.assertEqual(status, "degraded")
+
+    def test_publication_policy_cannot_claim_a_one_provider_quorum(self) -> None:
+        market_run = {
+            "providers": [f"provider-{index}" for index in range(12)],
+            "successful_providers": [f"provider-{index}" for index in range(12)],
+            "failed_providers": [],
+            "data_quality": {
+                "cohort": {
+                    "status": "complete",
+                    "minimum_successful_providers": 1,
+                    "required_providers": [],
+                }
+            },
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "publication policy"):
+            _validate_market_cohort(
+                market_run,
+                required_providers=set(),
+                forbidden_providers=set(),
+                minimum_provider_count=12,
+            )
+
+    def test_retired_provider_is_rejected_even_when_its_read_failed(self) -> None:
+        market_run = {
+            "providers": [*(f"provider-{index}" for index in range(12)), "retired"],
+            "successful_providers": [f"provider-{index}" for index in range(12)],
+            "failed_providers": ["retired"],
+            "data_quality": {
+                "cohort": {
+                    "status": "degraded",
+                    "minimum_successful_providers": 12,
+                    "required_providers": [],
+                }
+            },
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "Retired providers"):
+            _validate_market_cohort(
+                market_run,
+                required_providers=set(),
+                forbidden_providers={"retired"},
+                minimum_provider_count=12,
+            )
+
     def test_card_families_have_distinct_content_profiles(self) -> None:
         profiles = {
             GPU_PUBLICATION_RENDER_PROFILE,

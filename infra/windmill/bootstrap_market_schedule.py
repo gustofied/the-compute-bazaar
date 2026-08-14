@@ -13,6 +13,7 @@ from urllib.error import HTTPError
 from the_compute_bazaar.prices.provider_registry import (
     provider_credentials as registered_provider_credentials,
 )
+from the_compute_bazaar.prices.market_run import PUBLIC_MARKET_MINIMUM_PROVIDERS
 
 from client import (
     DEFAULT_BASE_URL,
@@ -237,6 +238,7 @@ def schedule_args(folder: str) -> dict[str, Any]:
         "kafka_password": f"$var:f/{folder}/kafka_password",
         "aws_region": os.getenv("AWS_REGION", "eu-west-3"),
         "topic_prefix": "gpu",
+        "minimum_successful_providers": PUBLIC_MARKET_MINIMUM_PROVIDERS,
         "dry_run": False,
     }
     return args

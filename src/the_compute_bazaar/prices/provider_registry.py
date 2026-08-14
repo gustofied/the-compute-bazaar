@@ -11,7 +11,6 @@ from .provider_ingestion_aggregators import (
     ingest_cloud_gpu_prices,
     ingest_getdeploying,
     ingest_gpus_io,
-    ingest_gridstackhub,
     ingest_shadeform,
 )
 from .provider_ingestion_clouds import (
@@ -142,9 +141,6 @@ PROVIDERS = (
         "spheron", ingest_spheron, "marketplace", "mixed_advertised_price"
     ),
     ProviderDefinition("inference_sh", ingest_inference_sh, "cloud", "published_rate"),
-    ProviderDefinition(
-        "gridstackhub", ingest_gridstackhub, "aggregator", "reference_price"
-    ),
     ProviderDefinition(
         "cloud_gpu_prices",
         ingest_cloud_gpu_prices,

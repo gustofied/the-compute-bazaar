@@ -28,6 +28,7 @@ from .schemas import to_jsonable, utc_now
 
 
 MARKET_RUN_TABLE = "market_runs"
+PUBLIC_MARKET_MINIMUM_PROVIDERS = 12
 
 
 def default_market_providers() -> list[str]:

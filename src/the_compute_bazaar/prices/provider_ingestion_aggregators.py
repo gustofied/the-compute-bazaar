@@ -19,10 +19,6 @@ from .providers.getdeploying import (
     GetDeployingClient,
     normalize_external_offerings as normalize_getdeploying_external_offerings,
 )
-from .providers.gridstackhub import (
-    GridStackHubClient,
-    normalize_reference_prices as normalize_gridstackhub_reference_prices,
-)
 from .providers.shadeform import ShadeformClient, normalize_instance_types
 from .schemas import utc_now
 from .storage import date_partition
@@ -135,61 +131,6 @@ def ingest_shadeform(
         normalized=normalized,
         unknown_gpu_names=unknown_gpu_names,
         snapshot_query={"source_type": "live_multi_cloud_inventory", "available": True},
-        automq_bootstrap_servers=automq_bootstrap_servers,
-        automq_config=automq_config,
-        topic_prefix=topic_prefix,
-        dry_run=dry_run,
-    )
-
-
-def ingest_gridstackhub(
-    *,
-    raw_root: str = "data/raw",
-    lake_root: str = "data/lake",
-    automq_bootstrap_servers: str | None = None,
-    automq_config: dict[str, str] | None = None,
-    topic_prefix: str = "gpu",
-    dry_run: bool = False,
-    run_id: str | None = None,
-    trace_id: str | None = None,
-    api_url: str | None = None,
-) -> IngestResult:
-    provider = "gridstackhub"
-    run_id = run_id or new_run_id(provider)
-    trace_id = trace_id or uuid.uuid4().hex
-    observed_at = utc_now()
-    raw_ref = date_partition(
-        raw_root,
-        provider=provider,
-        observed_date=observed_at.date().isoformat(),
-        run_id=run_id,
-        filename="external-gpu-prices.json",
-    )
-    client = GridStackHubClient(
-        **({"api_url": api_url} if api_url else {}),
-    )
-    fetched = client.fetch_prices()
-    normalized, unknown_gpu_names = normalize_gridstackhub_reference_prices(
-        fetched.rows,
-        as_of=fetched.as_of,
-        fetched_at=observed_at,
-        raw_ref=raw_ref,
-    )
-    return persist_provider_snapshot(
-        provider=provider,
-        run_id=run_id,
-        trace_id=trace_id,
-        observed_at=observed_at,
-        lake_root=lake_root,
-        raw_ref=raw_ref,
-        raw_payload=fetched.raw_payload,
-        raw_offer_count=len(fetched.rows),
-        normalized=normalized,
-        unknown_gpu_names=unknown_gpu_names,
-        snapshot_query={
-            "source_type": "external_gpu_price_reference",
-            "benchmark_eligible": False,
-        },
         automq_bootstrap_servers=automq_bootstrap_servers,
         automq_config=automq_config,
         topic_prefix=topic_prefix,

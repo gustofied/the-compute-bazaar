@@ -1,4 +1,4 @@
-"""Fail when the public GPU market feed is stale or incomplete."""
+"""Fail when the public GPU market feed is stale or unusable."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from the_compute_bazaar.prices.publication_profiles import (
     PRIME_PUBLICATION_RENDER_PROFILE,
     WORKLOAD_PUBLICATION_RENDER_PROFILE,
 )
+from the_compute_bazaar.prices.market_run import PUBLIC_MARKET_MINIMUM_PROVIDERS
 
 GPU_FAMILIES = ("h100", "h200", "b200", "b300")
 
@@ -23,6 +24,11 @@ def main() -> None:
     parser.add_argument("--max-age-hours", type=float, default=2.5)
     parser.add_argument("--require-provider", action="append", default=[])
     parser.add_argument("--forbid-provider", action="append", default=[])
+    parser.add_argument(
+        "--minimum-provider-count",
+        type=int,
+        default=PUBLIC_MARKET_MINIMUM_PROVIDERS,
+    )
     parser.add_argument(
         "--require-renderer-revision",
         help="Fail unless every publication was rendered by this Git revision",
@@ -55,6 +61,7 @@ def main() -> None:
         max_age_hours=args.max_age_hours,
         required_providers=set(args.require_provider),
         forbidden_providers=set(args.forbid_provider),
+        minimum_provider_count=args.minimum_provider_count,
         required_renderer_revision=args.require_renderer_revision,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
@@ -71,6 +78,7 @@ def validate_public_market(
     max_age_hours: float,
     required_providers: set[str],
     forbidden_providers: set[str],
+    minimum_provider_count: int = PUBLIC_MARKET_MINIMUM_PROVIDERS,
     required_renderer_revision: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -81,7 +89,7 @@ def validate_public_market(
         raise RuntimeError(
             f"Public market run is {age_hours:.2f} hours old; limit is {max_age_hours:.2f}"
         )
-    if market_run.get("status") != "success":
+    if market_run.get("status") not in {"success", "warning"}:
         raise RuntimeError(f"Public market run status is {market_run.get('status')!r}")
     worker_revision = str(market_run.get("worker_revision") or "")
     if not worker_revision or worker_revision == "unknown":
@@ -101,22 +109,12 @@ def validate_public_market(
     if portable_lake.get("history_mode") != "complete":
         raise RuntimeError("Portable lake does not contain complete Gold history")
 
-    providers = set(market_run.get("successful_providers") or [])
-    failed = set(market_run.get("failed_providers") or [])
-    missing = required_providers - providers
-    forbidden = forbidden_providers & providers
-    if failed:
-        raise RuntimeError(
-            f"Public market run has failed providers: {', '.join(sorted(failed))}"
-        )
-    if missing:
-        raise RuntimeError(
-            f"Public market run is missing providers: {', '.join(sorted(missing))}"
-        )
-    if forbidden:
-        raise RuntimeError(
-            f"Retired providers are still public: {', '.join(sorted(forbidden))}"
-        )
+    providers, failed, cohort_status = _validate_market_cohort(
+        market_run,
+        required_providers=required_providers,
+        forbidden_providers=forbidden_providers,
+        minimum_provider_count=minimum_provider_count,
+    )
 
     for family, card in cards.items():
         card_time = _timestamp(card.get("as_of"), field=f"{family}.as_of")
@@ -167,6 +165,8 @@ def validate_public_market(
         "observed_at": observed_at.isoformat(),
         "age_hours": round(age_hours, 3),
         "provider_count": len(providers),
+        "failed_providers": sorted(failed),
+        "cohort_status": cohort_status,
         "worker_revision": worker_revision,
         "cards": sorted(cards),
         "gpu_publication_profile": gpu_publications.get("render_profile"),
@@ -179,6 +179,50 @@ def validate_public_market(
         },
         "status": "ok",
     }
+
+
+def _validate_market_cohort(
+    market_run: dict[str, Any],
+    *,
+    required_providers: set[str],
+    forbidden_providers: set[str],
+    minimum_provider_count: int,
+) -> tuple[set[str], set[str], str]:
+    providers = set(market_run.get("successful_providers") or [])
+    failed = set(market_run.get("failed_providers") or [])
+    declared = set(market_run.get("providers") or [])
+    quality = market_run.get("data_quality")
+    cohort = quality.get("cohort") if isinstance(quality, dict) else None
+    if not isinstance(cohort, dict):
+        raise RuntimeError("Public market run is missing its provider cohort")
+
+    cohort_status = str(cohort.get("status") or "")
+    if cohort_status not in {"complete", "degraded"}:
+        raise RuntimeError(f"Public market cohort status is {cohort_status!r}")
+    published_minimum = int(cohort.get("minimum_successful_providers") or 0)
+    if published_minimum < minimum_provider_count:
+        raise RuntimeError(
+            f"Public market publication policy requires {published_minimum} providers; "
+            f"minimum is {minimum_provider_count}"
+        )
+    if len(providers) < minimum_provider_count:
+        raise RuntimeError(
+            f"Public market run has {len(providers)} providers; "
+            f"minimum is {minimum_provider_count}"
+        )
+
+    manifest_required = set(cohort.get("required_providers") or [])
+    missing = (required_providers | manifest_required) - providers
+    if missing:
+        raise RuntimeError(
+            f"Public market run is missing providers: {', '.join(sorted(missing))}"
+        )
+    forbidden = forbidden_providers & declared
+    if forbidden:
+        raise RuntimeError(
+            f"Retired providers are still public: {', '.join(sorted(forbidden))}"
+        )
+    return providers, failed, cohort_status
 
 
 def _validate_publication_manifest(

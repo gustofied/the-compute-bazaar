@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from the_compute_bazaar.prices.market_run import (
+    PUBLIC_MARKET_MINIMUM_PROVIDERS,
     default_market_providers,
     run_market_hourly,
 )
@@ -33,7 +34,7 @@ def main(
     topic_prefix: str = "gpu",
     providers: str | None = None,
     required_providers: str | None = None,
-    minimum_successful_providers: int = 1,
+    minimum_successful_providers: int = PUBLIC_MARKET_MINIMUM_PROVIDERS,
     dry_run: bool = False,
     run_id: str | None = None,
 ) -> dict[str, object]:
