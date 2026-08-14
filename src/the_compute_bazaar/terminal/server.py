@@ -410,7 +410,11 @@ def create_terminal_app(
             "status": "ok",
             "pid": os.getpid(),
             "project_root": str(project_root),
-            "run_id": run.get("source_run_id") or run.get("run_id"),
+            "run_id": (
+                run.get("market_generation_id")
+                or run.get("source_run_id")
+                or run.get("run_id")
+            ),
             "eval_available": eval_workspace.available,
             "fleet_hosts": len(fleet_workspace.service.hosts()),
         }

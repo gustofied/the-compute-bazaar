@@ -788,7 +788,9 @@ def fleet_plan(
     observation_id: Annotated[str, typer.Argument()],
     name: Annotated[str, typer.Option(help="Machine name.")],
     ssh_key_id: Annotated[str, typer.Option(help="Sesterce SSH key ID.")],
-    os_name: Annotated[str | None, typer.Option("--os", help="Sesterce VM image.")] = None,
+    os_name: Annotated[
+        str | None, typer.Option("--os", help="Sesterce VM image.")
+    ] = None,
 ) -> None:
     """Recheck one Sesterce observation and show the create request."""
     try:
@@ -813,11 +815,17 @@ def fleet_launch(
         float,
         typer.Option(help="Refuse the launch above this total hourly price."),
     ],
-    os_name: Annotated[str | None, typer.Option("--os", help="Sesterce VM image.")] = None,
+    os_name: Annotated[
+        str | None, typer.Option("--os", help="Sesterce VM image.")
+    ] = None,
     wait_seconds: Annotated[
         int,
         typer.Option(min=0, help="Wait for an SSH endpoint, in seconds."),
     ] = 180,
+    runtime_minutes: Annotated[
+        int,
+        typer.Option(min=5, max=120, help="Fleet runtime budget, in minutes."),
+    ] = 30,
     confirm: Annotated[
         bool,
         typer.Option("--confirm", help="Create the paid Sesterce instance."),
@@ -833,6 +841,7 @@ def fleet_launch(
             confirm=confirm,
             os_name=os_name,
             wait_seconds=wait_seconds,
+            runtime_minutes=runtime_minutes,
         )
     except (KeyError, RuntimeError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -927,24 +936,28 @@ def fleet_refresh(
 ) -> None:
     """Refresh a provisioned host and its SSH endpoint."""
     from .fleet import FleetRegistry
+    from .operations import OperationalLedger
     from .provider_execution import LaunchExecutionError
 
     registry = FleetRegistry()
+    ledger = OperationalLedger(registry=registry)
     try:
         machine = registry.get(host_id)
-        if machine.source == "sesterce":
+        source = str(ledger.allocation_for_machine(machine)["source"])
+        if source == "sesterce":
             refreshed = _sesterce_launcher(ctx).refresh(host_id)
-        else:
+        elif source == "runpod":
             from .offers import OfferService
-            from .operations import OperationalLedger
             from .provider_execution import RunpodExecutor
 
             service = OfferService.from_environment()
             refreshed = RunpodExecutor(
                 api_key=service.runpod_api_key,
                 registry=registry,
-                ledger=OperationalLedger(),
+                ledger=ledger,
             ).resolve_ssh(machine)
+        else:
+            raise ValueError(f"Fleet refresh is not implemented for {source}")
     except (KeyError, LaunchExecutionError, RuntimeError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
     _emit(
@@ -989,9 +1002,11 @@ def fleet_terminate(
     from .provider_execution import LaunchExecutionError, RunpodExecutor
 
     registry = FleetRegistry()
+    ledger = OperationalLedger(registry=registry)
     try:
         machine = registry.get(host_id)
-        if machine.source == "sesterce":
+        source = str(ledger.allocation_for_machine(machine)["source"])
+        if source == "sesterce":
             terminated = _sesterce_launcher(ctx).terminate(host_id, confirm=confirm)
             _emit(
                 ctx,
@@ -1003,11 +1018,13 @@ def fleet_terminate(
                 include_source=False,
             )
             return
+        if source != "runpod":
+            raise ValueError(f"Fleet termination is not implemented for {source}")
         service = OfferService.from_environment()
         terminated = RunpodExecutor(
             api_key=service.runpod_api_key,
             registry=registry,
-            ledger=OperationalLedger(),
+            ledger=ledger,
         ).terminate(machine, confirm=confirm)
     except (KeyError, LaunchExecutionError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -1626,7 +1643,12 @@ def _compact_cli_run(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(run, dict):
         result["run"] = {
             field: run.get(field)
-            for field in ("source_run_id", "run_id", "observed_at")
+            for field in (
+                "market_generation_id",
+                "source_run_id",
+                "run_id",
+                "observed_at",
+            )
             if run.get(field) is not None
         }
     return result

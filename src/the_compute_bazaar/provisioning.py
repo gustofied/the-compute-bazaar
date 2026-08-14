@@ -163,12 +163,16 @@ class Allocation(BaseModel):
     allocation_id: str
     request_id: str
     successful_attempt_id: str
-    acquisition_connector: str
-    capacity_provider: str
-    provider_resource_id: str
+    candidate_observation_id: str | None = None
+    preflight_observation_id: str
+    source: str
+    intermediary: str
+    operator: str | None = None
+    offer_id: str
+    source_resource_id: str
     state: str
-    realized_price_usd_gpu_hr: float | None = Field(default=None, gt=0)
-    realized_price_usd_instance_hr: float | None = Field(default=None, gt=0)
+    price_usd_gpu_hr: float = Field(gt=0)
+    price_usd_instance_hr: float = Field(gt=0)
     created_at: datetime
     terminate_at: datetime | None = None
     terminated_at: datetime | None = None
@@ -328,7 +332,11 @@ class LaunchPlanner:
         credentials_configured: bool,
         checks: tuple[str, ...],
     ) -> LaunchPlan:
-        if not offer.observation_id or not offer.batch_id or not offer.market_product_key:
+        if (
+            not offer.observation_id
+            or not offer.batch_id
+            or not offer.market_product_key
+        ):
             raise ValueError("Preflight observation has no lineage")
         identity = json.dumps(
             {

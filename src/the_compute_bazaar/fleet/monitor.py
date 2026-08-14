@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import Event, Lock, Thread
@@ -27,9 +28,16 @@ class FleetMonitorState:
 
 
 class FleetMonitor:
-    def __init__(self, service: FleetService, *, interval_seconds: float = 5) -> None:
+    def __init__(
+        self,
+        service: FleetService,
+        *,
+        interval_seconds: float = 5,
+        workload_refresher: Callable[[str], object] | None = None,
+    ) -> None:
         self.service = service
         self.interval_seconds = max(1.0, interval_seconds)
+        self.workload_refresher = workload_refresher
         self._states: dict[str, FleetMonitorState] = {}
         self._lock = Lock()
         self._stop = Event()
@@ -63,7 +71,7 @@ class FleetMonitor:
         workers = min(8, len(hosts))
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
-                executor.submit(self.service.monitor, machine.host_id): machine.host_id
+                executor.submit(self._poll_host, machine.host_id): machine.host_id
                 for machine in hosts
             }
             for future in as_completed(futures):
@@ -76,6 +84,12 @@ class FleetMonitor:
                     self._record_failure(host_id, str(exc))
                 else:
                     self._record_success(host_id, inspection, health)
+
+    def _poll_host(self, host_id: str) -> tuple[FleetInspection, FleetHealthResult]:
+        result = self.service.monitor(host_id)
+        if self.workload_refresher:
+            self.workload_refresher(host_id)
+        return result
 
     def _run(self) -> None:
         while not self._stop.is_set():

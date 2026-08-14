@@ -292,9 +292,15 @@ class FleetTest(unittest.TestCase):
                     known_hosts_file=root / "known_hosts",
                 ),
             )
-            monitor = FleetMonitor(service, interval_seconds=1)
+            refreshed: list[str] = []
+            monitor = FleetMonitor(
+                service,
+                interval_seconds=1,
+                workload_refresher=refreshed.append,
+            )
 
             monitor.poll_once()
+            self.assertEqual(refreshed, [selected.host_id])
             first = monitor.state(selected.host_id)
             self.assertIsNotNone(first)
             assert first is not None

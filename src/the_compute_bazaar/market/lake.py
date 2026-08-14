@@ -46,12 +46,12 @@ class MarketLake:
             "manifest.json",
         )
 
-    def market_manifest_ref(self, *, day: date, source_run_id: str) -> str:
+    def market_manifest_ref(self, *, day: date, generation_id: str) -> str:
         return self._ref(
             "_manifests",
             "market",
             f"date={day.isoformat()}",
-            f"source_run_id={source_run_id}.json",
+            f"generation_id={generation_id}.json",
         )
 
     def latest_market_manifest_ref(self) -> str:

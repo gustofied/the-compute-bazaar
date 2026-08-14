@@ -7,39 +7,54 @@ from pathlib import Path
 from typing import Any
 
 from ..contracts import MARKET_LAKE_CONTRACT
+from .contracts import stable_id
 from .lake import MarketLake
 from .pipeline import MarketRunResult
 
 
-def publish_generation(lake: MarketLake, result: MarketRunResult) -> dict[str, Any]:
-    if result.run.status != "complete" or not result.run.silver_ref:
-        raise RuntimeError("Only complete market runs can be published")
+def publish_generation(
+    lake: MarketLake,
+    *results: MarketRunResult,
+) -> dict[str, Any]:
+    if not results:
+        raise ValueError("A market generation needs at least one source run")
+    runs = sorted((result.run for result in results), key=lambda run: run.source)
+    if any(run.status != "complete" or not run.silver_ref for run in runs):
+        raise RuntimeError("Only complete source runs can be published")
+    sources = [run.source for run in runs]
+    if len(set(sources)) != len(sources):
+        raise ValueError("A market generation accepts one run per source")
     if "://" in lake.root:
         raise ValueError("Portable generation indexes currently require a local lake")
 
     root = Path(lake.root).expanduser().resolve()
-    run = result.run
-    day = run.observed_at.date()
+    observed_at = max(run.observed_at for run in runs)
+    generation_id = (
+        f"market-{observed_at:%Y%m%dT%H%M%S}-"
+        f"{stable_id(*(f'{run.source}:{run.source_run_id}' for run in runs), length=10)}"
+    )
+    day = observed_at.date()
     immutable_manifest_ref = lake.market_manifest_ref(
         day=day,
-        source_run_id=run.source_run_id,
+        generation_id=generation_id,
     )
     manifest = {
         "contract": MARKET_LAKE_CONTRACT,
         "table": "market_snapshot",
         "catalog_kind": "market",
-        "source_run_id": run.source_run_id,
-        "observed_at": run.observed_at,
+        "market_generation_id": generation_id,
+        "observed_at": observed_at,
         "observed_date": day.isoformat(),
         "ref_base": "lake_root",
-        "provider_scope": [run.source],
+        "source_scope": sources,
+        "source_runs": {run.source: run.source_run_id for run in runs},
         "source_manifest_refs": {
-            run.source: _relative(root, run.manifest_ref),
+            run.source: _relative(root, run.manifest_ref) for run in runs
         },
         "source_normalized_refs": {
-            run.source: _relative(root, run.silver_ref),
+            run.source: _relative(root, run.silver_ref) for run in runs
         },
-        "silver_row_counts": {"gpu_offers": run.silver_row_count},
+        "silver_row_counts": {"gpu_offers": sum(run.silver_row_count for run in runs)},
         "manifest_ref": _relative(root, immutable_manifest_ref),
     }
     lake.write_json(immutable_manifest_ref, manifest)
@@ -47,9 +62,10 @@ def publish_generation(lake: MarketLake, result: MarketRunResult) -> dict[str, A
 
     portable = {
         "contract": MARKET_LAKE_CONTRACT,
-        "source_run_id": run.source_run_id,
-        "observed_at": run.observed_at,
-        "provider_scope": [run.source],
+        "market_generation_id": generation_id,
+        "observed_at": observed_at,
+        "source_scope": sources,
+        "source_runs": manifest["source_runs"],
         "history_mode": "snapshot",
         "private_evidence_removed": False,
     }
@@ -58,10 +74,12 @@ def publish_generation(lake: MarketLake, result: MarketRunResult) -> dict[str, A
 
     files = _inventory(
         root,
-        refs=(
-            run.raw_ref,
-            run.silver_ref,
-            run.manifest_ref,
+        refs=tuple(
+            ref
+            for run in runs
+            for ref in (run.raw_ref, run.silver_ref, run.manifest_ref)
+        )
+        + (
             immutable_manifest_ref,
             lake.latest_market_manifest_ref(),
             portable_ref,
@@ -75,10 +93,10 @@ def publish_generation(lake: MarketLake, result: MarketRunResult) -> dict[str, A
     lake.write_json(str(root / "index.json"), index)
     return {
         "root": str(root),
-        "source_run_id": run.source_run_id,
-        "observed_at": run.observed_at,
-        "providers": [run.source],
-        "silver_rows": run.silver_row_count,
+        "market_generation_id": generation_id,
+        "observed_at": observed_at,
+        "sources": sources,
+        "silver_rows": sum(run.silver_row_count for run in runs),
         "tables": ["silver.gpu_offers"],
     }
 

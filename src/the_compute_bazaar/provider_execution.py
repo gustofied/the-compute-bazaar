@@ -171,9 +171,7 @@ class RunpodExecutor:
             if not pod_id:
                 self.ledger.complete_provisioning_attempt(
                     attempt.attempt_id,
-                    state=(
-                        "failed" if _create_was_rejected(payload) else "uncertain"
-                    ),
+                    state=("failed" if _create_was_rejected(payload) else "uncertain"),
                     error=str(exc),
                 )
                 raise
@@ -362,15 +360,13 @@ class RunpodExecutor:
             allocation = self.ledger.allocation_for_machine(machine)
         except KeyError as exc:
             raise LaunchExecutionError(str(exc)) from exc
-        connector = str(allocation["acquisition_connector"])
+        connector = str(allocation["source"])
         if connector != "runpod":
             raise LaunchExecutionError(
                 f"SSH resolution is not implemented for {connector}"
             )
-        provider_resource_id = str(allocation["provider_resource_id"])
-        payload = self._run_json(
-            [self.binary, "ssh", "info", provider_resource_id]
-        )
+        provider_resource_id = str(allocation["source_resource_id"])
+        payload = self._run_json([self.binary, "ssh", "info", provider_resource_id])
         resolved = machine.model_copy(
             update={
                 "state": "running",
@@ -398,13 +394,13 @@ class RunpodExecutor:
             allocation = self.ledger.allocation_for_machine(machine)
         except KeyError as exc:
             raise LaunchExecutionError(str(exc)) from exc
-        connector = str(allocation["acquisition_connector"])
+        connector = str(allocation["source"])
         if connector != "runpod":
             raise LaunchExecutionError(
                 f"Fleet termination is not implemented for {connector}"
             )
         self._run_json(
-            [self.binary, "pod", "delete", str(allocation["provider_resource_id"])]
+            [self.binary, "pod", "delete", str(allocation["source_resource_id"])]
         )
         terminated_at = datetime.now(UTC)
         terminated = machine.model_copy(update={"state": "terminated", "ssh": None})
@@ -427,9 +423,12 @@ class RunpodExecutor:
     ) -> tuple[Allocation, FleetMachine]:
         if self.ledger is None:
             raise LaunchExecutionError("Fleet operation requires the private ledger")
-        allocation_id = "allocation-" + hashlib.sha256(
-            f"{request.request_id}\x1f{provider_resource_id}".encode()
-        ).hexdigest()[:16]
+        allocation_id = (
+            "allocation-"
+            + hashlib.sha256(
+                f"{request.request_id}\x1f{provider_resource_id}".encode()
+            ).hexdigest()[:16]
+        )
         state = _machine_state(
             _find_text(
                 provider_payload,
@@ -442,12 +441,19 @@ class RunpodExecutor:
             allocation_id=allocation_id,
             request_id=request.request_id,
             successful_attempt_id=attempt_id,
-            acquisition_connector=request.acquisition_connector,
-            capacity_provider=request.capacity_provider,
-            provider_resource_id=provider_resource_id,
+            candidate_observation_id=request.candidate_observation_id,
+            preflight_observation_id=request.preflight_observation_id,
+            source=request.acquisition_connector,
+            intermediary=request.acquisition_connector,
+            operator=request.capacity_provider,
+            offer_id=request.source_offer_id,
+            source_resource_id=provider_resource_id,
             state=state,
+            price_usd_gpu_hr=request.selected_price_usd_gpu_hr,
+            price_usd_instance_hr=request.selected_price_usd_instance_hr,
             created_at=request.created_at,
-            terminate_at=request.created_at + timedelta(minutes=request.runtime_minutes),
+            terminate_at=request.created_at
+            + timedelta(minutes=request.runtime_minutes),
             updated_at=datetime.now(UTC),
         )
         machine = FleetMachine(

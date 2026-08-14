@@ -331,15 +331,12 @@ with benchmark_at_launch as (
   select
     allocation.*,
     request.plan_id,
-    request.candidate_observation_id,
-    request.preflight_observation_id,
     request.preflight_batch_id,
-    request.source_offer_id,
     request.market_product_key,
     request.gpu_model,
     request.gpu_count,
-    request.selected_price_usd_gpu_hr,
-    request.selected_price_usd_instance_hr,
+    allocation.price_usd_gpu_hr as selected_price_usd_gpu_hr,
+    allocation.price_usd_instance_hr as selected_price_usd_instance_hr,
     request.expected_max_cost_usd,
     preflight.observation_purpose as selected_observation_purpose,
     preflight.observation_resolution as selected_observation_resolution,
@@ -360,10 +357,10 @@ with benchmark_at_launch as (
     ) as benchmark_rank
   from fleet.allocations allocation
   join fleet.provisioning_requests request using (request_id)
-  join silver.offer_observations preflight
-    on preflight.observation_id = request.preflight_observation_id
+  left join silver.offer_observations preflight
+    on preflight.observation_id = allocation.preflight_observation_id
   left join silver.offer_observations candidate
-    on candidate.observation_id = request.candidate_observation_id
+    on candidate.observation_id = allocation.candidate_observation_id
   left join fleet.nodes node using (allocation_id)
   left join gold.fact_gpu_price_index_history benchmark
     on benchmark.benchmark_family_id = split_part(request.gpu_model, '_', 1)
@@ -408,14 +405,15 @@ select
   allocation.host_id,
   allocation.request_id,
   allocation.successful_attempt_id,
-  allocation.acquisition_connector,
-  allocation.capacity_provider,
-  allocation.provider_resource_id,
+  allocation.source,
+  allocation.intermediary,
+  allocation.operator,
+  allocation.offer_id,
+  allocation.source_resource_id,
   allocation.plan_id,
   allocation.candidate_observation_id,
   allocation.preflight_observation_id,
   allocation.preflight_batch_id,
-  allocation.source_offer_id,
   allocation.market_product_key,
   allocation.name,
   allocation.state as allocation_state,
@@ -438,8 +436,8 @@ select
       )
     else null
   end as preflight_price_change_pct,
-  allocation.realized_price_usd_gpu_hr,
-  allocation.realized_price_usd_instance_hr,
+  allocation.price_usd_gpu_hr,
+  allocation.price_usd_instance_hr,
   allocation.benchmark_usd_gpu_hr,
   case
     when allocation.benchmark_usd_gpu_hr > 0 then

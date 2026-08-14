@@ -131,9 +131,35 @@ function machineGpuLabel(machine, payload = null) {
 
 function machineSubtitle(machine, payload = null) {
   const parts = [machineGpuLabel(machine, payload)];
-  const hourlyPrice = machine.ask_usd_hr ?? machine.price_usd_instance_hr;
-  if (hourlyPrice !== null && hourlyPrice !== undefined && Number.isFinite(Number(hourlyPrice))) {
-    parts.push(`$${number(hourlyPrice, 2)}/hr`);
+  const gpuPrice = optionalNumber(machine.price_usd_gpu_hr);
+  const instancePrice = optionalNumber(machine.price_usd_instance_hr);
+  if (Number.isFinite(gpuPrice)) parts.push(`$${number(gpuPrice, 2)}/GPU-h`);
+  if (Number.isFinite(instancePrice) && (!Number.isFinite(gpuPrice) || Math.abs(instancePrice - gpuPrice) > 0.0001)) {
+    parts.push(`$${number(instancePrice, 2)}/h`);
+  }
+  return parts.join("  |  ");
+}
+
+function optionalNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function lineageLabel(machine) {
+  const parts = [];
+  if (machine.operator) {
+    parts.push(machine.operator);
+  } else if (machine.intermediary || machine.source) {
+    parts.push(machine.intermediary || machine.source, "OPERATOR —");
+  } else {
+    return "ATTACHED";
+  }
+  if (machine.intermediary && machine.intermediary !== machine.operator) {
+    parts.push(`VIA ${machine.intermediary}`);
+  }
+  if (machine.source && machine.source !== machine.intermediary && machine.source !== machine.operator) {
+    parts.push(`SOURCE ${machine.source}`);
   }
   return parts.join("  |  ");
 }
@@ -300,8 +326,8 @@ function renderSnapshot(payload) {
   elements.view.hidden = false;
   elements.name.textContent = machine.name;
   elements.subtitle.textContent = machineSubtitle(machine, payload);
-  elements.provider.textContent = [machine.provider, payload.monitor?.status === "stale" ? "STALE" : stateLabel(machine.state)].filter(Boolean).join("  |  ");
-  elements.readiness.textContent = stateLabel(readiness);
+  elements.provider.textContent = [lineageLabel(machine), payload.monitor?.status === "stale" ? "STALE" : stateLabel(machine.state)].filter(Boolean).join("  |  ");
+  elements.readiness.textContent = `VERIFY ${stateLabel(readiness)}`;
   elements.readiness.className = `readiness ${readiness}`;
   elements.termination.textContent = countdown(machine);
 
@@ -320,7 +346,9 @@ function renderSnapshot(payload) {
   elements.gpuMeta.textContent = [`${gpus.length} GPU`, drivers.length ? `driver ${drivers.join(", ")}` : null, system.driver_cuda_version ? `CUDA ${system.driver_cuda_version}` : null].filter(Boolean).join("  |  ");
   elements.gpuList.innerHTML = gpus.map(gpuCard).join("");
 
-  const visibleChecks = checks.length ? checks : (payload.health_checks ?? []);
+  const checkRank = { fail: 0, warn: 1, pass: 2 };
+  const visibleChecks = [...(checks.length ? checks : (payload.health_checks ?? []))]
+    .sort((left, right) => (checkRank[left.status] ?? 3) - (checkRank[right.status] ?? 3));
   elements.checkSummary.textContent = `${visibleChecks.filter((check) => check.status === "pass").length} / ${visibleChecks.length}`;
   elements.checks.innerHTML = visibleChecks.map((check) => `
     <div class="check-row ${escapeHtml(check.status)}">
@@ -336,7 +364,7 @@ function renderFailure(host, message) {
   elements.view.hidden = false;
   elements.name.textContent = host.name;
   elements.subtitle.textContent = machineGpuLabel(host);
-  elements.provider.textContent = host.provider;
+  elements.provider.textContent = lineageLabel(host);
   elements.readiness.textContent = "SSH ERR";
   elements.readiness.className = "readiness not_ready";
   elements.termination.textContent = countdown(host);
@@ -361,7 +389,7 @@ function overviewRow(host) {
   const status = state.errors.has(host.host_id) ? "fault" : payload?.monitor?.status === "stale" ? "stale" : payload?.health ?? host.state;
   return `
     <button class="overview-row ${escapeHtml(status)}" type="button" role="row" data-overview-host="${escapeHtml(host.host_id)}" ${host.ssh_ready && host.state === "running" ? "" : "disabled"}>
-      <span class="col-host" role="cell"><strong>${escapeHtml(host.name)}</strong><small>${escapeHtml(host.provider)}</small></span>
+      <span class="col-host" role="cell"><strong>${escapeHtml(host.name)}</strong><small>${escapeHtml(lineageLabel(host))}</small></span>
       <span class="col-state overview-status" role="cell">${escapeHtml(stateLabel(status))}</span>
       <span class="col-gpu" role="cell">${escapeHtml(machineGpuLabel(host, payload))}</span>
       <span class="col-load" role="cell">${gpu ? `${number(gpu.utilization)}%` : "—"}</span>

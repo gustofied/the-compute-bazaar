@@ -62,6 +62,17 @@ class MarketPipeline:
             source_run_id
             or f"{source.name}-{observed_at:%Y%m%dT%H%M%S}-{stable_id(observed_at, length=8)}"
         )
+        read = source.read(observed_at=observed_at)
+        return self.record(source, read, source_run_id=source_run_id)
+
+    def record(
+        self,
+        source: MarketSource,
+        read: SourceRead,
+        *,
+        source_run_id: str,
+    ) -> MarketRunResult:
+        observed_at = read.observed_at
         raw_ref = self.lake.bronze_ref(
             source=source.name,
             day=observed_at.date(),
@@ -72,21 +83,18 @@ class MarketPipeline:
             day=observed_at.date(),
             source_run_id=source_run_id,
         )
-        read = source.read(observed_at=observed_at)
         self.lake.write_json(raw_ref, read.bronze_record())
         normalized = source.normalize(read, source_run_id=source_run_id)
-        silver_ref = None
-        if normalized.offers:
-            silver_ref = self.lake.silver_ref(
-                source=source.name,
-                day=observed_at.date(),
-                source_run_id=source_run_id,
-            )
-            self.lake.write_parquet(
-                silver_ref,
-                (offer.row() for offer in normalized.offers),
-                schema=GPU_OFFER_SCHEMA,
-            )
+        silver_ref = self.lake.silver_ref(
+            source=source.name,
+            day=observed_at.date(),
+            source_run_id=source_run_id,
+        )
+        self.lake.write_parquet(
+            silver_ref,
+            (offer.row() for offer in normalized.offers),
+            schema=GPU_OFFER_SCHEMA,
+        )
         source_count = len(read.payload) if isinstance(read.payload, list) else 0
         run = MarketRun(
             source_run_id=source_run_id,

@@ -474,16 +474,32 @@ def _launch_payload(
 
 def _run_identity(catalog: Any) -> dict[str, Any]:
     manifest = catalog.manifest
-    key = "source_run_id" if manifest.get("source_run_id") else "run_id"
+    key = next(
+        (
+            key
+            for key in ("market_generation_id", "source_run_id", "run_id")
+            if manifest.get(key)
+        ),
+        "run_id",
+    )
     return {key: manifest.get(key), "observed_at": manifest.get("observed_at")}
 
 
 def _manifest_identity(manifest: dict[str, Any]) -> str | None:
-    return manifest.get("source_run_id") or manifest.get("run_id")
+    return (
+        manifest.get("market_generation_id")
+        or manifest.get("source_run_id")
+        or manifest.get("run_id")
+    )
 
 
 def _run_id(run: dict[str, Any]) -> str:
-    return str(run.get("source_run_id") or run.get("run_id") or "")
+    return str(
+        run.get("market_generation_id")
+        or run.get("source_run_id")
+        or run.get("run_id")
+        or ""
+    )
 
 
 def _arrow_stream(table: pa.Table) -> bytes:

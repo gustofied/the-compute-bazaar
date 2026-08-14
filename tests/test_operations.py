@@ -26,6 +26,74 @@ from tests.test_offers import FakeRunpodClient
 
 
 class OperationalLedgerTest(unittest.TestCase):
+    def test_legacy_allocation_keeps_market_lineage(self) -> None:
+        with closing(sqlite3.connect(":memory:")) as connection:
+            connection.row_factory = sqlite3.Row
+            connection.execute(
+                """
+create table provisioning_requests (
+  request_id text primary key,
+  candidate_observation_id text,
+  preflight_observation_id text not null,
+  source_offer_id text not null,
+  acquisition_connector text not null,
+  capacity_provider text not null,
+  selected_price_usd_gpu_hr real not null,
+  selected_price_usd_instance_hr real not null
+)
+"""
+            )
+            connection.execute(
+                """
+insert into provisioning_requests values (
+  'request-1', 'candidate-1', 'preflight-1', 'offer-1',
+  'runpod', 'operator-1', 2.5, 5.0
+)
+"""
+            )
+            connection.execute(
+                """
+create table allocations (
+  allocation_id text primary key,
+  request_id text not null,
+  successful_attempt_id text not null,
+  acquisition_connector text not null,
+  capacity_provider text not null,
+  provider_resource_id text not null,
+  state text not null,
+  realized_price_usd_gpu_hr real,
+  realized_price_usd_instance_hr real,
+  created_at text not null,
+  terminate_at text,
+  terminated_at text,
+  updated_at text not null
+)
+"""
+            )
+            connection.execute(
+                """
+insert into allocations values (
+  'allocation-1', 'request-1', 'attempt-1', 'runpod', 'operator-1',
+  'pod-1', 'running', null, null, '2026-08-14T00:00:00+00:00',
+  null, null, '2026-08-14T00:00:00+00:00'
+)
+"""
+            )
+
+            operations._migrate_allocations(connection)
+            row = connection.execute("select * from allocations").fetchone()
+            assert row is not None
+            allocation = dict(row)
+
+        self.assertEqual(allocation["candidate_observation_id"], "candidate-1")
+        self.assertEqual(allocation["preflight_observation_id"], "preflight-1")
+        self.assertEqual(allocation["source"], "runpod")
+        self.assertEqual(allocation["operator"], "operator-1")
+        self.assertEqual(allocation["offer_id"], "offer-1")
+        self.assertEqual(allocation["source_resource_id"], "pod-1")
+        self.assertEqual(allocation["price_usd_gpu_hr"], 2.5)
+        self.assertEqual(allocation["price_usd_instance_hr"], 5.0)
+
     def test_schema_is_initialized_once_per_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "operations.sqlite3"
@@ -79,7 +147,7 @@ create table offer_observations (
                 version = connection.execute("pragma user_version").fetchone()[0]
             self.assertIn("market_product_key", columns)
             self.assertIn("request_id", allocation_columns)
-            self.assertEqual(version, 7)
+            self.assertEqual(version, 8)
 
     def test_current_version_rebuilds_legacy_capacity_verifications(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -114,7 +182,7 @@ create table capacity_verifications (
                 version = connection.execute("pragma user_version").fetchone()[0]
             self.assertIn("expected_gpu_model", columns)
             self.assertFalse(columns["expected_gpu_count"])
-            self.assertEqual(version, 7)
+            self.assertEqual(version, 8)
 
     def test_market_selection_and_fleet_delivery_join_in_datafusion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -199,9 +267,7 @@ create table capacity_verifications (
             ledger.record_telemetry(inspection)
             telemetry = ledger.telemetry(selected.host_id)
             self.assertEqual(telemetry[0]["host_id"], selected.host_id)
-            self.assertEqual(
-                telemetry[0]["observed_at"], "2026-08-10T12:05:00+00:00"
-            )
+            self.assertEqual(telemetry[0]["observed_at"], "2026-08-10T12:05:00+00:00")
 
             before_rows = _query_delivery_facts(ledger)
             self.assertEqual(len(before_rows), 2)

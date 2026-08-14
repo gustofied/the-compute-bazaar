@@ -336,7 +336,9 @@ class OfferServiceTest(unittest.TestCase):
             ) -> subprocess.CompletedProcess[str]:
                 calls.append(command)
                 if command[1:3] == ["pod", "create"]:
-                    attempts = ledger.arrow_tables()["provisioning_attempts"].to_pylist()
+                    attempts = ledger.arrow_tables()[
+                        "provisioning_attempts"
+                    ].to_pylist()
                     self.assertEqual(attempts[0]["state"], "pending")
                     output = {"id": "pod-123", "desiredStatus": "RUNNING"}
                 else:
@@ -454,12 +456,16 @@ class OfferServiceTest(unittest.TestCase):
             runpod_client=FakeRunpodClient(),
         )
         offer = service.list_offers(providers=["runpod"]).observations[0]
-        plan = LaunchPlanner(service).plan(
-            offer.source_offer_id,
-            name="bazaar-h100-01",
-            image="runpod/pytorch:latest",
-        ).model_copy(
-            update={"observed_at": datetime.now(UTC) - timedelta(minutes=2)}
+        plan = (
+            LaunchPlanner(service)
+            .plan(
+                offer.source_offer_id,
+                name="bazaar-h100-01",
+                image="runpod/pytorch:latest",
+            )
+            .model_copy(
+                update={"observed_at": datetime.now(UTC) - timedelta(minutes=2)}
+            )
         )
 
         with self.assertRaisesRegex(LaunchExecutionError, "plan it again"):
@@ -550,7 +556,9 @@ class OfferServiceTest(unittest.TestCase):
             def rejected(
                 command: list[str], **_: object
             ) -> subprocess.CompletedProcess[str]:
-                stderr = "note: only the first data center is used\n" + json.dumps(error)
+                stderr = "note: only the first data center is used\n" + json.dumps(
+                    error
+                )
                 return subprocess.CompletedProcess(command, 1, "", stderr)
 
             with self.assertRaises(LaunchExecutionError):
@@ -609,9 +617,9 @@ class OfferServiceTest(unittest.TestCase):
                     max_hourly_usd=3,
                     confirm_spend=True,
                 )
-            attempt_id = ledger.arrow_tables()["provisioning_attempts"].to_pylist()[
-                0
-            ]["attempt_id"]
+            attempt_id = ledger.arrow_tables()["provisioning_attempts"].to_pylist()[0][
+                "attempt_id"
+            ]
 
             def provider_state(
                 command: list[str], **_: object
@@ -631,9 +639,7 @@ class OfferServiceTest(unittest.TestCase):
                         "port": 22023,
                         "ssh_command": "ssh root@203.0.113.11 -p 22023",
                     }
-                return subprocess.CompletedProcess(
-                    command, 0, json.dumps(payload), ""
-                )
+                return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
 
             executor.runner = provider_state
             receipt = executor.reconcile(attempt_id)
@@ -644,7 +650,7 @@ class OfferServiceTest(unittest.TestCase):
             attempts = ledger.arrow_tables()["provisioning_attempts"].to_pylist()
             allocations = ledger.arrow_tables()["allocations"].to_pylist()
             self.assertEqual(attempts[0]["state"], "succeeded")
-            self.assertEqual(allocations[0]["provider_resource_id"], "pod-recovered")
+            self.assertEqual(allocations[0]["source_resource_id"], "pod-recovered")
 
 
 if __name__ == "__main__":

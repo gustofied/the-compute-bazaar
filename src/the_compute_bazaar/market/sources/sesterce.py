@@ -78,6 +78,7 @@ class SesterceSource:
             status_code=status,
             payload=payload,
             elapsed_ms=round((time.monotonic() - started) * 1000, 3),
+            authentication="x-api-key",
             error=error,
         )
 
@@ -105,7 +106,9 @@ class SesterceSource:
                 f"Sesterce request failed: {getattr(exc, 'reason', exc)}"
             ) from exc
         if status != 201 or not isinstance(result, Mapping):
-            raise RuntimeError(f"Sesterce returned an invalid create response ({status})")
+            raise RuntimeError(
+                f"Sesterce returned an invalid create response ({status})"
+            )
         return result
 
     def get_instance(self, instance_id: str) -> Mapping[str, Any]:
@@ -152,7 +155,9 @@ class SesterceSource:
                 f"Sesterce request failed: {getattr(exc, 'reason', exc)}"
             ) from exc
         if status != 204:
-            raise RuntimeError(f"Sesterce returned an invalid delete response ({status})")
+            raise RuntimeError(
+                f"Sesterce returned an invalid delete response ({status})"
+            )
 
     def normalize(
         self,
@@ -227,7 +232,7 @@ class SesterceSource:
                         country_code=_optional_text(location.get("countryCode")),
                         region=_text(location.get("region")),
                         ask_usd_hr=price / gpu_count,
-                        available=location.get("available") is True,
+                        available=_boolean(location.get("available")),
                     )
                 )
         return NormalizedOffers(tuple(offers), tuple(rejected))

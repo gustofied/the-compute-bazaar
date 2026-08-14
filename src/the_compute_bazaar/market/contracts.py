@@ -31,6 +31,8 @@ class SourceRead:
     status_code: int
     payload: Any
     elapsed_ms: float
+    method: str = "GET"
+    authentication: str | None = None
     error: str | None = None
 
     @property
@@ -41,10 +43,10 @@ class SourceRead:
         return {
             "source": self.source,
             "request": {
-                "method": "GET",
+                "method": self.method,
                 "endpoint": self.endpoint,
                 "parameters": self.parameters,
-                "authentication": "x-api-key",
+                "authentication": self.authentication,
             },
             "response": {
                 "status_code": self.status_code,
@@ -75,7 +77,7 @@ class GpuOffer:
     country_code: str | None
     region: str
     ask_usd_hr: float
-    available: bool
+    available: bool | None
 
     def __post_init__(self) -> None:
         if self.observed_at.tzinfo is None:

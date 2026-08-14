@@ -73,19 +73,22 @@ PAYLOAD = [
 
 
 class FakeSesterce(SesterceSource):
+    payload = PAYLOAD
+
     def __init__(self) -> None:
         super().__init__("test")
         self.deleted: list[str] = []
 
     def read(self, *, observed_at=None) -> SourceRead:
         return SourceRead(
-            source="sesterce",
+            source=self.name,
             endpoint=self.endpoint,
             parameters={},
             observed_at=observed_at or datetime(2026, 8, 13, 13, tzinfo=UTC),
             status_code=200,
-            payload=PAYLOAD,
+            payload=self.payload,
             elapsed_ms=4.2,
+            authentication="x-api-key",
         )
 
     def create_instance(self, payload):
@@ -107,6 +110,11 @@ class FakeSesterce(SesterceSource):
 
     def delete_instance(self, instance_id):
         self.deleted.append(instance_id)
+
+
+class EmptySource(FakeSesterce):
+    name = "empty"
+    payload: list[object] = []
 
 
 class MarketPipelineTest(unittest.TestCase):
@@ -160,11 +168,31 @@ order by gpu_model
             self.assertEqual(rows[0]["listing_count"], 1)
             self.assertEqual(rows[0]["lowest_ask_usd_hr"], 3)
 
-            generation = publish_generation(MarketLake(directory), result)
+            empty = MarketPipeline(MarketLake(directory)).run(
+                EmptySource(),
+                observed_at=datetime(2026, 8, 13, 12, 1, tzinfo=UTC),
+                source_run_id="empty-test",
+            )
+            self.assertEqual(empty.run.status, "complete")
+            self.assertEqual(empty.run.silver_row_count, 0)
+            self.assertTrue(Path(empty.run.silver_ref).is_file())
+            self.assertEqual(
+                MarketCatalog.from_runs(empty).rows(
+                    "select count(*) as count from silver.gpu_offers"
+                )[0]["count"],
+                0,
+            )
+
+            generation = publish_generation(MarketLake(directory), result, empty)
             self.assertEqual(generation["tables"], ["silver.gpu_offers"])
+            self.assertEqual(generation["sources"], ["empty", "sesterce"])
             reopened = MarketCatalog.from_lake(directory)
             self.assertEqual(
-                reopened.tables()["run"]["source_run_id"], "sesterce-test"
+                reopened.tables()["run"]["source_runs"],
+                {"empty": "empty-test", "sesterce": "sesterce-test"},
+            )
+            self.assertEqual(
+                reopened.tables()["run"]["source_scope"], ["empty", "sesterce"]
             )
             self.assertEqual(
                 [table["layer"] for table in reopened.tables()["tables"]],
@@ -205,7 +233,7 @@ order by gpu_model
                     max_hourly_usd=24,
                     confirm=False,
                 )
-            _, machine = launcher.launch(
+            launched_plan, machine = launcher.launch(
                 available.observation_id,
                 name="h100-test",
                 ssh_key_id="key-1",
@@ -213,10 +241,43 @@ order by gpu_model
                 confirm=True,
             )
             self.assertEqual(machine.host_id, "sesterce:instance-1")
-            self.assertEqual(machine.source_offer_id, "H100x8")
+            self.assertIsNotNone(machine.allocation_id)
+            self.assertIsNone(machine.source)
+            self.assertIsNone(machine.source_offer_id)
+            self.assertIsNone(machine.provider_resource_id)
+            self.assertIsNone(machine.ask_usd_hr)
             self.assertEqual(machine.ssh.target, "ubuntu@192.0.2.10")
             self.assertEqual(registry.get(machine.host_id), machine)
-            registry.put(machine.model_copy(update={"state": "provisioning", "ssh": None}))
+            allocation = launcher.ledger.allocation_for_machine(machine)
+            self.assertEqual(
+                allocation["candidate_observation_id"], available.observation_id
+            )
+            self.assertEqual(
+                allocation["preflight_observation_id"],
+                launched_plan.live_observation_id,
+            )
+            self.assertEqual(allocation["source"], "sesterce")
+            self.assertEqual(allocation["intermediary"], "sesterce")
+            self.assertEqual(allocation["operator"], "Supplier One")
+            self.assertEqual(allocation["offer_id"], "H100x8")
+            self.assertEqual(allocation["source_resource_id"], "instance-1")
+            self.assertEqual(allocation["price_usd_gpu_hr"], 3)
+            self.assertEqual(allocation["price_usd_instance_hr"], 24)
+            self.assertEqual(allocation["expected_max_cost_usd"], 12)
+            self.assertIsNotNone(allocation["terminate_at"])
+            self.assertNotEqual(plan.source_run_id, launched_plan.source_run_id)
+            self.assertTrue(
+                Path(
+                    MarketLake(directory).silver_ref(
+                        source="sesterce",
+                        day=launched_plan.observed_at.date(),
+                        source_run_id=launched_plan.source_run_id,
+                    )
+                ).is_file()
+            )
+            registry.put(
+                machine.model_copy(update={"state": "provisioning", "ssh": None})
+            )
             refreshed = launcher.refresh(machine.host_id)
             self.assertEqual(refreshed.state, "running")
             self.assertEqual(refreshed.ssh.target, "ubuntu@192.0.2.10")

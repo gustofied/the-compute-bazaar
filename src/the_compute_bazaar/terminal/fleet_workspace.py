@@ -51,6 +51,7 @@ class FleetWorkspace:
         self.monitor = monitor or FleetMonitor(
             self.service,
             interval_seconds=interval,
+            workload_refresher=self.workloads.refresh_host,
         )
 
     def start(self) -> None:
@@ -100,7 +101,7 @@ class FleetWorkspace:
             health = state.health
             allocation = _allocation(self.service, inspection.machine)
             verification = _verification(self.service, inspection.machine.host_id)
-            workloads = self.workloads.refresh_host(host_id)
+            workloads = self.workloads.list(host_id)
             return {
                 "contract": "compute-bazaar.fleet-host",
                 "machine": _machine_payload(
@@ -165,22 +166,26 @@ def _machine_payload(
     payload = {
         "host_id": machine.host_id,
         "allocation_id": machine.allocation_id,
-        "provider": (
-            allocation.get("capacity_provider")
+        "source": allocation.get("source") if allocation else machine.source,
+        "intermediary": allocation.get("intermediary") if allocation else None,
+        "operator": allocation.get("operator") if allocation else None,
+        "source_resource_id": (
+            allocation.get("source_resource_id")
             if allocation
-            else machine.source or "attached"
+            else machine.provider_resource_id
         ),
         "name": machine.name,
         "state": machine.state,
         "expected_gpu_model": machine.expected_gpu_model,
         "expected_gpu_count": machine.expected_gpu_count,
         "price_usd_gpu_hr": (
-            allocation.get("selected_price_usd_gpu_hr")
-            if allocation
-            else machine.ask_usd_hr
+            allocation.get("price_usd_gpu_hr") if allocation else machine.ask_usd_hr
         ),
         "price_usd_instance_hr": (
-            allocation.get("selected_price_usd_instance_hr") if allocation else None
+            allocation.get("price_usd_instance_hr") if allocation else None
+        ),
+        "expected_max_cost_usd": (
+            allocation.get("expected_max_cost_usd") if allocation else None
         ),
         "created_at": machine.created_at,
         "terminate_at": allocation.get("terminate_at") if allocation else None,
@@ -197,9 +202,7 @@ def _machine_payload(
     return payload
 
 
-def _allocation(
-    service: FleetService, machine: FleetMachine
-) -> dict[str, Any] | None:
+def _allocation(service: FleetService, machine: FleetMachine) -> dict[str, Any] | None:
     if not service.ledger:
         return None
     try:

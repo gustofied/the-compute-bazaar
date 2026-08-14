@@ -223,10 +223,13 @@ def _context_line(payload: Mapping[str, Any]) -> str:
     if isinstance(source, Mapping) and source.get("label"):
         parts.append(str(source["label"]))
     if isinstance(run, Mapping):
-        if run.get("source_run_id"):
-            parts.append(str(run["source_run_id"]))
-        if run.get("run_id"):
-            parts.append(str(run["run_id"]))
+        run_id = (
+            run.get("market_generation_id")
+            or run.get("source_run_id")
+            or run.get("run_id")
+        )
+        if run_id:
+            parts.append(str(run_id))
         if run.get("observed_at"):
             parts.append(_format_time(str(run["observed_at"])))
     providers = payload.get("providers")

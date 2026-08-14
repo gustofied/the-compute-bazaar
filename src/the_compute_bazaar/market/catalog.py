@@ -126,9 +126,10 @@ order by ordinal_position
     def run(self) -> dict[str, Any]:
         manifest = getattr(self, "manifest", {})
         return {
-            "source_run_id": manifest.get("source_run_id"),
+            "market_generation_id": manifest.get("market_generation_id"),
             "observed_at": manifest.get("observed_at"),
-            "provider_scope": manifest.get("provider_scope") or [],
+            "source_scope": manifest.get("source_scope") or [],
+            "source_runs": manifest.get("source_runs") or {},
         }
 
     def _register_s3(self, refs: list[str]) -> None:

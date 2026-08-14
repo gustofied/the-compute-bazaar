@@ -32,6 +32,7 @@ from the_compute_bazaar.terminal.commands import (
     SqlAction,
     resolve_command,
 )
+from the_compute_bazaar.terminal.data_workspace import _manifest_identity
 from the_compute_bazaar.terminal.eval_workspace import EvalWorkspace
 from the_compute_bazaar.terminal.identity import (
     native_session_cookie,
@@ -359,6 +360,18 @@ class TerminalCommandTest(unittest.TestCase):
         self.assertTrue(_uses_lake(state, "/tmp/lake-a"))
         self.assertFalse(_uses_lake(state, "/tmp/lake-b"))
         self.assertFalse(_uses_lake({}, "/tmp/lake-a"))
+
+    def test_terminal_tracks_rebuilt_market_generations(self) -> None:
+        self.assertEqual(
+            _manifest_identity(
+                {
+                    "market_generation_id": "market-2",
+                    "source_run_id": "source-1",
+                    "run_id": "legacy-1",
+                }
+            ),
+            "market-2",
+        )
 
     def test_terminal_session_cookie_is_scoped_to_the_checkout(self) -> None:
         checkout_a = Path("/tmp/checkout-a")

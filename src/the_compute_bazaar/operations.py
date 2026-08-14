@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from .provisioning import Allocation, ProvisioningAttempt, ProvisioningRequest
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 TELEMETRY_RETENTION = timedelta(hours=6)
 
 ALLOCATIONS_SCHEMA = """
@@ -31,12 +31,16 @@ create table if not exists allocations (
   allocation_id text primary key,
   request_id text not null unique,
   successful_attempt_id text not null unique,
-  acquisition_connector text not null,
-  capacity_provider text not null,
-  provider_resource_id text not null,
+  candidate_observation_id text,
+  preflight_observation_id text not null,
+  source text not null,
+  intermediary text not null,
+  operator text,
+  offer_id text not null,
+  source_resource_id text not null,
   state text not null,
-  realized_price_usd_gpu_hr real,
-  realized_price_usd_instance_hr real,
+  price_usd_gpu_hr real not null,
+  price_usd_instance_hr real not null,
   created_at text not null,
   terminate_at text,
   terminated_at text,
@@ -147,9 +151,7 @@ create table if not exists provisioning_requests (
   request_hash text not null,
   provider_request_json text not null,
   created_at text not null,
-  state text not null,
-  foreign key (candidate_observation_id) references offer_observations(observation_id),
-  foreign key (preflight_observation_id) references offer_observations(observation_id)
+  state text not null
 );
 
 create table if not exists provisioning_attempts (
@@ -472,7 +474,7 @@ where attempt_id = ?
             provider_resource_id = attempt["provider_resource_id"]
             if (
                 provider_resource_id
-                and provider_resource_id != allocation.provider_resource_id
+                and provider_resource_id != allocation.source_resource_id
             ):
                 raise ProvisioningStateError(
                     "Allocation resource does not match its provisioning attempt"
@@ -494,7 +496,7 @@ update provisioning_attempts
 set state = 'succeeded', completed_at = ?, provider_resource_id = ?, error = ?
 where attempt_id = ?
 """,
-                (now, allocation.provider_resource_id, note, attempt_id),
+                (now, allocation.source_resource_id, note, attempt_id),
             )
             connection.execute(
                 "update provisioning_requests set state = 'succeeded' where request_id = ?",
@@ -742,6 +744,7 @@ where host_id = ? and state in ('starting', 'running', 'unknown')
             try:
                 connection.execute("pragma journal_mode=wal")
                 connection.executescript(SCHEMA)
+                connection.execute("pragma foreign_keys=off")
                 connection.execute("begin immediate")
                 _migrate(connection)
                 connection.execute(
@@ -750,6 +753,7 @@ where host_id = ? and state in ('starting', 'running', 'unknown')
                 )
                 connection.execute(f"pragma user_version={SCHEMA_VERSION}")
                 connection.commit()
+                connection.execute("pragma foreign_keys=on")
             except Exception:
                 connection.rollback()
                 connection.close()
@@ -777,12 +781,23 @@ def _migrate(connection: sqlite3.Connection) -> None:
         connection.execute(
             "alter table offer_observations add column market_product_key text"
         )
+    request_foreign_keys = {
+        str(row["from"])
+        for row in connection.execute("pragma foreign_key_list(provisioning_requests)")
+    }
+    if request_foreign_keys & {
+        "candidate_observation_id",
+        "preflight_observation_id",
+    }:
+        _migrate_provisioning_requests(connection)
     allocation_columns = {
         str(row["name"]) for row in connection.execute("pragma table_info(allocations)")
     }
     if allocation_columns and "request_id" not in allocation_columns:
         connection.execute("drop table allocations")
         connection.executescript(ALLOCATIONS_SCHEMA)
+    elif allocation_columns and "source" not in allocation_columns:
+        _migrate_allocations(connection)
     verification_columns = {
         str(row["name"]): bool(row["notnull"])
         for row in connection.execute("pragma table_info(capacity_verifications)")
@@ -795,6 +810,98 @@ def _migrate(connection: sqlite3.Connection) -> None:
         connection.executescript(CAPACITY_VERIFICATIONS_SCHEMA)
     connection.execute("drop table if exists fleet_allocations")
     connection.execute("drop table if exists fleet_observations")
+
+
+def _migrate_allocations(connection: sqlite3.Connection) -> None:
+    connection.execute("alter table allocations rename to allocations_legacy")
+    connection.executescript(ALLOCATIONS_SCHEMA)
+    connection.execute(
+        """
+insert into allocations (
+  allocation_id,
+  request_id,
+  successful_attempt_id,
+  candidate_observation_id,
+  preflight_observation_id,
+  source,
+  intermediary,
+  operator,
+  offer_id,
+  source_resource_id,
+  state,
+  price_usd_gpu_hr,
+  price_usd_instance_hr,
+  created_at,
+  terminate_at,
+  terminated_at,
+  updated_at
+)
+select
+  allocation.allocation_id,
+  allocation.request_id,
+  allocation.successful_attempt_id,
+  request.candidate_observation_id,
+  request.preflight_observation_id,
+  allocation.acquisition_connector,
+  allocation.acquisition_connector,
+  allocation.capacity_provider,
+  request.source_offer_id,
+  allocation.provider_resource_id,
+  allocation.state,
+  coalesce(
+    allocation.realized_price_usd_gpu_hr,
+    request.selected_price_usd_gpu_hr
+  ),
+  coalesce(
+    allocation.realized_price_usd_instance_hr,
+    request.selected_price_usd_instance_hr
+  ),
+  allocation.created_at,
+  allocation.terminate_at,
+  allocation.terminated_at,
+  allocation.updated_at
+from allocations_legacy allocation
+join provisioning_requests request using (request_id)
+"""
+    )
+    connection.execute("drop table allocations_legacy")
+
+
+def _migrate_provisioning_requests(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+create table provisioning_requests_new (
+  request_id text primary key,
+  plan_id text not null,
+  candidate_observation_id text,
+  preflight_observation_id text not null,
+  preflight_batch_id text not null,
+  source_offer_id text not null,
+  market_product_key text not null,
+  acquisition_connector text not null,
+  capacity_provider text not null,
+  operation text not null,
+  gpu_model text not null,
+  gpu_count integer not null,
+  selected_price_usd_gpu_hr real not null,
+  selected_price_usd_instance_hr real not null,
+  max_hourly_usd real not null,
+  runtime_minutes integer not null,
+  expected_max_cost_usd real not null,
+  request_hash text not null,
+  provider_request_json text not null,
+  created_at text not null,
+  state text not null
+)
+"""
+    )
+    connection.execute(
+        "insert into provisioning_requests_new select * from provisioning_requests"
+    )
+    connection.execute("drop table provisioning_requests")
+    connection.execute(
+        "alter table provisioning_requests_new rename to provisioning_requests"
+    )
 
 
 @contextmanager
@@ -993,12 +1100,16 @@ def _allocation_schema(pa: Any) -> Any:
             ("allocation_id", "text"),
             ("request_id", "text"),
             ("successful_attempt_id", "text"),
-            ("acquisition_connector", "text"),
-            ("capacity_provider", "text"),
-            ("provider_resource_id", "text"),
+            ("candidate_observation_id", "text"),
+            ("preflight_observation_id", "text"),
+            ("source", "text"),
+            ("intermediary", "text"),
+            ("operator", "text"),
+            ("offer_id", "text"),
+            ("source_resource_id", "text"),
             ("state", "text"),
-            ("realized_price_usd_gpu_hr", "float"),
-            ("realized_price_usd_instance_hr", "float"),
+            ("price_usd_gpu_hr", "float"),
+            ("price_usd_instance_hr", "float"),
             ("created_at", "time"),
             ("terminate_at", "time"),
             ("terminated_at", "time"),
