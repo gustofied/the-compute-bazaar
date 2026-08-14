@@ -197,6 +197,11 @@ create table capacity_verifications (
             )
             doctor = FleetService().doctor_inspection(inspection)
             ledger.record_telemetry(inspection)
+            telemetry = ledger.telemetry(selected.host_id)
+            self.assertEqual(telemetry[0]["host_id"], selected.host_id)
+            self.assertEqual(
+                telemetry[0]["observed_at"], "2026-08-10T12:05:00+00:00"
+            )
 
             before_rows = _query_delivery_facts(ledger)
             self.assertEqual(len(before_rows), 2)

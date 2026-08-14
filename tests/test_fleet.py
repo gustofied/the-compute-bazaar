@@ -152,7 +152,10 @@ class FleetTest(unittest.TestCase):
 
             service = FleetService(
                 registry=registry,
-                inspector=FleetInspector(runner=fake_runner),
+                inspector=FleetInspector(
+                    runner=fake_runner,
+                    known_hosts_file=root / "known_hosts",
+                ),
             )
 
             inspection, health = service.attach(
@@ -169,6 +172,7 @@ class FleetTest(unittest.TestCase):
             self.assertEqual(health.health, "degraded")
             self.assertNotIn("-i", calls[0])
             self.assertNotIn("-p", calls[0])
+            self.assertIn("StrictHostKeyChecking=accept-new", calls[0])
             self.assertEqual(calls[0][-2:], ["gpu-singapore-01", "sh -s"])
 
     def test_attach_rejects_a_host_without_an_nvidia_gpu(self) -> None:

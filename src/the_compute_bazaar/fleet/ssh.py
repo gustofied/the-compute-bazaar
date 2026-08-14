@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from .models import FleetMachine
+from .registry import default_fleet_root
 
 
 def ssh_command(
@@ -22,29 +24,28 @@ def ssh_command(
         "-o",
         "ConnectTimeout=15",
     ]
+    known_hosts = known_hosts_file or default_fleet_root() / "known_hosts"
+    known_hosts.parent.mkdir(parents=True, exist_ok=True)
+    control_root = Path("/tmp") / f"compute-bazaar-{os.getuid()}"
+    control_root.mkdir(mode=0o700, exist_ok=True)
+    control_root.chmod(0o700)
+    command.extend(
+        [
+            "-o",
+            "ControlMaster=auto",
+            "-o",
+            "ControlPersist=60",
+            "-o",
+            f"ControlPath={control_root / 'ssh-%C'}",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            f"UserKnownHostsFile={known_hosts}",
+        ]
+    )
     if machine.ssh.identity_file:
         identity = Path(machine.ssh.identity_file).expanduser()
-        known_hosts = (
-            known_hosts_file
-            or identity.parent / "compute_bazaar_fleet_known_hosts"
-        )
-        known_hosts.parent.mkdir(parents=True, exist_ok=True)
-        command.extend(
-            [
-                "-i",
-                str(identity),
-                "-o",
-                "ControlMaster=auto",
-                "-o",
-                "ControlPersist=60",
-                "-o",
-                f"ControlPath={known_hosts.parent / 'cbz-ssh-%C'}",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                "-o",
-                f"UserKnownHostsFile={known_hosts}",
-            ]
-        )
+        command.extend(["-i", str(identity)])
     if machine.ssh.port:
         command.extend(["-p", str(machine.ssh.port)])
     return [*command, machine.ssh.target, remote_command]

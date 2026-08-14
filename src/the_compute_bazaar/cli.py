@@ -925,22 +925,27 @@ def fleet_refresh(
     ctx: typer.Context,
     host_id: Annotated[str, typer.Argument()],
 ) -> None:
-    """Refresh the SSH endpoint of a newly provisioned RunPod host."""
+    """Refresh a provisioned host and its SSH endpoint."""
     from .fleet import FleetRegistry
-    from .offers import OfferService
-    from .operations import OperationalLedger
-    from .provider_execution import LaunchExecutionError, RunpodExecutor
+    from .provider_execution import LaunchExecutionError
 
     registry = FleetRegistry()
     try:
         machine = registry.get(host_id)
-        service = OfferService.from_environment()
-        refreshed = RunpodExecutor(
-            api_key=service.runpod_api_key,
-            registry=registry,
-            ledger=OperationalLedger(),
-        ).resolve_ssh(machine)
-    except (KeyError, LaunchExecutionError, ValueError) as exc:
+        if machine.source == "sesterce":
+            refreshed = _sesterce_launcher(ctx).refresh(host_id)
+        else:
+            from .offers import OfferService
+            from .operations import OperationalLedger
+            from .provider_execution import RunpodExecutor
+
+            service = OfferService.from_environment()
+            refreshed = RunpodExecutor(
+                api_key=service.runpod_api_key,
+                registry=registry,
+                ledger=OperationalLedger(),
+            ).resolve_ssh(machine)
+    except (KeyError, LaunchExecutionError, RuntimeError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
     _emit(
         ctx,

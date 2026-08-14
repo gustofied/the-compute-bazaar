@@ -437,6 +437,10 @@ button.catalog-item-copy {
   align-items: center;
 }
 
+.view-controls[hidden] {
+  display: none;
+}
+
 .view-controls {
   gap: 10px;
   flex: none;
@@ -703,8 +707,14 @@ perspective-viewer[theme="Pro Dark"] {
 }
 
 .result-limit {
+  display: block;
+  padding: 7px 11px 0;
   color: var(--accent);
   font-size: 8px;
+}
+
+.result-limit[hidden] {
+  display: none;
 }
 
 .result-printout,

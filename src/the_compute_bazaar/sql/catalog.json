@@ -18,6 +18,14 @@
       "default_limit": 500
     },
     {
+      "query_id": "weekly_gpu_market_pulse",
+      "title": "Weekly GPU Market Pulse",
+      "description": "Daily frontier GPU prices and observed marketplace depth over the latest seven days.",
+      "tables": ["fact_gpu_price_index_history"],
+      "sql_path": "queries/weekly_gpu_market_pulse.sql",
+      "default_limit": 100
+    },
+    {
       "query_id": "gpu_price_index_constituents",
       "title": "GPU Price Index Constituents",
       "description": "Rows included in or excluded from each index value.",

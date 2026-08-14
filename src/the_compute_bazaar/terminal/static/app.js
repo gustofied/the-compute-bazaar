@@ -72,7 +72,6 @@ const elements = {
   resultRows: document.querySelector("#result-rows"),
   resultTime: document.querySelector("#result-time"),
   resultRun: document.querySelector("#result-run"),
-  resultFileName: document.querySelector("#result-file-name"),
   resultPrintout: document.querySelector("#result-printout"),
   blueprintMarkdownPanel: document.querySelector("#blueprint-markdown-panel"),
   blueprintMarkdown: document.querySelector("#blueprint-markdown"),
@@ -147,8 +146,7 @@ function setBlueprintMarkdown(markdown = "") {
   elements.blueprintMarkdownPanel.hidden = !state.markdown;
 }
 
-function setPrintoutState(label, message) {
-  elements.resultFileName.textContent = label;
+function setPrintoutState(message) {
   elements.resultPrintout.textContent = message;
 }
 
@@ -198,9 +196,9 @@ function asciiTable(rows, schema, rowCount, { truncated = false, limit = null } 
 
 async function renderPrintout(
   table,
-  { label = "query.out", rowCount = 0, truncated = false, limit = null } = {},
+  { rowCount = 0, truncated = false, limit = null } = {},
 ) {
-  setPrintoutState(label, "printing...");
+  setPrintoutState("printing...");
   let view;
   try {
     const schema = await table.schema();
@@ -505,7 +503,7 @@ async function selectVirtualTable(tableRef) {
   setSqlOpen(false);
   closeCatalogOnMobile();
   setRunning(true);
-  setPrintoutState("query.out", "opening availability history...");
+  setPrintoutState("opening availability history...");
   setViewerState("Opening availability history", "Reading the table schema.");
   try {
     const schemaResponse = await fetch("/api/data/virtual/schema", { cache: "no-store" });
@@ -538,16 +536,13 @@ async function selectVirtualTable(tableRef) {
     elements.resultRun.textContent = shortRunId(runId);
     elements.resultRun.title = runId || "";
     showResultMeta();
-    await renderPrintout(nextTable, {
-      label: "query.out",
-      rowCount,
-    });
+    await renderPrintout(nextTable, { rowCount });
     state.hasResult = true;
     setViewerState("Ready", `${formatCount(rowCount)} rows available.`, { hidden: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Availability history unavailable", message, { error: true });
-    setPrintoutState("query.err", message);
+    setPrintoutState(message);
     showResultMeta(false);
     state.hasResult = false;
     throw error;
@@ -724,7 +719,7 @@ async function selectOffers(action) {
   elements.sqlToggle.disabled = true;
   state.saveable = false;
   setRunning(true);
-  setPrintoutState("offers.out", "reading provider APIs...");
+  setPrintoutState("reading provider APIs...");
   setViewerState("Fetching offers", "Reading the provider APIs now.");
   try {
     const response = await fetch(`/api/data/offers?${params}`, { cache: "no-store" });
@@ -742,16 +737,13 @@ async function selectOffers(action) {
     elements.resultRun.textContent = "provider read";
     elements.resultRun.title = response.headers.get("X-Compute-Bazaar-Observed-At") || "";
     showResultMeta();
-    await renderPrintout(nextTable, {
-      label: "offers.out",
-      rowCount: Number(rowCount),
-    });
+    await renderPrintout(nextTable, { rowCount: Number(rowCount) });
     state.hasResult = true;
     setViewerState("Ready", `${formatCount(rowCount)} offers loaded.`, { hidden: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Offers unavailable", message, { error: true });
-    setPrintoutState("offers.err", message);
+    setPrintoutState(message);
     showResultMeta(false);
     state.hasResult = false;
     throw error;
@@ -780,7 +772,7 @@ async function selectLaunchPlan(action) {
   elements.sqlToggle.disabled = true;
   state.saveable = false;
   setRunning(true);
-  setPrintoutState("launch.out", "building launch plan...");
+  setPrintoutState("building launch plan...");
   setViewerState("Revalidating offer", "Preparing the provider request now.");
   try {
     const response = await fetch(`/api/data/launch-plan?${params}`, { cache: "no-store" });
@@ -797,13 +789,13 @@ async function selectLaunchPlan(action) {
     elements.resultRun.textContent = response.headers.get("X-Compute-Bazaar-Run-Id") || "draft";
     elements.resultRun.title = response.headers.get("X-Compute-Bazaar-Observed-At") || "";
     showResultMeta();
-    await renderPrintout(nextTable, { label: "launch.out", rowCount: 1 });
+    await renderPrintout(nextTable, { rowCount: 1 });
     state.hasResult = true;
     setViewerState("Ready", "Launch plan loaded. No request was submitted.", { hidden: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Launch plan unavailable", message, { error: true });
-    setPrintoutState("launch.err", message);
+    setPrintoutState(message);
     showResultMeta(false);
     state.hasResult = false;
     throw error;
@@ -911,7 +903,7 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
   elements.limit.value = String(limit);
   if (!sql) {
     setViewerState("SQL is empty", "Write a SELECT or WITH statement before running it.", { error: true });
-    setPrintoutState("query.err", "SQL is empty");
+    setPrintoutState("SQL is empty");
     showResultMeta(false);
     throw new Error("SQL is empty");
   }
@@ -933,7 +925,7 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
 
   setRunning(true);
   setResultLimit(false);
-  setPrintoutState("query.out", "running query...");
+  setPrintoutState("running query...");
   setViewerState("Running query", "Preparing the result.");
   try {
     const response = await fetch("/api/data/query", {
@@ -967,7 +959,6 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
     showResultMeta();
     setResultLimit(truncated, selectedLimit);
     await renderPrintout(nextTable, {
-      label: "query.out",
       rowCount: Number(rowCount),
       truncated,
       limit: Number(selectedLimit),
@@ -977,7 +968,7 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Query failed", message, { error: true });
-    setPrintoutState("query.err", message);
+    setPrintoutState(message);
     showResultMeta(false);
     state.hasResult = false;
     throw error;
@@ -1277,7 +1268,7 @@ async function initialize() {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setViewerState("Terminal unavailable", message, { error: true });
-    setPrintoutState("query.err", message);
+    setPrintoutState(message);
     showResultMeta(false);
     reportCommandError(error);
   }

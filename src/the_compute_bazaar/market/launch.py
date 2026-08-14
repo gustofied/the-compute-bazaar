@@ -160,6 +160,19 @@ class SesterceLauncher:
         terminated = machine.model_copy(update={"state": "terminated", "ssh": None})
         return self.registry.put(terminated)
 
+    def refresh(self, host_id: str) -> FleetMachine:
+        machine = self.registry.get(host_id)
+        if machine.source != "sesterce" or not machine.provider_resource_id:
+            raise ValueError("This is not a Sesterce Fleet host")
+        instance = self.source.get_instance(machine.provider_resource_id)
+        refreshed = machine.model_copy(
+            update={
+                "state": _instance_state(instance),
+                "ssh": _instance_ssh(instance),
+            }
+        )
+        return self.registry.put(refreshed)
+
     def _candidate(self, observation_id: str) -> dict[str, Any]:
         if not OBSERVATION_ID.fullmatch(observation_id):
             raise ValueError("Expected a Silver observation_id")
@@ -182,17 +195,6 @@ class SesterceLauncher:
         instance: Mapping[str, Any],
     ) -> FleetMachine:
         resource_id = _required(instance, "_id")
-        status = str(instance.get("status") or "unknown").lower()
-        state = {
-            "pending": "provisioning",
-            "active": "running",
-            "deleted": "terminated",
-            "deleting": "terminated",
-        }.get(status, "unknown")
-        ip = str(instance.get("ip") or "").strip()
-        user = str(instance.get("sshUser") or "").strip()
-        port = _integer(instance.get("sshPort"))
-        ssh = SshEndpoint(target=f"{user}@{ip}", port=port) if ip and user else None
         return FleetMachine(
             host_id=f"sesterce:{resource_id}",
             source="sesterce",
@@ -200,11 +202,11 @@ class SesterceLauncher:
             provider_resource_id=resource_id,
             ask_usd_hr=plan.ask_usd_hr,
             name=str(instance.get("name") or plan.request["name"]),
-            state=state,
+            state=_instance_state(instance),
             expected_gpu_model=plan.gpu_model,
             expected_gpu_count=plan.gpu_count,
             created_at=_datetime(instance.get("createdAt")) or datetime.now(UTC),
-            ssh=ssh,
+            ssh=_instance_ssh(instance),
         )
 
 
@@ -250,6 +252,22 @@ def _integer(value: Any) -> int | None:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
         return None
+
+
+def _instance_state(instance: Mapping[str, Any]) -> str:
+    return {
+        "pending": "provisioning",
+        "active": "running",
+        "deleted": "terminated",
+        "deleting": "terminated",
+    }.get(str(instance.get("status") or "unknown").lower(), "unknown")
+
+
+def _instance_ssh(instance: Mapping[str, Any]) -> SshEndpoint | None:
+    ip = str(instance.get("ip") or "").strip()
+    user = str(instance.get("sshUser") or "").strip()
+    port = _integer(instance.get("sshPort"))
+    return SshEndpoint(target=f"{user}@{ip}", port=port) if ip and user else None
 
 
 def _datetime(value: Any) -> datetime | None:

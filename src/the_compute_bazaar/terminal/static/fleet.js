@@ -28,6 +28,10 @@ const elements = {
   gpuMeta: $("#gpu-meta"),
   gpuList: $("#gpu-list"),
   chart: $("#telemetry-chart"),
+  historyTime: $("#history-time"),
+  historyGpu: $("#history-gpu"),
+  historyVram: $("#history-vram"),
+  historyCpu: $("#history-cpu"),
   checks: $("#check-list"),
   checkSummary: $("#check-summary"),
   workloadCount: $("#workload-count"),
@@ -127,8 +131,9 @@ function machineGpuLabel(machine, payload = null) {
 
 function machineSubtitle(machine, payload = null) {
   const parts = [machineGpuLabel(machine, payload)];
-  if (Number.isFinite(Number(machine.price_usd_instance_hr))) {
-    parts.push(`$${number(machine.price_usd_instance_hr, 2)}/hr`);
+  const hourlyPrice = machine.ask_usd_hr ?? machine.price_usd_instance_hr;
+  if (hourlyPrice !== null && hourlyPrice !== undefined && Number.isFinite(Number(hourlyPrice))) {
+    parts.push(`$${number(hourlyPrice, 2)}/hr`);
   }
   return parts.join("  |  ");
 }
@@ -204,8 +209,16 @@ function countdown(machine) {
 
 function captureSample(payload) {
   const gpu = gpuSummary(payload);
-  const samples = state.samples.get(payload.machine.host_id) ?? [];
-  if (samples.at(-1)?.observedAt === payload.observed_at) return;
+  const samples = state.samples.get(payload.machine.host_id) ?? (payload.telemetry ?? []).map((sample) => ({
+    observedAt: sample.observed_at,
+    gpu: Number(sample.gpu_utilization_pct) || 0,
+    vram: percent(sample.gpu_memory_used_mb, sample.gpu_memory_total_mb),
+    cpu: Number(sample.cpu_utilization_pct) || 0,
+  }));
+  if (samples.at(-1)?.observedAt === payload.observed_at) {
+    state.samples.set(payload.machine.host_id, samples.slice(-180));
+    return;
+  }
   samples.push({
     observedAt: payload.observed_at,
     gpu: Number(gpu.utilization) || 0,
@@ -368,6 +381,16 @@ function renderOverview() {
 
 function chartData(hostId) {
   const samples = state.samples.get(hostId) ?? [];
+  if (samples.length === 1) {
+    const sample = samples[0];
+    const observedAt = Date.parse(sample.observedAt) / 1000;
+    return [
+      [observedAt - 5, observedAt],
+      [sample.gpu, sample.gpu],
+      [sample.vram, sample.vram],
+      [sample.cpu, sample.cpu],
+    ];
+  }
   return [
     samples.map((sample) => Date.parse(sample.observedAt) / 1000),
     samples.map((sample) => sample.gpu),
@@ -376,26 +399,61 @@ function chartData(hostId) {
   ];
 }
 
+function renderHistoryReadout(hostId, index = null) {
+  const samples = state.samples.get(hostId) ?? [];
+  const sample = index === null ? samples.at(-1) : samples[Math.min(index, samples.length - 1)];
+  elements.historyTime.textContent = sample ? new Date(sample.observedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
+  elements.historyGpu.textContent = sample ? `${number(sample.gpu, 1)}%` : "—";
+  elements.historyVram.textContent = sample ? `${number(sample.vram, 1)}%` : "—";
+  elements.historyCpu.textContent = sample ? `${number(sample.cpu, 1)}%` : "—";
+}
+
+function plotTime(timestamp) {
+  return new Date(timestamp * 1000).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+function chartSize() {
+  return {
+    width: Math.max(320, elements.chart.clientWidth - 24),
+    height: Math.max(120, elements.chart.clientHeight - 4),
+  };
+}
+
 function chartOptions() {
-  const width = Math.max(320, elements.chart.clientWidth - 16);
-  const height = Math.max(120, elements.chart.clientHeight - 4);
+  const { width, height } = chartSize();
   return {
     width,
     height,
     padding: [8, 6, 0, 0],
     legend: { show: false },
-    cursor: { drag: { x: false, y: false, setScale: false }, points: { show: false } },
+    cursor: { x: true, y: false, drag: { x: false, y: false, setScale: false }, points: { show: true, size: 4 } },
     scales: { x: { time: true }, pct: { range: [0, 100] } },
     axes: [
-      { stroke: "#585858", grid: { show: false }, ticks: { show: false }, size: 20, font: "8px SFMono-Regular" },
-      { scale: "pct", stroke: "#585858", grid: { stroke: "#2a302e", width: 1 }, ticks: { show: false }, size: 28, splits: () => [0, 50, 100], font: "8px SFMono-Regular" },
+      {
+        stroke: "#666666",
+        grid: { stroke: "#181818", width: 1 },
+        ticks: { show: false },
+        size: 24,
+        incrs: [5, 10, 15, 30, 60, 120, 300],
+        values: (_, splits) => splits.map(plotTime),
+        font: "12px SFMono-Regular",
+      },
+      { scale: "pct", stroke: "#666666", grid: { stroke: "#272727", width: 1 }, ticks: { show: false }, size: 32, splits: () => [0, 25, 50, 75, 100], font: "12px SFMono-Regular" },
     ],
     series: [
       {},
-      { label: "GPU", scale: "pct", stroke: "#ff8700", width: 1.5, points: { show: false } },
-      { label: "VRAM", scale: "pct", stroke: "#00afff", width: 1.5, points: { show: false } },
-      { label: "CPU", scale: "pct", stroke: "#00ff00", width: 1.5, points: { show: false } },
+      { label: "GPU", scale: "pct", stroke: "#ff8700", width: 2, paths: uPlot.paths.stepped({ align: 1 }), points: { show: false } },
+      { label: "VRAM", scale: "pct", stroke: "#00afff", width: 1.5, paths: uPlot.paths.stepped({ align: 1 }), points: { show: false } },
+      { label: "CPU", scale: "pct", stroke: "#00ff00", width: 1.5, paths: uPlot.paths.stepped({ align: 1 }), points: { show: false } },
     ],
+    hooks: {
+      setCursor: [(plot) => renderHistoryReadout(state.hostId, plot.cursor.idx)],
+    },
   };
 }
 
@@ -405,9 +463,10 @@ function renderChart(hostId) {
     const data = chartData(hostId);
     if (!state.plot) state.plot = new uPlot(chartOptions(), data, elements.chart);
     else {
-      state.plot.setSize({ width: Math.max(320, elements.chart.clientWidth - 16), height: Math.max(120, elements.chart.clientHeight - 4) });
+      state.plot.setSize(chartSize());
       state.plot.setData(data);
     }
+    renderHistoryReadout(hostId);
   });
 }
 
@@ -489,6 +548,7 @@ elements.overviewRows.addEventListener("click", (event) => {
 });
 
 elements.overviewToggle.addEventListener("click", () => setView(state.view === "overview" ? "detail" : "overview"));
+elements.chart.addEventListener("mouseleave", () => renderHistoryReadout(state.hostId));
 
 window.addEventListener("keydown", (event) => {
   if (["INPUT", "TEXTAREA"].includes(event.target.tagName)) return;
@@ -499,7 +559,7 @@ window.addEventListener("keydown", (event) => {
 
 new ResizeObserver(() => {
   if (state.plot && state.view === "detail") {
-    state.plot.setSize({ width: Math.max(320, elements.chart.clientWidth - 16), height: Math.max(120, elements.chart.clientHeight - 4) });
+    state.plot.setSize(chartSize());
   }
 }).observe(elements.chart);
 

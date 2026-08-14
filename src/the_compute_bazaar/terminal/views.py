@@ -36,6 +36,48 @@ class TerminalView:
 
 TERMINAL_VIEWS = (
     TerminalView(
+        view_id="weekly-gpu-price-pulse",
+        query_id="weekly_gpu_market_pulse",
+        title="Weekly GPU price pulse",
+        description="Seven days of daily median GPU-hour prices across H100, H200, B200, and B300.",
+        viewer="perspective",
+        viewer_config={
+            "plugin": "Y Line",
+            "group_by": ["observed_at"],
+            "split_by": ["gpu"],
+            "columns": ["price_usd_gpu_hr"],
+            "settings": False,
+        },
+    ),
+    TerminalView(
+        view_id="weekly-gpu-provider-depth",
+        query_id="weekly_gpu_market_pulse",
+        title="Weekly marketplace depth",
+        description="Observed providers per frontier GPU family through the latest seven days.",
+        viewer="perspective",
+        viewer_config={
+            "plugin": "Y Bar",
+            "group_by": ["observed_at"],
+            "split_by": ["gpu"],
+            "columns": ["provider_count"],
+            "settings": False,
+        },
+    ),
+    TerminalView(
+        view_id="weekly-gpu-offer-depth",
+        query_id="weekly_gpu_market_pulse",
+        title="Weekly qualifying offers",
+        description="Eligible index offers retained for each GPU family over the latest seven days.",
+        viewer="perspective",
+        viewer_config={
+            "plugin": "Y Bar",
+            "group_by": ["observed_at"],
+            "split_by": ["gpu"],
+            "columns": ["qualifying_offer_count"],
+            "settings": False,
+        },
+    ),
+    TerminalView(
         view_id="gpu-index-history",
         query_id="gpu_price_index_history",
         title="GPU Price Index",

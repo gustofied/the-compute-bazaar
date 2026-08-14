@@ -103,7 +103,7 @@
                 <h2 id="view-title">Opening Data</h2>
                 <p id="view-description">Loading market data.</p>
               </div>
-              <div class="view-controls">
+              <div class="view-controls" hidden>
                 <dl class="result-meta" id="result-meta" aria-live="polite" hidden>
                   <div><dt>Rows</dt><dd id="result-rows"></dd></div>
                   <div><dt>Time</dt><dd id="result-time"></dd></div>
@@ -152,11 +152,8 @@
               </div>
             </div>
 
-            <section class="source-file result-file" aria-labelledby="result-file-name">
-              <header class="source-file-heading">
-                <strong id="result-file-name">query.out</strong>
-                <span class="result-limit" id="result-limit" hidden></span>
-              </header>
+            <section class="source-file result-file" aria-label="Query printout">
+              <span class="result-limit" id="result-limit" hidden></span>
               <pre class="result-printout" id="result-printout" tabindex="0">waiting for query</pre>
             </section>
 

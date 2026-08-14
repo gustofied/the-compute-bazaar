@@ -137,6 +137,11 @@ class FleetWorkspace:
                     process.model_dump(mode="json")
                     for process in inspection.gpu_processes
                 ],
+                "telemetry": (
+                    self.service.ledger.telemetry(host_id)
+                    if self.service.ledger
+                    else []
+                ),
                 "workloads": [
                     workload.model_dump(mode="json") for workload in workloads
                 ],

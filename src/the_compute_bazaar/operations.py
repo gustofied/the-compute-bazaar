@@ -600,6 +600,19 @@ where allocation_id = ?
                 (_timestamp(cutoff),),
             )
 
+    def telemetry(self, host_id: str, *, limit: int = 180) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+select * from fleet_telemetry
+where host_id = ?
+order by observed_at desc
+limit ?
+""",
+                (host_id, max(1, min(limit, 1000))),
+            ).fetchall()
+        return [dict(row) for row in reversed(rows)]
+
     def record_capacity_verification(
         self,
         inspection: FleetInspection,

@@ -102,6 +102,9 @@ class FakeSesterce(SesterceSource):
             "createdAt": "2026-08-13T13:01:00Z",
         }
 
+    def get_instance(self, instance_id):
+        return self.create_instance({"name": "h100-test"})
+
     def delete_instance(self, instance_id):
         self.deleted.append(instance_id)
 
@@ -213,6 +216,10 @@ order by gpu_model
             self.assertEqual(machine.source_offer_id, "H100x8")
             self.assertEqual(machine.ssh.target, "ubuntu@192.0.2.10")
             self.assertEqual(registry.get(machine.host_id), machine)
+            registry.put(machine.model_copy(update={"state": "provisioning", "ssh": None}))
+            refreshed = launcher.refresh(machine.host_id)
+            self.assertEqual(refreshed.state, "running")
+            self.assertEqual(refreshed.ssh.target, "ubuntu@192.0.2.10")
             with self.assertRaisesRegex(ValueError, "--confirm"):
                 launcher.terminate(machine.host_id, confirm=False)
             terminated = launcher.terminate(machine.host_id, confirm=True)
