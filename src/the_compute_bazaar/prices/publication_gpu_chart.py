@@ -44,11 +44,9 @@ def render_gpu_benchmark_publication(
 
     selected_rows = _visible_gpu_series(cards, range_id).get(selected_family, [])
     outside = "#efede4"
-    sleeve = "#91aecb"
     paper = "#ffffff"
     ink = "#142027"
     blue = "#315f82"
-    rule = "#a7b1b3"
 
     figure = Figure(
         figsize=(IMAGE_WIDTH / _OUTPUT_DPI, IMAGE_HEIGHT / _OUTPUT_DPI),
@@ -66,21 +64,10 @@ def render_gpu_benchmark_publication(
                 0.932,
                 boxstyle="round,pad=0,rounding_size=0.008",
                 transform=figure.transFigure,
-                facecolor=sleeve,
+                facecolor=paper,
                 edgecolor=blue,
                 linewidth=1.35,
                 zorder=-20,
-            ),
-            FancyBboxPatch(
-                (0.034, 0.064),
-                0.932,
-                0.872,
-                boxstyle="round,pad=0,rounding_size=0.006",
-                transform=figure.transFigure,
-                facecolor=paper,
-                edgecolor="#315f82",
-                linewidth=0.8,
-                zorder=-10,
             ),
         )
     )
@@ -102,7 +89,7 @@ def render_gpu_benchmark_publication(
         parse_math=False,
     )
 
-    axes = figure.add_axes((0.034, 0.064, 0.932, 0.586), facecolor=paper)
+    axes = figure.add_axes((0.018, 0.034, 0.964, 0.616), facecolor=paper)
     if selected_rows:
         dates = [row["date"] for row in selected_rows]
         values = [row["value"] for row in selected_rows]
@@ -119,18 +106,6 @@ def render_gpu_benchmark_publication(
         domain_maximum = maximum + spread * 0.2
         axes.set_xlim(start, end)
         axes.set_ylim(domain_minimum, domain_maximum)
-        for tick in (
-            domain_minimum,
-            (domain_minimum + domain_maximum) / 2,
-            domain_maximum,
-        ):
-            axes.axhline(
-                tick,
-                color=rule,
-                alpha=0.42,
-                linewidth=1,
-                zorder=0,
-            )
         axes.fill_between(
             smooth_dates,
             smooth_values,

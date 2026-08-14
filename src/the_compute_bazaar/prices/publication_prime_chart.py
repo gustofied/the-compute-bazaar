@@ -31,20 +31,17 @@ def render_prime_offer_shelf_publication(
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
     from matplotlib.font_manager import FontProperties
-    from matplotlib.lines import Line2D
-    from matplotlib.patches import FancyBboxPatch
+    from matplotlib.patches import FancyBboxPatch, Polygon
 
     rows = _prime_publication_series(card)
     family = str((card.get("data") or {}).get("family_id") or "GPU").upper()
     outside = "#ffffff"
-    sleeve = "#f6ead3"
-    paper = "#ffffff"
+    paper = "#f8f5eb"
     ink = "#142027"
     blue = "#7c5231"
-    azure = "#f3c888"
-    green = "#526c28"
-    coral = "#a96552"
-    rule = "#a7b1b3"
+    lower_band = "#b7d07b"
+    middle_band = "#91aecb"
+    upper_band = "#f3c888"
 
     figure = Figure(
         figsize=(IMAGE_WIDTH / 100, IMAGE_HEIGHT / 100),
@@ -62,21 +59,10 @@ def render_prime_offer_shelf_publication(
                 0.924,
                 boxstyle="round,pad=0,rounding_size=0.008",
                 transform=figure.transFigure,
-                facecolor=sleeve,
+                facecolor=paper,
                 edgecolor="#9cabb0",
                 linewidth=0.9,
                 zorder=-20,
-            ),
-            FancyBboxPatch(
-                (0.030, 0.057),
-                0.940,
-                0.886,
-                boxstyle="round,pad=0,rounding_size=0.006",
-                transform=figure.transFigure,
-                facecolor=paper,
-                edgecolor="#c3ccce",
-                linewidth=0.75,
-                zorder=-10,
             ),
         )
     )
@@ -96,20 +82,8 @@ def render_prime_offer_shelf_publication(
         fontproperties=price_font,
         parse_math=False,
     )
-    figure.add_artist(
-        Line2D(
-            (0.030, 0.970),
-            (0.315, 0.315),
-            transform=figure.transFigure,
-            color=rule,
-            alpha=0.44,
-            linewidth=1,
-            zorder=0,
-        )
-    )
-
-    price_axes = figure.add_axes((0.030, 0.345, 0.940, 0.285), facecolor=paper)
-    offer_axes = figure.add_axes((0.030, 0.075, 0.940, 0.205), facecolor=paper)
+    price_axes = figure.add_axes((0.020, 0.315, 0.960, 0.315), facecolor="none")
+    offer_axes = figure.add_axes((0.020, 0.038, 0.960, 0.259), facecolor="none")
     if rows:
         dates = [row["date"] for row in rows]
         prices = [row["price"] for row in rows]
@@ -126,31 +100,35 @@ def render_prime_offer_shelf_publication(
         price_maximum = maximum + spread * 0.20
         price_axes.set_xlim(start, end)
         price_axes.set_ylim(price_minimum, price_maximum)
-        for tick in (
-            price_minimum,
-            (price_minimum + price_maximum) / 2,
-            price_maximum,
-        ):
-            price_axes.axhline(
-                tick,
-                color=rule,
-                alpha=0.42,
-                linewidth=1,
-                zorder=0,
-            )
-
         smooth_dates, smooth_prices = _shape_preserving_curve(
             dates,
             display_prices,
         )
-        price_axes.fill_between(
-            smooth_dates,
-            smooth_prices,
-            price_minimum,
-            color=blue,
-            alpha=0.055,
-            linewidth=0,
-            zorder=1,
+        duration = max((end - start).total_seconds(), 1)
+        price_span = max(price_maximum - price_minimum, 1e-9)
+        price_fill_points = [
+            (0.020, 0.038),
+            *(
+                (
+                    0.020
+                    + ((date - start).total_seconds() / duration) * 0.960,
+                    0.315
+                    + ((price - price_minimum) / price_span) * 0.315,
+                )
+                for date, price in zip(smooth_dates, smooth_prices, strict=True)
+            ),
+            (0.980, 0.038),
+        ]
+        figure.patches.append(
+            Polygon(
+                price_fill_points,
+                closed=True,
+                transform=figure.transFigure,
+                facecolor=blue,
+                edgecolor="none",
+                alpha=0.035,
+                zorder=-10,
+            )
         )
         price_axes.plot(
             smooth_dates,
@@ -185,8 +163,8 @@ def render_prime_offer_shelf_publication(
             0,
             lower,
             step="post",
-            color=green,
-            alpha=0.58,
+            color=lower_band,
+            alpha=0.78,
             linewidth=0,
         )
         offer_axes.fill_between(
@@ -194,8 +172,8 @@ def render_prime_offer_shelf_publication(
             lower,
             lower_middle,
             step="post",
-            color=azure,
-            alpha=0.58,
+            color=middle_band,
+            alpha=0.78,
             linewidth=0,
         )
         offer_axes.fill_between(
@@ -203,8 +181,8 @@ def render_prime_offer_shelf_publication(
             lower_middle,
             totals,
             step="post",
-            color=coral,
-            alpha=0.58,
+            color=upper_band,
+            alpha=0.78,
             linewidth=0,
         )
         offer_axes.step(
@@ -212,18 +190,9 @@ def render_prime_offer_shelf_publication(
             totals,
             where="post",
             color=blue,
-            linewidth=1.4,
-            alpha=0.68,
+            linewidth=1.2,
+            alpha=0.46,
         )
-        for tick in (0, max(max(totals), 1)):
-            offer_axes.axhline(
-                tick,
-                color=rule,
-                alpha=0.30,
-                linewidth=1,
-                zorder=0,
-            )
-
     price_axes.set_axis_off()
     offer_axes.set_axis_off()
     return _publication_png(canvas)
