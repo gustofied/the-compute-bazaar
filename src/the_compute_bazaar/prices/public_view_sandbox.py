@@ -1,4 +1,4 @@
-"""Build the public StarSling workload-cost card."""
+"""Build the public Sandbox cost card."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def sandbox_workload_view(payload: Mapping[str, Any]) -> dict[str, Any]:
             "claim_scope": workload.get("claim_scope"),
         },
         headline={
-            "label": "Latest StarSling workload cost",
+            "label": "Sandbox cost",
             "median_estimated_cost_usd": number(
                 latest_complete_run.get("median_estimated_cost_usd")
             ),

@@ -133,21 +133,18 @@ def sandbox_workload_publication_metadata(
     value = _format_cents(_finite_number(headline.get("median_estimated_cost_usd")))
     observed_label = _format_observed_date(observed_at)
     display_line = (
-        f"StarSling / {value} median cost per job / "
+        f"Sandbox cost / {value} per job / "
         f"observed {observed_label.replace(' at ', ', ')}"
     )
     return {
-        "title": f"Measured workload cost | {value} median per job",
+        "title": f"Sandbox cost | {value} per job",
         "description": (
-            "Median estimated processor-and-memory cost for the latest compatible "
-            f"StarSling HPC Sandbox Benchmark run. Observed {observed_label}."
+            f"The latest Sandbox cost is {value} per job. "
+            f"Observed {observed_label}."
         ),
-        "image_alt": (
-            "Latest StarSling HPC Sandbox Benchmark run with median estimated "
-            f"job cost of {value}"
-        ),
-        "subject_label": "Measured workload cost",
-        "view_label": "Latest measured run",
+        "image_alt": f"Sandbox cost of {value} per job across services",
+        "subject_label": "Sandbox cost",
+        "view_label": "Latest run",
         "value": value,
         "observed_at": observed_at.isoformat() if observed_at else "",
         "observed_label": _format_observed(observed_at),
