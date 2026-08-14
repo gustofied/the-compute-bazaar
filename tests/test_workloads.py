@@ -88,6 +88,7 @@ class WorkloadTest(unittest.TestCase):
             )
             self.assertEqual(running.state, "running")
             self.assertEqual(running.remote_pid, 4242)
+            self.assertEqual(running.working_directory, "/tmp")
             self.assertEqual(service.inspect(running.workload_id).state, "running")
 
             finished = True

@@ -1029,7 +1029,7 @@ def fleet_workload_run(
     working_directory: Annotated[
         str,
         typer.Option("--cwd", help="Remote working directory."),
-    ] = "/workspace",
+    ] = "/tmp",
 ) -> None:
     """Start one durable command over SSH."""
     from .fleet import WorkloadError, WorkloadService

@@ -18,7 +18,8 @@
     "@perspective-dev/viewer-datagrid": "4.5.2",
     "@xterm/addon-fit": "0.10.0",
     "@xterm/xterm": "5.5.0",
-    "acpx": "0.13.0"
+    "acpx": "0.13.0",
+    "uplot": "1.6.32"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.5",

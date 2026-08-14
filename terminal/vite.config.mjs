@@ -36,6 +36,10 @@ export default defineConfig({
         find: "@xterm/addon-fit",
         replacement: path.join(terminalRoot, "node_modules/@xterm/addon-fit"),
       },
+      {
+        find: "uplot",
+        replacement: path.join(terminalRoot, "node_modules/uplot"),
+      },
     ],
   },
   build: {
@@ -47,6 +51,7 @@ export default defineConfig({
       input: {
         app: path.join(staticRoot, "app.js"),
         command: path.join(staticRoot, "command.js"),
+        fleet: path.join(staticRoot, "fleet.js"),
       },
       output: {
         entryFileNames: "[name].js",

@@ -106,7 +106,7 @@ class WorkloadService:
         *,
         name: str,
         command: Sequence[str],
-        working_directory: str = "/workspace",
+        working_directory: str = "/tmp",
     ) -> WorkloadRun:
         if not command:
             raise WorkloadError("Workload command cannot be empty")
@@ -300,7 +300,7 @@ def _run_script(command: Sequence[str], *, working_directory: str) -> str:
             "finish() { code=$?; printf '%s\\n' \"$code\" > \"$status_file.tmp\"; mv \"$status_file.tmp\" \"$status_file\"; }",
             "trap finish EXIT",
             "trap 'exit 143' HUP INT TERM",
-            f"cd {shlex.quote(working_directory)}",
+            f"cd {shlex.quote(working_directory)} || exit 1",
             shlex.join(command),
         )
     )

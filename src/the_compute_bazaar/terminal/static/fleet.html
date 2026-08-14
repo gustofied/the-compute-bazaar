@@ -8,7 +8,8 @@
     <title>Compute Bazaar Fleet</title>
     <link rel="stylesheet" href="/terminal-assets/command.css?v=20260812-1">
     <link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2">
-    <link rel="stylesheet" href="/terminal-assets/fleet.css?v=20260811-3">
+    <link rel="stylesheet" href="/terminal-assets/perspective/fleet.css?v=20260814-1">
+    <link rel="stylesheet" href="/terminal-assets/fleet.css?v=20260814-1">
   </head>
   <body data-terminal-workspace="fleet">
     <div class="fleet-app">
@@ -25,10 +26,10 @@
       </header>
 
       <main class="fleet-shell">
-        <aside class="host-panel">
+        <aside class="host-panel" aria-label="Fleet hosts">
           <header>
             <h1>Hosts</h1>
-            <button id="overview-toggle" class="view-toggle" type="button" aria-pressed="false">All <kbd>T</kbd></button>
+            <button id="overview-toggle" class="view-toggle" type="button" aria-pressed="false">All <kbd>t</kbd></button>
           </header>
           <div class="host-list" id="host-list"></div>
           <footer>
@@ -38,13 +39,11 @@
         </aside>
 
         <section class="fleet-stage" aria-live="polite">
-          <div class="fleet-empty" id="fleet-empty">
-            <p>No active hosts</p>
-          </div>
+          <div class="fleet-empty" id="fleet-empty">No active hosts</div>
 
           <section class="overview-view" id="overview-view" aria-labelledby="overview-title" hidden>
-            <header>
-              <h2 id="overview-title">All hosts</h2>
+            <header class="section-bar">
+              <h2 id="overview-title">Fleet</h2>
               <span id="overview-state">0 hosts</span>
             </header>
             <div class="overview-table" role="table" aria-label="Fleet host telemetry">
@@ -65,72 +64,49 @@
 
           <div class="machine-view" id="machine-view" hidden>
             <header class="machine-header">
-              <div class="machine-identity">
-                <h2 id="machine-name">Machine</h2>
-                <p class="machine-subtitle" id="machine-subtitle"></p>
-              </div>
+              <h2 id="machine-name">Machine</h2>
+              <span id="machine-subtitle"></span>
               <div class="machine-state">
-                <span id="machine-provider">Provider</span>
-                <span class="readiness" id="readiness">Checking</span>
+                <span id="machine-provider">—</span>
+                <span class="readiness" id="readiness">Wait</span>
                 <span id="termination">—</span>
               </div>
             </header>
 
-            <section class="metric-strip" aria-label="GPU telemetry">
-              <article><span>GPU</span><strong id="gpu-util">—</strong><small>utilization</small></article>
-              <article><span>VRAM</span><strong id="gpu-memory">—</strong><small id="gpu-memory-total">used</small></article>
-              <article><span>Temp</span><strong id="gpu-temp">—</strong><small id="gpu-temp-limit">limit</small></article>
-              <article><span>Power</span><strong id="gpu-power">—</strong><small id="gpu-power-limit">limit</small></article>
+            <section class="system-panel" aria-labelledby="system-title">
+              <header class="section-bar">
+                <h3 id="system-title">System</h3>
+                <span id="system-meta">—</span>
+              </header>
+              <div class="system-meters">
+                <div class="meter-row"><span>CPU</span><strong id="cpu-value">—</strong><div class="meter"><i id="cpu-meter"></i></div></div>
+                <div class="meter-row"><span>RAM</span><strong id="memory-value">—</strong><div class="meter"><i id="memory-meter"></i></div></div>
+                <div class="meter-row"><span>Disk</span><strong id="disk-value">—</strong><div class="meter"><i id="disk-meter"></i></div></div>
+              </div>
+            </section>
+
+            <section class="gpu-panel" aria-labelledby="gpu-title">
+              <header class="section-bar">
+                <h3 id="gpu-title">GPU</h3>
+                <span id="gpu-meta">—</span>
+              </header>
+              <div class="gpu-list" id="gpu-list"></div>
             </section>
 
             <section class="telemetry-panel" aria-labelledby="telemetry-title">
-              <header>
-                <h3 id="telemetry-title">Telemetry</h3>
+              <header class="section-bar">
+                <h3 id="telemetry-title">History</h3>
                 <span class="sample-rate">5s</span>
-                <div class="legend" aria-label="Chart legend">
-                  <span class="gpu">GPU</span><span class="vram">VRAM</span><span class="cpu">CPU</span>
-                </div>
+                <div class="legend" aria-label="Chart legend"><span class="gpu">GPU</span><span class="vram">VRAM</span><span class="cpu">CPU</span></div>
               </header>
-              <svg id="telemetry-chart" viewBox="0 0 1000 160" preserveAspectRatio="none" role="img" aria-labelledby="telemetry-title telemetry-description">
-                <desc id="telemetry-description">Recent GPU, VRAM, and CPU utilization percentages.</desc>
-                <g class="chart-grid"><path d="M0 10H1000 M0 80H1000 M0 150H1000"></path></g>
-                <path class="chart-line cpu" id="cpu-line"></path>
-                <path class="chart-line vram" id="vram-line"></path>
-                <path class="chart-line gpu" id="gpu-line"></path>
-              </svg>
+              <div id="telemetry-chart" aria-label="GPU, VRAM, and CPU utilization history"></div>
             </section>
 
-            <div class="machine-lower">
-              <section class="resource-panel" aria-labelledby="resources-title">
-                <header><h3 id="resources-title">System</h3></header>
-                <div class="resource-row">
-                  <div><span>CPU</span><strong id="cpu-value">—</strong></div>
-                  <div class="meter"><span id="cpu-meter"></span></div>
-                </div>
-                <div class="resource-row">
-                  <div><span>Memory</span><strong id="memory-value">—</strong></div>
-                  <div class="meter"><span id="memory-meter"></span></div>
-                </div>
-                <div class="resource-row">
-                  <div><span>Disk</span><strong id="disk-value">—</strong></div>
-                  <div class="meter"><span id="disk-meter"></span></div>
-                </div>
-                <dl class="system-details">
-                  <div><dt>GPU</dt><dd id="gpu-name">—</dd></div>
-                  <div><dt>Driver</dt><dd id="driver">—</dd></div>
-                  <div><dt>PCIe</dt><dd id="pcie">—</dd></div>
-                  <div><dt>OS</dt><dd id="os-name">—</dd></div>
-                  <div><dt>Kernel</dt><dd id="kernel">—</dd></div>
-                </dl>
-              </section>
-
-              <section class="readiness-panel" aria-labelledby="checks-title">
-                <header><h3 id="checks-title">Checks</h3><span id="check-summary">0 / 0</span></header>
+            <section class="ops-panel" aria-label="Checks, jobs, and GPU processes">
+              <div class="ops-column checks-column">
+                <header><h3>Checks</h3><span id="check-summary">0 / 0</span></header>
                 <div id="check-list" class="check-list"></div>
-              </section>
-            </div>
-
-            <section class="activity-panel empty" id="activity-panel" aria-label="Jobs and GPU processes">
+              </div>
               <div class="activity-column">
                 <header><h3>Jobs</h3><span id="workload-count">0</span></header>
                 <div class="activity-list" id="workload-list"></div>
@@ -145,6 +121,6 @@
       </main>
     </div>
     <script type="module" src="/terminal-assets/perspective/command.js?v=20260812-1"></script>
-    <script type="module" src="/terminal-assets/fleet.js?v=20260811-2"></script>
+    <script type="module" src="/terminal-assets/perspective/fleet.js?v=20260814-1"></script>
   </body>
 </html>

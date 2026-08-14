@@ -42,6 +42,9 @@ importers:
       acpx:
         specifier: 0.13.0
         version: 0.13.0
+      uplot:
+        specifier: 1.6.32
+        version: 1.6.32
     devDependencies:
       '@tauri-apps/cli':
         specifier: ^2.8.5
@@ -896,6 +899,9 @@ packages:
     resolution: {integrity: sha512-N6uOhuW6zO95P3Mel2I2zMsbsanvvtgn6jVqJv4vbVcz/JN0OkL9suomjQGmWtxJQXOCqUJvquc1sMeNz/IwlA==}
     engines: {node: '>= 0.8.0'}
 
+  uplot@1.6.32:
+    resolution: {integrity: sha512-KIMVnG68zvu5XXUbC4LQEPnhwOxBuLyW1AHtpm6IKTXImkbLgkMy+jabjLgSLMasNuGGzQm/ep3tOkyTxpiQIw==}
+
   url-join@4.0.1:
     resolution: {integrity: sha512-jk1+QP6ZJqyOiuEI9AEWQfju/nB2Pw466kbA0LEZljHwKeMgd9WrAEgEGxjPDD2+TNbbb37rTyhEfrCXfuKXnA==}
 
@@ -1729,6 +1735,8 @@ snapshots:
   union@0.5.0:
     dependencies:
       qs: 6.15.3
+
+  uplot@1.6.32: {}
 
   url-join@4.0.1: {}
 
