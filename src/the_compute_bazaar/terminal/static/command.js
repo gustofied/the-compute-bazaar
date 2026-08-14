@@ -809,7 +809,7 @@ function actionSuccessMessage(action) {
 async function showStatus() {
   try {
     const status = await loadTerminal({ refresh: true });
-    const runId = status.run?.run_id || "unknown run";
+    const runId = status.run?.source_run_id || status.run?.run_id || "unknown run";
     const destinations = Object.entries(status.destinations || {})
       .filter(([, destination]) => destination.available)
       .map(([name]) => name)

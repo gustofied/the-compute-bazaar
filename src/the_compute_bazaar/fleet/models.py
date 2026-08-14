@@ -38,6 +38,10 @@ class FleetMachine(BaseModel):
 
     host_id: str
     allocation_id: str | None = None
+    source: str | None = None
+    source_offer_id: str | None = None
+    provider_resource_id: str | None = None
+    ask_usd_hr: float | None = Field(default=None, gt=0)
     name: str
     state: MachineState
     expected_gpu_model: str | None = None
@@ -55,6 +59,10 @@ class FleetMachine(BaseModel):
         return {
             "host_id": self.host_id,
             "allocation_id": self.allocation_id,
+            "source": self.source,
+            "source_offer_id": self.source_offer_id,
+            "provider_resource_id": self.provider_resource_id,
+            "ask_usd_hr": self.ask_usd_hr,
             "name": self.name,
             "state": self.state,
             "expected_gpu_model": self.expected_gpu_model,

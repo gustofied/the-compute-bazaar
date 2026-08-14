@@ -68,14 +68,12 @@ TABLE_COLUMNS: dict[str, tuple[Column, ...]] = {
     ),
     "launch": (
         ("OFFER", "offer_id", 20),
-        ("PROVIDER", "provider", 10),
+        ("OPERATOR", "operator", 14),
         ("GPU", "gpu_model", 18),
         ("COUNT", "gpu_count", 7),
-        ("GPU-HR", "price_usd_gpu_hr", 12),
-        ("LOCATION", "location", 24),
-        ("STATE", "status", 24),
-        ("MISSING", "missing", 30),
-        ("AUTH", "credentials_configured", 6),
+        ("GPU-HR", "ask_usd_hr|price_usd_gpu_hr", 12),
+        ("TOTAL-HR", "total_usd_hr|price_usd_instance_hr", 12),
+        ("REGION", "region|location", 24),
         ("OBSERVED", "observed_at", 20),
     ),
     "model": (
@@ -225,6 +223,8 @@ def _context_line(payload: Mapping[str, Any]) -> str:
     if isinstance(source, Mapping) and source.get("label"):
         parts.append(str(source["label"]))
     if isinstance(run, Mapping):
+        if run.get("source_run_id"):
+            parts.append(str(run["source_run_id"]))
         if run.get("run_id"):
             parts.append(str(run["run_id"]))
         if run.get("observed_at"):

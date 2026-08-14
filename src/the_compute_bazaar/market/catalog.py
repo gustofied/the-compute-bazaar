@@ -126,7 +126,7 @@ order by ordinal_position
     def run(self) -> dict[str, Any]:
         manifest = getattr(self, "manifest", {})
         return {
-            "run_id": manifest.get("run_id"),
+            "source_run_id": manifest.get("source_run_id"),
             "observed_at": manifest.get("observed_at"),
             "provider_scope": manifest.get("provider_scope") or [],
         }

@@ -18,40 +18,40 @@ class MarketLake:
     def __init__(self, root: str | Path) -> None:
         self.root = str(root).rstrip("/")
 
-    def bronze_ref(self, *, source: str, day: date, run_id: str) -> str:
+    def bronze_ref(self, *, source: str, day: date, source_run_id: str) -> str:
         return self._ref(
             "bronze",
             f"source={source}",
             f"date={day.isoformat()}",
-            f"run_id={run_id}",
+            f"source_run_id={source_run_id}",
             "response.json",
         )
 
-    def silver_ref(self, *, source: str, day: date, run_id: str) -> str:
+    def silver_ref(self, *, source: str, day: date, source_run_id: str) -> str:
         return self._ref(
             "silver",
             "gpu_offers",
             f"date={day.isoformat()}",
             f"source={source}",
-            f"run_id={run_id}",
+            f"source_run_id={source_run_id}",
             "part-0.parquet",
         )
 
-    def manifest_ref(self, *, source: str, day: date, run_id: str) -> str:
+    def manifest_ref(self, *, source: str, day: date, source_run_id: str) -> str:
         return self._ref(
             "runs",
             f"source={source}",
             f"date={day.isoformat()}",
-            f"run_id={run_id}",
+            f"source_run_id={source_run_id}",
             "manifest.json",
         )
 
-    def market_manifest_ref(self, *, day: date, run_id: str) -> str:
+    def market_manifest_ref(self, *, day: date, source_run_id: str) -> str:
         return self._ref(
             "_manifests",
             "market",
             f"date={day.isoformat()}",
-            f"run_id={run_id}.json",
+            f"source_run_id={source_run_id}.json",
         )
 
     def latest_market_manifest_ref(self) -> str:

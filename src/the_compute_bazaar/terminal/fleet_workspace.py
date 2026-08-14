@@ -160,13 +160,19 @@ def _machine_payload(
     payload = {
         "host_id": machine.host_id,
         "allocation_id": machine.allocation_id,
-        "provider": allocation.get("capacity_provider") if allocation else "attached",
+        "provider": (
+            allocation.get("capacity_provider")
+            if allocation
+            else machine.source or "attached"
+        ),
         "name": machine.name,
         "state": machine.state,
         "expected_gpu_model": machine.expected_gpu_model,
         "expected_gpu_count": machine.expected_gpu_count,
         "price_usd_gpu_hr": (
-            allocation.get("selected_price_usd_gpu_hr") if allocation else None
+            allocation.get("selected_price_usd_gpu_hr")
+            if allocation
+            else machine.ask_usd_hr
         ),
         "price_usd_instance_hr": (
             allocation.get("selected_price_usd_instance_hr") if allocation else None

@@ -74,7 +74,9 @@ class CatalogStore:
             operations_version = (
                 self._operations.version() if self._operations else None
             )
-            if manifest.get("run_id") != self._catalog.manifest.get("run_id"):
+            if _manifest_identity(manifest) != _manifest_identity(
+                self._catalog.manifest
+            ):
                 self._catalog = open_catalog(
                     lake_root=self._lake_root,
                     operations=self._operations,
@@ -274,7 +276,7 @@ class DataWorkspace:
                 media_type="application/vnd.apache.arrow.stream",
                 headers={
                     "Cache-Control": "no-store",
-                    "X-Compute-Bazaar-Run-Id": str(run.get("run_id") or ""),
+                    "X-Compute-Bazaar-Run-Id": _run_id(run),
                     "X-Compute-Bazaar-Observed-At": str(run.get("observed_at") or ""),
                     "X-Compute-Bazaar-Row-Count": str(table.num_rows),
                     "X-Compute-Bazaar-Query-Limit": str(selected_limit),
@@ -341,7 +343,7 @@ class DataWorkspace:
                 media_type="application/vnd.apache.arrow.stream",
                 headers={
                     "Cache-Control": "no-store",
-                    "X-Compute-Bazaar-Run-Id": str(run.get("run_id") or ""),
+                    "X-Compute-Bazaar-Run-Id": _run_id(run),
                     "X-Compute-Bazaar-Observed-At": str(run.get("observed_at") or ""),
                     "X-Compute-Bazaar-Row-Count": str(table.num_rows),
                     "X-Compute-Bazaar-Elapsed-Ms": str(elapsed_ms),
@@ -471,10 +473,17 @@ def _launch_payload(
 
 
 def _run_identity(catalog: Any) -> dict[str, Any]:
-    return {
-        "run_id": catalog.manifest.get("run_id"),
-        "observed_at": catalog.manifest.get("observed_at"),
-    }
+    manifest = catalog.manifest
+    key = "source_run_id" if manifest.get("source_run_id") else "run_id"
+    return {key: manifest.get(key), "observed_at": manifest.get("observed_at")}
+
+
+def _manifest_identity(manifest: dict[str, Any]) -> str | None:
+    return manifest.get("source_run_id") or manifest.get("run_id")
+
+
+def _run_id(run: dict[str, Any]) -> str:
+    return str(run.get("source_run_id") or run.get("run_id") or "")
 
 
 def _arrow_stream(table: pa.Table) -> bytes:

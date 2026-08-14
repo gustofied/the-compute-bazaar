@@ -20,12 +20,15 @@ def publish_generation(lake: MarketLake, result: MarketRunResult) -> dict[str, A
     root = Path(lake.root).expanduser().resolve()
     run = result.run
     day = run.observed_at.date()
-    immutable_manifest_ref = lake.market_manifest_ref(day=day, run_id=run.run_id)
+    immutable_manifest_ref = lake.market_manifest_ref(
+        day=day,
+        source_run_id=run.source_run_id,
+    )
     manifest = {
         "contract": MARKET_LAKE_CONTRACT,
         "table": "market_snapshot",
         "catalog_kind": "market",
-        "run_id": run.run_id,
+        "source_run_id": run.source_run_id,
         "observed_at": run.observed_at,
         "observed_date": day.isoformat(),
         "ref_base": "lake_root",
@@ -44,7 +47,7 @@ def publish_generation(lake: MarketLake, result: MarketRunResult) -> dict[str, A
 
     portable = {
         "contract": MARKET_LAKE_CONTRACT,
-        "run_id": run.run_id,
+        "source_run_id": run.source_run_id,
         "observed_at": run.observed_at,
         "provider_scope": [run.source],
         "history_mode": "snapshot",
@@ -72,7 +75,7 @@ def publish_generation(lake: MarketLake, result: MarketRunResult) -> dict[str, A
     lake.write_json(str(root / "index.json"), index)
     return {
         "root": str(root),
-        "run_id": run.run_id,
+        "source_run_id": run.source_run_id,
         "observed_at": run.observed_at,
         "providers": [run.source],
         "silver_rows": run.silver_row_count,

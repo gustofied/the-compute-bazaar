@@ -128,54 +128,6 @@ TERMINAL_VIEWS = (
 
 MARKET_TERMINAL_VIEWS = (
     TerminalView(
-        view_id="gpu-offer-summary",
-        title="Best GPU Asks",
-        description="Best available ask by GPU model, count, and deployment type.",
-        viewer="perspective",
-        viewer_config={
-            "plugin": "Datagrid",
-            "columns": [
-                "marketplace",
-                "gpu_model",
-                "gpu_count",
-                "deployment_type",
-                "best_ask_usd_gpu_hr",
-                "listing_count",
-                "provider_count",
-                "region_count",
-            ],
-            "sort": [["best_ask_usd_gpu_hr", "asc"]],
-            "settings": False,
-        },
-        sql="""select
-  marketplace,
-  gpu_model,
-  gpu_count,
-  deployment_type,
-  best_ask_usd_gpu_hr,
-  listing_count,
-  provider_count,
-  region_count,
-  observed_at
-from (
-  select
-    observed_at,
-    marketplace,
-    gpu_model,
-    gpu_count,
-    deployment_type,
-    min(ask_usd_gpu_hr) as best_ask_usd_gpu_hr,
-    count(*) as listing_count,
-    count(distinct provider_id) as provider_count,
-    count(distinct region_id) as region_count
-  from silver.gpu_offers
-  where available and gpu_model is not null
-  group by observed_at, marketplace, gpu_model, gpu_count, deployment_type
-)
-order by best_ask_usd_gpu_hr, gpu_model, gpu_count""",
-        tables=("silver.gpu_offers",),
-    ),
-    TerminalView(
         view_id="available-gpu-offers",
         title="Available GPU Offers",
         description="Available configurations retained from the latest provider read.",
@@ -183,32 +135,35 @@ order by best_ask_usd_gpu_hr, gpu_model, gpu_count""",
         viewer_config={
             "plugin": "Datagrid",
             "columns": [
-                "marketplace",
-                "provider_name",
+                "source",
+                "intermediary",
+                "operator",
                 "gpu_model",
                 "gpu_count",
-                "deployment_type",
-                "region_name",
-                "ask_usd_gpu_hr",
-                "ask_usd_instance_hr",
+                "region",
+                "ask_usd_hr",
+                "offer_id",
+                "observation_id",
             ],
-            "sort": [["ask_usd_gpu_hr", "asc"]],
+            "sort": [["ask_usd_hr", "asc"]],
             "settings": False,
         },
         sql="""select
-  marketplace,
-  provider_name,
+  source,
+  intermediary,
+  operator_id,
+  operator,
   gpu_model,
   gpu_count,
-  deployment_type,
   country_code,
-  region_name,
-  ask_usd_gpu_hr,
-  ask_usd_instance_hr,
+  region,
+  ask_usd_hr,
+  offer_id,
+  observation_id,
   observed_at
 from silver.gpu_offers
 where available and gpu_model is not null
-order by ask_usd_gpu_hr, gpu_model, gpu_count""",
+order by ask_usd_hr, gpu_model, gpu_count""",
         tables=("silver.gpu_offers",),
     ),
 )

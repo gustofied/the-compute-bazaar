@@ -534,8 +534,9 @@ async function selectVirtualTable(tableRef) {
     elements.resultTime.textContent = adapter.stats.elapsedMs === null
       ? "-"
       : `${adapter.stats.elapsedMs} ms`;
-    elements.resultRun.textContent = shortRunId(metadata.run?.run_id);
-    elements.resultRun.title = metadata.run?.run_id || "";
+    const runId = metadata.run?.source_run_id || metadata.run?.run_id;
+    elements.resultRun.textContent = shortRunId(runId);
+    elements.resultRun.title = runId || "";
     showResultMeta();
     await renderPrintout(nextTable, {
       label: "query.out",
@@ -1250,8 +1251,9 @@ async function initialize() {
     renderTableList(state.session.tables, "silver");
 
     const run = state.session.run || {};
-    elements.runId.textContent = run.run_id || "Unknown run";
-    elements.runId.title = run.run_id || "";
+    const runId = run.source_run_id || run.run_id;
+    elements.runId.textContent = runId || "Unknown run";
+    elements.runId.title = runId || "";
     elements.observedAt.textContent = formatObservedAt(run.observed_at);
     await startPerspective();
     pending = window.ComputeBazaarTerminal?.takePendingAction();

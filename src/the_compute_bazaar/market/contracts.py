@@ -60,43 +60,30 @@ class SourceRead:
 
 @dataclass(frozen=True)
 class GpuOffer:
-    """One marketplace offer in one location at one observation time."""
+    """One GPU offer in one location at one observation time."""
 
     observation_id: str
-    run_id: str
+    source_run_id: str
     observed_at: datetime
-    marketplace: str
-    provider_id: str
-    provider_name: str
-    marketplace_offer_id: str
-    gpu_name: str
+    source: str
+    intermediary: str
+    operator_id: str | None
+    operator: str | None
+    offer_id: str
     gpu_model: str | None
     gpu_count: int
-    gpu_vram_gb: float | None
-    total_vram_gb: float | None
-    cpu_count: float | None
-    memory_gb: float | None
-    storage_gb: float | None
-    deployment_type: str
-    interconnect: str | None
-    nvlink: bool | None
-    cloud_init: bool | None
     country_code: str | None
-    region_id: str
-    region_name: str
-    ask_usd_instance_hr: float
-    ask_usd_gpu_hr: float
+    region: str
+    ask_usd_hr: float
     available: bool
-    os_images: tuple[str, ...] = ()
-    raw_ref: str | None = None
 
     def __post_init__(self) -> None:
         if self.observed_at.tzinfo is None:
             raise ValueError("observed_at must be timezone-aware")
         if self.gpu_count < 1:
             raise ValueError("gpu_count must be positive")
-        if self.ask_usd_instance_hr <= 0:
-            raise ValueError("ask_usd_instance_hr must be positive")
+        if self.ask_usd_hr <= 0:
+            raise ValueError("ask_usd_hr must be positive")
 
     def row(self) -> dict[str, Any]:
         return asdict(self)
@@ -106,7 +93,7 @@ class GpuOffer:
 class RejectedOffer:
     source_index: int
     reason: str
-    marketplace_offer_id: str | None = None
+    offer_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -117,7 +104,7 @@ class NormalizedOffers:
 
 @dataclass(frozen=True)
 class MarketRun:
-    run_id: str
+    source_run_id: str
     source: str
     observed_at: datetime
     status: RunStatus

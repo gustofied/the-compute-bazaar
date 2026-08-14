@@ -43,7 +43,8 @@ class SesterceSource:
         if not api_key:
             raise ValueError("Sesterce API key is required")
         self.api_key = api_key
-        self.endpoint = f"{api_base.rstrip('/')}/gpu-cloud/instances/offers"
+        self.instances_endpoint = f"{api_base.rstrip('/')}/gpu-cloud/instances"
+        self.endpoint = f"{self.instances_endpoint}/offers"
 
     def read(self, *, observed_at: datetime | None = None) -> SourceRead:
         observed_at = observed_at or datetime.now(UTC)
@@ -80,12 +81,84 @@ class SesterceSource:
             error=error,
         )
 
+    def create_instance(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+        request = Request(
+            self.instances_endpoint,
+            data=json.dumps(payload, separators=(",", ":")).encode(),
+            method="POST",
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": USER_AGENT,
+                "x-api-key": self.api_key,
+            },
+        )
+        try:
+            with urlopen(request, timeout=120) as response:  # noqa: S310
+                result = _decode(response.read())
+                status = response.status
+        except HTTPError as exc:
+            detail = _decode(exc.read())
+            raise RuntimeError(f"Sesterce returned HTTP {exc.code}: {detail}") from exc
+        except (URLError, OSError) as exc:
+            raise RuntimeError(
+                f"Sesterce request failed: {getattr(exc, 'reason', exc)}"
+            ) from exc
+        if status != 201 or not isinstance(result, Mapping):
+            raise RuntimeError(f"Sesterce returned an invalid create response ({status})")
+        return result
+
+    def get_instance(self, instance_id: str) -> Mapping[str, Any]:
+        request = Request(
+            f"{self.instances_endpoint}/{instance_id}",
+            headers={
+                "Accept": "application/json",
+                "User-Agent": USER_AGENT,
+                "x-api-key": self.api_key,
+            },
+        )
+        try:
+            with urlopen(request, timeout=60) as response:  # noqa: S310
+                result = _decode(response.read())
+        except HTTPError as exc:
+            detail = _decode(exc.read())
+            raise RuntimeError(f"Sesterce returned HTTP {exc.code}: {detail}") from exc
+        except (URLError, OSError) as exc:
+            raise RuntimeError(
+                f"Sesterce request failed: {getattr(exc, 'reason', exc)}"
+            ) from exc
+        if not isinstance(result, Mapping):
+            raise RuntimeError("Sesterce returned an invalid instance response")
+        return result
+
+    def delete_instance(self, instance_id: str) -> None:
+        request = Request(
+            f"{self.instances_endpoint}/{instance_id}",
+            method="DELETE",
+            headers={
+                "Accept": "application/json",
+                "User-Agent": USER_AGENT,
+                "x-api-key": self.api_key,
+            },
+        )
+        try:
+            with urlopen(request, timeout=60) as response:  # noqa: S310
+                status = response.status
+        except HTTPError as exc:
+            detail = _decode(exc.read())
+            raise RuntimeError(f"Sesterce returned HTTP {exc.code}: {detail}") from exc
+        except (URLError, OSError) as exc:
+            raise RuntimeError(
+                f"Sesterce request failed: {getattr(exc, 'reason', exc)}"
+            ) from exc
+        if status != 204:
+            raise RuntimeError(f"Sesterce returned an invalid delete response ({status})")
+
     def normalize(
         self,
         read: SourceRead,
         *,
-        run_id: str,
-        raw_ref: str,
+        source_run_id: str,
     ) -> NormalizedOffers:
         if not read.complete:
             return NormalizedOffers(())
@@ -111,6 +184,9 @@ class SesterceSource:
             if price is None or price <= 0:
                 rejected.append(RejectedOffer(index, "invalid hourly price", offer_id))
                 continue
+            if _text(value.get("deploymentType")).lower() != "vm":
+                rejected.append(RejectedOffer(index, "not a VM offer", offer_id))
+                continue
             cloud = (
                 value.get("cloud") if isinstance(value.get("cloud"), Mapping) else {}
             )
@@ -130,41 +206,28 @@ class SesterceSource:
                 ):
                     rejected.append(RejectedOffer(index, "invalid region", offer_id))
                     continue
-                marketplace_offer_id = ":".join(
-                    (_text(cloud.get("_id")), offer_id, _text(location.get("region")))
-                )
                 offers.append(
                     GpuOffer(
                         observation_id="obs-"
-                        + stable_id(run_id, marketplace_offer_id),
-                        run_id=run_id,
+                        + stable_id(
+                            source_run_id,
+                            _text(cloud.get("_id")),
+                            offer_id,
+                            _text(location.get("region")),
+                        ),
+                        source_run_id=source_run_id,
                         observed_at=read.observed_at,
-                        marketplace=self.name,
-                        provider_id=_text(cloud.get("_id")),
-                        provider_name=_text(cloud.get("name")),
-                        marketplace_offer_id=marketplace_offer_id,
-                        gpu_name=gpu_name,
+                        source=self.name,
+                        intermediary=self.name,
+                        operator_id=_optional_text(cloud.get("_id")),
+                        operator=_optional_text(cloud.get("name")),
+                        offer_id=offer_id,
                         gpu_model=canonical_gpu(gpu_name, total_vram, gpu_count),
                         gpu_count=gpu_count,
-                        gpu_vram_gb=(total_vram / gpu_count if total_vram else None),
-                        total_vram_gb=total_vram,
-                        cpu_count=_number(config.get("vCpu")),
-                        memory_gb=_number(config.get("ramGB")),
-                        storage_gb=_number(config.get("storageGB")),
-                        deployment_type=_text(value.get("deploymentType")) or "unknown",
-                        interconnect=_optional_text(config.get("interconnect")),
-                        nvlink=_boolean(value.get("nvlink")),
-                        cloud_init=_boolean(value.get("cloudInitAvailable")),
                         country_code=_optional_text(location.get("countryCode")),
-                        region_id=_text(location.get("region")),
-                        region_name=_text(location.get("name")),
-                        ask_usd_instance_hr=price,
-                        ask_usd_gpu_hr=price / gpu_count,
+                        region=_text(location.get("region")),
+                        ask_usd_hr=price / gpu_count,
                         available=location.get("available") is True,
-                        os_images=tuple(
-                            str(item) for item in config.get("os", []) if item
-                        ),
-                        raw_ref=raw_ref,
                     )
                 )
         return NormalizedOffers(tuple(offers), tuple(rejected))

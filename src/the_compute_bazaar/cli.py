@@ -782,6 +782,72 @@ def fleet_hosts(ctx: typer.Context) -> None:
     )
 
 
+@fleet_app.command("plan")
+def fleet_plan(
+    ctx: typer.Context,
+    observation_id: Annotated[str, typer.Argument()],
+    name: Annotated[str, typer.Option(help="Machine name.")],
+    ssh_key_id: Annotated[str, typer.Option(help="Sesterce SSH key ID.")],
+    os_name: Annotated[str | None, typer.Option("--os", help="Sesterce VM image.")] = None,
+) -> None:
+    """Recheck one Sesterce observation and show the create request."""
+    try:
+        plan = _sesterce_launcher(ctx).plan(
+            observation_id,
+            name=name,
+            ssh_key_id=ssh_key_id,
+            os_name=os_name,
+        )
+    except (KeyError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(ctx, plan.payload(), command="launch", include_source=False)
+
+
+@fleet_app.command("launch")
+def fleet_launch(
+    ctx: typer.Context,
+    observation_id: Annotated[str, typer.Argument()],
+    name: Annotated[str, typer.Option(help="Machine name.")],
+    ssh_key_id: Annotated[str, typer.Option(help="Sesterce SSH key ID.")],
+    max_hourly_usd: Annotated[
+        float,
+        typer.Option(help="Refuse the launch above this total hourly price."),
+    ],
+    os_name: Annotated[str | None, typer.Option("--os", help="Sesterce VM image.")] = None,
+    wait_seconds: Annotated[
+        int,
+        typer.Option(min=0, help="Wait for an SSH endpoint, in seconds."),
+    ] = 180,
+    confirm: Annotated[
+        bool,
+        typer.Option("--confirm", help="Create the paid Sesterce instance."),
+    ] = False,
+) -> None:
+    """Create one Sesterce instance and add it to Fleet."""
+    try:
+        plan, machine = _sesterce_launcher(ctx).launch(
+            observation_id,
+            name=name,
+            ssh_key_id=ssh_key_id,
+            max_hourly_usd=max_hourly_usd,
+            confirm=confirm,
+            os_name=os_name,
+            wait_seconds=wait_seconds,
+        )
+    except (KeyError, RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        ctx,
+        {
+            "contract": "compute-bazaar.fleet-launch",
+            "observed_at": plan.observed_at,
+            "rows": [machine.row()],
+        },
+        command="fleet",
+        include_source=False,
+    )
+
+
 @fleet_app.command("attach")
 def fleet_attach(
     ctx: typer.Context,
@@ -911,7 +977,7 @@ def fleet_terminate(
         typer.Option("--confirm", help="Confirm permanent provider deletion."),
     ] = False,
 ) -> None:
-    """Delete one RunPod host and mark it terminated locally."""
+    """Delete one provider instance and mark it terminated locally."""
     from .fleet import FleetRegistry
     from .offers import OfferService
     from .operations import OperationalLedger
@@ -920,6 +986,18 @@ def fleet_terminate(
     registry = FleetRegistry()
     try:
         machine = registry.get(host_id)
+        if machine.source == "sesterce":
+            terminated = _sesterce_launcher(ctx).terminate(host_id, confirm=confirm)
+            _emit(
+                ctx,
+                {
+                    "contract": "compute-bazaar.fleet-termination",
+                    "rows": [terminated.row()],
+                },
+                command="fleet",
+                include_source=False,
+            )
+            return
         service = OfferService.from_environment()
         terminated = RunpodExecutor(
             api_key=service.runpod_api_key,
@@ -1434,6 +1512,27 @@ def _analysis_store() -> Any:
     return AnalysisStore()
 
 
+def _sesterce_launcher(ctx: typer.Context) -> Any:
+    import os
+
+    from .market import SesterceLauncher, SesterceSource, default_market_lake_root
+
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+    state = _state(ctx)
+    lake_root = (
+        state.lake.root if state.lake.kind == "explicit" else default_market_lake_root()
+    )
+    return SesterceLauncher(
+        lake_root=lake_root,
+        source=SesterceSource(os.getenv("SESTERCE_API_KEY", "")),
+    )
+
+
 def _offers() -> Any:
     from .offers import OfferService
 
@@ -1522,7 +1621,7 @@ def _compact_cli_run(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(run, dict):
         result["run"] = {
             field: run.get(field)
-            for field in ("run_id", "observed_at")
+            for field in ("source_run_id", "run_id", "observed_at")
             if run.get(field) is not None
         }
     return result
