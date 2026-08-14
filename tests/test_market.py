@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import patch
 
 from the_compute_bazaar.market import (
     MarketCatalog,
@@ -117,6 +118,19 @@ class EmptySource(FakeSesterce):
     payload: list[object] = []
 
 
+class HttpResponse:
+    status = 200
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return None
+
+    def read(self):
+        return b'{"message":"schema changed"}'
+
+
 class MarketPipelineTest(unittest.TestCase):
     def test_registry_builds_sesterce_from_its_declared_credential(self):
         source = default_registry.build(
@@ -124,6 +138,28 @@ class MarketPipelineTest(unittest.TestCase):
         )
 
         self.assertEqual(source.name, "sesterce")
+
+    def test_sesterce_rejects_a_successful_non_list_response(self):
+        source = SesterceSource("test")
+        with patch(
+            "the_compute_bazaar.market.sources.sesterce.urlopen",
+            return_value=HttpResponse(),
+        ):
+            read = source.read(observed_at=datetime(2026, 8, 13, 12, tzinfo=UTC))
+
+        self.assertFalse(read.complete)
+        self.assertEqual(read.payload, {"message": "schema changed"})
+        self.assertEqual(read.error, "Sesterce returned an invalid offers response")
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = MarketPipeline(MarketLake(directory)).record(
+                source,
+                read,
+                source_run_id="sesterce-malformed",
+            )
+            self.assertEqual(result.run.status, "failed")
+            raw = json.loads(Path(result.run.raw_ref).read_text())
+            self.assertEqual(raw["response"]["payload"], read.payload)
 
     def test_sesterce_reaches_bronze_and_silver_without_losing_shape(self):
         with tempfile.TemporaryDirectory() as directory:

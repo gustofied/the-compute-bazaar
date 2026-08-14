@@ -1,12 +1,11 @@
 # Architecture
 
 ```text
-provider APIs
-  scheduled -> Windmill -> Bronze -> Silver Parquet -> Gold -> public lake
-  direct -------------------------> private operations -> allocation -> Fleet
+Public market
+  provider APIs -> Windmill -> Bronze -> Silver -> Gold -> public lake
 
-Silver Parquet + private operations -> silver.offer_observations
-                                    -> DataFusion -> CLI / Terminal
+Rebuilt market path
+  source API -> Bronze -> silver.gpu_offers -> preflight -> allocation -> Fleet
 ```
 
 ## Market data
@@ -24,7 +23,7 @@ A sanitized Silver and Gold copy is published as the public lake. The CLI syncs
 that Parquet data locally, so DataFusion can query it without cloud credentials
 or a database server.
 
-All provider reads use one row contract and one DataFusion table:
+The deployed public path uses one observation table:
 
 ```text
 silver.offer_observations
@@ -34,11 +33,27 @@ silver.offer_observations
 ```
 
 Windmill writes scheduled rows to S3 each hour and publishes them to AutoMQ.
-Direct reads and launch checks are written to the private local ledger when
-they happen. DataFusion unions both stores as `silver.offer_observations`.
-`observation_purpose` says why a row exists. `observation_resolution` and
-`selection_resolution` say how precisely it identifies something a provider
-can supply.
+Direct RunPod and Verda reads and their launch checks are kept locally and
+unioned into `silver.offer_observations`. `observation_purpose` says why a row
+exists.
+
+The rebuilt `market/` path starts again from a smaller contract:
+
+```text
+SourceRead -> Bronze -> GpuOffer -> silver.gpu_offers -> MarketGeneration
+```
+
+It currently supports Sesterce and a local lake. A source read records request
+metadata and the full response. A normalized row keeps source, intermediary,
+operator, offer, GPU, region, price, availability, and source-run identity. A
+successful empty response still produces typed Silver evidence. The generation
+format accepts several source runs, while `compute-bazaar market ingest`
+currently publishes one source run per invocation.
+
+These are two selectable catalogs, not one universal SQL catalog. The default
+CLI and Terminal use the synced public Silver/Gold lake. `compute-bazaar terminal
+lake2` opens the rebuilt local market lake. Fleet reads its private operational
+ledger separately.
 
 ## Query layer
 
@@ -68,8 +83,8 @@ A working model becomes Gold only when it should be a shared data contract.
 ## Interfaces
 
 The CLI and Terminal use the same DataFusion engine. Data is available now,
-Eval contains the Harbor evaluation viewer, and Trade remains reserved for the
-later execution system.
+Eval contains the Harbor evaluation viewer, and Trade remains a research
+direction rather than an implemented exchange.
 
 Shell is a local PTY. Agent is a Bazaar thread connected to an external agent
 over ACP. `acpx` is the internal ACP client beneath `AgentSession`, not part of
@@ -98,8 +113,11 @@ GPU Price Index and the machine that was delivered. Private machine data stays
 local.
 
 SQL or an agent can find a candidate and prepare a launch plan. Creating a paid
-machine still requires a price ceiling, runtime deadline, and explicit
-confirmation.
+machine requires a price ceiling, runtime budget, and explicit confirmation.
+RunPod sends its deadline to the provider. Sesterce stores and displays the
+deadline, but currently requires explicit termination. An ambiguous Sesterce
+create must be checked manually before retrying; automated reconciliation is
+RunPod-only.
 
 Fleet workloads are detached SSH process groups. Their command, PID, state, exit
 code, and local log references live in the private operational ledger. Fleet also

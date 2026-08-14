@@ -4,27 +4,39 @@
   <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#eval">Eval</a> • <a href="#fleet">Fleet</a> • Trade
 </p>
 
-My vision is to build The Compute Bazaar as much for humans as for
-machine-to-machine work.
+The Compute Bazaar is a research workstation for compute markets. It records
+GPU offers, lets people and agents query them, checks selected capacity again
+before spending, and carries the resulting allocation into Fleet for monitoring
+and workloads.
 
 ## Architecture
 
-I use Windmill to orchestrate the hourly data pipeline. It runs ingestion every
-hour and publishes the live data through AutoMQ, a Kafka-compatible event
-stream. I use S3 for storage: a Bronze layer for raw data, a Silver layer for
-normalized data ready for analysis, and Gold models for things such as GPU price
-indexes and availability.
+The public market pipeline and the rebuilt market-to-Fleet path currently sit
+side by side.
+
+```text
+Public market
+  Windmill -> provider reads -> Bronze -> Silver -> Gold -> public lake
+
+Market to Fleet
+  source API -> Bronze -> silver.gpu_offers -> preflight -> allocation -> Fleet
+```
+
+I use Windmill for hourly ingestion, AutoMQ for the Kafka-compatible event
+stream, and S3 for the durable public lake. Bronze keeps raw evidence, Silver is
+normalized market data, and Gold contains shared models such as GPU price and
+availability indexes.
 
 This data can be queried with DataFusion, an SQL query engine built on Apache
 Arrow. Perspective also accepts Arrow data, so I am currently exploring it to
 visualize the query results. All of this can be used through the CLI and
 Terminal.
 
-Hourly reads, direct provider reads, and the final check before a rental use the
-same offer-observation columns. Scheduled rows live in S3; direct reads, launch
-checks, and Fleet measurements stay private and local. DataFusion presents them
-as one catalog, so we can follow the market record into a selected offer and the
-machine that arrived without putting direct reads into the hourly index.
+The rebuilt path is local and currently uses Sesterce. It persists the source
+response, normalized offers, and the fresh check made before a launch. The
+selected offer then becomes an Allocation linked to the Fleet machine. Its
+market-generation format can contain several source runs; the current CLI reads
+and publishes one source at a time.
 
 The idea behind the lake being object storage is that agents can use SQL for
 analysis or inspect the underlying files directly, such as contracts, deals, or
@@ -99,14 +111,24 @@ compute-bazaar offers inspect OFFER_ID
 RunPod's live catalog is public. Verda live availability uses the OAuth values
 shown in `.env.example`.
 
+The rebuilt Sesterce path writes a separate local market lake:
+
+```bash
+export SESTERCE_API_KEY=...
+compute-bazaar market ingest sesterce
+compute-bazaar terminal lake2
+```
+
+That Terminal exposes `silver.gpu_offers`. The default Terminal continues to
+use the synced public Silver and Gold lake.
+
 ## Terminal
 
 <p align="center">
   <img src="assets/compute-bazaar-terminal.png" alt="The Compute Bazaar Terminal" width="80%">
 </p>
 
-The Terminal is where we look at data, evaluate agents, and eventually place
-trades.
+The Terminal is where we look at data, operate Fleet, and evaluate agents.
 
 Let's start with Data, and how The Compute Bazaar enables market models and
 views that can be stored, reused, shared, and used by agents. It works both
@@ -124,8 +146,8 @@ compute-bazaar terminal
 The Terminal opens with Data, Fleet, Eval, and Trade. Data is where DataFusion
 queries market data and [Perspective](https://perspective-dev.github.io) turns
 the results into tables and charts. Eval contains agent evaluation tasks, jobs,
-and trials powered by Harbor. Trade is in the works. The Terminal currently
-supports macOS and Linux.
+and trials powered by Harbor. Trade is reserved for later research. The
+Terminal currently supports macOS and Linux.
 
 The side drawer has Shell and Agent tabs. Agent runs through ACP and uses the
 same `compute-bazaar` CLI; results opened with `--terminal` appear in Data.
@@ -148,7 +170,8 @@ order by observed_at, gpu
 
 A market model contains reusable DataFusion SQL. Its view describes how
 Perspective displays the result. Terminal Save keeps personal models and views
-outside the Git checkout. They can be rerun or used by agents without being shared.
+outside the Git checkout. They can be rerun or used by agents without being
+shared.
 
 ```bash
 compute-bazaar model list
@@ -182,7 +205,7 @@ tasks under the same conditions, using the same seeds, harness, and setup.
 ## Fleet
 
 <p align="center">
-  <img src="assets/compute-bazaar-fleet.webp" alt="The Compute Bazaar Fleet monitoring a live RunPod GPU node" width="80%">
+  <img src="assets/compute-bazaar-fleet.webp" alt="The Compute Bazaar Fleet monitoring a live NVIDIA node" width="80%">
 </p>
 
 Fleet operates NVIDIA nodes over SSH. A node can be provisioned from a live
@@ -211,7 +234,24 @@ key, agent, and jump host; Fleet stores only the alias.
 compute-bazaar fleet attach gpu-singapore-01 --expect H100 --count 8
 ```
 
-Or launch one from a live offer.
+Or use the rebuilt market path to launch a Sesterce offer.
+
+```bash
+compute-bazaar market ingest sesterce
+
+compute-bazaar fleet plan OBSERVATION_ID \
+  --name HOST \
+  --ssh-key-id SESTERCE_KEY_ID
+
+compute-bazaar fleet launch OBSERVATION_ID \
+  --name HOST \
+  --ssh-key-id SESTERCE_KEY_ID \
+  --max-hourly-usd 4 \
+  --runtime-minutes 30 \
+  --confirm
+```
+
+RunPod remains available through its direct provider path.
 
 ```bash
 compute-bazaar offers list --provider runpod
@@ -238,7 +278,8 @@ compute-bazaar fleet workload logs WORKLOAD_ID
 compute-bazaar fleet terminate HOST_ID --confirm
 ```
 
-The DataFusion catalog keeps the market, allocation, and Fleet records together.
+The existing public/direct catalog also exposes private allocation and Fleet
+views:
 
 ```bash
 compute-bazaar sql "select * from silver.current_offers order by price_usd_gpu_hr"
@@ -260,7 +301,10 @@ again.
 compute-bazaar launch reconcile ATTEMPT_ID
 ```
 
-### To do
+For Sesterce, the runtime budget and deadline are recorded and shown in Fleet,
+but automatic shutdown is not guaranteed. Terminate the host explicitly. After
+an ambiguous Sesterce create failure, check Sesterce before retrying; automated
+reconciliation currently covers RunPod only.
 
-- GPU PROC [Not Found] bug need to fix
-- add other providers than runpod
+Trade remains a research direction around availability, price and basis,
+operator breadth, and bounded execution. There is no matching engine here.

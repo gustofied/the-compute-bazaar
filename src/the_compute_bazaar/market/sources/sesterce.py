@@ -61,7 +61,11 @@ class SesterceSource:
             with urlopen(request, timeout=60) as response:  # noqa: S310
                 status = response.status
                 payload = _decode(response.read())
-            error = None
+            error = (
+                None
+                if isinstance(payload, list)
+                else "Sesterce returned an invalid offers response"
+            )
         except HTTPError as exc:
             status = exc.code
             payload = _decode(exc.read())
