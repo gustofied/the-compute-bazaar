@@ -39,7 +39,6 @@ def render_prime_offer_shelf_publication(
     family = str((card.get("data") or {}).get("family_id") or "GPU").upper()
     outside = "#efede4"
     paper = "#f8f5eb"
-    ink = "#142027"
     blue = "#7c5231"
     lower_band = "#b7d07b"
     middle_band = "#91aecb"
@@ -51,10 +50,16 @@ def render_prime_offer_shelf_publication(
         facecolor=outside,
     )
     canvas = FigureCanvasAgg(figure)
-    # Matplotlib sizes are points; these resolve to the share SVG's pixel scale
-    # after the 2x render is downsampled to the publication canvas.
-    price_font = FontProperties(fname=_GEIST_MEDIUM, size=46)
-    family_font = FontProperties(fname=_GEIST_SEMIBOLD, size=18)
+    # Match the share SVG's 64 px price and 24 px GPU name exactly after the
+    # 2x render is downsampled to the 100 dpi publication canvas.
+    price_font = FontProperties(
+        fname=_GEIST_MEDIUM,
+        size=64 * 72 / _OUTPUT_DPI,
+    )
+    family_font = FontProperties(
+        fname=_GEIST_SEMIBOLD,
+        size=24 * 72 / _OUTPUT_DPI,
+    )
     figure.patches.extend(
         (
             FancyBboxPatch(
@@ -83,17 +88,17 @@ def render_prime_offer_shelf_publication(
     )
     latest = rows[-1] if rows else None
     figure.text(
-        0.053,
-        0.900,
+        40 / IMAGE_WIDTH,
+        1 - (54 / IMAGE_HEIGHT),
         family,
-        color=ink,
+        color=blue,
         fontproperties=family_font,
     )
     figure.text(
-        0.053,
-        0.790,
+        40 / IMAGE_WIDTH,
+        1 - (138 / IMAGE_HEIGHT),
         _format_usd(latest["price"]) if latest else "PENDING",
-        color=ink,
+        color=blue,
         fontproperties=price_font,
         parse_math=False,
     )
@@ -154,19 +159,6 @@ def render_prime_offer_shelf_publication(
             solid_joinstyle="round",
             zorder=2,
         )
-        price_axes.plot(
-            dates[-1],
-            prices[-1],
-            marker="o",
-            markersize=7.5,
-            markerfacecolor=paper,
-            markeredgecolor=blue,
-            markeredgewidth=2.2,
-            linestyle="none",
-            clip_on=False,
-            zorder=3,
-        )
-
         offer_bands = _prime_offer_band_series(card, rows)
         lower = [row["lower"] for row in offer_bands]
         lower_middle = [row["lower"] + row["middle"] for row in offer_bands]

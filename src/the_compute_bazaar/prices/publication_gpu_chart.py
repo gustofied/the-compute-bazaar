@@ -18,7 +18,6 @@ from .publication_chart_common import (
 )
 
 _FONT_ROOT = Path(__file__).with_name("assets") / "fonts"
-_GEIST_REGULAR = _FONT_ROOT / "Geist-Regular.ttf"
 _GEIST_MEDIUM = _FONT_ROOT / "Geist-Medium.ttf"
 _GEIST_SEMIBOLD = _FONT_ROOT / "Geist-SemiBold.ttf"
 _RENDER_DPI = 200
@@ -45,7 +44,6 @@ def render_gpu_benchmark_publication(
     selected_rows = _visible_gpu_series(cards, range_id).get(selected_family, [])
     outside = "#dbe5e9"
     paper = "#ffffff"
-    ink = "#142027"
     blue = "#315f82"
 
     figure = Figure(
@@ -54,11 +52,16 @@ def render_gpu_benchmark_publication(
         facecolor=outside,
     )
     canvas = FigureCanvasAgg(figure)
-    # Matplotlib sizes are points; these resolve to the share SVG's pixel scale
-    # after the 2x render is downsampled to the publication canvas.
-    price_font = FontProperties(fname=_GEIST_MEDIUM, size=46)
-    family_font = FontProperties(fname=_GEIST_SEMIBOLD, size=18)
-    date_font = FontProperties(fname=_GEIST_MEDIUM, size=13)
+    # Use the same title block as the Availability share card: 24 px GPU name,
+    # 64 px price, and identical 40 / 54 / 138 px alignment.
+    price_font = FontProperties(
+        fname=_GEIST_MEDIUM,
+        size=64 * 72 / _OUTPUT_DPI,
+    )
+    family_font = FontProperties(
+        fname=_GEIST_SEMIBOLD,
+        size=24 * 72 / _OUTPUT_DPI,
+    )
     figure.patches.extend(
         (
             FancyBboxPatch(
@@ -88,22 +91,22 @@ def render_gpu_benchmark_publication(
     latest = selected_rows[-1] if selected_rows else None
 
     figure.text(
-        0.053,
-        0.890,
+        40 / IMAGE_WIDTH,
+        1 - (54 / IMAGE_HEIGHT),
         selected_family,
         color=blue,
         fontproperties=family_font,
     )
     figure.text(
-        0.053,
-        0.780,
+        40 / IMAGE_WIDTH,
+        1 - (138 / IMAGE_HEIGHT),
         _format_usd(latest["value"]) if latest else "PENDING",
-        color=ink,
+        color=blue,
         fontproperties=price_font,
         parse_math=False,
     )
 
-    axes = figure.add_axes((0.020, 0.165, 0.960, 0.551), facecolor="none")
+    axes = figure.add_axes((0.020, 0.165, 0.960, 0.559), facecolor="none")
     if selected_rows:
         dates = [row["date"] for row in selected_rows]
         values = [row["value"] for row in selected_rows]
@@ -155,21 +158,5 @@ def render_gpu_benchmark_publication(
             solid_joinstyle="round",
             zorder=2,
         )
-        tick_format = "%d %b" if end - start > timedelta(hours=36) else "%H:%M"
-        middle = start + (end - start) / 2
-        for position, date, alignment in (
-            (0.040, start, "left"),
-            (0.500, middle, "center"),
-            (0.960, end, "right"),
-        ):
-            figure.text(
-                position,
-                0.064,
-                date.strftime(tick_format),
-                color=ink,
-                fontproperties=date_font,
-                horizontalalignment=alignment,
-            )
-
     axes.set_axis_off()
     return _publication_png(canvas)
