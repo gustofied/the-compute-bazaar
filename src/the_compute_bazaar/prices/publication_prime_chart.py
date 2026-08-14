@@ -21,6 +21,8 @@ from .publication_chart_common import (
 _FONT_ROOT = Path(__file__).with_name("assets") / "fonts"
 _GEIST_MEDIUM = _FONT_ROOT / "Geist-Medium.ttf"
 _GEIST_SEMIBOLD = _FONT_ROOT / "Geist-SemiBold.ttf"
+_RENDER_DPI = 200
+_OUTPUT_DPI = 100
 
 
 def render_prime_offer_shelf_publication(
@@ -35,7 +37,7 @@ def render_prime_offer_shelf_publication(
 
     rows = _prime_publication_series(card)
     family = str((card.get("data") or {}).get("family_id") or "GPU").upper()
-    outside = "#ffffff"
+    outside = "#efede4"
     paper = "#f8f5eb"
     ink = "#142027"
     blue = "#7c5231"
@@ -44,45 +46,58 @@ def render_prime_offer_shelf_publication(
     upper_band = "#f3c888"
 
     figure = Figure(
-        figsize=(IMAGE_WIDTH / 100, IMAGE_HEIGHT / 100),
-        dpi=100,
+        figsize=(IMAGE_WIDTH / _OUTPUT_DPI, IMAGE_HEIGHT / _OUTPUT_DPI),
+        dpi=_RENDER_DPI,
         facecolor=outside,
     )
     canvas = FigureCanvasAgg(figure)
-    price_font = FontProperties(fname=_GEIST_MEDIUM, size=64)
-    family_font = FontProperties(fname=_GEIST_SEMIBOLD, size=24)
+    # Matplotlib sizes are points; these resolve to the share SVG's pixel scale
+    # after the 2x render is downsampled to the publication canvas.
+    price_font = FontProperties(fname=_GEIST_MEDIUM, size=46)
+    family_font = FontProperties(fname=_GEIST_SEMIBOLD, size=18)
     figure.patches.extend(
         (
+            FancyBboxPatch(
+                (0.008, 0.016),
+                0.984,
+                0.968,
+                boxstyle="round,pad=0,rounding_size=0.012",
+                transform=figure.transFigure,
+                facecolor=outside,
+                edgecolor=blue,
+                linewidth=1.05,
+                zorder=-30,
+            ),
             FancyBboxPatch(
                 (0.020, 0.038),
                 0.960,
                 0.924,
-                boxstyle="round,pad=0,rounding_size=0.008",
+                boxstyle="round,pad=0,rounding_size=0.006",
                 transform=figure.transFigure,
                 facecolor=paper,
-                edgecolor="#9cabb0",
-                linewidth=0.9,
+                edgecolor="#c2b7aa",
+                linewidth=0.75,
                 zorder=-20,
             ),
         )
     )
     latest = rows[-1] if rows else None
     figure.text(
-        0.060,
-        0.885,
+        0.053,
+        0.900,
         family,
         color=ink,
         fontproperties=family_font,
     )
     figure.text(
-        0.060,
-        0.700,
+        0.053,
+        0.790,
         _format_usd(latest["price"]) if latest else "PENDING",
         color=ink,
         fontproperties=price_font,
         parse_math=False,
     )
-    price_axes = figure.add_axes((0.020, 0.315, 0.960, 0.315), facecolor="none")
+    price_axes = figure.add_axes((0.020, 0.343, 0.960, 0.400), facecolor="none")
     offer_axes = figure.add_axes((0.020, 0.038, 0.960, 0.259), facecolor="none")
     if rows:
         dates = [row["date"] for row in rows]
@@ -112,8 +127,8 @@ def render_prime_offer_shelf_publication(
                 (
                     0.020
                     + ((date - start).total_seconds() / duration) * 0.960,
-                    0.315
-                    + ((price - price_minimum) / price_span) * 0.315,
+                    0.343
+                    + ((price - price_minimum) / price_span) * 0.400,
                 )
                 for date, price in zip(smooth_dates, smooth_prices, strict=True)
             ),
@@ -134,7 +149,7 @@ def render_prime_offer_shelf_publication(
             smooth_dates,
             smooth_prices,
             color=blue,
-            linewidth=3.5,
+            linewidth=2.5,
             solid_capstyle="round",
             solid_joinstyle="round",
             zorder=2,
@@ -190,7 +205,7 @@ def render_prime_offer_shelf_publication(
             totals,
             where="post",
             color=blue,
-            linewidth=1.2,
+            linewidth=0.85,
             alpha=0.46,
         )
     price_axes.set_axis_off()

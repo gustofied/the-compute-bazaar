@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 from collections.abc import Mapping
 from datetime import timedelta
 from pathlib import Path
@@ -13,6 +12,7 @@ from .publication_chart_common import (
     IMAGE_HEIGHT,
     IMAGE_WIDTH,
     _format_usd,
+    _publication_png,
     _shape_preserving_curve,
     _visible_gpu_series,
 )
@@ -35,7 +35,7 @@ def render_gpu_benchmark_publication(
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
     from matplotlib.font_manager import FontProperties
-    from matplotlib.patches import FancyBboxPatch
+    from matplotlib.patches import FancyBboxPatch, Polygon
 
     if selected_family not in cards:
         raise ValueError(f"Unknown GPU publication family: {selected_family}")
@@ -43,7 +43,7 @@ def render_gpu_benchmark_publication(
         raise ValueError(f"Unknown GPU publication range: {range_id}")
 
     selected_rows = _visible_gpu_series(cards, range_id).get(selected_family, [])
-    outside = "#efede4"
+    outside = "#dbe5e9"
     paper = "#ffffff"
     ink = "#142027"
     blue = "#315f82"
@@ -54,19 +54,33 @@ def render_gpu_benchmark_publication(
         facecolor=outside,
     )
     canvas = FigureCanvasAgg(figure)
-    price_font = FontProperties(fname=_GEIST_MEDIUM, size=56)
-    family_font = FontProperties(fname=_GEIST_SEMIBOLD, size=24)
+    # Matplotlib sizes are points; these resolve to the share SVG's pixel scale
+    # after the 2x render is downsampled to the publication canvas.
+    price_font = FontProperties(fname=_GEIST_MEDIUM, size=46)
+    family_font = FontProperties(fname=_GEIST_SEMIBOLD, size=18)
+    date_font = FontProperties(fname=_GEIST_MEDIUM, size=13)
     figure.patches.extend(
         (
             FancyBboxPatch(
-                (0.018, 0.034),
-                0.964,
-                0.932,
-                boxstyle="round,pad=0,rounding_size=0.008",
+                (0.008, 0.016),
+                0.984,
+                0.968,
+                boxstyle="round,pad=0,rounding_size=0.012",
+                transform=figure.transFigure,
+                facecolor=outside,
+                edgecolor=blue,
+                linewidth=1.15,
+                zorder=-30,
+            ),
+            FancyBboxPatch(
+                (0.020, 0.038),
+                0.960,
+                0.924,
+                boxstyle="round,pad=0,rounding_size=0.006",
                 transform=figure.transFigure,
                 facecolor=paper,
-                edgecolor=blue,
-                linewidth=1.35,
+                edgecolor="#7f9199",
+                linewidth=0.75,
                 zorder=-20,
             ),
         )
@@ -74,22 +88,22 @@ def render_gpu_benchmark_publication(
     latest = selected_rows[-1] if selected_rows else None
 
     figure.text(
-        0.060,
-        0.855,
+        0.053,
+        0.890,
         selected_family,
         color=blue,
         fontproperties=family_font,
     )
     figure.text(
-        0.060,
-        0.710,
+        0.053,
+        0.780,
         _format_usd(latest["value"]) if latest else "PENDING",
         color=ink,
         fontproperties=price_font,
         parse_math=False,
     )
 
-    axes = figure.add_axes((0.018, 0.034, 0.964, 0.616), facecolor=paper)
+    axes = figure.add_axes((0.020, 0.165, 0.960, 0.551), facecolor="none")
     if selected_rows:
         dates = [row["date"] for row in selected_rows]
         values = [row["value"] for row in selected_rows]
@@ -106,56 +120,56 @@ def render_gpu_benchmark_publication(
         domain_maximum = maximum + spread * 0.2
         axes.set_xlim(start, end)
         axes.set_ylim(domain_minimum, domain_maximum)
-        axes.fill_between(
-            smooth_dates,
-            smooth_values,
-            domain_minimum,
-            color=blue,
-            alpha=0.055,
-            linewidth=0,
-            zorder=1,
+        duration = max((end - start).total_seconds(), 1)
+        value_span = max(domain_maximum - domain_minimum, 1e-9)
+        fill_points = [
+            (0.020, 0.038),
+            *(
+                (
+                    0.020
+                    + ((date - start).total_seconds() / duration) * 0.960,
+                    0.165
+                    + ((value - domain_minimum) / value_span) * 0.551,
+                )
+                for date, value in zip(smooth_dates, smooth_values, strict=True)
+            ),
+            (0.980, 0.038),
+        ]
+        figure.patches.append(
+            Polygon(
+                fill_points,
+                closed=True,
+                transform=figure.transFigure,
+                facecolor=blue,
+                edgecolor="none",
+                alpha=0.055,
+                zorder=-10,
+            )
         )
         axes.plot(
             smooth_dates,
             smooth_values,
             color=blue,
-            linewidth=3.5,
+            linewidth=2.5,
             solid_capstyle="round",
             solid_joinstyle="round",
             zorder=2,
         )
-        axes.plot(
-            dates[-1],
-            values[-1],
-            marker="o",
-            markersize=7.5,
-            markerfacecolor=paper,
-            markeredgecolor=blue,
-            markeredgewidth=2.2,
-            linestyle="none",
-            clip_on=False,
-            zorder=3,
-        )
+        tick_format = "%d %b" if end - start > timedelta(hours=36) else "%H:%M"
+        middle = start + (end - start) / 2
+        for position, date, alignment in (
+            (0.040, start, "left"),
+            (0.500, middle, "center"),
+            (0.960, end, "right"),
+        ):
+            figure.text(
+                position,
+                0.064,
+                date.strftime(tick_format),
+                color=ink,
+                fontproperties=date_font,
+                horizontalalignment=alignment,
+            )
 
     axes.set_axis_off()
-
-    rgba_buffer = io.BytesIO()
-    canvas.print_png(rgba_buffer)
-    rgba_buffer.seek(0)
-
-    from PIL import Image
-
-    rgb_buffer = io.BytesIO()
-    with Image.open(rgba_buffer) as source:
-        rgb = source.convert("RGB")
-        if rgb.size != (IMAGE_WIDTH, IMAGE_HEIGHT):
-            rgb = rgb.resize(
-                (IMAGE_WIDTH, IMAGE_HEIGHT),
-                resample=Image.Resampling.LANCZOS,
-            )
-        rgb.save(
-            rgb_buffer,
-            format="PNG",
-            optimize=True,
-        )
-    return rgb_buffer.getvalue()
+    return _publication_png(canvas)

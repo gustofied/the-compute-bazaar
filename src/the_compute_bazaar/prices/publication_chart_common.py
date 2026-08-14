@@ -389,7 +389,13 @@ def _publication_png(canvas: Any) -> bytes:
 
     rgb_buffer = io.BytesIO()
     with Image.open(rgba_buffer) as source:
-        source.convert("RGB").save(
+        rgb = source.convert("RGB")
+        if rgb.size != (IMAGE_WIDTH, IMAGE_HEIGHT):
+            rgb = rgb.resize(
+                (IMAGE_WIDTH, IMAGE_HEIGHT),
+                resample=Image.Resampling.LANCZOS,
+            )
+        rgb.save(
             rgb_buffer,
             format="PNG",
             optimize=True,
