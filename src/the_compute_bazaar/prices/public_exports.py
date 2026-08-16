@@ -7,6 +7,7 @@ from typing import Any
 from ..contracts import CARD_CONTRACT, GOLD_MARKET_CONTRACT
 from .gold_manifest import read_latest_gold_manifest
 from .gold_queries import (
+    query_gold_akash_capacity_history,
     query_gold_gpu_price_index,
     query_gold_gpu_price_index_constituents,
     query_gold_gpu_price_index_history,
@@ -24,6 +25,7 @@ from .prime_public_data import public_prime_frontier_products
 from .gpu_publications import publish_gpu_benchmark_publications
 from .prime_publications import publish_prime_offer_shelf_publications
 from .public_view_gpu import GPU_FAMILIES, gpu_benchmark_view
+from .public_view_capacity import akash_capacity_view
 from .public_view_prime import prime_frontier_view
 from .public_series import (
     has_benchmark_value,
@@ -73,8 +75,19 @@ def export_public_cards(
         lake_root=lake_root,
         manifest=manifest,
     )
+    akash_capacity_payload = query_gold_akash_capacity_history(
+        lake_root=lake_root,
+        manifest=manifest,
+    )
+    akash_capacity_public = akash_capacity_view(
+        manifest=public_manifest,
+        rows=akash_capacity_payload["rows"],
+    )
     output_refs = {
         "manifest": "/".join([output_root.rstrip("/"), "manifest.json"]),
+        "akash_capacity_history": "/".join(
+            [output_root.rstrip("/"), "akash-capacity-history.json"]
+        ),
         "prime_frontier_offer_shelf": "/".join(
             [output_root.rstrip("/"), "prime-frontier-offer-shelf.json"]
         ),
@@ -182,6 +195,7 @@ def export_public_cards(
             [output_root.rstrip("/"), "prime-frontier", f"{family.lower()}.json"]
         )
     write_json(output_refs["manifest"], public_manifest)
+    write_json(output_refs["akash_capacity_history"], akash_capacity_public)
     write_json(
         output_refs["prime_frontier_offer_shelf"],
         prime_frontier_shelf_public,
@@ -206,6 +220,7 @@ def export_public_cards(
             "gpu_publications": gpu_publications["publication_count"],
             "prime_publications": prime_publications["publication_count"],
             "prime_frontier_cards": len(prime_cards),
+            "akash_capacity_history": len(akash_capacity_payload["rows"]),
         },
         "source_gold_manifest_ref": manifest.get("manifest_ref"),
     }
