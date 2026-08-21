@@ -196,3 +196,79 @@ print(listen2)
 
 stringen = "adamsdam"
 print(stringen.strip("ad"))
+
+unique = set(stringen)
+print(unique)
+
+print((lambda x,y: x+ y)(2,3))
+
+listen = [1, 3, 4, 5, 6]
+
+listen2 = [x+1 for x in listen if x>3]
+
+
+try:
+    print("ex")
+except:
+    print("ewe")
+
+
+servers = [
+    ("gpu-1", 80),
+    ("gpu-2", 40),
+    ("gpu-3", 95),
+]
+
+
+scores: dict[str, int] = {
+    "bob": 102,
+    "James": 42,
+    "Sarah": 34
+}
+
+print(sorted(scores.items(), key=lambda x: x[1]))
+
+# # # Decorators and closures
+
+
+def generatoren():
+    print("started")
+    while True:
+        value = (yield)
+        print(value)
+
+
+echoed = generatoren()
+echoed.send(None)
+echoed.send("hey")
+        
+
+
+
+
+servers = [
+    ("gpu-1", 80),
+    ("gpu-2", 40),
+    ("gpu-3", 95),
+]
+
+sorted_servers = sorted(
+    servers,
+    key=lambda x: x[1],
+    reverse=True,
+)
+
+print(sorted_servers)
+
+
+scores: dict[str, int] = {
+    "bob": 102,
+    "James": 42,
+    "Sarah": 34
+}
+
+print(sorted(scores.items(), key= lambda x: x[1]))
+
+## ##
+
+
