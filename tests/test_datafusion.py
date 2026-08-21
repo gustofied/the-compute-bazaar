@@ -14,6 +14,7 @@ import pyarrow.parquet as pq
 from pydantic import ValidationError
 
 from the_compute_bazaar.data_catalog import ComputeBazaarCatalog
+from the_compute_bazaar.data_release import build_release_assets
 from the_compute_bazaar.data_sync import inspect_lake, sync_public_lake
 from the_compute_bazaar.offers import OfferService
 from the_compute_bazaar.operations import OperationalLedger
@@ -347,6 +348,35 @@ class DataFusionEngineTest(unittest.TestCase):
             self.assertGreater(first_sync["downloaded_bytes"], 0)
             self.assertEqual(repeat_sync["status"], "current")
             self.assertEqual(repeat_sync["downloaded_bytes"], 0)
+
+            release = root / "release"
+            release_result = build_release_assets(
+                lake_root=str(portable),
+                output_root=str(release),
+            )
+            release_cache = root / "release-cache"
+            release_sync = sync_public_lake(
+                base_url=release.as_uri(),
+                output_root=str(release_cache),
+            )
+            repeated_release_sync = sync_public_lake(
+                base_url=release.as_uri(),
+                output_root=str(release_cache),
+            )
+            self.assertEqual(release_result["run_id"], "gold-market-1")
+            self.assertEqual(release_sync["status"], "synced")
+            self.assertEqual(
+                release_sync["downloaded_bytes"],
+                release_result["archive_bytes"],
+            )
+            self.assertEqual(repeated_release_sync["status"], "current")
+            self.assertEqual(repeated_release_sync["downloaded_bytes"], 0)
+            self.assertEqual(
+                ComputeBazaarCatalog(lake_root=str(release_cache)).query(
+                    "select count(*) as rows from silver.offer_observations"
+                )["rows"],
+                [{"rows": 2}],
+            )
 
             portable_manifest = read_latest_gold_manifest(str(portable))
             for normalized_ref in portable_manifest["source_normalized_refs"].values():

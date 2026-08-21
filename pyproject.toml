@@ -22,6 +22,12 @@ providers = [
     "python-dotenv>=1.2.1",
     "requests>=2.33.1",
 ]
+market = [
+    "matplotlib>=3.10.8",
+    "pillow>=12.0.0",
+    "python-dotenv>=1.2.1",
+    "requests>=2.33.1",
+]
 s3 = [
     "boto3>=1.41.0",
 ]

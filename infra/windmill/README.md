@@ -1,5 +1,8 @@
 # Windmill
 
+This is the optional hosted scheduler. The same market cycle can run locally
+with `compute-bazaar market refresh`; AutoMQ and AWS are not required.
+
 Windmill runs two scheduled Python jobs:
 
 - `market_hourly.py` calls `run_market_hourly()`.

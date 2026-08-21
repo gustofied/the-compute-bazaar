@@ -3,10 +3,14 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from types import SimpleNamespace
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
+from typer.testing import CliRunner
+
+from the_compute_bazaar.cli import app
 from the_compute_bazaar.market import (
     MarketCatalog,
     MarketLake,
@@ -132,6 +136,44 @@ class HttpResponse:
 
 
 class MarketPipelineTest(unittest.TestCase):
+    def test_local_refresh_keeps_cloud_services_out_of_the_run(self):
+        result = SimpleNamespace(
+            market_run_id="market-local-test",
+            status="complete",
+            successful_providers=["runpod"],
+            failed_providers=[],
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            with patch(
+                "the_compute_bazaar.prices.market_run.run_market_hourly",
+                return_value=result,
+            ) as run:
+                response = CliRunner().invoke(
+                    app,
+                    [
+                        "--format",
+                        "json",
+                        "market",
+                        "refresh",
+                        "--provider",
+                        "runpod",
+                        "--output-root",
+                        directory,
+                    ],
+                )
+
+        self.assertEqual(response.exit_code, 0, response.output)
+        self.assertEqual(json.loads(response.output)["rows"][0]["providers"], 1)
+        run.assert_called_once_with(
+            raw_root=str(Path(directory).resolve() / "raw"),
+            lake_root=str(Path(directory).resolve() / "lake"),
+            dashboard_output_root=str(Path(directory).resolve() / "public"),
+            providers=["runpod"],
+            minimum_successful_providers=1,
+            automq_bootstrap_servers=None,
+            run_id=None,
+        )
+
     def test_registry_builds_sesterce_from_its_declared_credential(self):
         source = default_registry.build(
             "sesterce", environment={"SESTERCE_API_KEY": "test"}

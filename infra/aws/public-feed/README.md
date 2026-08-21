@@ -1,5 +1,8 @@
 # Public feed
 
+This is the optional hosted public-feed deployment. The default CLI sync uses
+the repository's `public-lake` GitHub Release and does not require this stack.
+
 This Terraform stack serves files from the private S3 prefix
 `dashboard/compute-bazaar/` through CloudFront and
 `https://bazaar.adamsioud.com`.
