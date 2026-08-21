@@ -139,6 +139,62 @@ and portable lake with:
 uv run python infra/aws/check_public_market.py
 ```
 
+## Pause and resume
+
+The hosted path was parked on 21 August 2026 after the final complete run
+`market-20260821T160000-38566099`. Both Windmill schedules are disabled. The
+runtime and AutoMQ brokers are stopped, not deleted; their EBS volumes and the
+S3 lake remain in place.
+
+Current AWS resources in `eu-west-3`:
+
+```text
+runtime  i-0c53012571b49171c
+brokers  i-0538ddb92f967094c
+         i-05c16be5e92c53b55
+         i-0e4ba01ee8a719009
+ASG      automq-server-kf-1aa02fzbmuu6f4eo
+```
+
+The Auto Scaling group is suspended while the brokers are stopped. Resume in
+this order:
+
+```bash
+aws ec2 start-instances \
+  --profile compute-bazaar \
+  --region eu-west-3 \
+  --instance-ids \
+    i-0538ddb92f967094c \
+    i-05c16be5e92c53b55 \
+    i-0e4ba01ee8a719009
+
+aws ec2 wait instance-status-ok \
+  --profile compute-bazaar \
+  --region eu-west-3 \
+  --instance-ids \
+    i-0538ddb92f967094c \
+    i-05c16be5e92c53b55 \
+    i-0e4ba01ee8a719009
+
+aws autoscaling resume-processes \
+  --profile compute-bazaar \
+  --region eu-west-3 \
+  --auto-scaling-group-name automq-server-kf-1aa02fzbmuu6f4eo
+
+aws ec2 start-instances \
+  --profile compute-bazaar \
+  --region eu-west-3 \
+  --instance-ids i-0c53012571b49171c
+```
+
+Then refresh SSH access, open the tunnel, redeploy the desired worker revision,
+and run both schedule bootstrap commands above. Run one market cycle manually
+before leaving the hourly schedule enabled.
+
+Stopped EC2 instances do not incur compute charges, but EBS, S3, and any
+separate AutoMQ subscription can still incur storage or service charges. Do not
+resume the Auto Scaling group before the three existing brokers are healthy.
+
 ## Self-hosted development stack
 
 `self-host/docker-compose.yml` runs Postgres, the Windmill server and worker,

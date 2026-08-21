@@ -25,6 +25,8 @@ The hosted path remains in `infra/`: Windmill can schedule the same provider
 cycle, AutoMQ can carry its Kafka-compatible event stream, and S3 with
 CloudFront can store and serve the outputs. None of those services are required
 for the CLI, Terminal, local ingestion, or public data sync.
+The hosted deployment is currently parked; its exact restart order is recorded
+in [the Windmill runbook](infra/windmill/README.md#pause-and-resume).
 
 This data can be queried with DataFusion, an SQL query engine built on Apache
 Arrow. Perspective also accepts Arrow data, so I am currently exploring it to
