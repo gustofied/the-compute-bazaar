@@ -26,9 +26,6 @@ from client import (
 )
 
 
-DEFAULT_PUBLIC_BASE_URL = "https://bazaar.adamsioud.com"
-
-
 def main() -> None:
     load_local_env()
 
@@ -215,7 +212,7 @@ def required_variables(folder: str) -> list[dict[str, Any]]:
             "path": f"f/{folder}/public_base_url",
             "value": os.getenv(
                 "COMPUTE_BAZAAR_PUBLIC_BASE_URL",
-                DEFAULT_PUBLIC_BASE_URL,
+                "",
             ),
             "is_secret": False,
             "description": "Canonical public base URL for publication links",

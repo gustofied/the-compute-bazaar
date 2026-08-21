@@ -4,8 +4,7 @@ This is the optional hosted public-feed deployment. The default CLI sync uses
 the repository's `public-lake` GitHub Release and does not require this stack.
 
 This Terraform stack serves files from the private S3 prefix
-`dashboard/compute-bazaar/` through CloudFront and
-`https://bazaar.adamsioud.com`.
+`dashboard/compute-bazaar/` through CloudFront and a configured hostname.
 
 It configures CloudFront, S3 read access, CORS, security headers, the TLS
 certificate, and extensionless publication URLs. It does not expose `raw/` or
@@ -50,8 +49,8 @@ Get the public base URL with:
 terraform -chdir=infra/aws/public-feed output -raw dashboard_data_base_url
 ```
 
-Use `COMPUTE_BAZAAR_PUBLIC_BASE_URL=https://bazaar.adamsioud.com` when building
-publication metadata.
+Set `COMPUTE_BAZAAR_PUBLIC_BASE_URL` to that hostname when building publication
+metadata.
 
 Before applying, check that the bucket policy only grants CloudFront access to
 the public prefix.

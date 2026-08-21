@@ -43,7 +43,7 @@ variable "price_class" {
 }
 
 variable "custom_domain_name" {
-  description = "Branded hostname to request an ACM certificate for, such as bazaar.adamsioud.com."
+  description = "Branded hostname to request an ACM certificate for, such as bazaar.example.com."
   type        = string
   default     = null
   nullable    = true

@@ -3,7 +3,10 @@
 This is the optional hosted scheduler. The same market cycle can run locally
 with `compute-bazaar market refresh`; AutoMQ and AWS are not required.
 
-Windmill runs two scheduled Python jobs:
+No active Windmill deployment is required or assumed. This directory is kept
+for a future hosted deployment.
+
+When enabled, Windmill runs two scheduled Python jobs:
 
 - `market_hourly.py` calls `run_market_hourly()`.
 - `sandbox_benchmark_weekly.py` imports new public StarSling results and rebuilds
@@ -57,6 +60,7 @@ families against the exact deployed revision:
 
 ```bash
 uv run python infra/aws/check_public_market.py \
+  --base-url "$COMPUTE_BAZAAR_PUBLIC_BASE_URL" \
   --require-renderer-revision "$(git rev-parse HEAD)"
 ```
 
@@ -136,64 +140,9 @@ Verify freshness and one-run alignment across the market manifest, GPU cards,
 and portable lake with:
 
 ```bash
-uv run python infra/aws/check_public_market.py
+uv run python infra/aws/check_public_market.py \
+  --base-url "$COMPUTE_BAZAAR_PUBLIC_BASE_URL"
 ```
-
-## Pause and resume
-
-The hosted path was parked on 21 August 2026 after the final complete run
-`market-20260821T160000-38566099`. Both Windmill schedules are disabled. The
-runtime and AutoMQ brokers are stopped, not deleted; their EBS volumes and the
-S3 lake remain in place.
-
-Current AWS resources in `eu-west-3`:
-
-```text
-runtime  i-0c53012571b49171c
-brokers  i-0538ddb92f967094c
-         i-05c16be5e92c53b55
-         i-0e4ba01ee8a719009
-ASG      automq-server-kf-1aa02fzbmuu6f4eo
-```
-
-The Auto Scaling group is suspended while the brokers are stopped. Resume in
-this order:
-
-```bash
-aws ec2 start-instances \
-  --profile compute-bazaar \
-  --region eu-west-3 \
-  --instance-ids \
-    i-0538ddb92f967094c \
-    i-05c16be5e92c53b55 \
-    i-0e4ba01ee8a719009
-
-aws ec2 wait instance-status-ok \
-  --profile compute-bazaar \
-  --region eu-west-3 \
-  --instance-ids \
-    i-0538ddb92f967094c \
-    i-05c16be5e92c53b55 \
-    i-0e4ba01ee8a719009
-
-aws autoscaling resume-processes \
-  --profile compute-bazaar \
-  --region eu-west-3 \
-  --auto-scaling-group-name automq-server-kf-1aa02fzbmuu6f4eo
-
-aws ec2 start-instances \
-  --profile compute-bazaar \
-  --region eu-west-3 \
-  --instance-ids i-0c53012571b49171c
-```
-
-Then refresh SSH access, open the tunnel, redeploy the desired worker revision,
-and run both schedule bootstrap commands above. Run one market cycle manually
-before leaving the hourly schedule enabled.
-
-Stopped EC2 instances do not incur compute charges, but EBS, S3, and any
-separate AutoMQ subscription can still incur storage or service charges. Do not
-resume the Auto Scaling group before the three existing brokers are healthy.
 
 ## Self-hosted development stack
 

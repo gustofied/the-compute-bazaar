@@ -1,7 +1,7 @@
 aws_region            = "eu-west-3"
 dashboard_bucket_name = "YOUR_BUCKET"
 dashboard_prefix      = "dashboard/compute-bazaar"
-custom_domain_name    = "bazaar.adamsioud.com"
+custom_domain_name    = "bazaar.example.com"
 enable_custom_domain  = false
 
 allowed_origins = [

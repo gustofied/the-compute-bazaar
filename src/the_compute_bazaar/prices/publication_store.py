@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Mapping
 from datetime import datetime
 from hashlib import sha256
@@ -24,11 +25,14 @@ from .publication_page import publication_html
 from .storage import write_bytes
 
 
-DEFAULT_PUBLIC_DATA_BASE_URL = "https://bazaar.adamsioud.com"
-
 DEFAULT_ARTICLE_URL = (
     "https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html"
 )
+
+
+def configured_public_base_url(value: str | None = None) -> str | None:
+    configured = value or os.getenv("COMPUTE_BAZAAR_PUBLIC_BASE_URL")
+    return configured.rstrip("/") if configured else None
 
 
 def _publish_market_card_state(

@@ -256,6 +256,41 @@ def query_gold_gpu_availability(
     return {"manifest": manifest, "rows": rows}
 
 
+def query_gold_akash_capacity_history(
+    *,
+    lake_root: str,
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Read aggregate Akash GPU and CPU capacity history."""
+    manifest = manifest or read_latest_gold_manifest(lake_root)
+    table_name = "fact_compute_market_state_history"
+    table_ref = manifest.get("table_refs", {}).get(table_name)
+    if not table_ref:
+        return {"manifest": manifest, "rows": []}
+
+    rows = DataFusionEngine({table_name: table_ref}).query(f"""
+select
+  observed_at,
+  resource_type,
+  total_units,
+  rented_units,
+  available_units,
+  pending_units,
+  rented_share,
+  available_share,
+  source_run_id,
+  gold_run_id
+from {table_name}
+where lower(provider) = 'akash'
+  and measurement_kind = 'rental_occupancy'
+  and resource_type in ('ALL_GPU', 'ALL_CPU')
+  and unit in ('gpu_units', 'millicpu')
+  and observed_at is not null
+order by observed_at, resource_type
+""")
+    return {"manifest": manifest, "rows": rows}
+
+
 def query_gold_gpu_price_index_constituents(
     *,
     lake_root: str,
