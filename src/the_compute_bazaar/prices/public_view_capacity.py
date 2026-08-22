@@ -50,7 +50,7 @@ def akash_capacity_view(
         "card_type": "akash_capacity_history",
         "card_id": "akash-capacity",
         "as_of": as_of or None,
-        "status": "live" if resources else "unavailable",
+        "status": "frozen" if resources else "unavailable",
         "manifest": dict(manifest),
         "source": {
             "name": "Akash Network capacity",

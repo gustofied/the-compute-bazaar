@@ -11,9 +11,35 @@ from the_compute_bazaar.prices.publication_profiles import (
     PRIME_PUBLICATION_RENDER_PROFILE,
     WORKLOAD_PUBLICATION_RENDER_PROFILE,
 )
+from the_compute_bazaar.prices.public_view_capacity import akash_capacity_view
 
 
 class PublicationFreshnessTest(unittest.TestCase):
+    def test_akash_snapshot_separates_gpu_and_cpu_capacity(self) -> None:
+        view = akash_capacity_view(
+            manifest={"run_id": "gold-market-test"},
+            rows=[
+                {
+                    "observed_at": "2026-08-21T16:00:00+00:00",
+                    "resource_type": "ALL_GPU",
+                    "total_units": 450,
+                    "rented_units": 100,
+                    "available_units": 340,
+                },
+                {
+                    "observed_at": "2026-08-21T16:00:00+00:00",
+                    "resource_type": "ALL_CPU",
+                    "total_units": 16_702_509,
+                    "available_units": 13_289_264,
+                },
+            ],
+        )
+
+        gpu, cpu = view["resources"]
+        self.assertEqual(view["status"], "frozen")
+        self.assertEqual(gpu["current"]["available"], 340)
+        self.assertAlmostEqual(cpu["current"]["available"], 13_289.264)
+
     def test_degraded_optional_provider_is_healthy_with_quorum(self) -> None:
         market_run = {
             "providers": [*(f"provider-{index}" for index in range(12)), "optional"],

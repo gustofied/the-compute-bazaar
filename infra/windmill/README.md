@@ -1,6 +1,12 @@
 # Windmill
 
-Windmill runs two scheduled Python jobs:
+This is the optional hosted scheduler. The same market cycle can run locally
+with `compute-bazaar market refresh`; AutoMQ and AWS are not required.
+
+No active Windmill deployment is required or assumed. This directory is kept
+for a future hosted deployment.
+
+When enabled, Windmill runs two scheduled Python jobs:
 
 - `market_hourly.py` calls `run_market_hourly()`.
 - `sandbox_benchmark_weekly.py` imports new public StarSling results and rebuilds
@@ -54,6 +60,7 @@ families against the exact deployed revision:
 
 ```bash
 uv run python infra/aws/check_public_market.py \
+  --base-url "$COMPUTE_BAZAAR_PUBLIC_BASE_URL" \
   --require-renderer-revision "$(git rev-parse HEAD)"
 ```
 
@@ -133,7 +140,8 @@ Verify freshness and one-run alignment across the market manifest, GPU cards,
 and portable lake with:
 
 ```bash
-uv run python infra/aws/check_public_market.py
+uv run python infra/aws/check_public_market.py \
+  --base-url "$COMPUTE_BAZAAR_PUBLIC_BASE_URL"
 ```
 
 ## Self-hosted development stack

@@ -31,6 +31,7 @@ from the_compute_bazaar.contracts import SANDBOX_WORKLOAD_GOLD_CONTRACT
 from the_compute_bazaar.prices.datafusion import DataFusionEngine
 from the_compute_bazaar.prices.leases import exclusive_lease
 from the_compute_bazaar.prices.public_view_sandbox import sandbox_workload_view
+from the_compute_bazaar.prices.publication_store import configured_public_base_url
 from the_compute_bazaar.prices.sandbox_publications import (
     publish_sandbox_workload_publication,
 )
@@ -364,10 +365,13 @@ def _build_workload_cost_unlocked(
             expected_service_count=WORKLOAD_SERVICE_COUNT,
         )
         sandbox_card = sandbox_workload_view(public_payload)
-        publish_sandbox_workload_publication(
-            output_root=dashboard_output_root,
-            workload_card=sandbox_card,
-        )
+        public_base_url = configured_public_base_url()
+        if public_base_url:
+            publish_sandbox_workload_publication(
+                output_root=dashboard_output_root,
+                workload_card=sandbox_card,
+                public_base_url=public_base_url,
+            )
         public_ref = _join(dashboard_output_root, "sandbox/workload.json")
         write_json(public_ref, sandbox_card)
 

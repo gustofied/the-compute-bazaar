@@ -20,7 +20,7 @@ GPU_FAMILIES = ("h100", "h200", "b200", "b300")
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-url", default="https://bazaar.adamsioud.com")
+    parser.add_argument("--base-url", required=True)
     parser.add_argument("--max-age-hours", type=float, default=2.5)
     parser.add_argument("--require-provider", action="append", default=[])
     parser.add_argument("--forbid-provider", action="append", default=[])
@@ -42,9 +42,7 @@ def main() -> None:
         family: _fetch_json(f"{base_url}/gpu-benchmark/{family}.json")
         for family in GPU_FAMILIES
     }
-    gpu_publications = _fetch_json(
-        f"{base_url}/publications/gpu-index/manifest.json"
-    )
+    gpu_publications = _fetch_json(f"{base_url}/publications/gpu-index/manifest.json")
     prime_publications = _fetch_json(
         f"{base_url}/publications/prime-gpu-market/manifest.json"
     )
@@ -247,10 +245,7 @@ def _validate_publication_manifest(
     renderer_revision = str(manifest.get("renderer_revision") or "")
     if not renderer_revision or renderer_revision == "unknown":
         raise RuntimeError(f"{label} publications do not identify their renderer")
-    if (
-        required_renderer_revision
-        and renderer_revision != required_renderer_revision
-    ):
+    if required_renderer_revision and renderer_revision != required_renderer_revision:
         raise RuntimeError(
             f"{label} publications were rendered by {renderer_revision!r}; "
             f"expected {required_renderer_revision!r}"

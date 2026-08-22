@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import tempfile
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -18,7 +19,13 @@ from .data_root import default_synced_lake_root
 from .prices.gold_manifest import read_latest_gold_manifest
 
 
-DEFAULT_PUBLIC_LAKE_URL = "https://bazaar.adamsioud.com/lake"
+DEFAULT_PUBLIC_LAKE_URL = (
+    "https://github.com/gustofied/the-compute-bazaar/"
+    "releases/download/public-lake"
+)
+ASSET_NAME_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+)
 MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_LAKE_BYTES = 1024 * 1024 * 1024
 
@@ -55,21 +62,21 @@ def sync_public_lake(
     backup = destination.with_name(f".{destination.name}.previous")
     downloaded_bytes = 0
     try:
-        for item in index["files"]:
-            relative = _safe_relative_path(item["path"])
-            target = staging / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if _reuse_cached_file(destination / relative, target, item=item):
-                continue
-            payload = _download(
-                f"{source_url}/{quote(relative.as_posix(), safe='/=._-')}"
+        distribution = index.get("distribution")
+        if distribution:
+            downloaded_bytes = _download_release_archive(
+                source_url=source_url,
+                staging=staging,
+                index=index,
+                distribution=distribution,
             )
-            if len(payload) != item["size"]:
-                raise RuntimeError(f"Size mismatch for {relative.as_posix()}")
-            if hashlib.sha256(payload).hexdigest() != item["sha256"]:
-                raise RuntimeError(f"Checksum mismatch for {relative.as_posix()}")
-            target.write_bytes(payload)
-            downloaded_bytes += len(payload)
+        else:
+            downloaded_bytes = _download_exploded_lake(
+                source_url=source_url,
+                source_cache=destination,
+                staging=staging,
+                index=index,
+            )
 
         (staging / "index.json").write_bytes(index_bytes)
         _write_sync_metadata(staging, source_url=source_url)
@@ -100,6 +107,81 @@ def sync_public_lake(
         "file_count": index["file_count"],
         "downloaded_bytes": downloaded_bytes,
     }
+
+
+def _download_exploded_lake(
+    *,
+    source_url: str,
+    source_cache: Path,
+    staging: Path,
+    index: dict[str, Any],
+) -> int:
+    downloaded_bytes = 0
+    for item in index["files"]:
+        relative = _safe_relative_path(item["path"])
+        target = staging / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if _reuse_cached_file(source_cache / relative, target, item=item):
+            continue
+        payload = _download(
+            f"{source_url}/{quote(relative.as_posix(), safe='/=._-')}"
+        )
+        _validate_payload(payload, item=item, label=relative.as_posix())
+        target.write_bytes(payload)
+        downloaded_bytes += len(payload)
+    return downloaded_bytes
+
+
+def _download_release_archive(
+    *,
+    source_url: str,
+    staging: Path,
+    index: dict[str, Any],
+    distribution: Any,
+) -> int:
+    archive = _validated_distribution(distribution)
+    archive_path = staging.parent / f".{staging.name}.zip"
+    try:
+        downloaded_bytes = _download_to_file(
+            f"{source_url}/{quote(archive['asset'], safe='._-')}",
+            archive_path,
+            expected_size=archive["size"],
+            expected_sha256=archive["sha256"],
+        )
+        expected = {str(item["path"]): item for item in index["files"]}
+        with zipfile.ZipFile(archive_path) as bundle:
+            members = bundle.infolist()
+            names = [member.filename for member in members]
+            if len(names) != len(set(names)) or set(names) != set(expected):
+                raise RuntimeError("Portable lake archive does not match its inventory")
+            for member in members:
+                relative = _safe_relative_path(member.filename)
+                item = expected[relative.as_posix()]
+                if member.is_dir() or member.file_size != item["size"]:
+                    raise RuntimeError(
+                        f"Size mismatch for {relative.as_posix()} in release archive"
+                    )
+                payload = bundle.read(member)
+                _validate_payload(
+                    payload,
+                    item=item,
+                    label=f"{relative.as_posix()} in release archive",
+                )
+                target = staging / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(payload)
+        return downloaded_bytes
+    except zipfile.BadZipFile as exc:
+        raise RuntimeError("Public market lake release is not a valid zip archive") from exc
+    finally:
+        archive_path.unlink(missing_ok=True)
+
+
+def _validate_payload(payload: bytes, *, item: dict[str, Any], label: str) -> None:
+    if len(payload) != item["size"]:
+        raise RuntimeError(f"Size mismatch for {label}")
+    if hashlib.sha256(payload).hexdigest() != item["sha256"]:
+        raise RuntimeError(f"Checksum mismatch for {label}")
 
 
 def _reuse_cached_file(
@@ -223,6 +305,30 @@ def _download(url: str) -> bytes:
     return payload
 
 
+def _download_to_file(
+    url: str,
+    destination: Path,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+) -> int:
+    request = Request(url, headers={"User-Agent": "compute-bazaar-data-sync"})
+    checksum = hashlib.sha256()
+    downloaded = 0
+    with urlopen(request, timeout=60) as response, destination.open("wb") as target:
+        while chunk := response.read(1024 * 1024):
+            downloaded += len(chunk)
+            if downloaded > MAX_LAKE_BYTES:
+                raise RuntimeError("Public market lake release exceeds the download budget")
+            checksum.update(chunk)
+            target.write(chunk)
+    if downloaded != expected_size:
+        raise RuntimeError("Public market lake release has an unexpected size")
+    if checksum.hexdigest() != expected_sha256:
+        raise RuntimeError("Public market lake release checksum does not match")
+    return downloaded
+
+
 def _validate_generation(staging: Path, *, index: dict[str, Any]) -> None:
     required_paths = {
         "portable.json",
@@ -295,7 +401,33 @@ def _validated_index(payload: bytes) -> dict[str, Any]:
         raise RuntimeError("Portable lake index has no market run identity")
     if not isinstance(value.get("provider_scope"), list):
         raise RuntimeError("Portable lake index has no provider scope")
+    if value.get("distribution") is not None:
+        _validated_distribution(value["distribution"])
     return value
+
+
+def _validated_distribution(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.get("format") != "zip":
+        raise RuntimeError("Portable lake index has an invalid distribution")
+    asset = value.get("asset")
+    size = value.get("size")
+    checksum = value.get("sha256")
+    if (
+        not isinstance(asset, str)
+        or not asset
+        or PurePosixPath(asset).name != asset
+        or any(character not in ASSET_NAME_CHARACTERS for character in asset)
+    ):
+        raise RuntimeError("Portable lake distribution has an invalid asset name")
+    if not isinstance(size, int) or size < 1 or size > MAX_LAKE_BYTES:
+        raise RuntimeError("Portable lake distribution has an invalid size")
+    if (
+        not isinstance(checksum, str)
+        or len(checksum) != 64
+        or any(character not in "0123456789abcdef" for character in checksum)
+    ):
+        raise RuntimeError("Portable lake distribution has an invalid checksum")
+    return {"format": "zip", "asset": asset, "size": size, "sha256": checksum}
 
 
 def _safe_relative_path(value: Any) -> PurePosixPath:

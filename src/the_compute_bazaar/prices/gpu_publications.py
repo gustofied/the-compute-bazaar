@@ -30,7 +30,7 @@ from .storage import write_bytes, write_json
 
 from .publication_store import (
     DEFAULT_ARTICLE_URL,
-    DEFAULT_PUBLIC_DATA_BASE_URL,
+    configured_public_base_url,
     _join,
     _latest_card_observed_at,
     _live_gpu_url,
@@ -47,11 +47,9 @@ def publish_gpu_benchmark_publications(
     article_url: str | None = None,
 ) -> dict[str, Any]:
     """Publish immutable GPU chart pages and add their links to each card."""
-    public_base = (
-        public_base_url
-        or os.getenv("COMPUTE_BAZAAR_PUBLIC_BASE_URL")
-        or DEFAULT_PUBLIC_DATA_BASE_URL
-    ).rstrip("/")
+    public_base = configured_public_base_url(public_base_url)
+    if not public_base:
+        raise ValueError("A public base URL is required to publish immutable cards")
     live_article = (
         article_url or os.getenv("COMPUTE_BAZAAR_ARTICLE_URL") or DEFAULT_ARTICLE_URL
     )

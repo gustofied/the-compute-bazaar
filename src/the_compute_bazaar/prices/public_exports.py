@@ -27,6 +27,7 @@ from .prime_publications import publish_prime_offer_shelf_publications
 from .public_view_gpu import GPU_FAMILIES, gpu_benchmark_view
 from .public_view_capacity import akash_capacity_view
 from .public_view_prime import prime_frontier_view
+from .publication_store import configured_public_base_url
 from .public_series import (
     has_benchmark_value,
     public_benchmark_constituent,
@@ -79,17 +80,17 @@ def export_public_cards(
         lake_root=lake_root,
         manifest=manifest,
     )
-    akash_capacity_public = akash_capacity_view(
+    akash_card = akash_capacity_view(
         manifest=public_manifest,
         rows=akash_capacity_payload["rows"],
     )
     output_refs = {
         "manifest": "/".join([output_root.rstrip("/"), "manifest.json"]),
-        "akash_capacity_history": "/".join(
-            [output_root.rstrip("/"), "akash-capacity-history.json"]
-        ),
         "prime_frontier_offer_shelf": "/".join(
             [output_root.rstrip("/"), "prime-frontier-offer-shelf.json"]
+        ),
+        "akash_capacity_history": "/".join(
+            [output_root.rstrip("/"), "akash-capacity-history.json"]
         ),
     }
     prime_frontier_products = public_prime_frontier_products(
@@ -149,11 +150,6 @@ def export_public_cards(
         )
         for family in GPU_FAMILIES
     }
-    gpu_publications = publish_gpu_benchmark_publications(
-        output_root=output_root,
-        cards=benchmark_cards,
-    )
-    output_refs["gpu_publications"] = gpu_publications["manifest_ref"]
     for family in GPU_FAMILIES:
         output_refs[f"gpu_benchmark_{family.lower()}"] = "/".join(
             [output_root.rstrip("/"), "gpu-benchmark", f"{family.lower()}.json"]
@@ -168,38 +164,47 @@ def export_public_cards(
         )
         for product in prime_frontier_products
     }
-    prime_publications = publish_prime_offer_shelf_publications(
-        output_root=output_root,
-        cards=prime_cards,
-    )
-    output_refs["prime_publications"] = prime_publications["manifest_ref"]
-    for product in prime_frontier_products:
-        family = str(product.get("family_id") or "")
-        publication = (prime_cards.get(family) or {}).get("publication")
-        if publication:
-            product["publication"] = publication
-    for product in prime_frontier_shelf_public["products"]:
-        family = str(product.get("family_id") or "")
-        publication = (prime_cards.get(family) or {}).get("publication")
-        if publication:
-            product["publication"] = publication
-    prime_frontier_shelf_public["publications"] = {
-        "manifest_path": "publications/prime-gpu-market/manifest.json",
-        "revision": prime_publications["revision"],
-        "render_profile": prime_publications["render_profile"],
-        "renderer_revision": prime_publications["renderer_revision"],
-        "publication_count": prime_publications["publication_count"],
-    }
+    gpu_publication_count = 0
+    prime_publication_count = 0
+    public_base_url = configured_public_base_url()
+    if public_base_url:
+        gpu_publications = publish_gpu_benchmark_publications(
+            output_root=output_root,
+            cards=benchmark_cards,
+            public_base_url=public_base_url,
+        )
+        output_refs["gpu_publications"] = gpu_publications["manifest_ref"]
+        gpu_publication_count = gpu_publications["publication_count"]
+
+        prime_publications = publish_prime_offer_shelf_publications(
+            output_root=output_root,
+            cards=prime_cards,
+            public_base_url=public_base_url,
+        )
+        output_refs["prime_publications"] = prime_publications["manifest_ref"]
+        prime_publication_count = prime_publications["publication_count"]
+        for product in prime_frontier_shelf_public["products"]:
+            family = str(product.get("family_id") or "")
+            publication = (prime_cards.get(family) or {}).get("publication")
+            if publication:
+                product["publication"] = publication
+        prime_frontier_shelf_public["publications"] = {
+            "manifest_path": "publications/prime-gpu-market/manifest.json",
+            "revision": prime_publications["revision"],
+            "render_profile": prime_publications["render_profile"],
+            "renderer_revision": prime_publications["renderer_revision"],
+            "publication_count": prime_publication_count,
+        }
     for family in GPU_FAMILIES:
         output_refs[f"prime_frontier_{family.lower()}"] = "/".join(
             [output_root.rstrip("/"), "prime-frontier", f"{family.lower()}.json"]
         )
     write_json(output_refs["manifest"], public_manifest)
-    write_json(output_refs["akash_capacity_history"], akash_capacity_public)
     write_json(
         output_refs["prime_frontier_offer_shelf"],
         prime_frontier_shelf_public,
     )
+    write_json(output_refs["akash_capacity_history"], akash_card)
     for family, card in benchmark_cards.items():
         write_json(output_refs[f"gpu_benchmark_{family.lower()}"], card)
     for family, card in prime_cards.items():
@@ -216,11 +221,11 @@ def export_public_cards(
             "prime_frontier_ladder": len(prime_frontier_payload.get("ladder", [])),
             "prime_frontier_events": len(prime_frontier_payload.get("events", [])),
             "prime_frontier_offers": len(prime_frontier_payload.get("offers", [])),
-            "gpu_benchmark_cards": len(benchmark_cards),
-            "gpu_publications": gpu_publications["publication_count"],
-            "prime_publications": prime_publications["publication_count"],
-            "prime_frontier_cards": len(prime_cards),
             "akash_capacity_history": len(akash_capacity_payload["rows"]),
+            "gpu_benchmark_cards": len(benchmark_cards),
+            "gpu_publications": gpu_publication_count,
+            "prime_publications": prime_publication_count,
+            "prime_frontier_cards": len(prime_cards),
         },
         "source_gold_manifest_ref": manifest.get("manifest_ref"),
     }

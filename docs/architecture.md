@@ -1,17 +1,22 @@
 # Architecture
 
 ```text
-Public market
-  provider APIs -> Windmill -> Bronze -> Silver -> Gold -> public lake
+Default
+  provider APIs -> local runner -> Bronze -> Silver -> Gold -> public lake
+                                                            -> GitHub Release
 
-Rebuilt market path
+Market to Fleet
   source API -> Bronze -> silver.gpu_offers -> preflight -> allocation -> Fleet
+
+Optional hosted deployment
+  Windmill -> same market run -> AutoMQ event stream
+                             -> S3 -> CloudFront
 ```
 
 ## Market data
 
-Windmill runs provider ingestion each hour. AutoMQ carries the live observations
-as a Kafka-compatible stream. S3 keeps the durable lake:
+The local runner reads providers and writes the same three layers used by the
+hosted pipeline:
 
 ```text
 Bronze  raw provider evidence
@@ -19,9 +24,15 @@ Silver  normalized market data
 Gold    shared market models
 ```
 
-A sanitized Silver and Gold copy is published as the public lake. The CLI syncs
-that Parquet data locally, so DataFusion can query it without cloud credentials
-or a database server.
+A sanitized Silver and Gold copy is packaged as a checksummed ZIP on the
+repository's `public-lake` GitHub Release. The CLI verifies and replaces its
+local cache atomically, so DataFusion can query it without cloud credentials or
+a database server.
+
+Windmill, AutoMQ, S3, and CloudFront remain an optional hosted deployment.
+Windmill schedules the same market run; AutoMQ receives an event copy; S3 keeps
+the private lake and CloudFront can serve public outputs. The core run does not
+require any of them.
 
 The deployed public path uses one observation table:
 
@@ -32,10 +43,9 @@ silver.offer_observations
   preflight   provider read immediately before launch
 ```
 
-Windmill writes scheduled rows to S3 each hour and publishes them to AutoMQ.
-Direct RunPod and Verda reads and their launch checks are kept locally and
-unioned into `silver.offer_observations`. `observation_purpose` says why a row
-exists.
+The local or Windmill runner writes scheduled rows. Direct RunPod and Verda
+reads and their launch checks are kept locally and unioned into
+`silver.offer_observations`. `observation_purpose` says why a row exists.
 
 The rebuilt `market/` path starts again from a smaller contract:
 
@@ -54,6 +64,23 @@ These are two selectable catalogs, not one universal SQL catalog. The default
 CLI and Terminal use the synced public Silver/Gold lake. `compute-bazaar terminal
 lake2` opens the rebuilt local market lake. Fleet reads its private operational
 ledger separately.
+
+## Public delivery
+
+The public release contains only the files named in `index.json`. Every file and
+the ZIP itself has a SHA-256 checksum. `compute-bazaar data sync` verifies the
+archive before replacing the current cache. A repeated sync of the same run
+downloads nothing.
+
+AdamSioud uses checked-in dashboard snapshots. It does not contact S3 or
+CloudFront at runtime, so the article remains available when the hosted pipeline
+is stopped. New market data appears only after a local refresh, a GitHub release
+publish, and an intentional snapshot update.
+
+The public release is the portable history for users; it does not contain raw
+evidence. Before retiring S3, `compute-bazaar data archive` mirrors the private
+bucket into a content-addressed, checksummed local archive. Its `offline.env`
+maps the original `s3://` references onto that mirror for replay without AWS.
 
 ## Query layer
 

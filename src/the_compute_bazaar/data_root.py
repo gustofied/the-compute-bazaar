@@ -26,6 +26,14 @@ def default_synced_lake_root() -> str:
     return str(cache_home / "compute-bazaar" / "lake")
 
 
+def default_local_pipeline_root() -> str:
+    configured = os.getenv("COMPUTE_BAZAAR_LOCAL_HOME")
+    if configured:
+        return str(Path(configured).expanduser())
+    data_home = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return str(data_home / "compute-bazaar" / "local")
+
+
 def resolve_lake_root(explicit: str | None = None) -> LakeSelection:
     if explicit:
         return LakeSelection(explicit.rstrip("/"), "explicit", "explicit lake")

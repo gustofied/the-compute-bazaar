@@ -12,7 +12,12 @@ from typing import Annotated, Any
 import typer
 
 from .cli_output import render_table_payload, supports_auto_table
-from .data_root import LakeSelection, resolve_lake_root
+from .data_sync import DEFAULT_PUBLIC_LAKE_URL
+from .data_root import (
+    LakeSelection,
+    default_local_pipeline_root,
+    resolve_lake_root,
+)
 from .prices.schemas import to_jsonable
 from .terminal.lifecycle import DEFAULT_EVALUATION_ROOT
 
@@ -105,7 +110,7 @@ def data_sync(
     url: Annotated[
         str,
         typer.Option(help="Public portable-lake base URL."),
-    ] = "https://bazaar.adamsioud.com/lake",
+    ] = DEFAULT_PUBLIC_LAKE_URL,
     output_root: Annotated[
         str | None,
         typer.Option(help="Override the local cache directory."),
@@ -120,6 +125,108 @@ def data_sync(
         command="data",
         include_source=False,
     )
+
+
+@data_app.command("pack")
+def data_pack(
+    ctx: typer.Context,
+    lake_root: Annotated[
+        Path | None,
+        typer.Option(help="Portable lake directory."),
+    ] = None,
+    output_root: Annotated[
+        Path,
+        typer.Option(help="Directory for the release files."),
+    ] = Path("dist/public-lake"),
+) -> None:
+    """Package the sanitized lake for GitHub Releases."""
+    from .data_release import build_release_assets
+
+    source = lake_root or Path(default_local_pipeline_root()) / "public" / "lake"
+    _emit(
+        ctx,
+        build_release_assets(
+            lake_root=str(source),
+            output_root=str(output_root),
+        ),
+        command="data",
+        include_source=False,
+    )
+
+
+@data_app.command("publish")
+def data_publish(
+    ctx: typer.Context,
+    lake_root: Annotated[
+        Path | None,
+        typer.Option(help="Portable lake directory."),
+    ] = None,
+    repository: Annotated[
+        str,
+        typer.Option(help="GitHub owner/repository."),
+    ] = "gustofied/the-compute-bazaar",
+) -> None:
+    """Publish the sanitized lake to the rolling GitHub release."""
+    from .data_release import publish_release
+
+    source = lake_root or Path(default_local_pipeline_root()) / "public" / "lake"
+    try:
+        result = publish_release(lake_root=str(source), repository=repository)
+    except RuntimeError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(ctx, result, command="data", include_source=False)
+
+
+@data_app.command("archive")
+def data_archive(
+    ctx: typer.Context,
+    source_root: Annotated[
+        list[str] | None,
+        typer.Option("--source-root", help="S3 root; repeat for multiple roots."),
+    ] = None,
+    output_root: Annotated[
+        Path,
+        typer.Option(help="Private local archive directory."),
+    ] = Path("data/cloud-archive"),
+    workers: Annotated[
+        int,
+        typer.Option(min=1, max=32, help="Parallel S3 downloads."),
+    ] = 12,
+) -> None:
+    """Mirror private S3 data locally before shutting the hosted stack down."""
+    from .prices.archive import create_s3_archive, default_s3_archive_roots
+
+    try:
+        result = create_s3_archive(
+            source_roots=source_root or default_s3_archive_roots(),
+            archive_root=output_root,
+            workers=workers,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(ctx, result, command="data", include_source=False)
+
+
+@data_app.command("verify-archive")
+def data_verify_archive(
+    ctx: typer.Context,
+    archive_root: Annotated[
+        Path,
+        typer.Option(help="Private local archive directory."),
+    ] = Path("data/cloud-archive"),
+    workers: Annotated[
+        int,
+        typer.Option(min=1, max=32, help="Parallel checksum reads."),
+    ] = 8,
+) -> None:
+    """Verify every object in a private local archive."""
+    from .prices.archive import verify_s3_archive
+
+    try:
+        result = verify_s3_archive(archive_root=archive_root, workers=workers)
+    except (RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(ctx, result, command="data", include_source=False)
 
 
 @market_app.command("ingest")
@@ -158,6 +265,67 @@ def market_ingest(
     _emit(
         ctx,
         publish_generation(lake, result),
+        command="market",
+        include_source=False,
+    )
+
+
+@market_app.command("refresh")
+def market_refresh(
+    ctx: typer.Context,
+    provider: Annotated[
+        list[str] | None,
+        typer.Option("--provider", help="Provider to read; repeat to limit the run."),
+    ] = None,
+    output_root: Annotated[
+        Path | None,
+        typer.Option(help="Local pipeline directory."),
+    ] = None,
+    minimum_providers: Annotated[
+        int,
+        typer.Option(min=1, help="Minimum successful providers."),
+    ] = 1,
+    run_id: Annotated[str | None, typer.Option(help="Optional market run ID.")] = None,
+) -> None:
+    """Read providers and rebuild the market lake locally."""
+    from .prices.market_run import default_market_providers, run_market_hourly
+
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+
+    root = (output_root or Path(default_local_pipeline_root())).expanduser().resolve()
+    try:
+        result = run_market_hourly(
+            raw_root=str(root / "raw"),
+            lake_root=str(root / "lake"),
+            dashboard_output_root=str(root / "public"),
+            providers=provider or default_market_providers(),
+            minimum_successful_providers=minimum_providers,
+            automq_bootstrap_servers=None,
+            run_id=run_id,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    _emit(
+        ctx,
+        {
+            "contract": "compute-bazaar.local-market-refresh",
+            "rows": [
+                {
+                    "run": result.market_run_id,
+                    "status": result.status,
+                    "providers": len(result.successful_providers),
+                    "failed": len(result.failed_providers),
+                    "lake": str(root / "lake"),
+                }
+            ],
+            "failed_providers": result.failed_providers,
+        },
         command="market",
         include_source=False,
     )
@@ -1202,7 +1370,7 @@ def serve_terminal(
     ctx: typer.Context,
     lake: Annotated[
         str | None,
-        typer.Argument(help="Use lake2 to open the new market lake."),
+        typer.Argument(help="Use local or lake2 to select another market lake."),
     ] = None,
     port: Annotated[int, typer.Option(min=1, max=65535)] = 8767,
     view: Annotated[
@@ -1247,13 +1415,17 @@ def serve_terminal(
 ) -> None:
     """Open the Compute Bazaar Terminal."""
     if lake:
-        if lake != "lake2":
-            raise typer.BadParameter("Unknown lake. Use lake2 or omit it.")
-        from .market import default_market_lake_root
-
         state = _state(ctx)
+        if lake == "local":
+            selected_root = str(Path(default_local_pipeline_root()) / "lake")
+        elif lake == "lake2":
+            from .market import default_market_lake_root
+
+            selected_root = default_market_lake_root()
+        else:
+            raise typer.BadParameter("Unknown lake. Use local, lake2, or omit it.")
         ctx.find_root().obj = CLIState(
-            lake=resolve_lake_root(default_market_lake_root()),
+            lake=resolve_lake_root(selected_root),
             output_format=state.output_format,
         )
     if stop:

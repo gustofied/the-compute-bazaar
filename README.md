@@ -11,21 +11,22 @@ and workloads.
 
 ## Architecture
 
-The public market pipeline and the rebuilt market-to-Fleet path currently sit
-side by side.
-
 ```text
-Public market
-  Windmill -> provider reads -> Bronze -> Silver -> Gold -> public lake
-
-Market to Fleet
-  source API -> Bronze -> silver.gpu_offers -> preflight -> allocation -> Fleet
+provider APIs -> Bronze -> Silver -> Gold -> public lake -> GitHub Release
+                       \-> preflight -> allocation -> Fleet
 ```
 
-I use Windmill for hourly ingestion, AutoMQ for the Kafka-compatible event
-stream, and S3 for the durable public lake. Bronze keeps raw evidence, Silver is
-normalized market data, and Gold contains shared models such as GPU price and
-availability indexes.
+Bronze keeps raw evidence, Silver is normalized market data, and Gold contains
+shared models such as GPU price and availability indexes. The pipeline runs
+locally by default. A sanitized Silver and Gold lake is published to a rolling
+GitHub Release for `compute-bazaar data sync`.
+
+The hosted path remains in `infra/`: Windmill can schedule the same provider
+cycle, AutoMQ can carry its Kafka-compatible event stream, and S3 with
+CloudFront can store and serve the outputs. None of those services are required
+for the CLI, Terminal, local ingestion, or public data sync. No hosted Windmill
+deployment is currently assumed; [the runbook](infra/windmill/README.md) is kept
+for a future deployment.
 
 This data can be queried with DataFusion, an SQL query engine built on Apache
 Arrow. Perspective also accepts Arrow data, so I am currently exploring it to
@@ -47,7 +48,7 @@ More detail: [Architecture](docs/architecture.md).
 
 ## Setup
 
-Install the project and sync the hourly updated public market lake.
+Install the project and sync the latest published market lake.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gustofied/the-compute-bazaar/main/install.sh | sh
@@ -67,9 +68,9 @@ compute-bazaar data status
 compute-bazaar price-index
 ```
 
-`data sync` downloads the latest public Silver and Gold tables. Run it again
-for the newest hourly data; `data status` shows the current run and freshness,
-while `price-index` prints one example market view.
+`data sync` downloads the latest public Silver and Gold snapshot from GitHub.
+`data status` shows its run and age; `price-index` prints one example market
+view. No cloud credentials are needed.
 
 `compute-bazaar` prints tables by default. Use
 `compute-bazaar --format json COMMAND` for machine-readable output.
@@ -121,6 +122,38 @@ compute-bazaar terminal lake2
 
 That Terminal exposes `silver.gpu_offers`. The default Terminal continues to
 use the synced public Silver and Gold lake.
+
+The full provider cycle can also run locally without Windmill, AutoMQ, or AWS:
+
+```bash
+uv sync --extra market --extra terminal
+compute-bazaar market refresh
+compute-bazaar terminal local
+```
+
+Use `--provider NAME` more than once to limit a refresh. Private sources read
+their existing environment credentials. Each run records the market at that
+moment; periods when it is not running cannot be reconstructed later.
+
+To update the public snapshot, publish the sanitized lake created by that run:
+
+```bash
+compute-bazaar data publish
+```
+
+Publishing uses the authenticated GitHub CLI. Raw evidence and credentials are
+never included in the release.
+
+Before shutting down an S3 deployment, keep one private offline archive:
+
+```bash
+uv sync --extra s3
+compute-bazaar data archive --source-root s3://YOUR_BUCKET/
+compute-bazaar data verify-archive
+```
+
+The archive is incremental, checksummed, ignored by Git, and can replay its
+original `s3://` references through `data/cloud-archive/offline.env`.
 
 ## Terminal
 
