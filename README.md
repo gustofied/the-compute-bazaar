@@ -8,10 +8,9 @@
 With The Compute Bazaar, you sit at the compute trading desk. Use live and
 historical market data to analyse the market and build your own models. Find and
 rent compute, then operate and monitor it through Fleet. Connect Codex/OpenCode
-through ACP; agents can analyse the same data, create models, and operate the
-system through its CLI. Eval uses Harbor to test agents in both common compute
-deal work and compute market games. At last trade explores how price,
-availability, and risk could eventually be hedged.
+through ACP. In Eval, create and run Harbor benchmarks for agents across compute
+deal work and compute market games. Finally, Trade explores financial
+instruments for hedging compute price and availability risk.
 
 The Compute Bazaar is ongoing work, continuing ideas from my earlier work on
 [OUDAU](https://www.adamsioud.com/projects/oudau.html).
