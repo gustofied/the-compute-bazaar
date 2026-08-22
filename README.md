@@ -1,7 +1,7 @@
 <p align="center">
   <img src="assets/compute-bazaar-wordmark.webp" alt="The Compute Bazaar" width="440"><br>
   <strong>The Compute Bazaar</strong><br>
-  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#eval">Eval</a> • <a href="#fleet">Fleet</a> • Trade<br>
+  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#eval">Eval</a> • <a href="#fleet">Fleet</a> • Trade<br><br>
   <a href="https://www.adamsioud.com/exemplars/compute/feeling_the_compute">Article</a>
 </p>
 
