@@ -23,7 +23,7 @@ Install The Compute Bazaar.
 $ curl -fsSL https://raw.githubusercontent.com/gustofied/the-compute-bazaar/refs/heads/main/install.sh | sh
 ```
 
-Or clone and run the same installer.
+Or clone the repository.
 
 ```console
 $ git clone https://github.com/gustofied/the-compute-bazaar.git
