@@ -3,7 +3,7 @@
 set -eu
 
 REPO_URL="${COMPUTE_BAZAAR_REPO_URL:-https://github.com/gustofied/the-compute-bazaar.git}"
-INSTALL_DIR="${COMPUTE_BAZAAR_INSTALL_DIR:-$HOME/.local/share/compute-bazaar}"
+INSTALL_DIR="${COMPUTE_BAZAAR_INSTALL_DIR:-$HOME/.local/share/compute-bazaar/app}"
 BIN_DIR="${COMPUTE_BAZAAR_BIN_DIR:-$HOME/.local/bin}"
 
 fail() {
