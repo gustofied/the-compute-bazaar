@@ -20,7 +20,7 @@ The Compute Bazaar is ongoing work, continuing ideas from my earlier work on
 Install and open the Terminal.
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/gustofied/the-compute-bazaar/main/install.sh | sh
+$ curl -fsSL https://raw.githubusercontent.com/gustofied/the-compute-bazaar/refs/heads/main/install.sh | sh
 $ export PATH="$HOME/.local/bin:$PATH"
 $ compute-bazaar terminal
 ```
