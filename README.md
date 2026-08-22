@@ -1,13 +1,20 @@
 <p align="center">
-  <img src="assets/compute-bazaar-wordmark.png" alt="The Compute Bazaar" width="440"><br>
+  <img src="assets/compute-bazaar-wordmark.webp" alt="The Compute Bazaar" width="440"><br>
   <strong>The Compute Bazaar</strong><br>
-  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#eval">Eval</a> • <a href="#fleet">Fleet</a> • Trade
+  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#eval">Eval</a> • <a href="#fleet">Fleet</a> • Trade<br>
+  <a href="https://www.adamsioud.com/exemplars/compute/feeling_the_compute">Article</a>
 </p>
 
-The Compute Bazaar is a research workstation for compute markets. It records
-GPU offers, lets people and agents query them, checks selected capacity again
-before spending, and carries the resulting allocation into Fleet for monitoring
-and workloads.
+With The Compute Bazaar, you sit at the compute trading desk. Use live and
+historical market data to analyse the market and build your own models. Find and
+rent compute, then operate and monitor it through Fleet. Connect Codex/OpenCode
+through ACP; agents can analyse the same data, create models, and operate the
+system through its CLI. Eval uses Harbor to test agents in both common compute
+deal work and compute market games. At last trade explores how price,
+availability, and risk could eventually be hedged.
+
+The Compute Bazaar is ongoing work, continuing ideas from my earlier work on
+[OUDAU](https://www.adamsioud.com/projects/oudau.html).
 
 ## Architecture
 
