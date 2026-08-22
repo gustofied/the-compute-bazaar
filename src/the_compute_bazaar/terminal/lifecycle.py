@@ -591,7 +591,7 @@ def _terminal_runtime() -> tuple[Any, Any]:
         from . import create_terminal_app
     except ImportError as exc:
         raise TerminalLifecycleError(
-            "The terminal requires: uv sync --extra terminal"
+            "Terminal dependencies are unavailable. Run: uv sync"
         ) from exc
     return uvicorn, create_terminal_app
 

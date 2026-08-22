@@ -198,7 +198,7 @@ class OfferService:
                 from .prices.providers.runpod import RunpodClient
             except ImportError as exc:
                 raise OfferServiceError(
-                    "Provider reads require: uv sync --extra providers"
+                    "Provider dependencies are unavailable. Run: uv sync"
                 ) from exc
             self._runpod_client = RunpodClient(api_key=self.runpod_api_key)
         from .prices.providers.runpod import normalize_live_market

@@ -887,37 +887,28 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "datafusion" },
+    { name = "fastapi" },
     { name = "pyarrow" },
     { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "requests" },
     { name = "typer" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
 market = [
     { name = "matplotlib" },
     { name = "pillow" },
-    { name = "python-dotenv" },
-    { name = "requests" },
-]
-providers = [
-    { name = "python-dotenv" },
-    { name = "requests" },
 ]
 s3 = [
     { name = "boto3" },
-]
-terminal = [
-    { name = "fastapi" },
-    { name = "python-dotenv" },
-    { name = "requests" },
-    { name = "uvicorn", extra = ["standard"] },
 ]
 worker = [
     { name = "boto3" },
     { name = "confluent-kafka" },
     { name = "matplotlib" },
     { name = "pillow" },
-    { name = "requests" },
 ]
 
 [package.dev-dependencies]
@@ -931,24 +922,19 @@ requires-dist = [
     { name = "boto3", marker = "extra == 'worker'", specifier = ">=1.41.0" },
     { name = "confluent-kafka", marker = "extra == 'worker'", specifier = ">=2.12.2" },
     { name = "datafusion", specifier = ">=51.0.0" },
-    { name = "fastapi", marker = "extra == 'terminal'", specifier = ">=0.137.1" },
+    { name = "fastapi", specifier = ">=0.137.1" },
     { name = "matplotlib", marker = "extra == 'market'", specifier = ">=3.10.8" },
     { name = "matplotlib", marker = "extra == 'worker'", specifier = ">=3.10.8" },
     { name = "pillow", marker = "extra == 'market'", specifier = ">=12.0.0" },
     { name = "pillow", marker = "extra == 'worker'", specifier = ">=12.0.0" },
     { name = "pyarrow", specifier = ">=22.0.0" },
     { name = "pydantic", specifier = ">=2.12.0,<3.0.0" },
-    { name = "python-dotenv", marker = "extra == 'market'", specifier = ">=1.2.1" },
-    { name = "python-dotenv", marker = "extra == 'providers'", specifier = ">=1.2.1" },
-    { name = "python-dotenv", marker = "extra == 'terminal'", specifier = ">=1.2.1" },
-    { name = "requests", marker = "extra == 'market'", specifier = ">=2.33.1" },
-    { name = "requests", marker = "extra == 'providers'", specifier = ">=2.33.1" },
-    { name = "requests", marker = "extra == 'terminal'", specifier = ">=2.33.1" },
-    { name = "requests", marker = "extra == 'worker'", specifier = ">=2.33.1" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
+    { name = "requests", specifier = ">=2.33.1" },
     { name = "typer", specifier = ">=0.21.0,<1.0.0" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'terminal'", specifier = ">=0.49.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.49.0" },
 ]
-provides-extras = ["terminal", "providers", "market", "s3", "worker"]
+provides-extras = ["market", "s3", "worker"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "ruff", specifier = ">=0.14.0,<0.15.0" }]

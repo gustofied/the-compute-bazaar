@@ -15,6 +15,27 @@ instruments for hedging compute price and availability risk.
 The Compute Bazaar is ongoing work, continuing ideas from my earlier work on
 [OUDAU](https://www.adamsioud.com/projects/oudau.html).
 
+## Setup
+
+Install and open the Terminal.
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/gustofied/the-compute-bazaar/main/install.sh | sh
+$ export PATH="$HOME/.local/bin:$PATH"
+$ compute-bazaar terminal
+```
+
+Or clone, sync, and open the Terminal.
+
+```console
+$ git clone https://github.com/gustofied/the-compute-bazaar.git
+$ cd the-compute-bazaar
+$ uv sync
+$ source .venv/bin/activate
+$ compute-bazaar data sync
+$ compute-bazaar terminal
+```
+
 ## Architecture
 
 ```text
@@ -52,36 +73,10 @@ not just quantitative, but qualitative too.
 
 More detail: [Architecture](docs/architecture.md).
 
-## Setup
-
-Install the project and sync the latest published market lake.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/gustofied/the-compute-bazaar/main/install.sh | sh
-export PATH="$HOME/.local/bin:$PATH"
-compute-bazaar terminal
-```
-
-For development, clone the repository directly.
-
-```bash
-git clone https://github.com/gustofied/the-compute-bazaar.git
-cd the-compute-bazaar
-uv sync
-source .venv/bin/activate
-compute-bazaar data sync
-compute-bazaar data status
-compute-bazaar price-index
-```
-
-`data sync` downloads the latest public Silver and Gold snapshot from GitHub.
-`data status` shows its run and age; `price-index` prints one example market
-view. No cloud credentials are needed.
+## Data
 
 `compute-bazaar` prints tables by default. Use
 `compute-bazaar --format json COMMAND` for machine-readable output.
-
-## Data
 
 Start by listing the DataFusion catalog and inspecting a table.
 
@@ -110,7 +105,6 @@ can be selected now. Both use `silver.offer_observations`; the row says whether
 it came from the hourly run or a direct provider read.
 
 ```bash
-uv sync --extra providers
 compute-bazaar offers list --provider runpod --gpu-model H100
 compute-bazaar offers inspect OFFER_ID
 ```
@@ -132,7 +126,7 @@ use the synced public Silver and Gold lake.
 The full provider cycle can also run locally without Windmill, AutoMQ, or AWS:
 
 ```bash
-uv sync --extra market --extra terminal
+uv sync --extra market
 compute-bazaar market refresh
 compute-bazaar terminal local
 ```
@@ -177,7 +171,7 @@ for example whenever a new hourly observation arrives. The Compute Bazaar is
 extensible.
 
 ```bash
-uv sync --extra terminal
+uv sync
 pnpm --dir terminal install
 compute-bazaar terminal
 ```

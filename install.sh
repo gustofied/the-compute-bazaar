@@ -35,7 +35,7 @@ else
 fi
 
 printf 'Installing the CLI and Terminal...\n'
-uv sync --project "$INSTALL_DIR" --extra terminal --no-dev
+uv sync --project "$INSTALL_DIR" --no-dev
 
 if command -v node >/dev/null 2>&1 \
     && command -v pnpm >/dev/null 2>&1 \
