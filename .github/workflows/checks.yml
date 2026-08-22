@@ -16,6 +16,7 @@ jobs:
       - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
+      - run: /bin/sh -n install.sh
       - run: uv sync --frozen --group dev
       - run: uv run ruff format --check src tests
       - run: uv run ruff check src tests

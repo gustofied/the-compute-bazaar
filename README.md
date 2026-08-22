@@ -17,22 +17,23 @@ The Compute Bazaar is ongoing work, continuing ideas from my earlier work on
 
 ## Setup
 
-Install and open the Terminal.
+Install The Compute Bazaar.
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/gustofied/the-compute-bazaar/refs/heads/main/install.sh | sh
-$ export PATH="$HOME/.local/bin:$PATH"
-$ compute-bazaar terminal
 ```
 
-Or clone, sync, and open the Terminal.
+Or clone and run the same installer.
 
 ```console
 $ git clone https://github.com/gustofied/the-compute-bazaar.git
 $ cd the-compute-bazaar
-$ uv sync
-$ source .venv/bin/activate
-$ compute-bazaar data sync
+$ ./install.sh
+```
+
+Open the Terminal.
+
+```console
 $ compute-bazaar terminal
 ```
 
@@ -169,12 +170,6 @@ ways: people can make models for agents, and agents can make models and views
 for people or other agents to use later. A model can also run inside a pipeline,
 for example whenever a new hourly observation arrives. The Compute Bazaar is
 extensible.
-
-```bash
-uv sync
-pnpm --dir terminal install
-compute-bazaar terminal
-```
 
 The Terminal opens with Data, Fleet, Eval, and Trade. Data is where DataFusion
 queries market data and [Perspective](https://perspective-dev.github.io) turns
