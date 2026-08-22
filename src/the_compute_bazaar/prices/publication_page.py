@@ -18,7 +18,9 @@ def publication_html(metadata: Mapping[str, Any]) -> str:
     live_url = escape(str(metadata["live_url"]), quote=True)
     data_url = escape(str(metadata["data_url"]), quote=True)
     image_alt = escape(str(metadata["image_alt"]), quote=True)
-    render_profile = escape(str(metadata.get("render_profile") or "unknown"), quote=True)
+    render_profile = escape(
+        str(metadata.get("render_profile") or "unknown"), quote=True
+    )
     renderer_revision = escape(
         str(metadata.get("renderer_revision") or "unknown"), quote=True
     )

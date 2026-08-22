@@ -28,7 +28,11 @@ class SshEndpoint(BaseModel):
     @classmethod
     def validate_target(cls, value: str) -> str:
         target = value.strip()
-        if not target or target.startswith("-") or any(char.isspace() for char in target):
+        if (
+            not target
+            or target.startswith("-")
+            or any(char.isspace() for char in target)
+        ):
             raise ValueError("SSH target must be one host alias or user@host")
         return target
 

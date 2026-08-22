@@ -130,10 +130,8 @@ def render_prime_offer_shelf_publication(
             (0.020, 0.038),
             *(
                 (
-                    0.020
-                    + ((date - start).total_seconds() / duration) * 0.960,
-                    0.343
-                    + ((price - price_minimum) / price_span) * 0.400,
+                    0.020 + ((date - start).total_seconds() / duration) * 0.960,
+                    0.343 + ((price - price_minimum) / price_span) * 0.400,
                 )
                 for date, price in zip(smooth_dates, smooth_prices, strict=True)
             ),

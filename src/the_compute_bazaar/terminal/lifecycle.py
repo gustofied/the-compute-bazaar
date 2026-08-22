@@ -305,11 +305,9 @@ def _launch_browser_terminal(
             return f"Compute Bazaar Terminal is already open: {existing['url']}"
         os.kill(int(existing["pid"]), signal.SIGTERM)
         deadline = time.monotonic() + 5
-        while (
-            time.monotonic() < deadline
-            and _terminal_health(existing.get("url"), project_root)
-            == existing.get("pid")
-        ):
+        while time.monotonic() < deadline and _terminal_health(
+            existing.get("url"), project_root
+        ) == existing.get("pid"):
             time.sleep(0.1)
         if _terminal_health(existing.get("url"), project_root) == existing.get("pid"):
             raise TerminalLifecycleError(

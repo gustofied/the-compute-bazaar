@@ -27,6 +27,8 @@ def default_analysis_root() -> Path:
         return Path(data_home).expanduser() / "analyses"
     state_home = Path(os.getenv("XDG_STATE_HOME", Path.home() / ".local" / "state"))
     return state_home / "compute-bazaar" / "analyses"
+
+
 ARTIFACT_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 TABLE_REF_PATTERN = re.compile(
     r"\b(?:silver|gold|fleet)\.[A-Za-z_][A-Za-z0-9_]*\b",
@@ -237,11 +239,7 @@ class AnalysisStore:
         if self.bundled_root is not None:
             roots.append(self.bundled_root)
         return sorted(
-            {
-                path.stem
-                for root in roots
-                for path in (root / kind).glob("*.json")
-            }
+            {path.stem for root in roots for path in (root / kind).glob("*.json")}
         )
 
     def _artifact_root(

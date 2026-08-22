@@ -20,8 +20,7 @@ from .prices.gold_manifest import read_latest_gold_manifest
 
 
 DEFAULT_PUBLIC_LAKE_URL = (
-    "https://github.com/gustofied/the-compute-bazaar/"
-    "releases/download/public-lake"
+    "https://github.com/gustofied/the-compute-bazaar/releases/download/public-lake"
 )
 ASSET_NAME_CHARACTERS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
@@ -123,9 +122,7 @@ def _download_exploded_lake(
         target.parent.mkdir(parents=True, exist_ok=True)
         if _reuse_cached_file(source_cache / relative, target, item=item):
             continue
-        payload = _download(
-            f"{source_url}/{quote(relative.as_posix(), safe='/=._-')}"
-        )
+        payload = _download(f"{source_url}/{quote(relative.as_posix(), safe='/=._-')}")
         _validate_payload(payload, item=item, label=relative.as_posix())
         target.write_bytes(payload)
         downloaded_bytes += len(payload)
@@ -172,7 +169,9 @@ def _download_release_archive(
                 target.write_bytes(payload)
         return downloaded_bytes
     except zipfile.BadZipFile as exc:
-        raise RuntimeError("Public market lake release is not a valid zip archive") from exc
+        raise RuntimeError(
+            "Public market lake release is not a valid zip archive"
+        ) from exc
     finally:
         archive_path.unlink(missing_ok=True)
 
@@ -319,7 +318,9 @@ def _download_to_file(
         while chunk := response.read(1024 * 1024):
             downloaded += len(chunk)
             if downloaded > MAX_LAKE_BYTES:
-                raise RuntimeError("Public market lake release exceeds the download budget")
+                raise RuntimeError(
+                    "Public market lake release exceeds the download budget"
+                )
             checksum.update(chunk)
             target.write(chunk)
     if downloaded != expected_size:

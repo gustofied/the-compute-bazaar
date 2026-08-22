@@ -1,2 +1,0 @@
-String delimiters
-You can use single or double quotes to specify a string in Python, this does not change the interpretation of the string like in PHP.

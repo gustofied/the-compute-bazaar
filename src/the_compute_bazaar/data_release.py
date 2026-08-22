@@ -131,7 +131,9 @@ def publish_release(
                 "--latest=false",
             )
         else:
-            raise RuntimeError(release.stderr.strip() or "Could not read GitHub release")
+            raise RuntimeError(
+                release.stderr.strip() or "Could not read GitHub release"
+            )
 
     return {
         "run_id": result["run_id"],
@@ -149,7 +151,9 @@ def publish_release(
 
 def _validate_source_file(path: Path, *, item: dict[str, Any]) -> None:
     if not path.is_file() or path.stat().st_size != item["size"]:
-        raise RuntimeError(f"Portable lake file does not match its index: {item['path']}")
+        raise RuntimeError(
+            f"Portable lake file does not match its index: {item['path']}"
+        )
     if _file_sha256(path) != item["sha256"]:
         raise RuntimeError(f"Portable lake checksum does not match: {item['path']}")
 

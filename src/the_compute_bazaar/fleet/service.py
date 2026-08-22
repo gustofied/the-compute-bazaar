@@ -165,11 +165,7 @@ def _health_checks(inspection: FleetInspection) -> list[DoctorCheck]:
     narrowed_links = [
         index
         for index, current_gen, max_gen, current_width, max_width in links
-        if (
-            current_gen is not None
-            and max_gen is not None
-            and current_gen < max_gen
-        )
+        if (current_gen is not None and max_gen is not None and current_gen < max_gen)
         or (
             current_width is not None
             and max_width is not None
@@ -201,14 +197,12 @@ def _health_checks(inspection: FleetInspection) -> list[DoctorCheck]:
                 else "warn"
                 if expected_model
                 and not all(
-                    _gpu_model_matches(expected_model, gpu)
-                    for gpu in inspection.gpus
+                    _gpu_model_matches(expected_model, gpu) for gpu in inspection.gpus
                 )
                 else "pass"
             ),
             detail=(
-                f"detected {_detected_gpu_names(inspection)}; "
-                f"expected {expected_model}"
+                f"detected {_detected_gpu_names(inspection)}; expected {expected_model}"
                 if expected_model
                 else f"detected {_detected_gpu_names(inspection)}"
             ),

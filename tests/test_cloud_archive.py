@@ -124,13 +124,14 @@ class CloudArchiveTest(unittest.TestCase):
             self.assertEqual(client.get_calls, ["lake/portable.json"])
             self.assertEqual(
                 (
-                    Path(directory)
-                    / "objects/market-bucket/lake/portable.json"
+                    Path(directory) / "objects/market-bucket/lake/portable.json"
                 ).read_bytes(),
                 b"new",
             )
 
-    def test_interrupted_archive_redownloads_unverifiable_multipart_object(self) -> None:
+    def test_interrupted_archive_redownloads_unverifiable_multipart_object(
+        self,
+    ) -> None:
         client = MultipartFakeS3Client({"lake/history.parquet": b"multipart"})
         with tempfile.TemporaryDirectory() as directory:
             create_s3_archive(

@@ -1,7 +1,7 @@
 [project]
 name = "the-compute-bazaar"
 version = "0.1.0"
-description = "tinkering with compute markets"
+description = "A research workstation for compute markets"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -41,6 +41,10 @@ worker = [
 
 [project.scripts]
 compute-bazaar = "the_compute_bazaar.cli:main"
+
+[project.urls]
+Repository = "https://github.com/gustofied/the-compute-bazaar"
+Issues = "https://github.com/gustofied/the-compute-bazaar/issues"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]

@@ -25,7 +25,9 @@ def default_s3_archive_roots() -> tuple[str, ...]:
         os.getenv("COMPUTE_BAZAAR_LAKE_ROOT"),
         os.getenv("COMPUTE_BAZAAR_DASHBOARD_OUTPUT_ROOT"),
     ]
-    parsed = [urlparse(value) for value in configured if value and value.startswith("s3://")]
+    parsed = [
+        urlparse(value) for value in configured if value and value.startswith("s3://")
+    ]
     buckets = {item.netloc for item in parsed if item.netloc}
     if not buckets:
         raise RuntimeError(
@@ -70,7 +72,9 @@ def create_s3_archive(
         identity = (source["bucket"], source["key"])
         prior = previous_by_identity.get(identity)
         if prior and _can_reuse(root, source, prior):
-            _materialize_current(root, source["bucket"], source["key"], str(prior["sha256"]))
+            _materialize_current(
+                root, source["bucket"], source["key"], str(prior["sha256"])
+            )
             return {**source, "sha256": str(prior["sha256"])}, False
         materialized_digest = _materialized_digest(root, source)
         if materialized_digest:
@@ -80,7 +84,9 @@ def create_s3_archive(
         _materialize_current(root, source["bucket"], source["key"], digest)
         return {**source, "sha256": digest}, True
 
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="s3-archive") as pool:
+    with ThreadPoolExecutor(
+        max_workers=workers, thread_name_prefix="s3-archive"
+    ) as pool:
         futures = {pool.submit(archive_one, source): source for source in listed}
         for future in as_completed(futures):
             source = futures[future]
@@ -97,7 +103,8 @@ def create_s3_archive(
 
     if failures:
         raise RuntimeError(
-            f"Cloud archive failed for {len(failures)} object(s): " + "; ".join(failures[:5])
+            f"Cloud archive failed for {len(failures)} object(s): "
+            + "; ".join(failures[:5])
         )
 
     object_rows.sort(key=lambda row: (row["bucket"], row["key"]))
@@ -123,11 +130,7 @@ def create_s3_archive(
     _write_json_atomic(root / "latest-manifest.json", manifest)
     _write_json_atomic(root / "snapshots" / f"{archive_id}.json", manifest)
     _write_offline_env(root, sources)
-    return {
-        key: value
-        for key, value in manifest.items()
-        if key != "objects"
-    } | {
+    return {key: value for key, value in manifest.items() if key != "objects"} | {
         "archive_root": str(root),
         "manifest_path": str(root / "latest-manifest.json"),
         "offline_env_path": str(root / "offline.env"),
@@ -160,7 +163,9 @@ def verify_s3_archive(
         return None
 
     problems: list[str] = []
-    with ThreadPoolExecutor(max_workers=max(1, workers), thread_name_prefix="archive-verify") as pool:
+    with ThreadPoolExecutor(
+        max_workers=max(1, workers), thread_name_prefix="archive-verify"
+    ) as pool:
         for problem in pool.map(verify_one, rows):
             if problem:
                 problems.append(problem)
@@ -203,7 +208,9 @@ def _normalize_source_roots(source_roots: Sequence[str]) -> tuple[str, ...]:
     return tuple(sorted(set(normalized)))
 
 
-def _list_current_objects(client: Any, source_roots: Sequence[str]) -> list[dict[str, Any]]:
+def _list_current_objects(
+    client: Any, source_roots: Sequence[str]
+) -> list[dict[str, Any]]:
     by_identity: dict[tuple[str, str], dict[str, Any]] = {}
     for source_root in source_roots:
         parsed = urlparse(source_root)
@@ -223,7 +230,9 @@ def _list_current_objects(client: Any, source_roots: Sequence[str]) -> list[dict
                     "size": int(item.get("Size") or 0),
                     "etag": str(item.get("ETag") or "").strip('"'),
                     "last_modified": (
-                        modified.isoformat() if hasattr(modified, "isoformat") else str(modified or "")
+                        modified.isoformat()
+                        if hasattr(modified, "isoformat")
+                        else str(modified or "")
                     ),
                     "storage_class": str(item.get("StorageClass") or "STANDARD"),
                 }
@@ -327,9 +336,7 @@ def _prune_materialized_objects(
     current_rows: Iterable[Mapping[str, Any]],
     source_roots: Sequence[str],
 ) -> None:
-    current = {
-        (str(row.get("bucket")), str(row.get("key"))) for row in current_rows
-    }
+    current = {(str(row.get("bucket")), str(row.get("key"))) for row in current_rows}
     scopes = [
         (urlparse(source).netloc, urlparse(source).path.lstrip("/"))
         for source in source_roots
@@ -388,7 +395,9 @@ def _read_optional_manifest(path: Path) -> dict[str, Any]:
 def _write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     os.replace(temporary, path)
 
 

@@ -49,10 +49,7 @@ from the_compute_bazaar.terminal.virtual_table import (
 
 class DataFusionEngineTest(unittest.TestCase):
     def test_publication_curve_rounds_turns_without_overshooting(self) -> None:
-        dates = [
-            datetime(2026, 8, 10, hour, tzinfo=UTC)
-            for hour in (10, 11, 12, 13)
-        ]
+        dates = [datetime(2026, 8, 10, hour, tzinfo=UTC) for hour in (10, 11, 12, 13)]
         values = [3.25, 2.4, 3.25, 3.2]
 
         smooth_dates, smooth_values = _shape_preserving_curve(dates, values)

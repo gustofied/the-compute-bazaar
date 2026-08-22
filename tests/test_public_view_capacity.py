@@ -52,7 +52,9 @@ class AkashCapacityViewTest(unittest.TestCase):
         )
 
         self.assertEqual(view["card_type"], "akash_capacity_history")
-        self.assertEqual([row["resource_id"] for row in view["resources"]], ["GPU", "CPU"])
+        self.assertEqual(
+            [row["resource_id"] for row in view["resources"]], ["GPU", "CPU"]
+        )
         gpu, cpu = view["resources"]
         self.assertEqual(len(gpu["history"]), 2)
         self.assertEqual(gpu["current"]["available"], 354)

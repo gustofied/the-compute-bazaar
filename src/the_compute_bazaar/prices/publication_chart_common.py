@@ -81,10 +81,7 @@ def _shape_preserving_curve(
         second_weight = next_interval + 2 * previous_interval
         derivatives.append(
             (first_weight + second_weight)
-            / (
-                first_weight / previous_slope
-                + second_weight / next_slope
-            )
+            / (first_weight / previous_slope + second_weight / next_slope)
         )
     derivatives.append(
         endpoint_derivative(

@@ -39,10 +39,7 @@ def gpu_publication_metadata(
     value = _format_usd(latest["value"]) if latest else "pending"
     observed_at = latest["date"].isoformat() if latest else str(card.get("as_of") or "")
     change = _range_change(rows, range_id)
-    title = (
-        f"{selected_family} GPU Price Index · {value}/GPU-hour · "
-        f"{change['label']}"
-    )
+    title = f"{selected_family} GPU Price Index · {value}/GPU-hour · {change['label']}"
     description = (
         f"Observed {_format_observed_date(latest['date'] if latest else None)}."
     )
@@ -139,8 +136,7 @@ def sandbox_workload_publication_metadata(
     return {
         "title": f"Sandbox cost | {value} per job",
         "description": (
-            f"The latest Sandbox cost is {value} per job. "
-            f"Observed {observed_label}."
+            f"The latest Sandbox cost is {value} per job. Observed {observed_label}."
         ),
         "image_alt": f"Sandbox cost of {value} per job across services",
         "subject_label": "Sandbox cost",

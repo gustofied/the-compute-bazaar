@@ -278,12 +278,8 @@ class TerminalCommandTest(unittest.TestCase):
                 [model.model_id for model in store.list_models()],
                 ["bundled-model", "personal-model"],
             )
-            self.assertTrue(
-                (personal_root / "models" / "personal-model.sql").is_file()
-            )
-            self.assertFalse(
-                (bundled_root / "models" / "personal-model.sql").exists()
-            )
+            self.assertTrue((personal_root / "models" / "personal-model.sql").is_file())
+            self.assertFalse((bundled_root / "models" / "personal-model.sql").exists())
 
     def test_external_links_are_https_without_embedded_credentials(self) -> None:
         url = "https://hub.harborframework.com/tasks/gustofied/task/latest"

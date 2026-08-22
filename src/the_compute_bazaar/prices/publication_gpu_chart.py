@@ -129,10 +129,8 @@ def render_gpu_benchmark_publication(
             (0.020, 0.038),
             *(
                 (
-                    0.020
-                    + ((date - start).total_seconds() / duration) * 0.960,
-                    0.165
-                    + ((value - domain_minimum) / value_span) * 0.551,
+                    0.020 + ((date - start).total_seconds() / duration) * 0.960,
+                    0.165 + ((value - domain_minimum) / value_span) * 0.551,
                 )
                 for date, value in zip(smooth_dates, smooth_values, strict=True)
             ),

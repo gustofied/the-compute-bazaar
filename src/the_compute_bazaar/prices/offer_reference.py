@@ -175,7 +175,9 @@ def build_prime_frontier_offer_events(
         if normalized_run_id:
             run_times[normalized_run_id] = timestamp
 
-    run_keys = sorted((observed_at, run_id) for run_id, observed_at in run_times.items())
+    run_keys = sorted(
+        (observed_at, run_id) for run_id, observed_at in run_times.items()
+    )
     snapshots: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in normalized:
         snapshots[

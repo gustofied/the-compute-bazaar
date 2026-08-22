@@ -60,7 +60,9 @@ class WorkloadRun(BaseModel):
         if not self.command:
             raise ValueError("Workload command cannot be empty")
         for value in (self.started_at, self.updated_at, self.ended_at):
-            if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            if value is not None and (
+                value.tzinfo is None or value.utcoffset() is None
+            ):
                 raise ValueError("Workload timestamps must be timezone-aware")
         return self
 
@@ -170,7 +172,9 @@ class WorkloadService:
             try:
                 exit_code = int(value)
             except ValueError as exc:
-                raise WorkloadError("Remote workload returned an invalid exit code") from exc
+                raise WorkloadError(
+                    "Remote workload returned an invalid exit code"
+                ) from exc
             updates.update(
                 state="succeeded" if exit_code == 0 else "failed",
                 exit_code=exit_code,
@@ -281,7 +285,9 @@ class WorkloadService:
             check=False,
         )
         if result.returncode != 0:
-            detail = (result.stderr or result.stdout).strip() or "SSH workload command failed"
+            detail = (
+                result.stderr or result.stdout
+            ).strip() or "SSH workload command failed"
             raise WorkloadError(detail)
         return result
 
@@ -296,8 +302,8 @@ def _run_script(command: Sequence[str], *, working_directory: str) -> str:
     return "\n".join(
         (
             "#!/bin/sh",
-            "status_file=$(dirname \"$0\")/exit_code",
-            "finish() { code=$?; printf '%s\\n' \"$code\" > \"$status_file.tmp\"; mv \"$status_file.tmp\" \"$status_file\"; }",
+            'status_file=$(dirname "$0")/exit_code',
+            'finish() { code=$?; printf \'%s\\n\' "$code" > "$status_file.tmp"; mv "$status_file.tmp" "$status_file"; }',
             "trap finish EXIT",
             "trap 'exit 143' HUP INT TERM",
             f"cd {shlex.quote(working_directory)} || exit 1",
@@ -353,12 +359,12 @@ def _log_script(remote_directory: str) -> str:
 
 def _split_logs(output: str) -> tuple[str, str]:
     try:
-        stdout = output.split("CBZ_STDOUT_BEGIN\n", 1)[1].split(
-            "\nCBZ_STDOUT_END", 1
-        )[0]
-        stderr = output.split("CBZ_STDERR_BEGIN\n", 1)[1].split(
-            "\nCBZ_STDERR_END", 1
-        )[0]
+        stdout = output.split("CBZ_STDOUT_BEGIN\n", 1)[1].split("\nCBZ_STDOUT_END", 1)[
+            0
+        ]
+        stderr = output.split("CBZ_STDERR_BEGIN\n", 1)[1].split("\nCBZ_STDERR_END", 1)[
+            0
+        ]
     except IndexError as exc:
         raise WorkloadError("Remote workload logs were malformed") from exc
     return stdout, stderr
