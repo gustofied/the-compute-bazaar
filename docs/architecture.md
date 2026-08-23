@@ -1,152 +1,108 @@
 # Architecture
 
-```text
-Default
-  provider APIs -> local runner -> Bronze -> Silver -> Gold -> public lake
-                                                            -> GitHub Release
-
-Market to Fleet
-  source API -> Bronze -> silver.gpu_offers -> preflight -> allocation -> Fleet
-
-Optional hosted deployment
-  Windmill -> same market run -> AutoMQ event stream
-                             -> S3 -> CloudFront
-```
-
-## Market data
-
-The local runner reads providers and writes the same three layers used by the
-hosted pipeline:
+The Bazaar separates market history, live selection, private operations, and
+agent evaluation. The CLI and Terminal are the common interface.
 
 ```text
-Bronze  raw provider evidence
-Silver  normalized market data
-Gold    shared market models
+market sources -> market record -> DataFusion -> CLI / Perspective
+live source read -> preflight -> allocation -> Fleet -> workloads
+
+Harbor -> tasks -> jobs / trials -> Eval
+ACP agent -----------------------> CLI / Terminal
+market models - - - - - - - - --> Trade
 ```
 
-A sanitized Silver and Gold copy is packaged as a checksummed ZIP on the
-repository's `public-lake` GitHub Release. The CLI verifies and replaces its
-local cache atomically, so DataFusion can query it without cloud credentials or
-a database server.
+Trade is not yet implemented.
 
-Windmill, AutoMQ, S3, and CloudFront remain an optional hosted deployment.
-Windmill schedules the same market run; AutoMQ receives an event copy; S3 keeps
-the private lake and CloudFront can serve public outputs. The core run does not
-require any of them.
+## State
 
-The deployed public path uses one observation table:
+| State | Contains | Storage | Exposure |
+| --- | --- | --- | --- |
+| Market history | Source responses, normalized observations, shared models | JSON and Parquet, locally or in S3 | Sanitized Silver and Gold can be public |
+| Live market | Source runs and selectable GPU offers | Local JSON and Parquet | Private |
+| Operations | Direct reads, preflights, provisioning, allocations, Fleet, telemetry, workloads | SQLite and local files | Private |
+| Eval | Harbor tasks, jobs, trials, and reports | Repository tasks and job artifacts | Private unless published |
+
+## Market record
 
 ```text
-silver.offer_observations
-  scheduled   hourly market record used by Gold
-  interactive direct provider read
-  preflight   provider read immediately before launch
+source cycle -> Bronze -> Silver -> Gold
 ```
 
-The local or Windmill runner writes scheduled rows. Direct RunPod and Verda
-reads and their launch checks are kept locally and unioned into
-`silver.offer_observations`. `observation_purpose` says why a row exists.
+- **Bronze** preserves the source response and request metadata.
+- **Silver** normalizes observations into a shared market contract.
+- **Gold** contains reusable models and retained histories.
 
-The `market/` path uses a smaller contract:
+The same source cycle runs locally or on a Windmill schedule. See the
+[Pipeline](../infra/windmill/README.md) for its jobs and deployment.
+
+The public lake is a checksummed, sanitized Silver and Gold snapshot. It is
+published through a rolling GitHub Release and can also be served from S3
+through CloudFront. See [Public lake](../infra/aws/public-feed/README.md).
+
+## Selection and Fleet
+
+Recorded history describes the market. Selection needs a fresh provider read
+and the exact native fields required to buy one offer.
 
 ```text
-SourceRead -> Bronze -> GpuOffer -> silver.gpu_offers -> MarketGeneration
+offer -> preflight -> request -> allocation -> Fleet node
+OpenSSH target -> attach --------------------> Fleet node
+
+Fleet node -> inspect -> doctor -> monitor -> workload
 ```
 
-It currently supports Sesterce and a local lake. A source read records request
-metadata and the full response. A normalized row keeps source, intermediary,
-operator, offer, GPU, region, price, availability, and source-run identity. A
-successful empty response still produces typed Silver evidence. The generation
-format accepts several source runs, while `compute-bazaar market ingest`
-currently publishes one source run per invocation.
+Preflight repeats the provider check immediately before a paid request. The
+request carries a price ceiling, runtime budget, and explicit confirmation. A
+successful provider response becomes an Allocation; the resulting machine is
+then registered in Fleet.
 
-These are two selectable catalogs, not one universal SQL catalog. The default
-CLI and Terminal use the synced public Silver/Gold lake. `compute-bazaar terminal
-market` opens the local market lake. Fleet reads its private operational
-ledger separately.
+An existing NVIDIA machine can enter Fleet through an OpenSSH target without
+an Allocation. OpenSSH owns host resolution, keys, agents, and jump hosts.
+Fleet stores the target, expected hardware, inspections, telemetry, and
+workload state locally.
 
-## Public delivery
+## Catalogs
 
-The public release contains only the files named in `index.json`. Every file and
-the ZIP itself has a SHA-256 checksum. `compute-bazaar data sync` verifies the
-archive before replacing the current cache. A repeated sync of the same run
-downloads nothing.
+The CLI can open three DataFusion catalogs.
 
-AdamSioud uses checked-in dashboard snapshots. It does not contact S3 or
-CloudFront at runtime, so the article remains available when the hosted pipeline
-is stopped. New market data appears only after a local refresh, a GitHub release
-publish, and an intentional snapshot update.
+| Selection | DataFusion catalog |
+| --- | --- |
+| Default | Synced public Silver and Gold, plus private operational views |
+| Local | Locally refreshed Silver and Gold, plus private operational views |
+| Market | Source-first local offers in `silver.gpu_offers` |
 
-The public release is the portable history for users; it does not contain raw
-evidence. Before retiring S3, `compute-bazaar data archive` mirrors the private
-bucket into a content-addressed, checksummed local archive. Its `offline.env`
-maps the original `s3://` references onto that mirror for replay without AWS.
+The default and local catalogs expose scheduled observations in
+`silver.offer_observations`. Direct reads and preflights from the operational
+ledger are added to that view with their purpose intact. Fleet tables remain
+private under `fleet.*`.
 
-## Query layer
-
-DataFusion runs SQL over the lake and returns Apache Arrow data. The CLI prints
-the result directly; the Terminal passes the same Arrow result to Perspective
-for interactive tables and charts.
-
-## Market models
-
-A market model is a reusable way of reading the compute market:
-
-```text
-market lake -> DataFusion SQL model -> Arrow result -> Perspective view
-```
-
-The SQL is the model logic. The view decides how its result is displayed. An
-index, benchmark, curve, signal, or monitor is something the model may produce.
-
-This also fits agents. An agent can run or write a model without opening the
-Terminal, save it for later, or leave a view for a person or another agent to
-use as new market data arrives.
-
-The model and view remain separate, following
-[Rerun's blueprint idea](https://rerun.io/docs/concepts/visualization/blueprints).
-A working model becomes Gold only when it should be a shared data contract.
+DataFusion executes bounded, read-only SQL and returns Apache Arrow data. The
+CLI prints it directly; Perspective receives the same Arrow result in the
+Terminal. Saved SQL models and Perspective views remain separate files.
 
 ## Interfaces
 
-The CLI and Terminal use the same DataFusion engine. Data is available now,
-Eval contains the Harbor evaluation viewer, and Trade remains a research
-direction rather than an implemented exchange.
+The CLI is the command interface for people, scripts, and agents. It prints
+tables for people and JSON when another program needs structured output.
 
-Shell is a local PTY. Agent is a Bazaar thread connected to an external agent
-over ACP. `acpx` is the internal ACP client beneath `AgentSession`, not part of
-the Terminal contract. Eval stays in Harbor. The agent works through the repo
-checkout using normal repo tools and `compute-bazaar`; Bazaar exposes no MCP
-server or GUI control.
+The Terminal runs a local FastAPI backend inside a Tauri window, with a browser
+fallback. Its Data workspace uses DataFusion and Perspective; Fleet uses the
+private operations services; Eval reads Harbor reports.
 
-## Fleet
+The Agent drawer connects an external agent through ACP. The agent works in the
+repository and uses the same `compute-bazaar` CLI.
 
-Fleet has two entry paths:
+Eval remains a Harbor system for tasks, jobs, trials, and reports. Trade is a
+future workspace for instruments built from market models; it is not an
+execution venue today.
 
-```text
-offer -> launch -> allocation -\
-                               -> Fleet machine -> inspect -> monitor -> workload
-existing machine -> SSH attach /
-```
+## Invariants
 
-SSH attachments use native OpenSSH targets, so host config, agents, and jump
-hosts remain outside Bazaar. The registry stores the target and expected NVIDIA
-hardware, while inspections store what the machine actually reports.
-
-`silver.current_offers` is the latest direct observation for each provider
-selection. `fleet.allocations` links a machine to the exact final-check row.
-`gold.fact_market_to_fleet` compares the selected price with the nearest prior
-GPU Price Index and the machine that was delivered. Private machine data stays
-local.
-
-SQL or an agent can find a candidate and prepare a launch plan. Creating a paid
-machine requires a price ceiling, runtime budget, and explicit confirmation.
-RunPod sends its deadline to the provider. Sesterce stores and displays the
-deadline, but currently requires explicit termination. An ambiguous Sesterce
-create must be checked manually before retrying; automated reconciliation is
-RunPod-only.
-
-Fleet workloads are detached SSH process groups. Their command, PID, state, exit
-code, and local log references live in the private operational ledger. Fleet also
-reads NVIDIA compute-process rows, so the Terminal can show which processes are
-using each GPU. Host termination closes any workload records still marked active.
+- Bronze keeps source evidence; normalization begins in Silver.
+- Every Silver row retains source lineage; public copies remove private refs.
+- Gold is derived from declared Silver inputs and carries a run manifest.
+- Paid provisioning requires a fresh preflight, a cost bound, and confirmation.
+- Fleet identity, SSH details, telemetry, and workload logs remain private.
+- Public sync verifies checksums before replacing the local cache.
+- Agents use the same commands and contracts as people.
