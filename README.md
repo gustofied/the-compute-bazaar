@@ -171,8 +171,9 @@ examples live in [`analyses/`](analyses/) and can be listed with
   <a href="https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="80%"></a>
 </p>
 
-I created something I call Tourneys, where you can compare agents on these
-tasks under the same conditions, using the same seeds, harness, and setup.
+I created something I call Tourneys to pair with the evals: controlled
+comparisons where agents face the same tasks on matched market seeds, with the
+harness, temperature, and other settings fixed.
 
 ## Fleet
 

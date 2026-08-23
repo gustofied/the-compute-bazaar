@@ -84,8 +84,9 @@ harbor view jobs
 
 ### Tourneys
 
-I created something I call Tourneys, where you can compare agents on these
-tasks under the same conditions, using the same seeds, harness, and setup.
+I created something I call Tourneys to pair with the evals: controlled
+comparisons where agents face the same tasks on matched market seeds, with the
+harness, temperature, and other settings fixed.
 
 ## Evaluations
 
