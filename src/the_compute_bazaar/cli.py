@@ -32,6 +32,7 @@ class ChartType(str, Enum):
     TABLE = "table"
     LINE = "line"
     BAR = "bar"
+    AREA = "area"
 
 
 @dataclass(frozen=True)
@@ -408,7 +409,14 @@ def sql(
     ] = False,
     chart: Annotated[
         ChartType | None,
-        typer.Option(help="Initial UI view: table, line, or bar."),
+        typer.Option(help="Initial UI view: table, line, bar, or area."),
+    ] = None,
+    perspective_json: Annotated[
+        str | None,
+        typer.Option(
+            "--perspective",
+            help="Full Perspective view configuration as JSON.",
+        ),
     ] = None,
     x: Annotated[
         str | None,
@@ -427,9 +435,15 @@ def sql(
     """Run read-only SQL over the selected catalog."""
     selected_sql = _read_sql(statement=statement, sql_file=sql_file)
     selected_limit = _limit(limit)
-    perspective = _perspective_config(chart=chart, x=x, series=series, y=y)
-    if perspective and not terminal:
-        raise typer.BadParameter("--chart requires --terminal")
+    perspective = _perspective_config(
+        chart=chart,
+        perspective_json=perspective_json,
+        x=x,
+        series=series,
+        y=y,
+    )
+    if perspective is not None and not terminal:
+        raise typer.BadParameter("--chart and --perspective require --terminal")
     if terminal:
         _launch_native_terminal(
             ctx,
@@ -1335,6 +1349,23 @@ def prime(
     _emit(ctx, _service(ctx).prime_offers(family=family), command="prime")
 
 
+@app.command("open")
+def open_workspace(
+    workspace: Annotated[
+        str,
+        typer.Argument(help="Terminal workspace: terminal, data, fleet, or eval."),
+    ],
+) -> None:
+    """Move the running Terminal to a workspace."""
+    from .terminal.lifecycle import TerminalLifecycleError, open_terminal_workspace
+
+    try:
+        message = open_terminal_workspace(workspace)
+    except TerminalLifecycleError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(message)
+
+
 @app.command("terminal")
 def serve_terminal(
     ctx: typer.Context,
@@ -1514,19 +1545,26 @@ def _decode_perspective(value: str | None) -> dict[str, Any] | None:
     try:
         payload = json.loads(value)
     except json.JSONDecodeError as exc:
-        raise typer.BadParameter("Invalid initial Perspective configuration") from exc
+        raise typer.BadParameter("Invalid Perspective configuration") from exc
     if not isinstance(payload, dict):
-        raise typer.BadParameter("Initial Perspective configuration must be an object")
+        raise typer.BadParameter("Perspective configuration must be an object")
     return payload
 
 
 def _perspective_config(
     *,
     chart: ChartType | None,
+    perspective_json: str | None,
     x: str | None,
     series: str | None,
     y: str | None,
 ) -> dict[str, Any] | None:
+    if perspective_json is not None:
+        if any((chart, x, series, y)):
+            raise typer.BadParameter(
+                "--perspective cannot be combined with --chart, --x, --series, or --y"
+            )
+        return _decode_perspective(perspective_json)
     if chart is None:
         if any((x, series, y)):
             raise typer.BadParameter("--x, --series, and --y require --chart")
@@ -1536,9 +1574,14 @@ def _perspective_config(
             raise typer.BadParameter("Table views do not use --x, --series, or --y")
         return {"plugin": "Datagrid", "settings": False}
     if not x or not y:
-        raise typer.BadParameter("Line and bar charts require --x and --y")
+        raise typer.BadParameter("Line, bar, and area charts require --x and --y")
+    plugins = {
+        ChartType.LINE: "Y Line",
+        ChartType.BAR: "Y Bar",
+        ChartType.AREA: "Y Area",
+    }
     config: dict[str, Any] = {
-        "plugin": "Y Line" if chart is ChartType.LINE else "Y Bar",
+        "plugin": plugins[chart],
         "group_by": [x],
         "columns": [y],
         "settings": False,

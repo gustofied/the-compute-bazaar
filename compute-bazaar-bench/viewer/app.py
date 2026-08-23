@@ -57,19 +57,19 @@ ASSET_ROOT = Path(__file__).with_name("assets")
 STYLE = """
 :root {
   color-scheme: dark;
-  --bg: #0f1312;
-  --panel: #151a18;
-  --panel-deep: #111513;
-  --panel-hover: #1b211e;
-  --line: #303833;
-  --line-strong: #566158;
-  --text: #efede4;
-  --muted: #a7a69f;
+  --bg: #090e11;
+  --panel: #0d1418;
+  --panel-deep: #090e11;
+  --panel-hover: #121c21;
+  --line: #243139;
+  --line-strong: #3b4e59;
+  --text: #e5e9e7;
+  --muted: #8e9a9c;
   --green: #b7d07b;
   --amber: #f3c888;
   --red: #dc8d78;
   --blue: #91aecb;
-  --topbar-height: 52px;
+  --topbar-height: 44px;
 }
 * { box-sizing: border-box; }
 body {
@@ -85,7 +85,7 @@ a { color: inherit; text-decoration: none; }
 .topnav { display: flex; align-items: stretch; height: 100%; }
 .topnav a { display: inline-flex; align-items: center; padding: 0 13px; color: var(--muted); font-size: 12px; }
 .topnav a:hover, .topnav a[aria-current="page"] { color: var(--text); background: var(--panel-hover); }
-.shell { width: min(1480px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 56px; }
+.shell { width: min(1480px, calc(100% - 24px)); margin: 0 auto; padding: 12px 0 56px; }
 .page-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
 .compute-brand {
   display: block;
@@ -275,14 +275,19 @@ dialog::backdrop { background: rgb(0 0 0 / 72%); }
 .comparison-empty { color: var(--muted); }
 .section { margin-top: 26px; }
 .section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 16px; }
+.eval-tabs { display: flex; gap: 18px; height: 30px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.eval-tabs a { position: relative; display: inline-flex; align-items: center; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.eval-tabs a::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 1px; background: transparent; content: ""; }
+.eval-tabs a:hover, .eval-tabs a[aria-current="page"] { color: var(--text); }
+.eval-tabs a[aria-current="page"]::after { background: var(--blue); }
 .eval-list { border: 1px solid var(--line); }
 .eval-row {
   display: grid;
   grid-template-columns: minmax(260px, 1.5fr) minmax(110px, 0.6fr) minmax(70px, 0.35fr) minmax(70px, 0.35fr) minmax(320px, 2fr);
   gap: 16px;
   align-items: center;
-  min-height: 82px;
-  padding: 14px;
+  min-height: 58px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--line);
 }
 .job-row {
@@ -291,8 +296,8 @@ dialog::backdrop { background: rgb(0 0 0 / 72%); }
 .eval-row:last-child { border-bottom: 0; }
 .eval-row:hover { background: var(--panel-hover); }
 .eval-row .status { display: block; white-space: normal; }
-.eval-name { font-size: 16px; font-weight: 700; }
-.eval-cell-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.eval-name { font-size: 14px; font-weight: 700; }
+.eval-cell-label { display: block; margin-bottom: 3px; color: var(--muted); font-size: 9px; text-transform: uppercase; }
 input {
   width: min(360px, 100%);
   background: var(--panel);
@@ -419,6 +424,8 @@ def _timestamp_sort_key(value: str) -> float:
 
 
 def _compute_bazaar_mark(base_path: str) -> str:
+    if base_path:
+        return '<a class="terminal-wordmark" href="/" aria-label="The Compute Bazaar"><img src="/terminal-wordmark.png" alt="The Compute Bazaar"></a>'
     return f"""<a class="compute-brand" href="{_viewer_path(base_path, "/")}" data-compute-embroidery role="img" aria-label="The Compute Bazaar">
 <span class="compute-brand-fallback" aria-hidden="true"><span class="compute-brand-word the">THE</span><span class="compute-brand-word compute">COMPUTE</span><span class="compute-brand-word bazaar">BAZAAR</span></span></a>"""
 
@@ -431,11 +438,21 @@ def _layout(title: str, body: str, base_path: str) -> str:
     embroidery = _viewer_path(
         base_path, "/assets/compute-title/compute-title-embroidery.js"
     )
+    if base_path:
+        terminal_nav = f"""<header class="topbar terminal-topbar">{_compute_bazaar_mark(base_path)}<nav class="terminal-workspace-nav" aria-label="Terminal workspaces"><a href="/data">Data</a><a href="/fleet">Fleet</a><a href="{_viewer_path(base_path, "/")}" aria-current="page">Eval</a><span aria-disabled="true">Trade</span></nav></header>"""
+    else:
+        terminal_nav = f"""<header class="topbar">{_compute_bazaar_mark(base_path)}<nav class="topnav" aria-label="Evaluation viewer"><a href="{_viewer_path(base_path, "/")}">Tasks</a><a href="{_viewer_path(base_path, "/comparisons")}">Tourneys</a></nav></header>"""
+    current = "tourneys" if title == "Tourneys" or ">Tourneys</a>" in body else "tasks"
+    local_nav = (
+        ""
+        if not base_path
+        else f"""<nav class="eval-tabs" aria-label="Eval views"><a href="{_viewer_path(base_path, "/")}"{' aria-current="page"' if current == "tasks" else ""}>Tasks</a><a href="{_viewer_path(base_path, "/comparisons")}"{' aria-current="page"' if current == "tourneys" else ""}>Tourneys</a></nav>"""
+    )
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{escape(title)}</title><style>{STYLE}</style><link rel="stylesheet" href="/terminal-assets/command.css?v=20260808-2"><link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2"></head>
-<body data-terminal-workspace="eval"><header class="topbar">{_compute_bazaar_mark(base_path)}<nav class="topnav" aria-label="Evaluation viewer"><a href="{_viewer_path(base_path, "/")}">Tasks</a><a href="{_viewer_path(base_path, "/comparisons")}">Tourneys</a></nav></header><main class="shell">{body}</main>
-<script type="module" src="/terminal-assets/perspective/command.js?v=20260808-2"></script>
+<title>{escape(title)}</title><style>{STYLE}</style><link rel="stylesheet" href="/terminal-assets/chrome.css?v=20260823-4"><link rel="stylesheet" href="/terminal-assets/command.css?v=20260823-4"><link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2"></head>
+<body data-terminal-workspace="eval">{terminal_nav}<main class="shell">{local_nav}{body}</main>
+<script type="module" src="/terminal-assets/perspective/command.js?v=20260823-5"></script>
 <script type="module">import {{ setupComputeTitleEmbroidery }} from "{embroidery}"; setupComputeTitleEmbroidery();</script></body></html>"""
 
 

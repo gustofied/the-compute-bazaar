@@ -33,7 +33,14 @@ $ cd the-compute-bazaar
 $ ./install.sh
 ```
 
-Open the Terminal.
+Use the CLI directly.
+
+```console
+$ compute-bazaar price-index
+$ compute-bazaar availability --gpu-model H100 --limit 20
+```
+
+Or open the Terminal.
 
 ```console
 $ compute-bazaar terminal
@@ -57,7 +64,7 @@ lake](infra/aws/public-feed/README.md), and [architecture](docs/architecture.md)
 ## Terminal
 
 <p align="center">
-  <img src="assets/compute-bazaar-terminal.png" alt="The Compute Bazaar Terminal" width="80%">
+  <img src="assets/compute-bazaar-terminal.webp" alt="The Compute Bazaar Terminal" width="80%">
 </p>
 
 The Terminal is where we look at data, operate Fleet, and evaluate agents.

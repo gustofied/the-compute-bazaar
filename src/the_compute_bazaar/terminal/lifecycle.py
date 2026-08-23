@@ -35,6 +35,31 @@ class TerminalLifecycleError(RuntimeError):
     """Raised when the local Terminal cannot be started or stopped cleanly."""
 
 
+def open_terminal_workspace(
+    workspace: str,
+    *,
+    project_root: Path = PROJECT_ROOT,
+) -> str:
+    """Move a running Terminal to one of its main workspaces."""
+    destinations = {
+        "terminal": "/",
+        "data": "/data",
+        "fleet": "/fleet",
+        "eval": "/eval/",
+    }
+    try:
+        href = destinations[workspace.strip().lower()]
+    except KeyError as exc:
+        raise TerminalLifecycleError(
+            "Unknown workspace. Use terminal, data, fleet, or eval."
+        ) from exc
+
+    state = _read_state(project_root)
+    if not state or not _terminal_health(state.get("url"), project_root):
+        raise TerminalLifecycleError("Compute Bazaar Terminal is not running.")
+    return _open_in_existing_terminal(state, {"kind": "navigate", "href": href})
+
+
 def launch_terminal(
     *,
     lake_root: str,

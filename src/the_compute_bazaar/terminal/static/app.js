@@ -10,8 +10,16 @@ const REQUIRED_PERSPECTIVE_PLUGINS = [
   { name: "Datagrid", tag: "perspective-viewer-datagrid" },
   { name: "Y Bar", tag: "perspective-viewer-charts-y-bar" },
   { name: "Y Line", tag: "perspective-viewer-charts-y-line" },
+  { name: "Y Area", tag: "perspective-viewer-charts-y-area" },
 ];
+const VIEWER_LOAD_TIMEOUT_MS = 15_000;
 const PRINTOUT_ROW_LIMIT = 36;
+const CHART_PLUGIN_PREFIX = "PERSPECTIVE-VIEWER-CHARTS-";
+const CHART_FRAME_CSS = `
+  .webgl-container {
+    inset: -2px -150px -26px !important;
+  }
+`;
 const VIRTUAL_AVAILABILITY_TABLE = "gold.fact_gpu_availability_history";
 const VIRTUAL_DEFAULT_COLUMNS = [
   "observed_at",
@@ -39,6 +47,7 @@ const VIRTUAL_FILTER_OPS = [
 ];
 const elements = {
   body: document.body,
+  analysisDocument: document.querySelector("#analysis-document"),
   catalogPanel: document.querySelector("#catalog-panel"),
   catalogToggle: document.querySelector("#catalog-toggle"),
   catalogClose: document.querySelector("#catalog-close"),
@@ -59,6 +68,9 @@ const elements = {
   runId: document.querySelector("#run-id"),
   observedAt: document.querySelector("#observed-at"),
   viewKind: document.querySelector("#view-kind"),
+  viewHeader: document.querySelector(".view-header"),
+  viewCopy: document.querySelector(".view-copy"),
+  viewControls: document.querySelector(".view-controls"),
   viewTitle: document.querySelector("#view-title"),
   viewDescription: document.querySelector("#view-description"),
   resultLimit: document.querySelector("#result-limit"),
@@ -102,6 +114,7 @@ const state = {
   hasResult: false,
   saveable: true,
   running: false,
+  actionQueue: Promise.resolve(),
   sqlOpen: false,
   markdown: "",
   toastTimer: null,
@@ -155,6 +168,12 @@ function printableCell(value, type) {
   if ((type === "date" || type === "datetime") && !Number.isNaN(new Date(value).valueOf())) {
     return new Date(value).toISOString().replace("T", " ").replace(".000Z", " UTC");
   }
+  if (type === "float" && Number.isFinite(Number(value))) {
+    return Number(value).toLocaleString("en-US", {
+      maximumFractionDigits: 6,
+      useGrouping: false,
+    });
+  }
   let text;
   if (typeof value === "object") {
     try {
@@ -170,7 +189,20 @@ function printableCell(value, type) {
 }
 
 function asciiTable(rows, schema, rowCount, { truncated = false, limit = null } = {}) {
-  const columns = Object.keys(schema || {});
+  const preferred = [
+    "date",
+    "observed_at",
+    "gpu",
+    "gpu_model",
+    "provider",
+    "usd_gpu_hr",
+    "price_usd_gpu_hr",
+  ];
+  const schemaColumns = Object.keys(schema || {});
+  const columns = [
+    ...preferred.filter((column) => schemaColumns.includes(column)),
+    ...schemaColumns.filter((column) => !preferred.includes(column)),
+  ];
   if (!columns.length) return "(no columns)";
   const headings = columns.map((column) => (
     column.length > 32 ? `${column.slice(0, 29)}...` : column
@@ -260,6 +292,8 @@ function setViewCopy(kind, title, description, markdown = "") {
   elements.viewKind.textContent = kind;
   elements.viewTitle.textContent = title;
   elements.viewDescription.textContent = description;
+  elements.viewCopy.hidden = !title;
+  elements.viewHeader.hidden = !title && elements.viewControls.hidden;
   setBlueprintMarkdown(markdown);
   setResultLimit(false);
   showResultMeta(false);
@@ -292,13 +326,71 @@ async function startPerspective() {
   ]);
   await customElements.whenDefined("perspective-viewer");
   await waitForPerspectivePlugins(REQUIRED_PERSPECTIVE_PLUGINS);
-  elements.viewer = document.createElement("perspective-viewer");
-  elements.viewer.id = "viewer";
-  elements.viewer.setAttribute("theme", "Pro Dark");
+  elements.viewer = createPerspectiveViewer();
   elements.viewerHost.append(elements.viewer);
   elements.viewerConfig.disabled = false;
   state.perspective = perspective;
   state.worker = await state.perspective.worker();
+}
+
+function createPerspectiveViewer() {
+  const viewer = document.createElement("perspective-viewer");
+  viewer.id = "viewer";
+  viewer.setAttribute("theme", "Pro Dark");
+  viewer.addEventListener("perspective-config-update", () => {
+    window.requestAnimationFrame(() => void syncViewerPresentation(viewer));
+  });
+  return viewer;
+}
+
+async function syncViewerPresentation(viewer = elements.viewer) {
+  await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  if (viewer !== elements.viewer) return;
+
+  const chart = Array.from(viewer.children).find(
+    (child) => child.tagName.startsWith(CHART_PLUGIN_PREFIX),
+  );
+  elements.analysisDocument.classList.toggle("chart-result", Boolean(chart));
+  if (!chart?.shadowRoot) return;
+
+  if (!chart.shadowRoot.querySelector("[data-bazaar-chart-frame]")) {
+    const style = document.createElement("style");
+    style.dataset.bazaarChartFrame = "";
+    style.textContent = CHART_FRAME_CSS;
+    chart.shadowRoot.append(style);
+  }
+  await viewer.resize();
+}
+
+async function loadViewerTable(table) {
+  const viewer = elements.viewer;
+  let timer;
+  try {
+    await Promise.race([
+      viewer.load(table),
+      new Promise((_, reject) => {
+        timer = window.setTimeout(
+          () => reject(new Error("The result view took too long to load")),
+          VIEWER_LOAD_TIMEOUT_MS,
+        );
+      }),
+    ]);
+    return viewer;
+  } catch (error) {
+    if (elements.viewer === viewer) {
+      const replacement = createPerspectiveViewer();
+      viewer.replaceWith(replacement);
+      elements.viewer = replacement;
+      try {
+        void Promise.resolve(viewer.delete?.()).catch(() => {});
+      } catch {
+        // The detached viewer must not block the replacement.
+      }
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 async function waitForPerspectivePlugins(required, timeoutMs = 5000) {
@@ -514,14 +606,15 @@ async function selectVirtualTable(tableRef) {
     const client = await state.perspective.worker(Promise.resolve(port));
     const nextTable = await client.open_table(tableRef);
     try {
-      await elements.viewer.load(nextTable);
-      await elements.viewer.restore({
+      const viewer = await loadViewerTable(nextTable);
+      await viewer.restore({
         plugin: "Datagrid",
         columns: VIRTUAL_DEFAULT_COLUMNS.filter((column) => column in metadata.schema),
         settings: false,
       });
-      await elements.viewer.flush();
-      await elements.viewer.resize();
+      await viewer.flush();
+      await syncViewerPresentation(viewer);
+      await viewer.resize();
     } catch (error) {
       await client.terminate();
       throw error;
@@ -692,7 +785,7 @@ function createDataFusionVirtualAdapter(tableRef, tableSchema) {
 }
 
 async function selectScratch(sql, limit, perspective = null) {
-  setViewCopy("Query", "Query", "Read-only result.");
+  setViewCopy("Result", "", "Read-only result.");
   elements.editor.value = sql;
   state.sourceSql = sql.trim();
   elements.limit.value = limit;
@@ -728,10 +821,11 @@ async function selectOffers(action) {
     if (!response.ok) throw new Error(await responseError(response));
     const arrow = await response.arrayBuffer();
     const nextTable = await state.worker.table(arrow);
-    await elements.viewer.load(nextTable);
-    await elements.viewer.restore({ plugin: "Datagrid", settings: false });
-    await elements.viewer.flush();
-    await elements.viewer.resize();
+    const viewer = await loadViewerTable(nextTable);
+    await viewer.restore({ plugin: "Datagrid", settings: false });
+    await viewer.flush();
+    await syncViewerPresentation(viewer);
+    await viewer.resize();
     await replaceTable(nextTable);
     const rowCount = response.headers.get("X-Compute-Bazaar-Row-Count") || "0";
     elements.resultRows.textContent = formatCount(rowCount);
@@ -781,10 +875,11 @@ async function selectLaunchPlan(action) {
     if (!response.ok) throw new Error(await responseError(response));
     const arrow = await response.arrayBuffer();
     const nextTable = await state.worker.table(arrow);
-    await elements.viewer.load(nextTable);
-    await elements.viewer.restore({ plugin: "Datagrid", settings: false });
-    await elements.viewer.flush();
-    await elements.viewer.resize();
+    const viewer = await loadViewerTable(nextTable);
+    await viewer.restore({ plugin: "Datagrid", settings: false });
+    await viewer.flush();
+    await syncViewerPresentation(viewer);
+    await viewer.resize();
     await replaceTable(nextTable);
     elements.resultRows.textContent = "1";
     elements.resultTime.textContent = `${response.headers.get("X-Compute-Bazaar-Elapsed-Ms") || "-"} ms`;
@@ -912,7 +1007,7 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
 
   const sourceChanged = Boolean(state.activeSource && state.sourceSql !== sql);
   if (sourceChanged) {
-    setViewCopy("Query", "Query", "Read-only result.");
+    setViewCopy("Result", "", "Read-only result.");
     setActiveSource(null);
   }
 
@@ -939,13 +1034,14 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
 
     const arrow = await response.arrayBuffer();
     const nextTable = await state.worker.table(arrow);
-    await elements.viewer.load(nextTable);
-    const restored = await restoreViewerLayout(currentConfig);
+    const viewer = await loadViewerTable(nextTable);
+    const restored = await restoreViewerLayout(currentConfig, viewer);
     if (!restored && restoreConfig) {
       showToast("This layout does not match the current result");
     }
-    await elements.viewer.flush();
-    await elements.viewer.resize();
+    await viewer.flush();
+    await syncViewerPresentation(viewer);
+    await viewer.resize();
     await replaceTable(nextTable);
     state.sourceSql = sql;
 
@@ -979,14 +1075,14 @@ async function runCurrentQuery({ restoreConfig = null, preserveView = true } = {
   }
 }
 
-async function restoreViewerLayout(config) {
+async function restoreViewerLayout(config, viewer = elements.viewer) {
   const fallback = { plugin: "Datagrid", settings: false };
   try {
-    await elements.viewer.restore(config || fallback);
+    await viewer.restore(config || fallback);
     return true;
   } catch {
-    await elements.viewer.reset();
-    await elements.viewer.restore(fallback);
+    await viewer.reset();
+    await viewer.restore(fallback);
     return false;
   }
 }
@@ -1125,10 +1221,27 @@ async function handleTerminalAction(action) {
   }
 }
 
+async function waitForQuery() {
+  const deadline = Date.now() + 60_000;
+  while (state.running) {
+    if (Date.now() >= deadline) throw new Error("The current query did not finish");
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+  }
+}
+
+function queueTerminalAction(action) {
+  const completion = state.actionQueue.then(async () => {
+    await waitForQuery();
+    return handleTerminalAction(action);
+  });
+  state.actionQueue = completion.catch(() => {});
+  return completion;
+}
+
 window.addEventListener("compute-bazaar:command", (event) => {
   if (!event.detail?.action || !state.session) return;
   event.detail.handled = true;
-  event.detail.completion = handleTerminalAction(event.detail.action);
+  event.detail.completion = queueTerminalAction(event.detail.action);
 });
 
 window.addEventListener("compute-bazaar:shell", (event) => {
@@ -1255,7 +1368,7 @@ async function initialize() {
       return;
     }
     try {
-      await handleTerminalAction(pending.action);
+      await queueTerminalAction(pending.action);
       await window.ComputeBazaarTerminal?.completeTerminalOpen(pending.launchId, {
         message: window.ComputeBazaarTerminal?.actionSuccessMessage(pending.action),
       });

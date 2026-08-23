@@ -1,0 +1,111 @@
+:root {
+  --bazaar-bg: #090e11;
+  --bazaar-panel: #0d1418;
+  --bazaar-line: #243139;
+  --bazaar-line-strong: #3b4e59;
+  --bazaar-text: #e5e9e7;
+  --bazaar-muted: #8e9a9c;
+  --bazaar-quiet: #59666a;
+  --bazaar-blue: #91aecb;
+  --bazaar-topbar-height: 44px;
+}
+
+.terminal-topbar {
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: 0;
+  height: var(--bazaar-topbar-height);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--bazaar-line);
+  background: var(--bazaar-bg);
+}
+
+.terminal-wordmark {
+  display: block;
+  width: 116px;
+  height: var(--bazaar-topbar-height);
+  flex: none;
+}
+
+.terminal-wordmark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.terminal-topbar-tools,
+.terminal-workspace-nav {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+}
+
+.terminal-topbar-tools {
+  gap: 12px;
+}
+
+.terminal-workspace-nav {
+  gap: 18px;
+}
+
+.terminal-workspace-nav a,
+.terminal-workspace-nav span {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  color: var(--bazaar-muted);
+  font-size: 8px;
+  font-weight: 700;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.terminal-workspace-nav a::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: transparent;
+  content: "";
+}
+
+.terminal-workspace-nav a:hover,
+.terminal-workspace-nav a[aria-current="page"] {
+  color: var(--bazaar-text);
+}
+
+.terminal-workspace-nav a[aria-current="page"]::after {
+  background: var(--bazaar-blue);
+}
+
+.terminal-workspace-nav span {
+  color: var(--bazaar-quiet);
+}
+
+@media (max-width: 620px) {
+  .terminal-topbar {
+    gap: 12px;
+    padding-inline: 9px;
+  }
+
+  .terminal-wordmark {
+    width: 96px;
+  }
+
+  .terminal-topbar-tools {
+    gap: 10px;
+  }
+
+  .terminal-workspace-nav {
+    gap: 12px;
+  }
+}

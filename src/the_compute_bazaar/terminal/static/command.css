@@ -1,15 +1,15 @@
 :root {
-  --terminal-command-height: 58px;
-  --terminal-shell-head-height: 40px;
-  --terminal-shell-width: clamp(360px, 38vw, 620px);
-  --terminal-command-bg: #0d1110;
-  --terminal-command-panel: #141917;
-  --terminal-command-line: #303833;
-  --terminal-command-line-strong: #536057;
-  --terminal-command-text: #efede4;
-  --terminal-command-muted: #9fa49e;
-  --terminal-command-quiet: #737c76;
-  --terminal-command-accent: #a8c96b;
+  --terminal-command-height: 46px;
+  --terminal-shell-head-height: 44px;
+  --terminal-shell-width: clamp(360px, 28vw, 480px);
+  --terminal-command-bg: #090e11;
+  --terminal-command-panel: #0d1418;
+  --terminal-command-line: #243139;
+  --terminal-command-line-strong: #3b4e59;
+  --terminal-command-text: #e5e9e7;
+  --terminal-command-muted: #8e9a9c;
+  --terminal-command-quiet: #59666a;
+  --terminal-command-accent: #91aecb;
   --terminal-command-green: #b7d07b;
   --terminal-command-danger: #d98770;
 }
@@ -22,7 +22,7 @@
   width: calc(100% + 1px);
   height: calc(100dvh - var(--terminal-command-height));
   overflow: hidden;
-  border-right: 1px solid var(--terminal-command-line-strong);
+  border-right: 1px solid var(--terminal-command-line);
   background: var(--terminal-command-bg);
 }
 
@@ -32,11 +32,11 @@
 
 .terminal-shell-head {
   height: var(--terminal-shell-head-height);
-  padding: 0 10px 0 13px;
+  padding: 0 7px 0 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 8px;
   border-bottom: 1px solid var(--terminal-command-line);
   background: var(--terminal-command-bg);
 }
@@ -60,9 +60,9 @@
 
 .terminal-session-tabs button {
   position: relative;
-  min-width: 72px;
+  min-width: 66px;
   height: 100%;
-  padding: 0 12px;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -72,7 +72,7 @@
   background: transparent;
   color: var(--terminal-command-quiet);
   font: inherit;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
   text-transform: uppercase;
   white-space: nowrap;
@@ -124,14 +124,15 @@
 }
 
 .terminal-shell-actions button {
-  min-height: 26px;
-  padding: 0 8px;
+  min-height: 24px;
+  padding: 0 7px;
   border: 0;
   background: transparent;
   color: var(--terminal-command-muted);
   font: inherit;
-  font-size: 9px;
+  font-size: 8px;
   text-transform: uppercase;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -161,7 +162,7 @@
 }
 
 .terminal-shell-actions [data-session-action="access"][data-access="full"] {
-  color: var(--terminal-command-danger);
+  color: var(--terminal-command-accent);
 }
 
 .terminal-session-stack {
@@ -174,7 +175,7 @@
 
 .terminal-shell-stage {
   height: 100%;
-  padding: 10px 12px 8px;
+  padding: 8px 10px 6px;
   text-align: left;
 }
 
@@ -186,7 +187,7 @@
 .terminal-agent-transcript {
   box-sizing: border-box;
   height: 100%;
-  padding: 10px 13px 16px;
+  padding: 9px 12px 18px;
   overflow: auto;
   scrollbar-color: var(--terminal-command-line-strong) transparent;
   scrollbar-width: thin;
@@ -195,16 +196,17 @@
 .terminal-agent-event {
   box-sizing: border-box;
   margin: 0;
-  padding: 2px 0;
+  padding: 1px 0;
   color: var(--terminal-command-muted);
-  font-size: 11px;
-  line-height: 1.6;
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .terminal-agent-event.message.user {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 8px;
+  gap: 7px;
+  margin: 3px 0 5px;
 }
 
 .terminal-agent-event.message > span,
@@ -222,11 +224,17 @@
   white-space: pre-wrap;
 }
 
+.terminal-agent-event.message.assistant {
+  margin-bottom: 5px;
+}
+
 .terminal-agent-event.tool {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 8px;
   color: var(--terminal-command-quiet);
+  font-size: 8px;
+  line-height: 1.35;
 }
 
 .terminal-agent-event.tool code {
@@ -269,7 +277,7 @@
   right: 0;
   bottom: 0;
   width: 1px;
-  background: var(--terminal-command-line-strong);
+  background: var(--terminal-command-line);
   content: "";
 }
 
@@ -323,7 +331,7 @@ body.terminal-command-enabled .terminal-menu {
   bottom: 0;
   left: 0;
   height: var(--terminal-command-height);
-  border-top: 1px solid var(--terminal-command-line-strong);
+  border-top: 1px solid var(--terminal-command-line);
   background: var(--terminal-command-bg);
   color: var(--terminal-command-text);
   font-family: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
@@ -333,12 +341,12 @@ body.terminal-command-enabled .terminal-menu {
 .terminal-command.shell-open {
   right: auto;
   width: var(--terminal-shell-width);
-  border-right: 1px solid var(--terminal-command-line-strong);
+  border-right: 1px solid var(--terminal-command-line);
 }
 
 .terminal-command.shell-open .terminal-command-inner {
   width: 100%;
-  padding: 0 10px;
+  padding: 0 8px 0 12px;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   gap: 8px;
 }
@@ -349,26 +357,27 @@ body.terminal-command-enabled .terminal-menu {
 }
 
 .terminal-command-inner {
-  width: min(1180px, calc(100% - 32px));
+  width: 100%;
   height: 100%;
-  margin: 0 auto;
+  margin: 0;
+  padding: 0 12px;
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .terminal-command-workspace {
   min-width: 38px;
   color: var(--terminal-command-accent);
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .terminal-command-prompt {
   color: var(--terminal-command-green);
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
 }
 
@@ -377,7 +386,7 @@ body.terminal-command-enabled .terminal-menu {
   min-width: 0;
   max-height: 96px;
   margin: 0;
-  padding: 8px 0;
+  padding: 6px 0;
   resize: none;
   overflow-y: auto;
   border: 0;
@@ -421,18 +430,21 @@ body.terminal-command-enabled .terminal-menu {
 }
 
 .terminal-command-run {
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--terminal-command-line);
-  border-radius: 3px;
+  align-self: stretch;
+  min-height: 100%;
+  padding: 0 4px 0 12px;
+  border: 0;
+  border-left: 1px solid var(--terminal-command-line);
+  border-radius: 0;
   background: transparent;
   color: var(--terminal-command-text);
   cursor: pointer;
 }
 
 .terminal-command-run:hover {
-  border-color: var(--terminal-command-accent);
-  background: color-mix(in srgb, var(--terminal-command-accent) 10%, transparent);
+  border-color: var(--terminal-command-line);
+  color: var(--terminal-command-accent);
+  background: transparent;
 }
 
 .terminal-command-run:disabled {
@@ -568,7 +580,7 @@ body.terminal-command-enabled .terminal-menu {
 
 @media (max-width: 760px) {
   :root {
-    --terminal-command-height: 54px;
+    --terminal-command-height: 46px;
     --terminal-shell-width: 100vw;
   }
 

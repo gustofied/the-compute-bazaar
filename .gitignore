@@ -47,7 +47,8 @@ tfplan
 /CLAUDE.md
 /CLAUDE.local.md
 /.prime/
-/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/use-compute-bazaar/
 /.claude/skills/
 /.cursor/skills/
 /.factory/skills/

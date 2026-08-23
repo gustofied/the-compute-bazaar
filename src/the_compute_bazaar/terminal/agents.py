@@ -23,21 +23,47 @@ AGENT_REASONING_EFFORT = "medium"
 SESSION_NAME = "compute-bazaar-terminal-terra-medium"
 ACP_CONFIG = Path("terminal/acp.json")
 DEFAULT_ACP_AGENT = Path("terminal/node_modules/.bin/codex-acp")
+CODEX_ACCESS_MODES = {
+    "read": "read-only",
+    "full": "agent-full-access",
+}
 TERMINAL_CONTEXT = """<compute-bazaar-terminal>
 Work in the Bazaar checkout using normal repo tools and `compute-bazaar`.
+- Run Bazaar commands through `.venv/bin/compute-bazaar`; never use a global
+  installation from another checkout.
+- Read `.agents/skills/use-compute-bazaar/SKILL.md` before operating the desk.
 - Inspect data with `compute-bazaar tables`, `compute-bazaar describe TABLE`, and
   `compute-bazaar sql \"SQL\"`.
 - Put useful results in Data with `compute-bazaar query QUERY_ID --terminal` or
   `compute-bazaar sql \"SQL\" --terminal`.
+- SQL handoffs support `--chart table|line|bar|area`; use `--x`, `--series`, and
+  `--y` for quick charts. Use `--perspective '{...}'` to pass a complete
+  Perspective view configuration.
+- Move the desk with `compute-bazaar open data`, `fleet`, `eval`, or `terminal`.
+Never stop or restart the running Terminal to show a result. Use `--terminal` or
+`compute-bazaar open` to hand work to the instance that is already open.
 Use `compute-bazaar COMMAND --help` when needed. Do not use GUI automation to
 operate the Terminal.
 </compute-bazaar-terminal>"""
 READ_TERMINAL_CONTEXT = """<compute-bazaar-terminal>
 This turn has Read access.
 
-Inspect and reason about the Bazaar checkout. Do not execute shell commands or
-change local or remote state. If the request requires `compute-bazaar` or another
-command, ask the user to switch to Full access.
+Inspect the Bazaar checkout and query its data without changing local or remote
+state. Read-only `compute-bazaar` commands are allowed, including `tables`,
+`describe`, `sql` with SELECT or WITH, `query`, `price-index`, `availability`, and
+`open`. Put useful results in Data with `--terminal`, and move the desk with
+`compute-bazaar open data`, `fleet`, `eval`, or `terminal`.
+SQL handoffs support `--chart table|line|bar|area`, or a complete Perspective
+view configuration through `--perspective '{...}'`.
+
+Run Bazaar commands through `.venv/bin/compute-bazaar`; never use a global
+installation from another checkout.
+
+Read `.agents/skills/use-compute-bazaar/SKILL.md` before operating the desk.
+
+Do not edit files, refresh or publish data, provision or terminate compute, run or
+stop workloads, or execute any other state-changing command. Ask for Full access
+only when the requested operation changes state.
 </compute-bazaar-terminal>"""
 
 
@@ -116,7 +142,7 @@ class AgentSession:
             "events": [dict(event) for event in self.events],
         }
 
-    def start(self, prompt: str, *, access: str = "read") -> None:
+    def start(self, prompt: str, *, access: str = "full") -> None:
         prompt = prompt.strip()
         if not prompt:
             raise AgentSessionError("Prompt is empty")
@@ -174,8 +200,6 @@ class AgentSession:
     async def _run(self, prompt: str, *, access: str) -> None:
         self._emit({"kind": "message", "role": "user", "text": prompt})
         self._set_state("starting")
-        process: asyncio.subprocess.Process | None = None
-        stderr_task: asyncio.Task[bytes] | None = None
         try:
             if not self._ensured:
                 await self._control(
@@ -186,30 +210,54 @@ class AgentSession:
                 )
                 self._ensured = True
             self._set_state("working")
-            permission = "--approve-all" if access == "full" else "--approve-reads"
-            command = [
-                *self._command(),
-                permission,
-                "--non-interactive-permissions",
-                "deny",
-                "--format",
-                "json",
-                "--json-strict",
-                "--suppress-reads",
-                "prompt",
-                "-s",
-                self.session_name,
-                _terminal_prompt(prompt, access=access),
-            ]
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                cwd=self.cwd,
-                env=_agent_environment(),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                limit=ACP_STREAM_LIMIT,
-            )
-            self._process = process
+            for attempt in range(2):
+                if mode := _agent_mode(self.agent_command, access):
+                    await self._control("set-mode", mode, "-s", self.session_name)
+                error = await self._prompt_once(prompt, access=access)
+                if error is None:
+                    break
+                if attempt == 0 and _stale_queue_error(error):
+                    await self._control("sessions", "new", "--name", self.session_name)
+                    self._ensured = True
+                    continue
+                raise AgentSessionError(error)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._emit({"kind": "error", "text": str(exc)})
+            self._set_state("error")
+            return
+        self._set_state("idle")
+
+    async def _prompt_once(self, prompt: str, *, access: str) -> str | None:
+        permission = "--approve-all" if access == "full" else "--approve-reads"
+        command = [
+            *self._command(),
+            permission,
+            "--non-interactive-permissions",
+            "deny",
+            "--format",
+            "json",
+            "--json-strict",
+            "--suppress-reads",
+            "prompt",
+            "-s",
+            self.session_name,
+            _terminal_prompt(prompt, access=access),
+        ]
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            cwd=self.cwd,
+            env=_agent_environment(self.cwd),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            limit=ACP_STREAM_LIMIT,
+        )
+        self._process = process
+        stderr_task: asyncio.Task[bytes] | None = None
+        protocol_error = ""
+        undecoded_output = ""
+        try:
             assert process.stdout is not None
             assert process.stderr is not None
             stderr_task = asyncio.create_task(process.stderr.read())
@@ -225,30 +273,32 @@ class AgentSession:
                 try:
                     payload = json.loads(line)
                 except (json.JSONDecodeError, UnicodeDecodeError):
+                    text = line.decode("utf-8", "replace").strip()
+                    if text:
+                        undecoded_output = text
+                    continue
+                if isinstance(payload.get("error"), dict):
+                    protocol_error = _error_text(payload)
                     continue
                 self._accept(payload)
             error_output = (await stderr_task).decode("utf-8", "replace").strip()
             return_code = await process.wait()
-            if return_code and error_output:
-                raise AgentSessionError(error_output[-2_000:])
-            if return_code:
-                raise AgentSessionError(f"Agent exited with status {return_code}")
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            self._emit({"kind": "error", "text": str(exc)})
-            self._set_state("error")
-            return
+            if not return_code:
+                return None
+            return (
+                error_output[-2_000:]
+                or protocol_error
+                or undecoded_output[-2_000:]
+                or f"Agent exited with status {return_code}"
+            )
         finally:
-            if process is not None:
-                await _terminate_agent_process(process)
+            await _terminate_agent_process(process)
             if stderr_task is not None:
                 if not stderr_task.done():
                     stderr_task.cancel()
                 await asyncio.gather(stderr_task, return_exceptions=True)
             if self._process is process:
                 self._process = None
-        self._set_state("idle")
 
     async def _control(
         self,
@@ -262,7 +312,7 @@ class AgentSession:
             "quiet",
             *arguments,
             cwd=self.cwd,
-            env=_agent_environment(),
+            env=_agent_environment(self.cwd),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -421,6 +471,10 @@ def _error_text(payload: dict[str, Any]) -> str:
     return "Agent request failed"
 
 
+def _stale_queue_error(message: str) -> bool:
+    return "queue owner is running but not accepting queue requests" in message.lower()
+
+
 def _terminal_prompt(prompt: str, *, access: str) -> str:
     if prompt.startswith("/"):
         return prompt
@@ -431,21 +485,39 @@ def _terminal_prompt(prompt: str, *, access: str) -> str:
 def _session_name(cwd: Path) -> str:
     config_path = cwd / ACP_CONFIG
     config = config_path.read_bytes() if config_path.is_file() else b""
+    skill_path = cwd / ".agents/skills/use-compute-bazaar/SKILL.md"
+    skill = skill_path.read_bytes() if skill_path.is_file() else b""
     contract = b"\0".join(
-        (config, AGENT_MODEL.encode(), AGENT_REASONING_EFFORT.encode())
+        (
+            config,
+            skill,
+            TERMINAL_CONTEXT.encode(),
+            READ_TERMINAL_CONTEXT.encode(),
+            AGENT_MODEL.encode(),
+            AGENT_REASONING_EFFORT.encode(),
+        )
     )
     fingerprint = hashlib.sha256(contract).hexdigest()[:10]
     return f"{SESSION_NAME}-{fingerprint}"
 
 
-def _agent_environment() -> dict[str, str]:
+def _agent_environment(cwd: Path | None = None) -> dict[str, str]:
     environment = {
         key: value
         for key, value in os.environ.items()
         if not key.startswith("COMPUTE_BAZAAR_TERMINAL_")
     }
-    executable_dir = str(Path(sys.executable).parent)
-    environment["PATH"] = os.pathsep.join((executable_dir, environment.get("PATH", "")))
+    executable_dirs = [Path(sys.executable).parent]
+    if cwd is not None:
+        checkout_bin = cwd / ".venv" / "bin"
+        if (checkout_bin / "compute-bazaar").is_file():
+            executable_dirs.insert(0, checkout_bin)
+            environment["VIRTUAL_ENV"] = str(cwd / ".venv")
+    path_entries = [
+        *(str(path) for path in executable_dirs),
+        *environment.get("PATH", "").split(os.pathsep),
+    ]
+    environment["PATH"] = os.pathsep.join(dict.fromkeys(filter(None, path_entries)))
     environment["CODEX_CONFIG"] = json.dumps(
         {
             "model": AGENT_MODEL,
@@ -453,7 +525,14 @@ def _agent_environment() -> dict[str, str]:
         },
         separators=(",", ":"),
     )
+    environment["INITIAL_AGENT_MODE"] = CODEX_ACCESS_MODES["full"]
     return environment
+
+
+def _agent_mode(agent_command: str, access: str) -> str | None:
+    if "codex-acp" not in agent_command:
+        return None
+    return CODEX_ACCESS_MODES[access]
 
 
 def _find_acpx(cwd: Path) -> Path | None:

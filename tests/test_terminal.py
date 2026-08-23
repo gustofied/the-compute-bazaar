@@ -10,7 +10,7 @@ import unittest
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, call, patch
 
 from fastapi import HTTPException
 
@@ -39,6 +39,7 @@ from the_compute_bazaar.terminal.identity import (
     project_identity,
 )
 from the_compute_bazaar.terminal.lifecycle import (
+    open_terminal_workspace,
     _project_state_root,
     _resolve_evaluation_root,
     _terminal_health,
@@ -60,41 +61,84 @@ class TerminalCommandTest(unittest.TestCase):
         self.assertIn("compute-bazaar describe TABLE", prompt)
         self.assertIn("compute-bazaar query QUERY_ID --terminal", prompt)
         self.assertIn('compute-bazaar sql "SQL" --terminal', prompt)
+        self.assertIn("--chart table|line|bar|area", prompt)
+        self.assertIn("--perspective '{...}'", prompt)
+        self.assertIn(".venv/bin/compute-bazaar", prompt)
+        self.assertIn("compute-bazaar open data", prompt)
+        self.assertIn("Never stop or restart the running Terminal", prompt)
         self.assertNotIn("open_workspace", prompt)
         self.assertIn("Bazaar checkout", prompt)
         self.assertNotIn("repo shell", prompt)
         self.assertTrue(prompt.endswith("Show me the latest H200 price."))
         self.assertEqual(_terminal_prompt("/login", access="read"), "/login")
 
-    def test_read_agent_does_not_receive_shell_instructions(self) -> None:
+    def test_read_agent_receives_read_only_bazaar_commands(self) -> None:
         prompt = _terminal_prompt("Read the market.", access="read")
 
         self.assertIn("This turn has Read access", prompt)
-        self.assertIn("Do not execute shell commands", prompt)
-        self.assertIn("switch to Full access", prompt)
-        self.assertNotIn("compute-bazaar tables", prompt)
+        self.assertIn("Read-only `compute-bazaar` commands are allowed", prompt)
+        self.assertIn("`tables`", prompt)
+        self.assertIn("`sql` with SELECT or WITH", prompt)
+        self.assertIn("Put useful results in Data with `--terminal`", prompt)
+        self.assertIn("--chart table|line|bar|area", prompt)
+        self.assertIn("--perspective '{...}'", prompt)
+        self.assertIn(".venv/bin/compute-bazaar", prompt)
+        self.assertIn("compute-bazaar open data", prompt)
+        self.assertIn("Do not edit files", prompt)
+        self.assertIn("Ask for Full access", prompt)
         self.assertNotIn("open_workspace", prompt)
 
-    def test_agent_can_find_the_current_compute_bazaar_command(self) -> None:
-        executable_dir = str(Path(sys.executable).parent)
-        with patch.dict(
-            os.environ,
-            {
-                "COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN": "native-secret",
-                "COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN": "control-secret",
-                "COMPUTE_BAZAAR_TERMINAL_PORT": "8767",
-                "COMPUTE_BAZAAR_TERMINAL_READY_FILE": "/tmp/terminal-ready.json",
-                "COMPUTE_BAZAAR_LAKE_ROOT": "/tmp/lake",
-            },
+    def test_cli_workspace_open_uses_the_terminal_handoff(self) -> None:
+        state = {"url": "http://127.0.0.1:8767", "pid": 42}
+        with (
+            patch(
+                "the_compute_bazaar.terminal.lifecycle._read_state",
+                return_value=state,
+            ),
+            patch(
+                "the_compute_bazaar.terminal.lifecycle._terminal_health",
+                return_value=42,
+            ),
+            patch(
+                "the_compute_bazaar.terminal.lifecycle._open_in_existing_terminal",
+                return_value="Opened Data.",
+            ) as handoff,
         ):
-            environment = _agent_environment()
+            message = open_terminal_workspace("data", project_root=Path("/repo"))
 
-        self.assertEqual(environment["PATH"].split(":", 1)[0], executable_dir)
+        self.assertEqual(message, "Opened Data.")
+        handoff.assert_called_once_with(
+            state,
+            {"kind": "navigate", "href": "/data"},
+        )
+
+    def test_agent_can_find_the_current_compute_bazaar_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            checkout = Path(temp_dir)
+            checkout_bin = checkout / ".venv" / "bin"
+            checkout_bin.mkdir(parents=True)
+            (checkout_bin / "compute-bazaar").touch()
+            with patch.dict(
+                os.environ,
+                {
+                    "COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN": "native-secret",
+                    "COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN": "control-secret",
+                    "COMPUTE_BAZAAR_TERMINAL_PORT": "8767",
+                    "COMPUTE_BAZAAR_TERMINAL_READY_FILE": "/tmp/terminal-ready.json",
+                    "COMPUTE_BAZAAR_LAKE_ROOT": "/tmp/lake",
+                },
+            ):
+                environment = _agent_environment(checkout)
+
+        self.assertEqual(environment["PATH"].split(":", 1)[0], str(checkout_bin))
+        self.assertEqual(environment["VIRTUAL_ENV"], str(checkout / ".venv"))
+        self.assertIn(str(Path(sys.executable).parent), environment["PATH"].split(":"))
         self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_NATIVE_TOKEN", environment)
         self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_CONTROL_TOKEN", environment)
         self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_PORT", environment)
         self.assertNotIn("COMPUTE_BAZAAR_TERMINAL_READY_FILE", environment)
         self.assertEqual(environment["COMPUTE_BAZAAR_LAKE_ROOT"], "/tmp/lake")
+        self.assertEqual(environment["INITIAL_AGENT_MODE"], "agent-full-access")
         self.assertEqual(
             json.loads(environment["CODEX_CONFIG"]),
             {
@@ -527,6 +571,47 @@ class TerminalCommandTest(unittest.TestCase):
             },
         )
 
+    def test_cli_area_chart_becomes_a_perspective_layout(self) -> None:
+        action = resolve_command(
+            'compute-bazaar sql "select observed_at, available from gold.example" '
+            "--terminal --chart area --x observed_at --y available"
+        )
+
+        self.assertIsInstance(action, SqlAction)
+        assert isinstance(action, SqlAction)
+        self.assertEqual(
+            action.perspective,
+            {
+                "plugin": "Y Area",
+                "group_by": ["observed_at"],
+                "columns": ["available"],
+                "settings": False,
+            },
+        )
+
+    def test_cli_accepts_a_complete_perspective_layout(self) -> None:
+        action = resolve_command(
+            'compute-bazaar sql "select x, y from gold.example" --terminal '
+            '--perspective \'{"plugin":"X/Y Scatter","columns":["x","y"]}\''
+        )
+
+        self.assertIsInstance(action, SqlAction)
+        assert isinstance(action, SqlAction)
+        self.assertEqual(
+            action.perspective,
+            {"plugin": "X/Y Scatter", "columns": ["x", "y"]},
+        )
+
+    def test_cli_rejects_mixed_perspective_configuration(self) -> None:
+        action = resolve_command(
+            'compute-bazaar sql "select x, y from gold.example" --terminal '
+            "--chart area --x x --y y --perspective '{}'"
+        )
+
+        self.assertIsInstance(action, ErrorAction)
+        assert isinstance(action, ErrorAction)
+        self.assertIn("cannot be combined", action.message)
+
     def test_external_commands_still_use_the_shell(self) -> None:
         action = resolve_command("harbor run -p task", shell_fallback=True)
 
@@ -559,6 +644,11 @@ class TerminalCommandTest(unittest.TestCase):
         self.assertEqual(published["action"]["perspective"], {"plugin": "Y Line"})
         self.assertEqual(published["state"], "pending")
 
+        claimed = mailbox.claim(published["launch_id"])
+        assert claimed is not None
+        self.assertEqual(claimed["state"], "processing")
+        self.assertIsNone(mailbox.claim(published["launch_id"]))
+
         completed = mailbox.complete(
             published["launch_id"],
             message="Opened query in Data.",
@@ -584,6 +674,40 @@ class TerminalCommandTest(unittest.TestCase):
 
 
 class AgentProcessTest(unittest.IsolatedAsyncioTestCase):
+    async def test_agent_session_defaults_to_full_access(self) -> None:
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+
+        with patch.object(session, "_run", new=AsyncMock()) as run:
+            session.start("Open Data.")
+            assert session._task is not None
+            await session._task
+
+        run.assert_awaited_once_with("Open Data.", access="full")
+
+    async def test_codex_agent_sets_the_requested_access_mode(self) -> None:
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+        session._ensured = True
+
+        with (
+            patch.object(session, "_control", new=AsyncMock()) as control,
+            patch.object(session, "_prompt_once", new=AsyncMock(return_value=None)),
+        ):
+            session.start("Open Data.", access="full")
+            assert session._task is not None
+            await session._task
+
+        control.assert_awaited_once_with(
+            "set-mode", "agent-full-access", "-s", session.session_name
+        )
+
     async def test_agent_process_cleanup_reaps_a_running_child(self) -> None:
         process = await asyncio.create_subprocess_exec(
             sys.executable,
@@ -666,6 +790,76 @@ class AgentProcessTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(session.events, [])
         self.assertEqual(session._tool_events, {})
         self.assertTrue(session._ensured)
+
+    async def test_agent_replaces_a_stale_queue_and_retries_once(self) -> None:
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path("/bin/false"),
+            agent_command="codex-acp",
+        )
+        session._ensured = True
+
+        with (
+            patch.object(
+                session,
+                "_prompt_once",
+                new=AsyncMock(
+                    side_effect=[
+                        "Session queue owner is running but not accepting queue requests",
+                        None,
+                    ]
+                ),
+            ) as prompt_once,
+            patch.object(session, "_control", new=AsyncMock()) as control,
+        ):
+            session.start("Open Data.", access="read")
+            assert session._task is not None
+            await session._task
+
+        self.assertEqual(prompt_once.await_count, 2)
+        self.assertEqual(
+            control.await_args_list,
+            [
+                call("set-mode", "read-only", "-s", session.session_name),
+                call("sessions", "new", "--name", session.session_name),
+                call("set-mode", "read-only", "-s", session.session_name),
+            ],
+        )
+        self.assertEqual(session.state, "idle")
+        self.assertFalse(any(event["kind"] == "error" for event in session.events))
+
+    async def test_agent_reports_json_rpc_failure(self) -> None:
+        fake_acpx = """
+import json
+import sys
+
+if "prompt" in sys.argv:
+    print(json.dumps({
+        "jsonrpc": "2.0",
+        "id": None,
+        "error": {"code": -32603, "message": "ACP authentication failed"},
+    }), flush=True)
+    raise SystemExit(1)
+"""
+        session = AgentSession(
+            cwd=Path("/tmp"),
+            executable=Path(sys.executable),
+            agent_command="fake-acp-agent",
+        )
+        session._ensured = True
+
+        with patch.object(
+            session,
+            "_command",
+            return_value=[sys.executable, "-c", fake_acpx],
+        ):
+            session.start("Read the market.", access="read")
+            assert session._task is not None
+            await session._task
+
+        self.assertEqual(session.state, "error")
+        self.assertEqual(session.events[-1]["kind"], "error")
+        self.assertEqual(session.events[-1]["text"], "ACP authentication failed")
 
     async def test_agent_session_crosses_the_process_boundary(self) -> None:
         fake_acpx = """

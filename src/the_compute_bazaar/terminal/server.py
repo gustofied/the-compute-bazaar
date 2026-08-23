@@ -100,6 +100,14 @@ class TerminalLaunchMailbox:
             launch = self._launches.get(launch_id)
             return dict(launch) if launch else None
 
+    def claim(self, launch_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            launch = self._launches.get(launch_id)
+            if launch is None or launch["state"] != "pending":
+                return None
+            launch["state"] = "processing"
+            return dict(launch)
+
     def complete(
         self,
         launch_id: str,
@@ -111,7 +119,7 @@ class TerminalLaunchMailbox:
             launch = self._launches.get(launch_id)
             if launch is None:
                 return None
-            if launch["state"] == "pending":
+            if launch["state"] in {"pending", "processing"}:
                 launch["state"] = "failed" if error else "complete"
                 launch["message"] = error or message
             return dict(launch)
@@ -320,6 +328,22 @@ def create_terminal_app(
             raise HTTPException(status_code=404, detail="Terminal request not found")
         return {"contract": "compute-bazaar.terminal.open", "launch": launch}
 
+    @app.post("/api/terminal/open/{launch_id}/claim")
+    def claim_terminal_open(launch_id: str, request: Request) -> dict[str, Any]:
+        if not _same_http_origin(request) or (
+            native_session is not None
+            and not _valid_native_session(
+                request.cookies.get(session_cookie), native_session
+            )
+        ):
+            raise HTTPException(status_code=403, detail="Terminal origin rejected")
+        launch = launch_mailbox.claim(launch_id)
+        if launch is None:
+            raise HTTPException(
+                status_code=409, detail="Terminal request already claimed"
+            )
+        return {"contract": "compute-bazaar.terminal.open", "launch": launch}
+
     @app.post("/api/terminal/open/{launch_id}/complete")
     def complete_terminal_open(
         launch_id: str,
@@ -522,7 +546,7 @@ async def _receive_agent_input(websocket: WebSocket, session: AgentSession) -> N
             if message.get("type") == "prompt":
                 session.start(
                     str(message.get("prompt") or ""),
-                    access=str(message.get("access") or "read"),
+                    access=str(message.get("access") or "full"),
                 )
             elif message.get("type") == "cancel":
                 await session.cancel()

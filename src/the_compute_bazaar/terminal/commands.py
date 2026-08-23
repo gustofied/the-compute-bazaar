@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 from collections.abc import Callable
@@ -271,7 +272,15 @@ def _sql(argument: str) -> TerminalAction:
 def _cli_sql(argument: str) -> TerminalAction:
     parsed = _parse_arguments(
         argument,
-        value_options={"limit", "port", "chart", "x", "series", "y"},
+        value_options={
+            "limit",
+            "port",
+            "chart",
+            "perspective",
+            "x",
+            "series",
+            "y",
+        },
         flag_options={"terminal"},
     )
     if isinstance(parsed, ErrorAction):
@@ -855,20 +864,34 @@ def _parsed_limit(
 
 
 def _chart_config(parsed: ParsedArguments) -> dict[str, Any] | None | ErrorAction:
+    perspective = parsed.values.get("perspective")
+    if perspective is not None:
+        if any(option in parsed.values for option in ("chart", "x", "series", "y")):
+            return _error(
+                "--perspective cannot be combined with --chart, --x, --series, or --y."
+            )
+        try:
+            config = json.loads(perspective)
+        except json.JSONDecodeError:
+            return _error("--perspective must be a JSON object.")
+        if not isinstance(config, dict):
+            return _error("--perspective must be a JSON object.")
+        return config
     chart = parsed.values.get("chart")
     if chart is None:
         return None
     chart = chart.lower()
     if chart == "table":
         return _datagrid()
-    if chart not in {"line", "bar"}:
-        return _error("--chart must be table, line, or bar.")
+    if chart not in {"line", "bar", "area"}:
+        return _error("--chart must be table, line, bar, or area.")
     x = parsed.values.get("x")
     y = parsed.values.get("y")
     if not x or not y:
-        return _error("Line and bar charts require --x and --y.")
+        return _error("Line, bar, and area charts require --x and --y.")
+    plugins = {"line": "Y Line", "bar": "Y Bar", "area": "Y Area"}
     config: dict[str, Any] = {
-        "plugin": "Y Line" if chart == "line" else "Y Bar",
+        "plugin": plugins[chart],
         "group_by": [x],
         "columns": [y],
         "settings": False,

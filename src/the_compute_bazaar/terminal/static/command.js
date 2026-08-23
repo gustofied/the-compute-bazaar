@@ -4,7 +4,6 @@ import "@xterm/xterm/css/xterm.css";
 
 const HISTORY_KEY = "compute-bazaar.terminal.command-history";
 const PENDING_KEY = "compute-bazaar.terminal.pending-command";
-const OPEN_KEY = "compute-bazaar.terminal.last-open";
 const SHELL_LAYOUT_KEY = "compute-bazaar.terminal.shell-layout";
 const MAX_HISTORY = 50;
 const SHELL_MIN_WIDTH = 320;
@@ -30,7 +29,7 @@ const state = {
   opening: false,
   activeSession: shellLayout.tab,
   agent: {
-    access: "read",
+    access: "full",
     state: "idle",
     submitting: false,
     events: [],
@@ -63,7 +62,7 @@ root.innerHTML = `
         </button>
       </nav>
       <div class="terminal-shell-actions">
-        <button type="button" data-session-action="access" title="Agent access" hidden>Read</button>
+        <button type="button" data-session-action="access" title="Agent access" hidden>Full access</button>
         <button type="button" data-session-action="interrupt" aria-label="Interrupt session" title="Interrupt session">^C</button>
         <button type="button" data-session-action="clear" title="Clear shell">Clear</button>
         <button type="button" data-session-action="close" aria-label="Close sessions" title="Close sessions">×</button>
@@ -526,19 +525,19 @@ function updateSessionControls() {
     : null;
   elements.access.hidden = !agent;
   elements.access.textContent = agent?.access === "full" ? "Full access" : "Read";
-  elements.access.dataset.access = agent?.access || "read";
+  elements.access.dataset.access = agent?.access || "full";
   elements.access.disabled = Boolean(agent && agentIsBusy());
   elements.interrupt.textContent = agent ? "Stop" : "^C";
-  elements.clear.textContent = agent ? "New session" : "Clear";
+  elements.clear.textContent = agent ? "New" : "Clear";
   elements.clear.title = agent ? "Start a new agent session" : "Clear shell";
   elements.clear.disabled = Boolean(agent && agentIsBusy());
   elements.workspace.textContent = state.shell.open ? state.activeSession : workspace;
   elements.input.placeholder = agent
-    ? "Agent prompt"
+    ? "Ask The Bazaar"
     : "SQL, command, or shell · try help";
   elements.input.setAttribute(
     "aria-label",
-    agent ? "Agent prompt" : "Terminal command or read-only SQL",
+    agent ? "Write to agent" : "Terminal command or read-only SQL",
   );
   elements.run.textContent = agent ? "Send" : "Run";
   elements.run.disabled = Boolean(agent && agentIsBusy());
@@ -680,15 +679,23 @@ function renderAgent() {
   const transcript = agentPanel()?.querySelector(".terminal-agent-transcript");
   if (!transcript) return;
   transcript.replaceChildren();
-  state.agent.events.forEach((event) => appendAgentEvent(transcript, event));
+  state.agent.events
+    .filter(isVisibleAgentEvent)
+    .forEach((event) => appendAgentEvent(transcript, event));
   scrollAgent({ force: true });
 }
 
 function renderAgentEvent(event) {
   const transcript = agentPanel()?.querySelector(".terminal-agent-transcript");
-  if (!transcript) return;
+  if (!transcript || !isVisibleAgentEvent(event)) return;
   appendAgentEvent(transcript, event);
   scrollAgent();
+}
+
+function isVisibleAgentEvent(event) {
+  if (event.kind !== "tool") return true;
+  const status = String(event.status || "running").toLowerCase();
+  return !["completed", "complete", "success", "succeeded"].includes(status);
 }
 
 function appendAgentEvent(transcript, event) {
@@ -707,9 +714,13 @@ function appendAgentEvent(transcript, event) {
     row.append(content);
   } else if (event.kind === "tool") {
     const status = document.createElement("span");
-    status.textContent = event.status || "running";
+    const value = String(event.status || "running").replaceAll("_", " ");
+    status.textContent = value;
     const title = document.createElement("code");
-    title.textContent = event.title || "Tool";
+    const generic = !event.title || event.title.toLowerCase() === "tool";
+    title.textContent = generic
+      ? (value.includes("fail") ? "Step failed" : "Working")
+      : event.title;
     row.append(status, title);
   } else {
     row.textContent = event.text || "";
@@ -784,6 +795,15 @@ async function completeTerminalOpen(launchId, { message = null, error = null } =
     body: JSON.stringify({ message, error }),
   });
   if (!response.ok) throw new Error("Could not report the Terminal result");
+}
+
+async function claimTerminalOpen(launchId) {
+  const response = await fetch(`/api/terminal/open/${encodeURIComponent(launchId)}/claim`, {
+    method: "POST",
+  });
+  if (response.status === 403 || response.status === 409) return false;
+  if (!response.ok) throw new Error("Could not claim the Terminal request");
+  return true;
 }
 
 function actionSuccessMessage(action) {
@@ -874,8 +894,7 @@ async function pollTerminalOpen() {
     const launch = payload.contract === "compute-bazaar.terminal.open" ? payload.launch : null;
     if (!launch?.launch_id || !launch.action || launch.state !== "pending") return;
     launchId = launch.launch_id;
-    if (localStorage.getItem(OPEN_KEY) === launch.launch_id) return;
-    localStorage.setItem(OPEN_KEY, launch.launch_id);
+    if (!await claimTerminalOpen(launch.launch_id)) return;
     window.focus();
     const result = await execute(launch.action, { launchId: launch.launch_id });
     if (!result?.deferred) {

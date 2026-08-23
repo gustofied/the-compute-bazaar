@@ -7,25 +7,34 @@
     <title>Compute Bazaar Data</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath fill='%2391aecb' d='M1 1h5v5H1z'/%3E%3Cpath fill='%23b7d07b' d='M8 1h5v5H8z'/%3E%3Cpath fill='%23efede4' d='M1 8h5v5H1z'/%3E%3Cpath fill='%23f3c888' d='M8 8h5v5H8z'/%3E%3C/svg%3E">
     <link rel="stylesheet" href="/terminal-assets/perspective/app.css?v=20260812-1">
-    <link rel="stylesheet" href="/terminal-assets/app.css?v=20260813-2">
-    <link rel="stylesheet" href="/terminal-assets/command.css?v=20260812-1">
+    <link rel="stylesheet" href="/terminal-assets/app.css?v=20260823-6">
+    <link rel="stylesheet" href="/terminal-assets/chrome.css?v=20260823-5">
+    <link rel="stylesheet" href="/terminal-assets/command.css?v=20260823-5">
     <link rel="stylesheet" href="/terminal-assets/perspective/command.css?v=20260808-2">
   </head>
   <body data-terminal-workspace="data">
     <div class="app-shell">
-      <header class="topbar">
-        <a class="workspace-wordmark" href="/" aria-label="The Compute Bazaar">
+      <header class="topbar terminal-topbar">
+        <a class="workspace-wordmark terminal-wordmark" href="/" aria-label="The Compute Bazaar">
           <img src="/terminal-wordmark.png?v=20260808-1" alt="The Compute Bazaar">
         </a>
-        <button
-          class="catalog-toggle"
-          id="catalog-toggle"
-          type="button"
-          aria-controls="catalog-panel"
-          aria-expanded="false"
-        >
-          Browse
-        </button>
+        <div class="terminal-topbar-tools">
+          <nav class="terminal-workspace-nav" aria-label="Terminal workspaces">
+            <a href="/data" aria-current="page">Data</a>
+            <a href="/fleet">Fleet</a>
+            <a href="/eval/">Eval</a>
+            <span aria-disabled="true">Trade</span>
+          </nav>
+          <button
+            class="catalog-toggle"
+            id="catalog-toggle"
+            type="button"
+            aria-controls="catalog-panel"
+            aria-expanded="false"
+          >
+            Browse
+          </button>
+        </div>
       </header>
 
       <main class="workspace">
@@ -96,7 +105,7 @@
         <button class="catalog-scrim" id="catalog-scrim" type="button" aria-label="Close market data browser"></button>
 
         <section class="view-workspace" aria-label="Data result viewer">
-          <article class="analysis-document">
+          <article class="analysis-document" id="analysis-document">
             <header class="view-header">
               <div class="view-copy">
                 <p class="eyebrow" id="view-kind">Market view</p>
@@ -184,7 +193,7 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/terminal-assets/perspective/command.js?v=20260813-2"></script>
-    <script type="module" src="/terminal-assets/perspective/app.js?v=20260813-2"></script>
+    <script type="module" src="/terminal-assets/perspective/command.js?v=20260823-7"></script>
+    <script type="module" src="/terminal-assets/perspective/app.js?v=20260823-11"></script>
   </body>
 </html>
