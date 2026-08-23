@@ -1,25 +1,55 @@
-# Windmill
+# Pipeline
 
-This is the optional hosted scheduler. The same market cycle can run locally
-with `compute-bazaar market refresh`; AutoMQ and AWS are not required.
+The pipeline preserves market data, normalizes offers, builds models, and
+publishes outputs. Run the same cycle locally or hourly with Windmill.
 
-No active Windmill deployment is required or assumed. This directory is kept
-for a future hosted deployment.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../assets/compute-bazaar-pipeline-dark.png">
+    <img src="../../assets/compute-bazaar-pipeline.png" alt="The Compute Bazaar market pipeline" width="92%">
+  </picture>
+</p>
 
-When enabled, Windmill runs two scheduled Python jobs:
+Run locally:
 
-- `market_hourly.py` calls `run_market_hourly()`.
-- `sandbox_benchmark_weekly.py` imports new public StarSling results and rebuilds
-  the measured-workload Gold/public output.
+```bash
+uv sync --extra market
+compute-bazaar market refresh
+```
 
-The market job pulls providers, writes Bronze and Silver, runs the DataFusion
-SQL models, writes GPU Gold, publishes JSON, and writes the market-run manifest.
-There are no separate provider schedules.
+Windmill runs two jobs:
+
+- `market_hourly.py` builds and publishes the market lake.
+- `sandbox_benchmark_weekly.py` imports public StarSling results.
+
+## Runtime
+
+`self-host/` contains a Docker Compose runtime with Postgres, Windmill, its
+worker, and Caddy. On the private host, place those files in `/opt/windmill`,
+create `.env` from `.env.example`, and keep it readable only by its owner.
+
+Start the database, server, and local proxy:
+
+```bash
+cd /opt/windmill
+sudo docker compose up -d db windmill_server caddy
+```
+
+Deploy the worker from one committed revision:
+
+```bash
+uv run python infra/windmill/deploy_worker.py \
+  --host ec2-user@RUNTIME_HOST \
+  --revision HEAD
+```
+
+The helper archives that revision, builds it on the host, replaces only the
+worker, and verifies the running commit. A Git push does not deploy the worker.
 
 ## Access
 
-The worker runs inside the AutoMQ VPC. Windmill and AutoMQ listen only on the
-EC2 host, so update the laptop SSH rule and open a tunnel:
+Windmill and AutoMQ stay bound to localhost on the private runtime. Update the
+laptop SSH rule and open a tunnel:
 
 ```bash
 uv run python infra/aws/refresh_runtime_access.py \
@@ -37,58 +67,12 @@ ssh -i .secrets/compute-bazaar-automq-runtime.pem \
 - AutoMQ: `http://127.0.0.1:8080`
 - Windmill: `http://127.0.0.1:18081`
 
-The different local Windmill port avoids collisions with local development
-services. Do not open the runtime's ports 8080 or 8081 in the public security
-group.
+Do not expose runtime ports `8080` or `8081` through the public security group.
 
-## Worker image
+## Configuration
 
-Deploy through the revision-pinned helper. It archives one committed revision,
-builds that exact source on the runtime, updates only the worker service, and
-fails unless the running container reports the requested revision:
-
-```bash
-uv run python infra/windmill/deploy_worker.py \
-  --host ec2-user@RUNTIME_HOST \
-  --revision HEAD
-```
-
-Do not update `WM_WORKER_IMAGE` by hand. A Git push does not deploy the worker.
-After deploying renderer changes, run the market job once. If the workload
-renderer changed, run the StarSling job once too. Then verify all three card
-families against the exact deployed revision:
-
-```bash
-uv run python infra/aws/check_public_market.py \
-  --base-url "$COMPUTE_BAZAAR_PUBLIC_BASE_URL" \
-  --require-renderer-revision "$(git rev-parse HEAD)"
-```
-
-The check covers GPU index, Prime availability, and measured workload cards.
-It fails on an old render profile, missing card variant, unknown producing
-revision, or a revision that differs from the requested commit.
-
-Render profiles are content-derived from each card renderer, its shared chart
-code, metadata, page template, and fonts. Editing any of those inputs changes
-the immutable publication path automatically. Do not add manual renderer
-version numbers.
-
-The equivalent manual build is retained below for debugging only.
-
-Build from the repository root:
-
-```bash
-docker build \
-  -f infra/windmill/self-host/Dockerfile.worker \
-  --build-arg COMPUTE_BAZAAR_REVISION=$(git rev-parse HEAD) \
-  -t compute-bazaar-windmill-worker:YYYY-MM-DD-description \
-  .
-```
-
-The image installs this uv project. Put credentials in Windmill secrets or use
-the EC2 IAM role. Do not add them to the image.
-
-## Windmill variables
+The bootstrap scripts read these values from the environment and store them as
+Windmill variables or secrets:
 
 ```text
 AWS_REGION
@@ -104,9 +88,12 @@ COMPUTE_BAZAAR_KAFKA_PASSWORD
 provider API keys
 ```
 
+Use the EC2 IAM role for AWS access and Windmill secrets for credentials. Do
+not put credentials in the worker image.
+
 ## Schedules
 
-Create or update both schedules through the private tunnel:
+Create or update the schedules through the private tunnel:
 
 ```bash
 export WINDMILL_TOKEN=...
@@ -116,18 +103,16 @@ uv run python infra/windmill/bootstrap_market_schedule.py
 uv run python infra/windmill/bootstrap_sandbox_benchmark_weekly_schedule.py
 ```
 
-The market schedule's default six-field cron is hourly:
+The market cycle defaults to hourly:
 
 ```text
 0 0 * * * *
 ```
 
-The StarSling job only reads results published in its public repository. It
-polls weekly, does not run paid workloads, and does not depend on the hourly
-GPU job. Its chart uses the measured dates retained in the source; it does not
-create daily observations between source runs.
+StarSling defaults to a weekly poll. It reads committed public results and
+keeps their measured dates; it does not create observations between runs.
 
-Run the market job manually with:
+Run one market cycle immediately:
 
 ```bash
 uv run python infra/windmill/bootstrap_market_schedule.py \
@@ -136,25 +121,19 @@ uv run python infra/windmill/bootstrap_market_schedule.py \
   --run-id market-manual-YYYYMMDD
 ```
 
-Verify freshness and one-run alignment across the market manifest, GPU cards,
-and portable lake with:
+Verify the market manifest, cards, and published lake:
 
 ```bash
 uv run python infra/aws/check_public_market.py \
-  --base-url "$COMPUTE_BAZAAR_PUBLIC_BASE_URL"
+  --base-url "$COMPUTE_BAZAAR_PUBLIC_BASE_URL" \
+  --require-renderer-revision "$(git rev-parse HEAD)"
 ```
 
-## Self-hosted development stack
+The [public lake](../aws/public-feed/README.md) documents the CloudFront layer
+used to serve these outputs.
 
-`self-host/docker-compose.yml` runs Postgres, the Windmill server and worker,
-and Caddy. Real values belong in `/opt/windmill/.env`.
+## Worker safety
 
-The worker currently uses `privileged: true` and `DISABLE_NSJAIL=true`. Do not
-use this compose file on a public or multi-tenant host. A production worker
-should use Windmill's sandbox image path and should not run privileged.
-
-```bash
-cd /opt/windmill
-sudo docker compose ps
-curl -sS http://127.0.0.1:18081/api/version
-```
+The current Compose worker uses `privileged: true` and `DISABLE_NSJAIL=true`.
+Keep it on a private, single-tenant host. A multi-tenant deployment should use
+Windmill's sandboxed worker path instead.

@@ -34,6 +34,8 @@ tfplan
 !assets/compute-bazaar-wordmark.png
 !assets/compute-bazaar-architecture.png
 !assets/compute-bazaar-architecture-dark.png
+!assets/compute-bazaar-pipeline.png
+!assets/compute-bazaar-pipeline-dark.png
 !compute-bazaar-bench/evals/reliability-is-blind/assets/results.png
 !compute-bazaar-bench/evals/**/environment/matter/*.csv
 !compute-bazaar-bench/evals/transactions/draft-capacity-data-room-population-plan/environment/documents/evidence-register.xlsx
