@@ -50,7 +50,10 @@ saved separately.
 ## Fleet
 
 <p align="center">
-  <img src="../assets/compute-bazaar-fleet-flow.svg" alt="A live offer or SSH host entering Fleet" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/compute-bazaar-fleet-flow-dark.svg">
+    <img src="../assets/compute-bazaar-fleet-flow.svg" alt="A live offer or SSH host entering Fleet" width="100%">
+  </picture>
 </p>
 
 Preflight checks the offer again before spending. A successful launch creates
@@ -63,4 +66,11 @@ Fleet then records its hardware, health, telemetry, and workloads.
 
 The CLI and Terminal use the same services. The CLI returns tables or JSON; the
 Terminal presents Data, Fleet, Eval, and Trade through a Tauri window backed by
-a local FastAPI process. Agents connect through ACP and use the same CLI.
+a local FastAPI process.
+
+The Terminal keeps Shell and Agent separate. Shell is a real PTY, so
+interactive programs behave like a normal terminal. Agent uses ACP, keeping
+The Bazaar independent of any one agent while letting Codex, OpenCode, and
+others work inside the project through the same CLI. In practice, an agent can
+operate the same compute desk as you: run commands, open results, and move
+between Data, Fleet, and Eval.

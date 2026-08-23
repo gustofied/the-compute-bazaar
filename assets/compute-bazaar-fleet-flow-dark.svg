@@ -3,8 +3,8 @@
   <desc id="description">A live offer passes through preflight and allocation, or an SSH host is attached directly. Both become a Fleet node that can be inspected, checked, monitored, and used for workloads.</desc>
   <style>
     :root {
-      --line: #6d93af;
-      --text: #315f82;
+      --line: #91aecb;
+      --text: #b7d0e6;
     }
     .box {
       fill: none;
