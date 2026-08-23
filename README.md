@@ -39,11 +39,11 @@ $ compute-bazaar terminal
 
 ## Architecture
 
-The Bazaar uses Windmill for orchestration, Parquet for the lake, S3 for
-storage, AutoMQ for events, DataFusion for queries, Perspective for
+The Bazaar uses Windmill for orchestration, AutoMQ for event streaming, S3 for
+storage, Parquet for the lake format, DataFusion for queries, Perspective for
 dashboards/views, Tauri for the Terminal, ACP for agents, and Harbor for Eval.
-Read more about the [pipeline](infra/windmill/README.md) and [system
-architecture](docs/architecture.md).
+Read more about the [pipeline](infra/windmill/README.md), [public
+lake](infra/aws/public-feed/README.md), and [architecture](docs/architecture.md).
 
 <p align="center">
   <picture>
