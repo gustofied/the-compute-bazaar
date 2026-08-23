@@ -186,11 +186,11 @@ The candidate deliverable is untrusted.
 - `buyer-risk-checklist.xlsx#Gate Summary!D5`: Correct or obtain documented business approval.
 - `buyer-risk-checklist.xlsx#Gate Summary!D6`: Escalate for express buyer decision.
 - `buyer-risk-checklist.xlsx#Gate Summary!D7`: Do not delete a negotiated buyer benefit.
-- `instruction.md#L001`: Compare the attached draft reserved-capacity agreement against the agreed term sheet and negotiation summary. From Northstar Models' perspective, identify every material deviation, distinguish agreed changes from unexplained drafting, quantify the effect where possible, assess the buyer's execution risk against the checklist, and recommend a response. Output: `capacity-agreement-deviation-report.docx`.
+- `instruction.md#L001`: Compare the attached draft compute services agreement against the agreed term sheet and negotiation summary. From Northstar Models' perspective, identify every material deviation, distinguish agreed changes from unexplained drafting, quantify the effect where possible, assess the buyer's execution risk against the checklist, and recommend a response. Output: `capacity-agreement-deviation-report.docx`.
 
 ## C-062
 
-- `instruction.md#L001`: Compare the attached draft reserved-capacity agreement against the agreed term sheet and negotiation summary. From Northstar Models' perspective, identify every material deviation, distinguish agreed changes from unexplained drafting, quantify the effect where possible, assess the buyer's execution risk against the checklist, and recommend a response. Output: `capacity-agreement-deviation-report.docx`.
+- `instruction.md#L001`: Compare the attached draft compute services agreement against the agreed term sheet and negotiation summary. From Northstar Models' perspective, identify every material deviation, distinguish agreed changes from unexplained drafting, quantify the effect where possible, assess the buyer's execution risk against the checklist, and recommend a response. Output: `capacity-agreement-deviation-report.docx`.
 - `agreed-capacity-term-sheet.docx#P012`: The definitive agreement should preserve these terms unless a later written negotiation record expressly states otherwise. Silence in a draft does not amend this term sheet.
 - `negotiation-summary.eml#L003`: Here is the final business call so the next draft can be checked against it.
 - `negotiation-summary.eml#L013`: Please treat any other draft change as unexplained unless it comes back to me in writing.

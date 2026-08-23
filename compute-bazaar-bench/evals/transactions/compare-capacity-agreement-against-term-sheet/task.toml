@@ -3,8 +3,8 @@ artifacts = ["/app/capacity-agreement-deviation-report.docx"]
 
 [task]
 name = "gustofied/compare-capacity-agreement-against-term-sheet"
-description = "Compare a draft reserved GPU capacity agreement against the agreed term sheet."
-keywords = ["compute-market", "transactions", "contracting", "term-sheet", "reserved-capacity", "rewardkit", "judge-grading"]
+description = "Compare a draft compute services agreement against the agreed term sheet."
+keywords = ["compute-market", "transactions", "contracting", "term-sheet", "compute-services", "rewardkit", "judge-grading"]
 authors = [{ name = "Adam Sioud" }]
 
 [verifier]

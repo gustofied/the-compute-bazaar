@@ -2,16 +2,17 @@
 
 **Question: Can an agent turn messy compute-deal material into accurate work without losing the terms that control the transaction?**
 
-Transactions follows one fictional reserved-capacity deal through three pieces of work:
+The Transactions benchmark follows one fictional GPU capacity deal through
+three pieces of work:
 
 ```text
-buyer intent -> diligence room -> capacity agreement
-normalize    -> organize       -> compare
+buyer requirements -> diligence room -> compute services agreement
+normalize          -> organize       -> compare
 ```
 
 | Task                                                                                              | Work                                                                    | Deliverable                |
 | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------- |
-| [`normalize-buyer-mandate`](normalize-buyer-mandate/)                                             | Reconcile a buyer's intake documents and open questions                 | Buyer mandate brief        |
+| [`normalize-buyer-mandate`](normalize-buyer-mandate/)                                             | Reconcile a buyer's requirements and open questions                     | Buyer mandate brief        |
 | [`draft-capacity-data-room-population-plan`](draft-capacity-data-room-population-plan/)           | Decide what belongs in the room, who owns it, and when it should arrive | Data-room population plan  |
 | [`compare-capacity-agreement-against-term-sheet`](compare-capacity-agreement-against-term-sheet/) | Find where the draft agreement departs from the agreed terms            | Agreement deviation report |
 
@@ -64,7 +65,7 @@ Document quality is reviewed separately so a factually strong answer does not re
 
 ## Source
 
-The three kinds of work come from [Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark), but the compute transaction and its documents are original. Thanks to [Punit Arani](https://x.com/punit_arani) for converting the Harvey tasks into Harbor tasks.
+The three task forms come from [Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark), but the compute transaction and its documents are original. Thanks to [Punit Arani](https://x.com/punit_arani) for converting the Harvey tasks into Harbor tasks.
 
 | Compute task         | Harvey task form                                                                                                                                                          |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -72,4 +73,6 @@ The three kinds of work come from [Harvey's Legal Agent Benchmark](https://www.h
 | Data-room plan       | [Draft sell-side data-room population plan](https://hub.harborframework.com/tasks/punitarani/corporate-ma-draft-data-room-population-plan-scenario-01/latest)             |
 | Agreement comparison | [Compare PPA against term sheet](https://hub.harborframework.com/tasks/punitarani/energy-natural-resources-compare-power-purchase-agreement-against-term-sheet/latest)    |
 
-Each task keeps the structure of its Harvey counterpart while replacing the legal matter with compute-deal work across buyer intake, diligence, and contracting.
+Each task keeps the structure of its Harvey counterpart while replacing the
+legal matter with compute-deal work across buyer requirements, diligence, and
+agreement review.

@@ -1,6 +1,6 @@
-# Compare Capacity Agreement Against Term Sheet
+# Compare Compute Services Agreement Against Term Sheet
 
-Compare a draft reserved-capacity agreement with the agreed term sheet.
+Compare a draft compute services agreement with the agreed term sheet.
 
 The matter contains the term sheet, draft agreement, negotiation summary, and
 buyer risk checklist. The report must distinguish agreed changes from drafting

@@ -14,8 +14,6 @@ An initial comparison ran Mistral Medium 3.5, Mistral Small 2603, and Mistral La
 | Mistral Small 2603 |           11/20 |                   2/20 |                           19.5% |
 | Mistral Large 2512 |            6/19 |                   4/19 |                            5.5% |
 
-![Reliability Is Blind results across the matched Mistral comparison](assets/results.png)
-
 Mistral Medium completed the most books and met the reliability target most often. Large's 5.5% failure rate only covers the six books it completed and should be read alongside its low completion rate.
 
 The trajectories reveal different failure modes. Mistral Medium often committed to an early successful supplier group and repeated it in large batches, which worked on easy openings but broke down when the opening supply was only moderately reliable. Small explored broadly but struggled to convert collective outcomes into a stable trust map. Large frequently delegated the workflow and often failed to place or complete deals, making market control its main bottleneck.

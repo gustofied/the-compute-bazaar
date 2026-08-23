@@ -10,11 +10,12 @@ supply, pricing, terms, diligence, and relationship history are spread across
 messages, calls, spreadsheets, PDFs, data rooms, and people's memory. This
 context has to be reconstructed, checked, and turned into action.
 
-The benchmark brings together two complementary styles of environments.
+The benchmark has two parts.
 
 ### Compute Deal Work
 
-Compute Deal Work starts with transactions: intake, diligence, and contracting.
+Compute Deal Work starts with buyer requirements, diligence, and agreement
+review.
 Human relationships remain central, while agents may carry more of the analysis,
 documentation, and operational volume around them. The products and commentary
 from [Epilogue](https://epilogue.inc/) and
@@ -23,12 +24,12 @@ motivate this direction.
 
 [Harvey's Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark)
 provides the methodological starting point. Rather than inventing arbitrary
-benchmark exercises, we begin with task forms that already represent real
-professional work and test whether they transfer meaningfully into compute
-transactions.
+benchmark exercises, the benchmark begins with task forms that already
+represent real professional work and tests whether they transfer meaningfully
+into compute transactions.
 
-[**transactions**](evals/transactions/) evaluates agents on compute
-deal work across intake, diligence, and contracting.
+[**transactions**](evals/transactions/) evaluates agents on buyer requirements,
+data-room planning, and agreement review.
 
 ### Compute Market Games
 
@@ -41,8 +42,7 @@ The first implemented environment is
 
 ## Setup
 
-For the most part, the benchmark follows Harbor's task and evaluation
-methodology.
+The benchmark uses Harbor tasks and jobs.
 
 ```text
 compute-bazaar-bench/
