@@ -5,34 +5,29 @@
     :root {
       --line: #6d93af;
       --text: #315f82;
-      --muted: #6d93af;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --line: #91aecb;
         --text: #b7d0e6;
-        --muted: #91aecb;
       }
     }
     .box {
       fill: none;
       stroke: var(--line);
-      stroke-width: 2;
+      stroke-width: 3;
     }
     .line {
       fill: none;
       stroke: var(--line);
-      stroke-width: 2;
+      stroke-width: 3;
       marker-end: url(#arrow);
     }
     .label {
       fill: var(--text);
-      font: 500 27px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      text-anchor: middle;
-    }
-    .small {
-      fill: var(--muted);
-      font: 400 20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-family: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+      font-size: 27px;
+      font-weight: 400;
       text-anchor: middle;
     }
   </style>
