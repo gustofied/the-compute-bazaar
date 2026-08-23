@@ -1,7 +1,7 @@
 # Pipeline
 
-The pipeline preserves market data, normalizes offers, builds models, and
-publishes outputs. Run the same cycle locally or hourly with Windmill.
+The pipeline gathers market data, normalizes offers, builds models, and
+publishes. Run the same cycle locally or hourly with Windmill.
 
 <p align="center">
   <picture>
