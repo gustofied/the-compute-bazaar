@@ -1,15 +1,12 @@
-# Public feed
+# Public lake
 
-This is the optional hosted public-feed deployment. The default CLI sync uses
-the repository's `public-lake` GitHub Release and does not require this stack.
+The public lake contains sanitized Silver and Gold outputs. Its rolling GitHub
+Release is downloaded by `compute-bazaar data sync`.
 
-This Terraform stack serves files from the private S3 prefix
-`dashboard/compute-bazaar/` through CloudFront and a configured hostname.
-
-It configures CloudFront, S3 read access, CORS, security headers, the TLS
-certificate, and extensionless publication URLs. It does not expose `raw/` or
-the private market lake. The public `lake/` route is a sanitized copy written
-under `dashboard/compute-bazaar/`.
+This Terraform stack serves publications and the public `lake/` route from the
+private S3 prefix `dashboard/compute-bazaar/` through CloudFront. It configures
+S3 access, CORS, security headers, TLS, and extensionless publication URLs.
+Bronze and the private market lake remain private.
 
 ## Setup
 
@@ -31,8 +28,7 @@ commit `.terraform/`, plans, state copies, or real tfvars.
 
 ## Routes
 
-Files such as `manifest.json` use a short cache. Publication files do not
-change after they are written.
+`manifest.json` uses a short cache. Revisioned publication files are immutable.
 
 The CloudFront function maps:
 
