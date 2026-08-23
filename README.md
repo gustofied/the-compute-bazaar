@@ -96,15 +96,23 @@ compute-bazaar terminal --stop
   <img src="assets/compute-bazaar-data.webp" alt="The Compute Bazaar Data catalog and query view" width="96%">
 </p>
 
-Bronze keeps raw evidence, Silver is normalized market data, and Gold contains
-shared models such as GPU price and availability indexes. A sanitized Silver
-and Gold lake is published to a rolling GitHub Release for
-`compute-bazaar data sync`.
+Data uses the medallion pattern. Bronze keeps the raw source response. Silver
+maps useful fields into common market tables. Gold builds opinionated,
+analysis-ready models such as price indexes and availability histories. This is
+how another provider or dataset joins the Bazaar: keep its native evidence,
+map the fields that can be compared, then use the same queries and models.
+Bronze is JSON; Silver and Gold are Parquet.
 
-`compute-bazaar` prints tables by default. Use
-`compute-bazaar --format json COMMAND` for machine-readable output.
+A sanitized Silver and Gold snapshot is published to a rolling GitHub Release
+for `compute-bazaar data sync`.
 
-Start by listing the DataFusion catalog and inspecting a table.
+### Querying the lake
+
+DataFusion is the read-only SQL engine over the selected lake. Results are
+returned as Apache Arrow: the CLI prints them as tables or JSON, while the
+Terminal sends the same Arrow result to Perspective.
+
+List the catalog and inspect a table:
 
 ```bash
 compute-bazaar tables
@@ -112,74 +120,49 @@ compute-bazaar describe silver.offer_observations
 compute-bazaar describe gold.fact_gpu_price_index
 ```
 
-Run a built-in market query or write SQL directly.
+Or turn a DataFusion query into a Perspective chart in the running Terminal:
 
 ```bash
-compute-bazaar availability --gpu-model H100 --history --limit 20
-
 compute-bazaar sql "
-select provider, gpu_model, price_usd_gpu_hr
-from silver.offer_observations
-where observation_purpose = 'scheduled'
-order by price_usd_gpu_hr
-limit 20
-"
+select
+  gold_observed_at,
+  benchmark_usd_gpu_hr
+from gold.fact_gpu_price_index_history
+where benchmark_family_id = 'H200'
+  and gold_observed_at >= (
+    select max(gold_observed_at) - interval '21 days'
+    from gold.fact_gpu_price_index_history
+  )
+order by gold_observed_at
+" --limit 600 --terminal --chart line \
+  --x gold_observed_at --y benchmark_usd_gpu_hr
 ```
 
-`listings` reads the synced hourly record. `offers` asks RunPod and Verda what
-can be selected now. Both use `silver.offer_observations`; the row says whether
-it came from the hourly run or a direct provider read.
+Use `compute-bazaar --format json COMMAND` for machine-readable output. A
+compatible lake can be selected with `--lake-root` or
+`COMPUTE_BAZAAR_LAKE_ROOT`.
+
+### Models and views
+
+Reusable DataFusion SQL is saved as a model. A blueprint saves a Perspective
+view of that model. The model works on its own through the CLI or an agent, and
+one model can have several table or chart views.
 
 ```bash
-compute-bazaar offers list --provider runpod --gpu-model H100
-compute-bazaar offers inspect OFFER_ID
+compute-bazaar model save my-model --file query.sql
+compute-bazaar model run my-model
+compute-bazaar blueprint save my-view --model my-model --config view.json
+compute-bazaar blueprint open my-view
 ```
 
-RunPod's live catalog is public. Verda live availability uses the OAuth values
-shown in `.env.example`.
+Personal models and views are stored outside the repository. The bundled
+examples live in [`analyses/`](analyses/) and can be listed with
+`compute-bazaar model list`.
 
-The Sesterce market path writes a separate local lake:
-
-```bash
-export SESTERCE_API_KEY=...
-compute-bazaar market ingest sesterce
-compute-bazaar terminal market
-```
-
-That Terminal exposes `silver.gpu_offers`. The default Terminal continues to
-use the synced public Silver and Gold lake.
-
-The full provider cycle can also run locally without Windmill, AutoMQ, or AWS:
-
-```bash
-uv sync --extra market
-compute-bazaar market refresh
-compute-bazaar terminal local
-```
-
-Use `--provider NAME` more than once to limit a refresh. Private sources read
-their existing environment credentials. Each run records the market at that
-moment; periods when it is not running cannot be reconstructed later.
-
-To update the public snapshot, publish the sanitized lake created by that run:
-
-```bash
-compute-bazaar data publish
-```
-
-Publishing uses the authenticated GitHub CLI. Raw evidence and credentials are
-never included in the release.
-
-Before shutting down an S3 deployment, keep one private offline archive:
-
-```bash
-uv sync --extra s3
-compute-bazaar data archive --source-root s3://YOUR_BUCKET/
-compute-bazaar data verify-archive
-```
-
-The archive is incremental, checksummed, ignored by Git, and can replay its
-original `s3://` references through `data/cloud-archive/offline.env`.
+The retained historical lake still runs on the broad multi-provider pipeline.
+The newer [`market`](src/the_compute_bazaar/market/) package is its
+source-by-source replacement, beginning with Sesterce and one smaller Silver
+offer contract. Gold has not moved to it yet.
 
 ## Eval
 
