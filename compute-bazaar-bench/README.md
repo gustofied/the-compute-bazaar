@@ -2,16 +2,15 @@
 
 [Harbor dataset](https://hub.harborframework.com/datasets/gustofied/compute-bazaar-bench)
 
-A benchmark for evaluating agents on compute-market tasks.
+A benchmark for evaluating agents on compute-market tasks, from transactions
+and sourcing to market intelligence, risk, financing, and operations.
 
 Large compute deals rarely happen in a single, transparent "venue". Buyer requirements,
 supply, pricing, terms, diligence, and relationship history are spread across
 messages, calls, spreadsheets, PDFs, data rooms, and people's memory. This
 context has to be reconstructed, checked, and turned into action.
 
-Compute Bazaar Bench asks where agents can be useful across that market, from
-transactions and sourcing to market intelligence, risk, financing, and
-operations. It brings together two complementary styles of environments.
+The benchmark brings together two complementary styles of environments.
 
 ### Compute Deal Work
 
@@ -86,15 +85,16 @@ harbor view jobs
 
 I created something I call Tourneys to pair with the evals: controlled
 comparisons where agents face the same tasks under the same conditions. As we
-know, it is one thing to compare models on an eval, but it is also important to
-fix the harness around the model, temperature, and other factors that may
-affect the model's output.
+know, it is one thing to compare models on an eval, but to ensure fair
+comparisons, it is also important to fix the harness, temperature, and other
+factors that may affect the model's output.
 
 ## Evaluations
 
 ### [transactions](evals/transactions/)
 
-Its first three tasks move through intake, diligence, and contracting:
+The first three tasks cover buyer requirements, data-room planning, and
+agreement review:
 
 ```text
 messy intent -> organized evidence process -> controlled transaction paper
