@@ -40,7 +40,7 @@ $ compute-bazaar terminal
 ## Architecture
 
 <p align="center">
-  <img src="assets/compute-bazaar-architecture.svg" alt="The Compute Bazaar architecture" width="92%">
+  <img src="assets/compute-bazaar-architecture.png" alt="The Compute Bazaar architecture" width="92%">
 </p>
 
 More detail: [Architecture](docs/architecture.md).

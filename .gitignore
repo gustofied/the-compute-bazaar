@@ -32,6 +32,7 @@ tfplan
 *.csv
 *.xlsx
 !assets/compute-bazaar-wordmark.png
+!assets/compute-bazaar-architecture.png
 !compute-bazaar-bench/evals/reliability-is-blind/assets/results.png
 !compute-bazaar-bench/evals/**/environment/matter/*.csv
 !compute-bazaar-bench/evals/transactions/draft-capacity-data-room-population-plan/environment/documents/evidence-register.xlsx
