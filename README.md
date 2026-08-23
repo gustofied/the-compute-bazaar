@@ -61,7 +61,7 @@ Arrow. Perspective also accepts Arrow data, so I am currently exploring it to
 visualize the query results. All of this can be used through the CLI and
 Terminal.
 
-The rebuilt path is local and currently uses Sesterce. It persists the source
+The local Sesterce path persists the source
 response, normalized offers, and the fresh check made before a launch. The
 selected offer then becomes an Allocation linked to the Fleet machine. Its
 market-generation format can contain several source runs; the current CLI reads
@@ -113,12 +113,12 @@ compute-bazaar offers inspect OFFER_ID
 RunPod's live catalog is public. Verda live availability uses the OAuth values
 shown in `.env.example`.
 
-The rebuilt Sesterce path writes a separate local market lake:
+The Sesterce market path writes a separate local lake:
 
 ```bash
 export SESTERCE_API_KEY=...
 compute-bazaar market ingest sesterce
-compute-bazaar terminal lake2
+compute-bazaar terminal market
 ```
 
 That Terminal exposes `silver.gpu_offers`. The default Terminal continues to
@@ -262,7 +262,7 @@ key, agent, and jump host; Fleet stores only the alias.
 compute-bazaar fleet attach gpu-singapore-01 --expect H100 --count 8
 ```
 
-Or use the rebuilt market path to launch a Sesterce offer.
+Or use the Sesterce market path to launch an offer.
 
 ```bash
 compute-bazaar market ingest sesterce

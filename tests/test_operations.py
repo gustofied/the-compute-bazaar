@@ -6,14 +6,12 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pyarrow as pa
 
-import the_compute_bazaar.operations as operations
 from the_compute_bazaar.data_catalog import _market_to_fleet_sql
 from the_compute_bazaar.fleet import FleetRegistry, FleetService
 from the_compute_bazaar.fleet.models import FleetInspection, GpuDevice
@@ -26,163 +24,49 @@ from tests.test_offers import FakeRunpodClient
 
 
 class OperationalLedgerTest(unittest.TestCase):
-    def test_legacy_allocation_keeps_market_lineage(self) -> None:
-        with closing(sqlite3.connect(":memory:")) as connection:
-            connection.row_factory = sqlite3.Row
-            connection.execute(
-                """
-create table provisioning_requests (
-  request_id text primary key,
-  candidate_observation_id text,
-  preflight_observation_id text not null,
-  source_offer_id text not null,
-  acquisition_connector text not null,
-  capacity_provider text not null,
-  selected_price_usd_gpu_hr real not null,
-  selected_price_usd_instance_hr real not null
-)
-"""
-            )
-            connection.execute(
-                """
-insert into provisioning_requests values (
-  'request-1', 'candidate-1', 'preflight-1', 'offer-1',
-  'runpod', 'operator-1', 2.5, 5.0
-)
-"""
-            )
-            connection.execute(
-                """
-create table allocations (
-  allocation_id text primary key,
-  request_id text not null,
-  successful_attempt_id text not null,
-  acquisition_connector text not null,
-  capacity_provider text not null,
-  provider_resource_id text not null,
-  state text not null,
-  realized_price_usd_gpu_hr real,
-  realized_price_usd_instance_hr real,
-  created_at text not null,
-  terminate_at text,
-  terminated_at text,
-  updated_at text not null
-)
-"""
-            )
-            connection.execute(
-                """
-insert into allocations values (
-  'allocation-1', 'request-1', 'attempt-1', 'runpod', 'operator-1',
-  'pod-1', 'running', null, null, '2026-08-14T00:00:00+00:00',
-  null, null, '2026-08-14T00:00:00+00:00'
-)
-"""
-            )
-
-            operations._migrate_allocations(connection)
-            row = connection.execute("select * from allocations").fetchone()
-            assert row is not None
-            allocation = dict(row)
-
-        self.assertEqual(allocation["candidate_observation_id"], "candidate-1")
-        self.assertEqual(allocation["preflight_observation_id"], "preflight-1")
-        self.assertEqual(allocation["source"], "runpod")
-        self.assertEqual(allocation["operator"], "operator-1")
-        self.assertEqual(allocation["offer_id"], "offer-1")
-        self.assertEqual(allocation["source_resource_id"], "pod-1")
-        self.assertEqual(allocation["price_usd_gpu_hr"], 2.5)
-        self.assertEqual(allocation["price_usd_instance_hr"], 5.0)
-
-    def test_schema_is_initialized_once_per_ledger(self) -> None:
+    def test_current_schema_is_initialized(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "operations.sqlite3"
-            with patch.object(
-                operations, "_migrate", wraps=operations._migrate
-            ) as migrate:
-                ledger = OperationalLedger(path)
-                with closing(ledger._connect()), closing(ledger._connect()):
-                    pass
-
-            self.assertEqual(migrate.call_count, 1)
-
-    def test_concurrent_connections_migrate_one_legacy_store(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "operations.sqlite3"
-            with closing(sqlite3.connect(path)) as connection, connection:
-                connection.execute(
-                    """
-create table offer_observations (
-  observation_id text primary key,
-  source_offer_id text not null,
-  observed_at text not null
-)
-"""
-                )
-                connection.execute(
-                    "create table allocations (provider_resource_id text, state text)"
-                )
-                connection.execute("pragma user_version=2")
-
             ledger = OperationalLedger(path)
+            with closing(ledger._connect()) as connection:
+                version = connection.execute("pragma user_version").fetchone()[0]
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        "select name from sqlite_master where type='table'"
+                    )
+                }
 
-            def connect_and_close(_: int) -> None:
-                with closing(ledger._connect()):
-                    pass
+            self.assertEqual(version, 8)
+            self.assertIn("offer_observations", tables)
+            self.assertIn("allocations", tables)
+            self.assertIn("capacity_verifications", tables)
+
+    def test_concurrent_initialization_uses_one_current_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "operations.sqlite3"
+
+            def initialize(_: int) -> int:
+                ledger = OperationalLedger(path)
+                with closing(ledger._connect()) as connection:
+                    return int(connection.execute("pragma user_version").fetchone()[0])
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-                list(executor.map(connect_and_close, range(16)))
+                versions = list(executor.map(initialize, range(16)))
 
-            with closing(sqlite3.connect(path)) as connection:
-                columns = {
-                    row[1]
-                    for row in connection.execute(
-                        "pragma table_info(offer_observations)"
-                    )
-                }
-                allocation_columns = {
-                    row[1]
-                    for row in connection.execute("pragma table_info(allocations)")
-                }
-                version = connection.execute("pragma user_version").fetchone()[0]
-            self.assertIn("market_product_key", columns)
-            self.assertIn("request_id", allocation_columns)
-            self.assertEqual(version, 8)
+            self.assertEqual(versions, [8] * 16)
 
-    def test_current_version_rebuilds_legacy_capacity_verifications(self) -> None:
+    def test_unsupported_schema_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "operations.sqlite3"
             with closing(sqlite3.connect(path)) as connection, connection:
-                connection.execute(
-                    """
-create table capacity_verifications (
-  verification_id text primary key,
-  host_id text not null,
-  observed_at text not null,
-  readiness text not null,
-  expected_gpu_count integer not null,
-  detected_gpu_count integer not null,
-  inspection_json text not null,
-  checks_json text not null
-)
-"""
-                )
-                connection.execute("pragma user_version=6")
+                connection.execute("pragma user_version=7")
 
-            with closing(OperationalLedger(path)._connect()):
-                pass
-
-            with closing(sqlite3.connect(path)) as connection:
-                columns = {
-                    row[1]: bool(row[3])
-                    for row in connection.execute(
-                        "pragma table_info(capacity_verifications)"
-                    )
-                }
-                version = connection.execute("pragma user_version").fetchone()[0]
-            self.assertIn("expected_gpu_model", columns)
-            self.assertFalse(columns["expected_gpu_count"])
-            self.assertEqual(version, 8)
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Unsupported Fleet database schema 7; expected 8",
+            ):
+                OperationalLedger(path)
 
     def test_market_selection_and_fleet_delivery_join_in_datafusion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

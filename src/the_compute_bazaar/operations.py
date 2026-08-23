@@ -26,48 +26,7 @@ if TYPE_CHECKING:
 SCHEMA_VERSION = 8
 TELEMETRY_RETENTION = timedelta(hours=6)
 
-ALLOCATIONS_SCHEMA = """
-create table if not exists allocations (
-  allocation_id text primary key,
-  request_id text not null unique,
-  successful_attempt_id text not null unique,
-  candidate_observation_id text,
-  preflight_observation_id text not null,
-  source text not null,
-  intermediary text not null,
-  operator text,
-  offer_id text not null,
-  source_resource_id text not null,
-  state text not null,
-  price_usd_gpu_hr real not null,
-  price_usd_instance_hr real not null,
-  created_at text not null,
-  terminate_at text,
-  terminated_at text,
-  updated_at text not null,
-  foreign key (request_id) references provisioning_requests(request_id),
-  foreign key (successful_attempt_id) references provisioning_attempts(attempt_id)
-);
-"""
-
-CAPACITY_VERIFICATIONS_SCHEMA = """
-create table if not exists capacity_verifications (
-  verification_id text primary key,
-  host_id text not null,
-  observed_at text not null,
-  readiness text not null,
-  expected_gpu_model text,
-  expected_gpu_count integer,
-  detected_gpu_count integer not null,
-  inspection_json text not null,
-  checks_json text not null
-);
-
-create index if not exists capacity_verifications_host_time
-  on capacity_verifications (host_id, observed_at desc);
-"""
-
-SCHEMA = f"""
+SCHEMA = """
 create table if not exists provider_read_batches (
   batch_id text not null,
   source_connector text not null,
@@ -130,6 +89,9 @@ create table if not exists offer_observations (
 create index if not exists offer_observations_offer_time
   on offer_observations (source_offer_id, observed_at desc);
 
+create index if not exists offer_observations_product_time
+  on offer_observations (market_product_key, observed_at desc);
+
 create table if not exists provisioning_requests (
   request_id text primary key,
   plan_id text not null,
@@ -167,7 +129,27 @@ create table if not exists provisioning_attempts (
   foreign key (request_id) references provisioning_requests(request_id)
 );
 
-{ALLOCATIONS_SCHEMA}
+create table if not exists allocations (
+  allocation_id text primary key,
+  request_id text not null unique,
+  successful_attempt_id text not null unique,
+  candidate_observation_id text,
+  preflight_observation_id text not null,
+  source text not null,
+  intermediary text not null,
+  operator text,
+  offer_id text not null,
+  source_resource_id text not null,
+  state text not null,
+  price_usd_gpu_hr real not null,
+  price_usd_instance_hr real not null,
+  created_at text not null,
+  terminate_at text,
+  terminated_at text,
+  updated_at text not null,
+  foreign key (request_id) references provisioning_requests(request_id),
+  foreign key (successful_attempt_id) references provisioning_attempts(attempt_id)
+);
 
 create table if not exists fleet_telemetry (
   sample_id text primary key,
@@ -189,7 +171,20 @@ create table if not exists fleet_telemetry (
 create index if not exists fleet_telemetry_host_time
   on fleet_telemetry (host_id, observed_at desc);
 
-{CAPACITY_VERIFICATIONS_SCHEMA}
+create table if not exists capacity_verifications (
+  verification_id text primary key,
+  host_id text not null,
+  observed_at text not null,
+  readiness text not null,
+  expected_gpu_model text,
+  expected_gpu_count integer,
+  detected_gpu_count integer not null,
+  inspection_json text not null,
+  checks_json text not null
+);
+
+create index if not exists capacity_verifications_host_time
+  on capacity_verifications (host_id, observed_at desc);
 
 create table if not exists workload_runs (
   workload_id text primary key,
@@ -740,25 +735,11 @@ where host_id = ? and state in ('starting', 'running', 'unknown')
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.path.parent.chmod(0o700)
         with _schema_lock(self.path):
-            connection = self._open_connection()
-            try:
+            with closing(self._open_connection()) as connection, connection:
                 connection.execute("pragma journal_mode=wal")
+                _require_current_schema(connection)
                 connection.executescript(SCHEMA)
-                connection.execute("pragma foreign_keys=off")
-                connection.execute("begin immediate")
-                _migrate(connection)
-                connection.execute(
-                    "create index if not exists offer_observations_product_time "
-                    "on offer_observations (market_product_key, observed_at desc)"
-                )
                 connection.execute(f"pragma user_version={SCHEMA_VERSION}")
-                connection.commit()
-                connection.execute("pragma foreign_keys=on")
-            except Exception:
-                connection.rollback()
-                connection.close()
-                raise
-            connection.close()
         self.path.chmod(0o600)
 
     def _open_connection(self) -> sqlite3.Connection:
@@ -769,138 +750,19 @@ where host_id = ? and state in ('starting', 'running', 'unknown')
         return connection
 
 
-def _migrate(connection: sqlite3.Connection) -> None:
+def _require_current_schema(connection: sqlite3.Connection) -> None:
     version = int(connection.execute("pragma user_version").fetchone()[0])
-    if version >= SCHEMA_VERSION:
-        return
-    columns = {
-        str(row["name"])
-        for row in connection.execute("pragma table_info(offer_observations)")
-    }
-    if "market_product_key" not in columns:
-        connection.execute(
-            "alter table offer_observations add column market_product_key text"
+    tables = {
+        str(row[0])
+        for row in connection.execute(
+            "select name from sqlite_master "
+            "where type='table' and name not like 'sqlite_%'"
         )
-    request_foreign_keys = {
-        str(row["from"])
-        for row in connection.execute("pragma foreign_key_list(provisioning_requests)")
     }
-    if request_foreign_keys & {
-        "candidate_observation_id",
-        "preflight_observation_id",
-    }:
-        _migrate_provisioning_requests(connection)
-    allocation_columns = {
-        str(row["name"]) for row in connection.execute("pragma table_info(allocations)")
-    }
-    if allocation_columns and "request_id" not in allocation_columns:
-        connection.execute("drop table allocations")
-        connection.executescript(ALLOCATIONS_SCHEMA)
-    elif allocation_columns and "source" not in allocation_columns:
-        _migrate_allocations(connection)
-    verification_columns = {
-        str(row["name"]): bool(row["notnull"])
-        for row in connection.execute("pragma table_info(capacity_verifications)")
-    }
-    if verification_columns and (
-        "expected_gpu_model" not in verification_columns
-        or verification_columns.get("expected_gpu_count")
-    ):
-        connection.execute("drop table capacity_verifications")
-        connection.executescript(CAPACITY_VERIFICATIONS_SCHEMA)
-    connection.execute("drop table if exists fleet_allocations")
-    connection.execute("drop table if exists fleet_observations")
-
-
-def _migrate_allocations(connection: sqlite3.Connection) -> None:
-    connection.execute("alter table allocations rename to allocations_legacy")
-    connection.executescript(ALLOCATIONS_SCHEMA)
-    connection.execute(
-        """
-insert into allocations (
-  allocation_id,
-  request_id,
-  successful_attempt_id,
-  candidate_observation_id,
-  preflight_observation_id,
-  source,
-  intermediary,
-  operator,
-  offer_id,
-  source_resource_id,
-  state,
-  price_usd_gpu_hr,
-  price_usd_instance_hr,
-  created_at,
-  terminate_at,
-  terminated_at,
-  updated_at
-)
-select
-  allocation.allocation_id,
-  allocation.request_id,
-  allocation.successful_attempt_id,
-  request.candidate_observation_id,
-  request.preflight_observation_id,
-  allocation.acquisition_connector,
-  allocation.acquisition_connector,
-  allocation.capacity_provider,
-  request.source_offer_id,
-  allocation.provider_resource_id,
-  allocation.state,
-  coalesce(
-    allocation.realized_price_usd_gpu_hr,
-    request.selected_price_usd_gpu_hr
-  ),
-  coalesce(
-    allocation.realized_price_usd_instance_hr,
-    request.selected_price_usd_instance_hr
-  ),
-  allocation.created_at,
-  allocation.terminate_at,
-  allocation.terminated_at,
-  allocation.updated_at
-from allocations_legacy allocation
-join provisioning_requests request using (request_id)
-"""
-    )
-    connection.execute("drop table allocations_legacy")
-
-
-def _migrate_provisioning_requests(connection: sqlite3.Connection) -> None:
-    connection.execute(
-        """
-create table provisioning_requests_new (
-  request_id text primary key,
-  plan_id text not null,
-  candidate_observation_id text,
-  preflight_observation_id text not null,
-  preflight_batch_id text not null,
-  source_offer_id text not null,
-  market_product_key text not null,
-  acquisition_connector text not null,
-  capacity_provider text not null,
-  operation text not null,
-  gpu_model text not null,
-  gpu_count integer not null,
-  selected_price_usd_gpu_hr real not null,
-  selected_price_usd_instance_hr real not null,
-  max_hourly_usd real not null,
-  runtime_minutes integer not null,
-  expected_max_cost_usd real not null,
-  request_hash text not null,
-  provider_request_json text not null,
-  created_at text not null,
-  state text not null
-)
-"""
-    )
-    connection.execute(
-        "insert into provisioning_requests_new select * from provisioning_requests"
-    )
-    connection.execute("drop table provisioning_requests")
-    connection.execute(
-        "alter table provisioning_requests_new rename to provisioning_requests"
+    if version == SCHEMA_VERSION or (version == 0 and not tables):
+        return
+    raise RuntimeError(
+        f"Unsupported Fleet database schema {version}; expected {SCHEMA_VERSION}"
     )
 
 

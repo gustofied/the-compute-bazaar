@@ -47,7 +47,7 @@ The local or Windmill runner writes scheduled rows. Direct RunPod and Verda
 reads and their launch checks are kept locally and unioned into
 `silver.offer_observations`. `observation_purpose` says why a row exists.
 
-The rebuilt `market/` path starts again from a smaller contract:
+The `market/` path uses a smaller contract:
 
 ```text
 SourceRead -> Bronze -> GpuOffer -> silver.gpu_offers -> MarketGeneration
@@ -62,7 +62,7 @@ currently publishes one source run per invocation.
 
 These are two selectable catalogs, not one universal SQL catalog. The default
 CLI and Terminal use the synced public Silver/Gold lake. `compute-bazaar terminal
-lake2` opens the rebuilt local market lake. Fleet reads its private operational
+market` opens the local market lake. Fleet reads its private operational
 ledger separately.
 
 ## Public delivery

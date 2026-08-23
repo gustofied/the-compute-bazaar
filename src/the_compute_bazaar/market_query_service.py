@@ -21,7 +21,6 @@ from .prices.query_catalog import (
     bounded_query_limit,
     list_catalog_queries,
     run_catalog_query,
-    run_scratch_query,
 )
 
 
@@ -100,20 +99,6 @@ class MarketQueryService:
                 ),
                 manifest,
             ),
-        )
-
-    def scratch_sql(self, *, sql: str, limit: int | None = None) -> dict[str, Any]:
-        manifest = self._latest_manifest()
-        selected_limit = bounded_query_limit(limit or 100)
-        return _with_public_run(
-            _sanitize_public_value(
-                run_scratch_query(
-                    manifest=manifest,
-                    sql=sql,
-                    limit=selected_limit,
-                )
-            ),
-            manifest,
         )
 
     def gpu_price_index(

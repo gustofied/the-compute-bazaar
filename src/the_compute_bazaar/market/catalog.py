@@ -1,4 +1,4 @@
-"""DataFusion catalog for the rebuilt market lake."""
+"""DataFusion catalog for the local market lake."""
 
 from __future__ import annotations
 
@@ -167,7 +167,7 @@ def market_manifest_ref(lake_root: str) -> str:
 def read_market_manifest(lake_root: str) -> dict[str, Any]:
     ref = market_manifest_ref(lake_root)
     if "://" in ref:
-        raise ValueError("Remote rebuilt market lakes are not supported yet")
+        raise ValueError("Remote market lakes are not supported")
     manifest = json.loads(Path(ref).read_text(encoding="utf-8"))
     require_contract(manifest, contract=MARKET_LAKE_CONTRACT)
     if manifest.get("ref_base") == "lake_root":

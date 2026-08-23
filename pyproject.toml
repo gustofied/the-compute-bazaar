@@ -1,7 +1,7 @@
 [project]
 name = "the-compute-bazaar"
 version = "0.1.0"
-description = "A research workstation for compute markets"
+description = "Compute-market data, GPU fleet operations, and agent evaluations"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

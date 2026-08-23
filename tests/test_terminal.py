@@ -357,7 +357,7 @@ class TerminalCommandTest(unittest.TestCase):
         self.assertFalse(_uses_lake(state, "/tmp/lake-b"))
         self.assertFalse(_uses_lake({}, "/tmp/lake-a"))
 
-    def test_terminal_tracks_rebuilt_market_generations(self) -> None:
+    def test_terminal_tracks_market_generations(self) -> None:
         self.assertEqual(
             _manifest_identity(
                 {

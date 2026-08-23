@@ -41,7 +41,7 @@ class CLIState:
 
 
 app = typer.Typer(
-    help="Query the Compute Bazaar data catalog.",
+    help="Compute-market data, GPU fleet operations, and agent evaluations.",
     no_args_is_help=True,
     add_completion=False,
     pretty_exceptions_show_locals=False,
@@ -53,7 +53,7 @@ sandbox_app = typer.Typer(help="Maintain StarSling workload costs.")
 model_app = typer.Typer(help="Save and run reusable DataFusion SQL models.")
 blueprint_app = typer.Typer(help="Save and open Perspective views of SQL models.")
 offers_app = typer.Typer(help="Read offers directly from compute providers.")
-launch_app = typer.Typer(help="Plan provider-native compute launches.")
+launch_app = typer.Typer(help="Plan and rent compute from providers.")
 fleet_app = typer.Typer(help="Attach, inspect, and operate NVIDIA compute.")
 workload_app = typer.Typer(help="Run and inspect commands on Fleet hosts.")
 app.add_typer(data_app, name="data")
@@ -79,7 +79,7 @@ def configure(
         typer.Option("--format", help="Output format."),
     ] = OutputFormat.AUTO,
 ) -> None:
-    """Query the Compute Bazaar data catalog."""
+    """Work with compute-market data, GPU fleets, and agent evaluations."""
     ctx.obj = CLIState(
         lake=resolve_lake_root(lake_root),
         output_format=output_format,
@@ -333,7 +333,7 @@ def market_refresh(
 
 @app.command()
 def manifest(ctx: typer.Context) -> None:
-    """Show the latest public-safe Gold manifest."""
+    """Show the latest public Gold manifest."""
     _emit(ctx, _service(ctx).manifest(), command="manifest")
 
 
@@ -424,7 +424,7 @@ def sql(
     ] = None,
     port: Annotated[int, typer.Option(min=1, max=65535)] = 8767,
 ) -> None:
-    """Run bounded read-only SQL over the local catalog."""
+    """Run read-only SQL over the selected catalog."""
     selected_sql = _read_sql(statement=statement, sql_file=sql_file)
     selected_limit = _limit(limit)
     perspective = _perspective_config(chart=chart, x=x, series=series, y=y)
@@ -449,7 +449,7 @@ def sql(
 
 @model_app.command("list")
 def model_list(ctx: typer.Context) -> None:
-    """List repo-backed analysis models."""
+    """List saved market models."""
     from .analysis_store import model_payload
 
     rows = []
@@ -529,7 +529,7 @@ def model_run(
     terminal: Annotated[bool, typer.Option("--terminal")] = False,
     port: Annotated[int, typer.Option(min=1, max=65535)] = 8767,
 ) -> None:
-    """Run a saved model headlessly or open it in the Terminal."""
+    """Run a saved model or open it in the Terminal."""
     store = _analysis_store()
     try:
         model = store.load_model(model_id)
@@ -798,7 +798,7 @@ def offers_inspect(
     ctx: typer.Context,
     offer_id: Annotated[str, typer.Argument()],
 ) -> None:
-    """Re-fetch and inspect one provider-native offer selection."""
+    """Recheck one current provider offer."""
     from .offers import display_row
 
     try:
@@ -1221,7 +1221,7 @@ def fleet_workload_run(
         typer.Option("--cwd", help="Remote working directory."),
     ] = "/tmp",
 ) -> None:
-    """Start one durable command over SSH."""
+    """Start a command over SSH and record it."""
     from .fleet import WorkloadError, WorkloadService
 
     try:
@@ -1335,44 +1335,12 @@ def prime(
     _emit(ctx, _service(ctx).prime_offers(family=family), command="prime")
 
 
-@app.command("api")
-def serve_api(
-    ctx: typer.Context,
-    host: Annotated[str, typer.Option()] = "127.0.0.1",
-    port: Annotated[int, typer.Option()] = 8766,
-    enable_scratch_sql: Annotated[
-        bool,
-        typer.Option(help="Expose authenticated read-only SQL."),
-    ] = False,
-) -> None:
-    """Serve the typed read-only API."""
-    state = _state(ctx)
-    _require_lake(state.lake)
-    try:
-        import uvicorn
-
-        from .api import create_app
-    except ImportError as exc:
-        raise typer.BadParameter(
-            "API dependencies are unavailable. Run: uv sync"
-        ) from exc
-
-    uvicorn.run(
-        create_app(
-            lake_root=state.lake.root,
-            enable_scratch_sql=enable_scratch_sql,
-        ),
-        host=host,
-        port=port,
-    )
-
-
 @app.command("terminal")
 def serve_terminal(
     ctx: typer.Context,
     lake: Annotated[
         str | None,
-        typer.Argument(help="Use local or lake2 to select another market lake."),
+        typer.Argument(help="Use local or market to select another market lake."),
     ] = None,
     port: Annotated[int, typer.Option(min=1, max=65535)] = 8767,
     view: Annotated[
@@ -1420,12 +1388,12 @@ def serve_terminal(
         state = _state(ctx)
         if lake == "local":
             selected_root = str(Path(default_local_pipeline_root()) / "lake")
-        elif lake == "lake2":
+        elif lake == "market":
             from .market import default_market_lake_root
 
             selected_root = default_market_lake_root()
         else:
-            raise typer.BadParameter("Unknown lake. Use local, lake2, or omit it.")
+            raise typer.BadParameter("Unknown lake. Use local, market, or omit it.")
         ctx.find_root().obj = CLIState(
             lake=resolve_lake_root(selected_root),
             output_format=state.output_format,
@@ -1608,7 +1576,7 @@ def sandbox_build(
 
 @sandbox_app.command("validate")
 def sandbox_validate(ctx: typer.Context) -> None:
-    """Validate the canonical StarSling evidence."""
+    """Validate the StarSling evidence."""
     from .sandbox_cost.evidence import validate_evidence
 
     _emit(
