@@ -165,15 +165,17 @@ examples live in [`analyses/`](analyses/) and can be listed with
 
 ## Eval
 
-[Compute Bazaar Bench](https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench) is a benchmark for evaluating agents on compute-market tasks.
+[Compute Bazaar Bench](https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench) is a benchmark for evaluating agents on compute-market tasks. The benchmark asks where agents can be useful across that market, from transactions and sourcing to market intelligence, risk, financing, and operations.
 
 <p align="center">
-  <a href="https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="80%"></a>
+  <a href="https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="96%"></a>
 </p>
 
 I created something I call Tourneys to pair with the evals: controlled
-comparisons where agents face the same tasks on matched market seeds, with the
-harness, temperature, and other settings fixed.
+comparisons where agents face the same tasks under the same conditions. As we
+know, it is one thing to compare models on an eval, but it is also important to
+fix the harness around the model, temperature, and other factors that may
+affect the model's output.
 
 ## Fleet
 

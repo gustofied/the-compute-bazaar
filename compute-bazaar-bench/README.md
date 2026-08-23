@@ -85,8 +85,10 @@ harbor view jobs
 ### Tourneys
 
 I created something I call Tourneys to pair with the evals: controlled
-comparisons where agents face the same tasks on matched market seeds, with the
-harness, temperature, and other settings fixed.
+comparisons where agents face the same tasks under the same conditions. As we
+know, it is one thing to compare models on an eval, but it is also important to
+fix the harness around the model, temperature, and other factors that may
+affect the model's output.
 
 ## Evaluations
 
