@@ -126,6 +126,10 @@ compute-bazaar terminal --stop
 
 ## Data
 
+<p align="center">
+  <img src="assets/compute-bazaar-data.webp" alt="The Compute Bazaar Data catalog and query view" width="96%">
+</p>
+
 Bronze keeps raw evidence, Silver is normalized market data, and Gold contains
 shared models such as GPU price and availability indexes. A sanitized Silver
 and Gold lake is published to a rolling GitHub Release for
