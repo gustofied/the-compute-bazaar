@@ -1,7 +1,7 @@
 <p align="center">
   <img src="assets/compute-bazaar-wordmark.webp" alt="The Compute Bazaar" width="440"><br>
   <strong>The Compute Bazaar</strong><br>
-  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#eval">Eval</a> • <a href="#fleet">Fleet</a> • Trade<br><br>
+  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#eval">Eval</a> • <a href="#fleet">Fleet</a> • <a href="#trade">Trade</a><br><br>
   <a href="https://www.adamsioud.com/exemplars/compute/feeling_the_compute">Article</a>
 </p>
 
@@ -280,5 +280,10 @@ but automatic shutdown is not guaranteed. Terminate the host explicitly. After
 an ambiguous Sesterce create failure, check Sesterce before retrying; automated
 reconciliation currently covers RunPod only.
 
-Trade remains a research direction around availability, price and basis,
-operator breadth, and bounded execution. There is no matching engine here.
+## Trade
+
+Trade is the final layer of The Bazaar. It will use the indexes and market data
+from Data to define and resolve instruments around future compute price,
+availability, depth, and basis. I explore this in two sections of my article:
+[Financialization](https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html#s-substrate)
+and [The Trade](https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html#s-tinkering).
