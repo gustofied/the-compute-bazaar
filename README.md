@@ -141,10 +141,9 @@ Use `compute-bazaar --format json COMMAND` for machine-readable output. A
 compatible lake can be selected with `--lake-root` or
 `COMPUTE_BAZAAR_LAKE_ROOT`.
 
-The retained historical lake still runs on the broad multi-provider pipeline.
-The newer [`market`](src/the_compute_bazaar/market/) package is its
-source-by-source replacement, beginning with Sesterce and one smaller Silver
-offer contract. Gold has not moved to it yet.
+The current Silver and Gold lake is built by the multi-provider pipeline. The
+newer [`market`](src/the_compute_bazaar/market/) path is replacing it one source
+at a time, starting with Sesterce; Gold still uses the existing pipeline.
 
 ### Models and views
 

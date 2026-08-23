@@ -67,7 +67,7 @@ TERMINAL_VIEWS = (
         view_id="weekly-gpu-offer-depth",
         query_id="weekly_gpu_market_pulse",
         title="Weekly qualifying offers",
-        description="Eligible index offers retained for each GPU family over the latest seven days.",
+        description="Eligible index offers by GPU family over the latest seven days.",
         viewer="perspective",
         viewer_config={
             "plugin": "Y Bar",
@@ -81,7 +81,7 @@ TERMINAL_VIEWS = (
         view_id="gpu-index-history",
         query_id="gpu_price_index_history",
         title="GPU Price Index",
-        description="Daily medians of retained hourly H100, H200, B200, and B300 index values.",
+        description="Daily median H100, H200, B200, and B300 index values.",
         viewer="perspective",
         viewer_config={
             "plugin": "Y Line",
@@ -172,7 +172,7 @@ MARKET_TERMINAL_VIEWS = (
     TerminalView(
         view_id="available-gpu-offers",
         title="Available GPU Offers",
-        description="Available configurations retained from the latest provider read.",
+        description="Available configurations from the latest provider read.",
         viewer="perspective",
         viewer_config={
             "plugin": "Datagrid",

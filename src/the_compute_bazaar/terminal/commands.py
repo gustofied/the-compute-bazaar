@@ -638,7 +638,7 @@ COMMANDS = (
         ("schema",),
     ),
     TerminalCommand(
-        "sql", "sql [--limit N] <statement>", "Run bounded read-only SQL.", _sql, "data"
+        "sql", "sql [--limit N] <statement>", "Run read-only SQL.", _sql, "data"
     ),
     TerminalCommand(
         "price-index",
