@@ -39,42 +39,18 @@ $ compute-bazaar terminal
 
 ## Architecture
 
-```text
-provider APIs -> Bronze -> Silver -> Gold -> public lake -> GitHub Release
-                       \-> preflight -> allocation -> Fleet
-```
-
-Bronze keeps raw evidence, Silver is normalized market data, and Gold contains
-shared models such as GPU price and availability indexes. The pipeline runs
-locally by default. A sanitized Silver and Gold lake is published to a rolling
-GitHub Release for `compute-bazaar data sync`.
-
-The hosted path remains in `infra/`: Windmill can schedule the same provider
-cycle, AutoMQ can carry its Kafka-compatible event stream, and S3 with
-CloudFront can store and serve the outputs. None of those services are required
-for the CLI, Terminal, local ingestion, or public data sync. No hosted Windmill
-deployment is currently assumed; [the runbook](infra/windmill/README.md) is kept
-for a future deployment.
-
-This data can be queried with DataFusion, an SQL query engine built on Apache
-Arrow. Perspective also accepts Arrow data, so I am currently exploring it to
-visualize the query results. All of this can be used through the CLI and
-Terminal.
-
-The local Sesterce path persists the source
-response, normalized offers, and the fresh check made before a launch. The
-selected offer then becomes an Allocation linked to the Fleet machine. Its
-market-generation format can contain several source runs; the current CLI reads
-and publishes one source at a time.
-
-The idea behind the lake being object storage is that agents can use SQL for
-analysis or inspect the underlying files directly, such as contracts, deals, or
-whatever else needs source evidence. This matters because compute markets are
-not just quantitative, but qualitative too.
+<p align="center">
+  <img src="assets/compute-bazaar-architecture.svg" alt="The Compute Bazaar architecture" width="92%">
+</p>
 
 More detail: [Architecture](docs/architecture.md).
 
 ## Data
+
+Bronze keeps raw evidence, Silver is normalized market data, and Gold contains
+shared models such as GPU price and availability indexes. A sanitized Silver
+and Gold lake is published to a rolling GitHub Release for
+`compute-bazaar data sync`.
 
 `compute-bazaar` prints tables by default. Use
 `compute-bazaar --format json COMMAND` for machine-readable output.
