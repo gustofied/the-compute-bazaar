@@ -67,58 +67,24 @@ lake](infra/aws/public-feed/README.md), and [architecture](docs/architecture.md)
   <img src="assets/compute-bazaar-terminal.webp" alt="The Compute Bazaar Terminal" width="96%">
 </p>
 
-The Terminal is where we look at data, operate Fleet, and evaluate agents.
+The Terminal opens Data, Fleet, Eval, and Trade in one local window. It is
+optional; The Bazaar can also be used directly through the `compute-bazaar`
+CLI.
 
-Let's start with Data, and how The Compute Bazaar enables market models and
-views that can be stored, reused, shared, and used by agents. It works both
-ways: people can make models for agents, and agents can make models and views
-for people or other agents to use later. A model can also run inside a pipeline,
-for example whenever a new hourly observation arrives. The Compute Bazaar is
-extensible.
+The side drawer keeps Shell and Agent separate. Shell is a PTY. Agent connects
+through ACP and uses the same project and CLI, so Codex, OpenCode, or another
+ACP agent can operate the desk alongside you.
 
-The Terminal opens with Data, Fleet, Eval, and Trade. Data is where DataFusion
-queries market data and [Perspective](https://perspective-dev.github.io) turns
-the results into tables and charts. Eval contains agent evaluation tasks, jobs,
-and trials powered by Harbor. Trade is reserved for later research. The
-Terminal currently supports macOS and Linux.
-
-The side drawer has Shell and Agent tabs. Agent runs through ACP and uses the
-same `compute-bazaar` CLI; results opened with `--terminal` appear in Data.
-
-Data can open a saved query or custom SQL as an interactive table or chart.
+In Data, DataFusion runs SQL and Perspective renders the result as a table or
+chart. Queries and views can be saved, rerun, or opened in the running
+Terminal.
 
 ```bash
 compute-bazaar query gpu_price_index_history --terminal
-
-compute-bazaar sql "
-select
-  gold_observed_at as observed_at,
-  benchmark_family_id as gpu,
-  benchmark_usd_gpu_hr as price_usd_gpu_hr
-from gold.fact_gpu_price_index_history
-where benchmark_family_id in ('H100', 'H200', 'B200', 'B300')
-order by observed_at, gpu
-" --terminal --chart line --x observed_at --series gpu --y price_usd_gpu_hr
 ```
 
-A market model contains reusable DataFusion SQL. Its view describes how
-Perspective displays the result. Terminal Save keeps personal models and views
-outside the Git checkout. They can be rerun or used by agents without being
-shared.
-
-```bash
-compute-bazaar model list
-compute-bazaar model run h200-under-4
-compute-bazaar blueprint open h200-under-4
-```
-
-For anyone who wants to read the market, whether a quant, a broker, or someone
-looking in from the outside, being able to curate your own market models and
-views is useful. The Compute Bazaar gives you that: write the model, save its
-view, and run it again as new data comes in.
-
-Press `Cmd+K` inside the Terminal to run SQL, inspect tables, or move between
-Data and Eval. Stop the Terminal with:
+Press `Cmd+K` anywhere in the Terminal to start typing a command. Stop the
+Terminal with:
 
 ```bash
 compute-bazaar terminal --stop
