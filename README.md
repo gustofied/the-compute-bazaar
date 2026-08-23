@@ -64,7 +64,7 @@ lake](infra/aws/public-feed/README.md), and [architecture](docs/architecture.md)
 ## Terminal
 
 <p align="center">
-  <img src="assets/compute-bazaar-terminal.webp" alt="The Compute Bazaar Terminal" width="80%">
+  <img src="assets/compute-bazaar-terminal.webp" alt="The Compute Bazaar Terminal" width="96%">
 </p>
 
 The Terminal is where we look at data, operate Fleet, and evaluate agents.
