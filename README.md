@@ -96,11 +96,10 @@ compute-bazaar terminal --stop
   <img src="assets/compute-bazaar-data.webp" alt="The Compute Bazaar Data catalog and query view" width="96%">
 </p>
 
-Data uses the medallion pattern. Bronze keeps the raw source response. Silver
-maps useful fields into common market tables. Gold builds opinionated,
-analysis-ready models such as price indexes and availability histories. This is
-how another provider or dataset joins the Bazaar: keep its native evidence,
-map the fields that can be compared, then use the same queries and models.
+The lake uses the usual Bronze, Silver, and Gold layers. Bronze stores the raw
+data as it arrived. Silver cleans and standardizes it so it can be queried and
+analysed. Gold contains ready-made indexes, histories, and other datasets for
+analysis and visualisation. New providers and datasets follow the same route.
 Bronze is JSON; Silver and Gold are Parquet.
 
 A sanitized Silver and Gold snapshot is published to a rolling GitHub Release
@@ -142,6 +141,11 @@ Use `compute-bazaar --format json COMMAND` for machine-readable output. A
 compatible lake can be selected with `--lake-root` or
 `COMPUTE_BAZAAR_LAKE_ROOT`.
 
+The retained historical lake still runs on the broad multi-provider pipeline.
+The newer [`market`](src/the_compute_bazaar/market/) package is its
+source-by-source replacement, beginning with Sesterce and one smaller Silver
+offer contract. Gold has not moved to it yet.
+
 ### Models and views
 
 Reusable DataFusion SQL is saved as a model. A blueprint saves a Perspective
@@ -158,11 +162,6 @@ compute-bazaar blueprint open my-view
 Personal models and views are stored outside the repository. The bundled
 examples live in [`analyses/`](analyses/) and can be listed with
 `compute-bazaar model list`.
-
-The retained historical lake still runs on the broad multi-provider pipeline.
-The newer [`market`](src/the_compute_bazaar/market/) package is its
-source-by-source replacement, beginning with Sesterce and one smaller Silver
-offer contract. Gold has not moved to it yet.
 
 ## Eval
 
