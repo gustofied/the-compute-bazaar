@@ -179,18 +179,23 @@ factors that may affect the model's output.
 ## Fleet
 
 <p align="center">
-  <img src="assets/compute-bazaar-fleet.webp" alt="The Compute Bazaar Fleet monitoring a live NVIDIA node" width="80%">
+  <img src="assets/compute-bazaar-fleet.webp" alt="The Compute Bazaar Fleet monitoring a live Sesterce GPU" width="96%">
 </p>
 
-Fleet operates NVIDIA nodes over SSH. A node can be provisioned from a live
+Fleet operates NVIDIA nodes over SSH. A node can be rented from a live
 offer or attached through OpenSSH. Fleet records inventory, runs readiness
 checks, monitors telemetry and health every five seconds, and tracks workloads
 and logs.
 
+The host above was rented from Sesterce: one A4000 in Oslo at $0.165/hour. The
+Bazaar recorded the offer, checked it again before spending, launched it with a
+price ceiling and runtime budget, waited for SSH, then verified the GPU and
+began five-second telemetry in Fleet.
+
 ```text
 Live offer
   -> availability check
-  -> provision
+  -> rent
   -> allocation ----+
                     |
 SSH host -> attach -+-> Fleet node
@@ -283,7 +288,7 @@ reconciliation currently covers RunPod only.
 ## Trade
 
 Trade is the final layer of The Bazaar. It will use the indexes and market data
-from Data to define and resolve instruments around future compute price,
-availability, depth, and basis. I explore this in two sections of my article:
+from Data to define and settle contracts on future compute price, availability,
+depth, and basis. I explore this in two sections of my article:
 [Financialization](https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html#s-substrate)
 and [The Trade](https://www.adamsioud.com/exemplars/compute/feeling_the_compute.html#s-tinkering).
