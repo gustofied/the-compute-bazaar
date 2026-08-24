@@ -1,24 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 360" role="img" aria-labelledby="title description">
   <title id="title">Compute Bazaar Fleet flow</title>
-  <desc id="description">A live offer passes through preflight and allocation, or an SSH host is attached directly. Both become a Fleet node that can be inspected, checked, monitored, and used for workloads.</desc>
+  <desc id="description">A live offer is checked, rented, and recorded as an allocation, or an SSH host is attached directly. Both become a Fleet node that can be inspected, checked, monitored, and used for workloads.</desc>
   <style>
-    :root {
-      --line: #91aecb;
-      --text: #b7d0e6;
-    }
     .box {
       fill: none;
-      stroke: var(--line);
+      stroke: #91aecb;
       stroke-width: 3;
     }
     .line {
       fill: none;
-      stroke: var(--line);
+      stroke: #91aecb;
       stroke-width: 3;
       marker-end: url(#arrow);
     }
     .label {
-      fill: var(--text);
+      fill: #b7d0e6;
       font-family: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
       font-size: 27px;
       font-weight: 400;
@@ -27,47 +23,51 @@
   </style>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line)"/>
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#91aecb"/>
     </marker>
   </defs>
 
-  <rect class="box" x="35" y="45" width="190" height="82"/>
-  <text class="label" x="130" y="95">Live offer</text>
+  <rect class="box" x="25" y="45" width="170" height="82"/>
+  <text class="label" x="110" y="95">Live offer</text>
 
-  <rect class="box" x="285" y="45" width="190" height="82"/>
-  <text class="label" x="380" y="95">Preflight</text>
+  <rect class="box" x="225" y="45" width="190" height="82"/>
+  <text class="label" x="320" y="95">Check offer</text>
 
-  <rect class="box" x="535" y="45" width="190" height="82"/>
-  <text class="label" x="630" y="95">Allocation</text>
+  <rect class="box" x="445" y="45" width="150" height="82"/>
+  <text class="label" x="520" y="95">Rent</text>
 
-  <rect class="box" x="285" y="230" width="190" height="82"/>
-  <text class="label" x="380" y="280">SSH host</text>
+  <rect class="box" x="625" y="45" width="180" height="82"/>
+  <text class="label" x="715" y="95">Allocation</text>
 
-  <rect class="box" x="535" y="230" width="190" height="82"/>
-  <text class="label" x="630" y="280">Attach</text>
+  <rect class="box" x="225" y="230" width="170" height="82"/>
+  <text class="label" x="310" y="280">SSH host</text>
 
-  <rect class="box" x="805" y="108" width="210" height="96"/>
-  <text class="label" x="910" y="165">Fleet node</text>
+  <rect class="box" x="425" y="230" width="150" height="82"/>
+  <text class="label" x="500" y="280">Attach</text>
 
-  <rect class="box" x="1095" y="115" width="150" height="82"/>
-  <text class="label" x="1170" y="165">Inspect</text>
+  <rect class="box" x="835" y="108" width="190" height="96"/>
+  <text class="label" x="930" y="165">Fleet node</text>
 
-  <rect class="box" x="1305" y="115" width="150" height="82"/>
-  <text class="label" x="1380" y="165">Doctor</text>
+  <rect class="box" x="1090" y="115" width="150" height="82"/>
+  <text class="label" x="1165" y="165">Inspect</text>
 
-  <rect class="box" x="1515" y="45" width="240" height="82"/>
-  <text class="label" x="1635" y="95">Monitor</text>
+  <rect class="box" x="1295" y="115" width="150" height="82"/>
+  <text class="label" x="1370" y="165">Doctor</text>
 
-  <rect class="box" x="1515" y="230" width="240" height="82"/>
-  <text class="label" x="1635" y="280">Workloads</text>
+  <rect class="box" x="1500" y="45" width="260" height="82"/>
+  <text class="label" x="1630" y="95">Monitor</text>
 
-  <path class="line" d="M225 86 H285"/>
-  <path class="line" d="M475 86 H535"/>
-  <path class="line" d="M475 271 H535"/>
-  <path class="line" d="M725 86 H770 V137 H805"/>
-  <path class="line" d="M725 271 H770 V176 H805"/>
-  <path class="line" d="M1015 156 H1095"/>
-  <path class="line" d="M1245 156 H1305"/>
-  <path class="line" d="M1455 156 H1485 V86 H1515"/>
-  <path class="line" d="M1455 156 H1485 V271 H1515"/>
+  <rect class="box" x="1500" y="230" width="260" height="82"/>
+  <text class="label" x="1630" y="280">Workloads</text>
+
+  <path class="line" d="M195 86 H225"/>
+  <path class="line" d="M415 86 H445"/>
+  <path class="line" d="M595 86 H625"/>
+  <path class="line" d="M395 271 H425"/>
+  <path class="line" d="M805 86 H815 V137 H835"/>
+  <path class="line" d="M575 271 H805 V176 H835"/>
+  <path class="line" d="M1025 156 H1090"/>
+  <path class="line" d="M1240 156 H1295"/>
+  <path class="line" d="M1445 156 H1475 V86 H1500"/>
+  <path class="line" d="M1445 156 H1475 V271 H1500"/>
 </svg>

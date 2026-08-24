@@ -182,38 +182,31 @@ factors that may affect the model's output.
   <img src="assets/compute-bazaar-fleet-workload.webp" alt="The Compute Bazaar Fleet monitoring a live Sesterce GPU" width="96%">
 </p>
 
-Fleet operates NVIDIA nodes over SSH. A node can be rented from a live
-offer or attached through OpenSSH. Fleet records inventory, runs readiness
-checks, monitors telemetry and health every five seconds, and tracks workloads
-and logs.
+Fleet operates GPUs over SSH. Rent one from a live offer or attach one
+you already have. Either route creates a Fleet node with inventory, readiness
+checks, five-second telemetry, workloads, and logs.
 
 The host above was rented from Sesterce: one A4000 in Oslo at $0.165/hour. The
 Bazaar recorded the offer, checked it again before spending, launched it with a
 price ceiling and runtime budget, waited for SSH, then verified the GPU and
 began five-second telemetry in Fleet.
 
-```text
-Live offer
-  -> availability check
-  -> rent
-  -> allocation ----+
-                    |
-SSH host -> attach -+-> Fleet node
-                          |
-                          +-> inventory
-                          +-> readiness and diagnostics
-                          +-> telemetry and health
-                          +-> workloads and logs
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/compute-bazaar-fleet-flow-dark.svg">
+    <img src="assets/compute-bazaar-fleet-flow.svg" alt="A live offer or SSH host entering Fleet" width="96%">
+  </picture>
+</p>
 
-Attach an existing node by SSH host alias. OpenSSH resolves its address, user,
-key, agent, and jump host; Fleet stores only the alias.
+Attach a remote you already rent. The Bazaar resolves its address, user, key,
+agent, and jump host; Fleet stores only the alias.
 
 ```bash
 compute-bazaar fleet attach gpu-singapore-01 --expect H100 --count 8
 ```
 
-Or use the Sesterce market path to launch an offer.
+Right now you can rent from the provider Sesterce. `plan` shows the machine and
+price without spending. `launch` checks the offer again before the paid request.
 
 ```bash
 compute-bazaar market ingest sesterce
@@ -230,60 +223,16 @@ compute-bazaar fleet launch OBSERVATION_ID \
   --confirm
 ```
 
-RunPod remains available through its direct provider path.
-
-```bash
-compute-bazaar offers list --provider runpod
-
-compute-bazaar launch run OFFER_ID \
-  --name HOST \
-  --image runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404 \
-  --max-hourly-usd 0.75 \
-  --runtime-minutes 30 \
-  --confirm-spend
-```
-
-Inspect it, run readiness checks, monitor it, and run workloads through the CLI
-or Terminal.
+Once the machine is in Fleet, the CLI and Terminal use the same records.
 
 ```bash
 compute-bazaar fleet hosts
 compute-bazaar fleet inspect HOST_ID
 compute-bazaar fleet doctor HOST_ID
-compute-bazaar terminal
 compute-bazaar fleet workload run HOST_ID --name training -- python train.py
-compute-bazaar fleet workload list --host HOST_ID
 compute-bazaar fleet workload logs WORKLOAD_ID
 compute-bazaar fleet terminate HOST_ID --confirm
 ```
-
-The existing public/direct catalog also exposes private allocation and Fleet
-views:
-
-```bash
-compute-bazaar sql "select * from silver.current_offers order by price_usd_gpu_hr"
-compute-bazaar sql "select * from silver.offer_observations order by observed_at desc"
-compute-bazaar sql "select * from fleet.nodes order by created_at desc"
-compute-bazaar sql "select * from gold.fact_market_to_fleet"
-compute-bazaar model run gpu-launch-candidates
-```
-
-`launch run` checks availability and price again before spending, then records
-the offer on the allocation. Fleet keeps node inventory, five-second telemetry,
-workload state, exit codes, and logs. Remote workloads continue when the
-Terminal closes.
-
-If a launch ends before RunPod confirms the result, reconcile it before trying
-again.
-
-```bash
-compute-bazaar launch reconcile ATTEMPT_ID
-```
-
-For Sesterce, the runtime budget and deadline are recorded and shown in Fleet,
-but automatic shutdown is not guaranteed. Terminate the host explicitly. After
-an ambiguous Sesterce create failure, check Sesterce before retrying; automated
-reconciliation currently covers RunPod only.
 
 ## Trade
 
