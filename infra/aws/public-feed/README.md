@@ -3,7 +3,7 @@
 The public lake contains sanitized Silver and Gold outputs. Its rolling GitHub
 Release is downloaded by `compute-bazaar data sync`.
 
-This Terraform stack can serve publications and the public `lake/` route from the
+This Terraform stack serves publications and the public `lake/` route from the
 private S3 prefix `dashboard/compute-bazaar/` through CloudFront. It configures
 S3 access, CORS, security headers, TLS, and extensionless publication URLs.
 Bronze and the private market lake remain private.

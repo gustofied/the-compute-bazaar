@@ -48,10 +48,10 @@ $ compute-bazaar terminal
 
 ## Architecture
 
-The Bazaar starts locally with Parquet and Arrow, DataFusion for queries,
-Perspective for dashboards/views, Tauri for the Terminal, ACP for agents, and
-Harbor for Eval. Windmill, AutoMQ, S3, and CloudFront remain an optional hosted
-path. Read more about the [pipeline](infra/windmill/README.md), [public
+The Bazaar uses Windmill for orchestration, AutoMQ for event streaming, S3 for
+storage, Parquet and Arrow, DataFusion for queries, Perspective for
+dashboards/views, Tauri for the Terminal, ACP for agents, and Harbor for Eval.
+Read more about the [pipeline](infra/windmill/README.md), [public
 lake](infra/aws/public-feed/README.md), and [architecture](docs/architecture.md).
 
 <p align="center">
@@ -190,9 +190,6 @@ Right now you can rent a GPU Cloud instance through Sesterce. `plan` shows the
 configuration and price without spending. `launch` checks the offer again before
 creating the instance.
 
-Set `SESTERCE_API_KEY` first; the [Market README](src/the_compute_bazaar/market/README.md)
-explains the source path.
-
 ```bash
 compute-bazaar market ingest sesterce
 
@@ -221,7 +218,7 @@ compute-bazaar fleet terminate HOST_ID --confirm
 
 ## Eval
 
-[Compute Bazaar Bench](https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench) evaluates agents on compute-market tasks. The current tasks cover compute-deal documents and a repeated supplier-allocation game; the broader direction includes sourcing, market intelligence, risk, financing, and operations.
+[Compute Bazaar Bench](https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench) is a benchmark for evaluating agents on compute-market tasks, from transactions and sourcing to market intelligence, risk, financing, and operations.
 
 <p align="center">
   <a href="https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="96%"></a>

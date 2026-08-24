@@ -22,12 +22,11 @@ The current Silver and Gold lake is built by the multi-provider pipeline. The
 newer [`market`](../src/the_compute_bazaar/market/) path is replacing it one
 source at a time, starting with Sesterce; Gold still uses the existing pipeline.
 
-The pipeline runs locally. Windmill can schedule the same cycle hourly in a
-hosted setup. See [Pipeline](../infra/windmill/README.md).
+The pipeline runs locally or hourly with Windmill. See [Pipeline](../infra/windmill/README.md).
 
 The public lake is a checksummed Silver and Gold snapshot published through a
-rolling GitHub Release. An optional hosted deployment can publish through S3
-with CloudFront. See [Public lake](../infra/aws/public-feed/README.md).
+rolling GitHub Release or S3 with CloudFront. See
+[Public lake](../infra/aws/public-feed/README.md).
 
 ## Query layer
 
