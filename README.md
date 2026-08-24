@@ -179,7 +179,7 @@ factors that may affect the model's output.
 ## Fleet
 
 <p align="center">
-  <img src="assets/compute-bazaar-fleet.webp" alt="The Compute Bazaar Fleet monitoring a live Sesterce GPU" width="96%">
+  <img src="assets/compute-bazaar-fleet-workload.webp" alt="The Compute Bazaar Fleet monitoring a live Sesterce GPU" width="96%">
 </p>
 
 Fleet operates NVIDIA nodes over SSH. A node can be rented from a live
