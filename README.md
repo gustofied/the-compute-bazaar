@@ -1,7 +1,7 @@
 <p align="center">
   <img src="assets/compute-bazaar-wordmark.webp" alt="The Compute Bazaar" width="440"><br>
   <strong>The Compute Bazaar</strong><br>
-  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#eval">Eval</a> • <a href="#fleet">Fleet</a> • <a href="#trade">Trade</a><br><br>
+  <a href="#terminal">Terminal</a> • <a href="#data">Data</a> • <a href="#fleet">Fleet</a> • <a href="#eval">Eval</a> • <a href="#trade">Trade</a><br><br>
   <a href="https://www.adamsioud.com/exemplars/compute/feeling_the_compute">Article</a>
 </p>
 
@@ -162,20 +162,6 @@ Personal models and views are stored outside the repository. The bundled
 examples live in [`analyses/`](analyses/) and can be listed with
 `compute-bazaar model list`.
 
-## Eval
-
-[Compute Bazaar Bench](https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench) is a benchmark for evaluating agents on compute-market tasks, from transactions and sourcing to market intelligence, risk, financing, and operations.
-
-<p align="center">
-  <a href="https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="96%"></a>
-</p>
-
-I created something I call Tourneys to pair with the evals: controlled
-comparisons where agents face the same tasks under the same conditions. As we
-know, it is one thing to compare models on an eval, but to ensure fair
-comparisons, it is also important to fix the harness, temperature, and other
-factors that may affect the model's output.
-
 ## Fleet
 
 <p align="center">
@@ -186,11 +172,6 @@ Fleet operates GPUs over SSH. Rent one from a live offer or attach one
 you already have. Either route creates a Fleet node with inventory, readiness
 checks, five-second telemetry, workloads, and logs.
 
-The host above was rented from Sesterce: one A4000 in Oslo at $0.165/hour. The
-Bazaar recorded the offer, checked it again before spending, launched it with a
-price ceiling and runtime budget, waited for SSH, then verified the GPU and
-began five-second telemetry in Fleet.
-
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/compute-bazaar-fleet-flow-dark.svg">
@@ -198,15 +179,16 @@ began five-second telemetry in Fleet.
   </picture>
 </p>
 
-Attach a remote you already rent. The Bazaar resolves its address, user, key,
-agent, and jump host; Fleet stores only the alias.
+Attach an SSH host you already rent. The Bazaar resolves its address, user,
+key, agent, and jump host; Fleet stores only the alias.
 
 ```bash
 compute-bazaar fleet attach gpu-singapore-01 --expect H100 --count 8
 ```
 
-Right now you can rent from the provider Sesterce. `plan` shows the machine and
-price without spending. `launch` checks the offer again before the paid request.
+Right now you can rent a GPU Cloud instance through Sesterce. `plan` shows the
+configuration and price without spending. `launch` checks the offer again before
+creating the instance.
 
 ```bash
 compute-bazaar market ingest sesterce
@@ -233,6 +215,20 @@ compute-bazaar fleet workload run HOST_ID --name training -- python train.py
 compute-bazaar fleet workload logs WORKLOAD_ID
 compute-bazaar fleet terminate HOST_ID --confirm
 ```
+
+## Eval
+
+[Compute Bazaar Bench](https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench) is a benchmark for evaluating agents on compute-market tasks, from transactions and sourcing to market intelligence, risk, financing, and operations.
+
+<p align="center">
+  <a href="https://github.com/gustofied/the-compute-bazaar/tree/main/compute-bazaar-bench"><img src="assets/compute-bazaar-eval.webp" alt="The Compute Bazaar Eval" width="96%"></a>
+</p>
+
+I created something I call Tourneys to pair with the evals: controlled
+comparisons where agents face the same tasks under the same conditions. As we
+know, it is one thing to compare models on an eval, but to ensure fair
+comparisons, it is also important to fix the harness, temperature, and other
+factors that may affect the model's output.
 
 ## Trade
 

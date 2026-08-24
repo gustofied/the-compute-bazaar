@@ -1,6 +1,9 @@
-# Providers
+# Broad provider pipeline
 
-Every provider follows one path:
+These adapters build the current multi-provider Silver and Gold lake. The
+smaller provider-by-provider path lives in [`market`](../../market/README.md).
+
+Each adapter here follows one path:
 
 ```text
 API response -> raw Bronze capture -> OfferObservation Silver rows -> DataFusion Gold

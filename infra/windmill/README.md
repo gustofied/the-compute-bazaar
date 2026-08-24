@@ -1,7 +1,8 @@
 # Pipeline
 
 The pipeline gathers market data, normalizes offers, builds models, and
-publishes. Run the same cycle locally or hourly with Windmill.
+publishes. The hosted pipeline runs through Windmill, AutoMQ, S3, and
+CloudFront; the same pipeline can also run locally.
 
 <p align="center">
   <picture>
