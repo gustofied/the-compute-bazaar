@@ -2,8 +2,10 @@
 
 [Harbor dataset](https://hub.harborframework.com/datasets/gustofied/compute-bazaar-bench)
 
-A benchmark for evaluating agents on compute-market tasks, from transactions
-and sourcing to market intelligence, risk, financing, and operations.
+A benchmark for evaluating agents on compute-market tasks. The current tasks
+cover compute-deal documents and a repeated supplier-allocation game. The
+broader direction includes sourcing, market intelligence, risk, financing, and
+operations.
 
 Large compute deals rarely happen in a single, transparent "venue". Buyer requirements,
 supply, pricing, terms, diligence, and relationship history are spread across
@@ -42,7 +44,13 @@ The first implemented environment is
 
 ## Setup
 
-The benchmark uses Harbor tasks and jobs.
+The benchmark uses Harbor tasks and jobs. Install
+[Harbor](https://www.harborframework.com/docs/getting-started) first and make
+sure Docker or another supported environment is available.
+
+```bash
+uv tool install harbor
+```
 
 ```text
 compute-bazaar-bench/
