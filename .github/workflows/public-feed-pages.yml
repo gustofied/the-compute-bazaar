@@ -11,7 +11,6 @@ on:
       - "src/the_compute_bazaar/**"
       - "pyproject.toml"
       - "uv.lock"
-      - "external/AdamSioud"
 
 permissions:
   contents: read
@@ -27,8 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
       - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
@@ -45,8 +42,7 @@ jobs:
           uv run python -m the_compute_bazaar.pages_feed \
             --output-root _site \
             --raw-root .market-state/raw \
-            --lake-root .market-state/lake \
-            --static-snapshot-root external/AdamSioud/api/dashboard-snapshots
+            --lake-root .market-state/lake
       - name: Save market history
         if: success()
         uses: actions/cache/save@v4

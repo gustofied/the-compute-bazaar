@@ -5,9 +5,10 @@ The live public feed is built hourly by
 `https://bazaar.adamsioud.com`.
 
 The workflow runs the public provider pipeline, publishes market cards and the
-sanitized portable lake, adds the committed article snapshots, and deploys one
-static artifact. A GitHub Actions cache carries the public market history from
-one hourly run to the next. Bronze and private deal data are never published.
+sanitized portable lake, and deploys one static artifact. The article keeps its
+own committed snapshots as fallbacks. A GitHub Actions cache carries the public
+market history from one hourly run to the next. Bronze and private deal data are
+never published.
 
 ## Repository settings
 
@@ -31,8 +32,7 @@ uv sync --frozen --extra worker
 uv run python -m the_compute_bazaar.pages_feed \
   --output-root _site \
   --raw-root .market-state/raw \
-  --lake-root .market-state/lake \
-  --static-snapshot-root external/AdamSioud/api/dashboard-snapshots
+  --lake-root .market-state/lake
 ```
 
 The old CloudFront distribution and S3 bucket were deleted on August 21, 2026.
