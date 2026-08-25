@@ -135,11 +135,16 @@ def _landing_page() -> str:
   body { max-width: 42rem; margin: 12vh auto; padding: 0 1.5rem; color: #17354c; }
   h1 { font-size: clamp(1.8rem, 7vw, 3.8rem); letter-spacing: -.05em; }
   p { line-height: 1.65; color: #526777; }
+  nav { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
   a { color: inherit; text-underline-offset: .2em; }
 </style>
 <h1>The Compute Bazaar</h1>
 <p>This host publishes the Bazaar's live market cards and portable public lake.</p>
-<p><a href="/manifest.json">Feed manifest</a> · <a href="/lake/index.json">Public lake</a> · <a href="https://github.com/gustofied/the-compute-bazaar">Repository</a></p>
+<nav aria-label="Public feed links">
+  <a href="/manifest.json">Feed manifest</a>
+  <a href="/lake/index.json">Public lake</a>
+  <a href="https://github.com/gustofied/the-compute-bazaar">Repository</a>
+</nav>
 </html>
 """
 
