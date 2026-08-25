@@ -1,0 +1,70 @@
+name: Public feed
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/public-feed-pages.yml"
+      - "src/the_compute_bazaar/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "external/AdamSioud"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: public-feed-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Restore market history
+        uses: actions/cache/restore@v4
+        with:
+          path: .market-state/lake
+          key: market-lake-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            market-lake-${{ runner.os }}-
+      - name: Build public feed
+        run: |
+          uv sync --frozen --extra worker
+          uv run python -m the_compute_bazaar.pages_feed \
+            --output-root _site \
+            --raw-root .market-state/raw \
+            --lake-root .market-state/lake \
+            --static-snapshot-root external/AdamSioud/api/dashboard-snapshots
+      - name: Save market history
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: .market-state/lake
+          key: market-lake-${{ runner.os }}-${{ github.run_id }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy public feed
+        id: deployment
+        uses: actions/deploy-pages@v4

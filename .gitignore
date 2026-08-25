@@ -12,6 +12,8 @@ dist/
 .env
 .secrets/
 data/
+_site/
+.market-state/
 terminal/node_modules/
 terminal/src-tauri/target/
 terminal/src-tauri/gen/schemas/

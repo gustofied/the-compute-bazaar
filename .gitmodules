@@ -1,5 +1,5 @@
 [submodule "external/AdamSioud"]
 	path = external/AdamSioud
-	url = git@github.com:gustofied/AdamSioud.git
+	url = https://github.com/gustofied/AdamSioud.git
 	branch = main
 	shallow = true

@@ -48,11 +48,13 @@ $ compute-bazaar terminal
 
 ## Architecture
 
-The Bazaar uses Windmill for orchestration, AutoMQ for event streaming, S3 for
-storage, Parquet and Arrow, DataFusion for queries, Perspective for
-dashboards/views, Tauri for the Terminal, ACP for agents, and Harbor for Eval.
-Read more about the [pipeline](infra/windmill/README.md), [public
-lake](infra/aws/public-feed/README.md), and [architecture](docs/architecture.md).
+The Bazaar uses Windmill for orchestration, AutoMQ for event streaming, Parquet
+and Arrow for storage, DataFusion for queries, Perspective for dashboards and
+views, Tauri for the Terminal, ACP for agents, and Harbor for Eval. GitHub
+Actions builds the public market feed and portable lake, and GitHub Pages serves
+them at `bazaar.adamsioud.com`. Read more about the
+[pipeline](infra/windmill/README.md), [public feed](infra/github-pages/README.md),
+and [architecture](docs/architecture.md).
 
 <p align="center">
   <picture>

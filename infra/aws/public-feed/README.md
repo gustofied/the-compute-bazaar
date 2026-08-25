@@ -1,4 +1,8 @@
-# Public lake
+# Legacy AWS public feed
+
+> The CloudFront distribution and S3 bucket described here were deleted on
+> August 21, 2026. The current public feed is deployed with GitHub Actions and
+> GitHub Pages; see `infra/github-pages/README.md`.
 
 The public lake contains sanitized Silver and Gold outputs. Its rolling GitHub
 Release is downloaded by `compute-bazaar data sync`.
