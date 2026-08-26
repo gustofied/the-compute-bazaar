@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from datetime import timedelta
 from pathlib import Path
@@ -15,6 +16,7 @@ from .publication_chart_common import (
     _format_cents,
     _parse_datetime,
     _publication_png,
+    _shape_preserving_curve,
 )
 
 _FONT_ROOT = Path(__file__).with_name("assets") / "fonts"
@@ -199,11 +201,12 @@ def _render_sandbox_history(
     *,
     range_id: str,
 ) -> bytes:
-    from matplotlib import dates as mdates
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
     from matplotlib.font_manager import FontProperties
-    from matplotlib.patches import FancyBboxPatch
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import FancyBboxPatch, PathPatch, Rectangle
+    from matplotlib.path import Path as MatplotlibPath
 
     workload = (card.get("data") or {}).get("workload") or {}
     rows: list[dict[str, Any]] = []
@@ -224,7 +227,7 @@ def _render_sandbox_history(
         rows.append(
             {
                 "date": observed_at,
-                "value": value * 100,
+                "value": value,
                 "id": str(source.get("series_id") or "service"),
                 "label": str(
                     source.get("series_label")
@@ -241,7 +244,7 @@ def _render_sandbox_history(
         rows = [row for row in rows if row["date"] >= cutoff]
 
     outside = "#e5ecd4"
-    paper = "#f8f5eb"
+    paper = "#ffffff"
     green = "#526c28"
     rule = "#dfe6cf"
     frame = "#889b64"
@@ -263,14 +266,9 @@ def _render_sandbox_history(
         fname=_GEIST_SEMIBOLD,
         size=24 * 72 / _OUTPUT_DPI,
     )
-    value_font = FontProperties(
-        fname=_GEIST_MEDIUM,
-        size=48 * 72 / _OUTPUT_DPI,
-    )
-    label_font = FontProperties(
-        fname=_GEIST_MEDIUM,
-        size=13 * 72 / _OUTPUT_DPI,
-    )
+    value_font = FontProperties(fname=_GEIST_MEDIUM, size=64 * 72 / _OUTPUT_DPI)
+    label_font = FontProperties(fname=_GEIST_SEMIBOLD, size=20 * 72 / _OUTPUT_DPI)
+    range_font = FontProperties(fname=_GEIST_SEMIBOLD, size=20 * 72 / _OUTPUT_DPI)
     figure.patches.extend(
         (
             FancyBboxPatch(
@@ -310,70 +308,187 @@ def _render_sandbox_history(
     )
     figure.text(
         40 / IMAGE_WIDTH,
-        1 - (122 / IMAGE_HEIGHT),
+        1 - (138 / IMAGE_HEIGHT),
         value,
         color=green,
         fontproperties=value_font,
         parse_math=False,
     )
     figure.text(
-        0.965,
-        1 - (80 / IMAGE_HEIGHT),
-        f"{presentation['label']} history",
+        1160 / IMAGE_WIDTH,
+        1 - (54 / IMAGE_HEIGHT),
+        _sandbox_range_label(rows, range_id, presentation["label"]),
         color=green,
-        fontproperties=title_font,
+        fontproperties=range_font,
         horizontalalignment="right",
     )
 
-    axis = figure.add_axes((0.075, 0.14, 0.86, 0.61), facecolor=paper)
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         grouped.setdefault(row["id"], []).append(row)
     ordered = sorted(
         grouped.values(),
         key=lambda values: (
+            values[-1]["value"],
             values[0]["order"],
             values[0]["label"],
         ),
     )
-    for values in ordered:
+    if not ordered:
+        return _publication_png(canvas)
+
+    start = min(row["date"] for row in rows)
+    end = max(row["date"] for row in rows)
+    if start == end:
+        start -= timedelta(minutes=30)
+        end += timedelta(minutes=30)
+    time_span = max((end - start).total_seconds(), 1)
+
+    chart_top = 174 / IMAGE_HEIGHT
+    chart_bottom = 0.038
+    chart_height = 1 - chart_top - chart_bottom
+    row_height = chart_height / len(ordered)
+    plot_left = 0.020
+    plot_right = 0.980
+
+    for index, values in enumerate(ordered):
         color = series_colors[
             max(0, min(len(series_colors) - 1, values[0]["order"] - 1))
         ]
-        axis.plot(
-            [row["date"] for row in values],
-            [row["value"] for row in values],
-            color=color,
-            linewidth=2.2,
-            marker="o",
-            markersize=3.2,
-            label=values[0]["label"],
+        row_top = 1 - chart_top - index * row_height
+        row_bottom = row_top - row_height
+        if index:
+            figure.patches.append(
+                Rectangle(
+                    (plot_left, row_bottom),
+                    plot_right - plot_left,
+                    row_height,
+                    transform=figure.transFigure,
+                    facecolor=color,
+                    edgecolor="none",
+                    alpha=0.08,
+                    zorder=-5,
+                )
+            )
+            figure.add_artist(
+                _figure_line(
+                    figure,
+                    x=(plot_left, plot_right),
+                    y=(row_top, row_top),
+                    color=rule,
+                    width=0.8,
+                )
+            )
+
+        minimum = min(row["value"] for row in values)
+        maximum = max(row["value"] for row in values)
+        spread = max(maximum - minimum, maximum * 0.035, 0.00035)
+        domain_minimum = max(0, minimum - spread * 0.24)
+        domain_maximum = maximum + spread * 0.24
+        value_span = max(domain_maximum - domain_minimum, 0.00035)
+        line_top = row_top - (38 / IMAGE_HEIGHT)
+        line_bottom = row_bottom + (10 / IMAGE_HEIGHT)
+
+        dates = [row["date"] for row in values]
+        amounts = [row["value"] for row in values]
+        smooth_dates, smooth_values = _shape_preserving_curve(dates, amounts)
+        points = [
+            (
+                plot_left
+                + ((date - start).total_seconds() / time_span)
+                * (plot_right - plot_left),
+                line_bottom
+                + ((amount - domain_minimum) / value_span)
+                * (line_top - line_bottom),
+            )
+            for date, amount in zip(smooth_dates, smooth_values)
+        ]
+        if len(points) == 1:
+            points = [(plot_left, points[0][1]), (plot_right, points[0][1])]
+
+        area_vertices = [
+            (points[0][0], row_bottom),
+            *points,
+            (points[-1][0], row_bottom),
+            (points[0][0], row_bottom),
+        ]
+        area_codes = [
+            MatplotlibPath.MOVETO,
+            *([MatplotlibPath.LINETO] * len(points)),
+            MatplotlibPath.LINETO,
+            MatplotlibPath.CLOSEPOLY,
+        ]
+        figure.patches.append(
+            PathPatch(
+                MatplotlibPath(area_vertices, area_codes),
+                transform=figure.transFigure,
+                facecolor=color,
+                edgecolor="none",
+                alpha=0.18,
+                zorder=1,
+            )
+        )
+        figure.add_artist(
+            Line2D(
+                [point[0] for point in points],
+                [point[1] for point in points],
+                transform=figure.transFigure,
+                color=green if index == 0 else color,
+                linewidth=2.45,
+                solid_capstyle="round",
+                solid_joinstyle="round",
+                zorder=3,
+            )
         )
 
-    axis.spines[:].set_visible(False)
-    axis.grid(axis="y", color=rule, linewidth=0.8)
-    axis.tick_params(axis="both", colors=green, labelsize=10, length=0, pad=7)
-    axis.yaxis.set_major_formatter(lambda value, _position: f"{value:.0f}c")
-    axis.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=3, maxticks=7))
-    axis.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-    if rows:
-        start = min(row["date"] for row in rows)
-        end = max(row["date"] for row in rows)
-        if start == end:
-            start -= timedelta(hours=12)
-            end += timedelta(hours=12)
-        axis.set_xlim(start, end)
-    axis.legend(
-        loc="upper left",
-        bbox_to_anchor=(0, 1.13),
-        ncol=3,
-        frameon=False,
-        prop=label_font,
-        labelcolor=green,
-        handlelength=1.6,
-        columnspacing=1.4,
-    )
+        label_y = row_top - (27 / IMAGE_HEIGHT)
+        key_y = row_top - (21 / IMAGE_HEIGHT)
+        figure.add_artist(
+            _figure_line(
+                figure,
+                x=(40 / IMAGE_WIDTH, 58 / IMAGE_WIDTH),
+                y=(key_y, key_y),
+                color=color,
+                width=2.8,
+            )
+        )
+        figure.text(
+            70 / IMAGE_WIDTH,
+            label_y,
+            values[0]["label"],
+            color=green,
+            fontproperties=label_font,
+        )
+        figure.text(
+            1160 / IMAGE_WIDTH,
+            label_y,
+            _format_cents(values[-1]["value"]),
+            color=green,
+            fontproperties=label_font,
+            horizontalalignment="right",
+        )
     return _publication_png(canvas)
+
+
+def _sandbox_range_label(
+    rows: list[dict[str, Any]],
+    range_id: str,
+    fallback: str,
+) -> str:
+    if not rows:
+        return fallback.upper()
+    if range_id == "7d":
+        return "7D"
+    start = min(row["date"] for row in rows)
+    end = max(row["date"] for row in rows)
+    days = max(math.ceil((end - start).total_seconds() / (24 * 60 * 60)), 1)
+    if days <= 1:
+        return "TODAY"
+    if days < 31:
+        return f"{days}D"
+    if days < 365:
+        return f"{max(1, days // 30)}M+"
+    return f"{max(1, days // 365)}Y+"
 
 
 def _figure_line(
