@@ -26,11 +26,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: true
       - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
+      - name: Download stable preview snapshots
+        run: |
+          mkdir -p .market-state/snapshots/sandbox
+          curl --fail --silent --show-error --location --retry 3 \
+            https://www.adamsioud.com/api/dashboard-snapshots/prime-frontier-offer-shelf.json \
+            --output .market-state/snapshots/prime-frontier-offer-shelf.json
+          curl --fail --silent --show-error --location --retry 3 \
+            https://www.adamsioud.com/api/dashboard-snapshots/sandbox/workload.json \
+            --output .market-state/snapshots/sandbox/workload.json
       - name: Restore market history
         uses: actions/cache/restore@v4
         with:
@@ -52,7 +59,7 @@ jobs:
             --output-root _site \
             --raw-root .market-state/raw \
             --lake-root .market-state/lake \
-            --static-snapshot-root external/AdamSioud/api/dashboard-snapshots \
+            --static-snapshot-root .market-state/snapshots \
             --publication-archive-root .market-state/publications
       - name: Save market history
         if: success()
