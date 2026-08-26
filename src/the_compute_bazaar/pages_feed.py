@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 from pathlib import Path
+from typing import Any
 
 from .prices.market_run import MarketRunResult, run_market_hourly
+from .prices.prime_publications import publish_prime_offer_shelf_publications
+from .prices.public_view_prime import prime_frontier_view
+from .prices.publication_chart_common import _prime_publication_series
+from .prices.sandbox_publications import publish_sandbox_workload_publication
 
 
 DEFAULT_PUBLIC_BASE_URL = "https://bazaar.adamsioud.com"
@@ -34,6 +40,7 @@ def build_pages_feed(
     raw_root: str,
     lake_root: str,
     static_snapshot_root: str | None = None,
+    publication_archive_root: str | None = None,
     public_base_url: str = DEFAULT_PUBLIC_BASE_URL,
     custom_domain: str = DEFAULT_CUSTOM_DOMAIN,
     providers: tuple[str, ...] = PUBLIC_PROVIDERS,
@@ -46,6 +53,10 @@ def build_pages_feed(
     if output.exists():
         shutil.rmtree(output)
     output.mkdir(parents=True)
+    _restore_publication_archive(
+        output=output,
+        publication_archive_root=publication_archive_root,
+    )
 
     previous_base_url = os.environ.get("COMPUTE_BAZAAR_PUBLIC_BASE_URL")
     os.environ["COMPUTE_BAZAAR_PUBLIC_BASE_URL"] = public_base_url
@@ -63,12 +74,158 @@ def build_pages_feed(
         else:
             os.environ["COMPUTE_BAZAAR_PUBLIC_BASE_URL"] = previous_base_url
 
+    _publish_snapshot_fallbacks(
+        output=output,
+        static_snapshot_root=static_snapshot_root,
+        public_base_url=public_base_url,
+    )
+
     prepare_pages_site(
         output_root=output,
         static_snapshot_root=static_snapshot_root,
         custom_domain=custom_domain,
     )
+    _save_publication_archive(
+        output=output,
+        publication_archive_root=publication_archive_root,
+    )
     return result
+
+
+def _restore_publication_archive(
+    *, output: Path, publication_archive_root: str | Path | None
+) -> None:
+    if publication_archive_root is None:
+        return
+    archive = Path(publication_archive_root)
+    if not archive.exists():
+        return
+    shutil.copytree(archive, output / "publications", dirs_exist_ok=True)
+
+
+def _save_publication_archive(
+    *, output: Path, publication_archive_root: str | Path | None
+) -> None:
+    if publication_archive_root is None:
+        return
+    publications = output / "publications"
+    if not publications.exists():
+        return
+    archive = Path(publication_archive_root)
+    archive.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(publications, archive, dirs_exist_ok=True)
+
+
+def _publish_snapshot_fallbacks(
+    *,
+    output: Path,
+    static_snapshot_root: str | Path | None,
+    public_base_url: str,
+) -> None:
+    """Fill publication gaps without replacing the live analytical feed."""
+    if static_snapshot_root is None:
+        return
+    snapshots = Path(static_snapshot_root)
+    if not snapshots.exists():
+        return
+    _publish_prime_snapshot_fallback(
+        output=output,
+        snapshots=snapshots,
+        public_base_url=public_base_url,
+    )
+    _publish_sandbox_snapshot(
+        output=output,
+        snapshots=snapshots,
+        public_base_url=public_base_url,
+    )
+
+
+def _publish_prime_snapshot_fallback(
+    *, output: Path, snapshots: Path, public_base_url: str
+) -> None:
+    collection_path = output / "prime-frontier-offer-shelf.json"
+    fallback_path = snapshots / "prime-frontier-offer-shelf.json"
+    if not collection_path.exists() or not fallback_path.exists():
+        return
+    collection = _read_json(collection_path)
+    fallback = _read_json(fallback_path)
+    fallback_products = {
+        str(product.get("family_id") or "").upper(): product
+        for product in fallback.get("products", [])
+        if isinstance(product, dict)
+    }
+    cards: dict[str, dict[str, Any]] = {}
+    for family in ("H100", "H200"):
+        live_card_path = output / "prime-frontier" / f"{family.lower()}.json"
+        live_card = _read_json(live_card_path) if live_card_path.exists() else {}
+        if _prime_publication_series(live_card):
+            cards[family] = live_card
+            continue
+        product = fallback_products.get(family)
+        if not product:
+            cards[family] = live_card
+            continue
+        cards[family] = prime_frontier_view(
+            manifest=fallback.get("manifest") or {},
+            product=product,
+            methodology=str(fallback.get("methodology") or ""),
+            source=fallback.get("source") or {},
+            measurement_notes=list(fallback.get("measurement_notes") or []),
+        )
+
+    if not any(_prime_publication_series(card) for card in cards.values()):
+        return
+    publish_prime_offer_shelf_publications(
+        output_root=str(output),
+        cards=cards,
+        public_base_url=public_base_url,
+    )
+    by_family = {
+        str(product.get("family_id") or "").upper(): product
+        for product in collection.get("products", [])
+        if isinstance(product, dict)
+    }
+    for family, card in cards.items():
+        publication = card.get("publication")
+        if not publication:
+            continue
+        if family in by_family:
+            by_family[family]["publication"] = publication
+        live_card_path = output / "prime-frontier" / f"{family.lower()}.json"
+        if live_card_path.exists():
+            live_card = _read_json(live_card_path)
+            live_card["publication"] = publication
+            _write_json(live_card_path, live_card)
+    _write_json(collection_path, collection)
+
+
+def _publish_sandbox_snapshot(
+    *, output: Path, snapshots: Path, public_base_url: str
+) -> None:
+    snapshot = snapshots / "sandbox" / "workload.json"
+    live = output / "sandbox" / "workload.json"
+    source = live if live.exists() else snapshot
+    if not source.exists():
+        return
+    card = _read_json(source)
+    publish_sandbox_workload_publication(
+        output_root=str(output),
+        workload_card=card,
+        public_base_url=public_base_url,
+    )
+    _write_json(live, card)
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def prepare_pages_site(
@@ -155,6 +312,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--raw-root", default=".market-state/raw")
     parser.add_argument("--lake-root", default=".market-state/lake")
     parser.add_argument("--static-snapshot-root")
+    parser.add_argument("--publication-archive-root")
     parser.add_argument("--public-base-url", default=DEFAULT_PUBLIC_BASE_URL)
     parser.add_argument("--custom-domain", default=DEFAULT_CUSTOM_DOMAIN)
     parser.add_argument("--minimum-successful-providers", type=int, default=3)
@@ -169,6 +327,7 @@ def main() -> None:
         raw_root=args.raw_root,
         lake_root=args.lake_root,
         static_snapshot_root=args.static_snapshot_root,
+        publication_archive_root=args.publication_archive_root,
         public_base_url=args.public_base_url,
         custom_domain=args.custom_domain,
         providers=tuple(args.providers),

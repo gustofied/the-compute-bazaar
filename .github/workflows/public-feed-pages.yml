@@ -26,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true
       - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
@@ -36,19 +38,34 @@ jobs:
           key: market-lake-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             market-lake-${{ runner.os }}-
+      - name: Restore publication archive
+        uses: actions/cache/restore@v4
+        with:
+          path: .market-state/publications
+          key: market-publications-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            market-publications-${{ runner.os }}-
       - name: Build public feed
         run: |
           uv sync --frozen --extra worker
           uv run python -m the_compute_bazaar.pages_feed \
             --output-root _site \
             --raw-root .market-state/raw \
-            --lake-root .market-state/lake
+            --lake-root .market-state/lake \
+            --static-snapshot-root external/AdamSioud/api/dashboard-snapshots \
+            --publication-archive-root .market-state/publications
       - name: Save market history
         if: success()
         uses: actions/cache/save@v4
         with:
           path: .market-state/lake
           key: market-lake-${{ runner.os }}-${{ github.run_id }}
+      - name: Save publication archive
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: .market-state/publications
+          key: market-publications-${{ runner.os }}-${{ github.run_id }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

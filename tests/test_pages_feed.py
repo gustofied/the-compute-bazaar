@@ -4,10 +4,45 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from the_compute_bazaar.pages_feed import prepare_pages_site
+from the_compute_bazaar.pages_feed import (
+    _restore_publication_archive,
+    _save_publication_archive,
+    prepare_pages_site,
+)
 
 
 class PagesFeedTest(unittest.TestCase):
+    def test_publication_archive_survives_a_fresh_site_build(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / "archive"
+            old_page = archive / "gpu-index/h200/7-day/old.html"
+            old_page.parent.mkdir(parents=True)
+            old_page.write_text("old", encoding="utf-8")
+            output = root / "site"
+            output.mkdir()
+
+            _restore_publication_archive(
+                output=output,
+                publication_archive_root=archive,
+            )
+            new_page = output / "publications/gpu-index/h200/7-day/new.html"
+            new_page.parent.mkdir(parents=True, exist_ok=True)
+            new_page.write_text("new", encoding="utf-8")
+            _save_publication_archive(
+                output=output,
+                publication_archive_root=archive,
+            )
+
+            self.assertEqual(
+                (output / "publications/gpu-index/h200/7-day/old.html").read_text(),
+                "old",
+            )
+            self.assertEqual(
+                (archive / "gpu-index/h200/7-day/new.html").read_text(),
+                "new",
+            )
+
     def test_prepares_pages_metadata_snapshots_and_pretty_routes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

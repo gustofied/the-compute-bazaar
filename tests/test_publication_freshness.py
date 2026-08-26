@@ -11,10 +11,35 @@ from the_compute_bazaar.prices.publication_profiles import (
     PRIME_PUBLICATION_RENDER_PROFILE,
     WORKLOAD_PUBLICATION_RENDER_PROFILE,
 )
+from the_compute_bazaar.prices.publication_chart_common import (
+    _prime_publication_series,
+)
 from the_compute_bazaar.prices.public_view_capacity import akash_capacity_view
 
 
 class PublicationFreshnessTest(unittest.TestCase):
+    def test_prime_preview_uses_latest_observation_with_available_supply(self) -> None:
+        rows = _prime_publication_series(
+            {
+                "series": [
+                    {
+                        "observed_at": "2026-08-25T08:00:00+00:00",
+                        "value": 4.19,
+                        "configuration_count": 2,
+                    },
+                    {
+                        "observed_at": "2026-08-25T09:00:00+00:00",
+                        "value": 4.19,
+                        "configuration_count": 0,
+                    },
+                ]
+            }
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["price"], 4.19)
+        self.assertEqual(rows[0]["offers"], 2)
+
     def test_akash_snapshot_separates_gpu_and_cpu_capacity(self) -> None:
         view = akash_capacity_view(
             manifest={"run_id": "gold-market-test"},

@@ -13,6 +13,7 @@ from ..contracts import (
 from ..publication_contract import PublicationRoute
 from .publication_chart_common import (
     PRIME_OFFER_FAMILIES,
+    _prime_publication_series,
 )
 from .publication_metadata import (
     prime_offer_publication_metadata,
@@ -60,7 +61,12 @@ def publish_prime_offer_shelf_publications(
     publication_rows: list[dict[str, Any]] = []
 
     for family, card in normalized_cards.items():
-        observed_at = _latest_card_observed_at({family: card})
+        available_rows = _prime_publication_series(card)
+        observed_at = (
+            available_rows[-1]["date"]
+            if available_rows
+            else _latest_card_observed_at({family: card})
+        )
         live_url = _live_prime_offer_url(
             article_url=live_article,
             family=family,
@@ -91,7 +97,15 @@ def publish_prime_offer_shelf_publications(
         )
         publication_rows.append({"family_id": family, **link})
 
-    latest_observed_at = _latest_card_observed_at(normalized_cards)
+    available_observations = [
+        rows[-1]["date"]
+        for card in normalized_cards.values()
+        if (rows := _prime_publication_series(card))
+    ]
+    latest_observed_at = max(
+        available_observations,
+        default=_latest_card_observed_at(normalized_cards),
+    )
     revision = PublicationRoute.create(
         card_id="prime-gpu-market",
         subject_id="market",

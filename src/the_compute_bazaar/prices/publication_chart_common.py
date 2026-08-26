@@ -195,14 +195,21 @@ def _prime_publication_series(card: Mapping[str, Any]) -> list[dict[str, Any]]:
         price = _finite_number(row.get("value"))
         if observed_at is None or price is None:
             continue
+        offers = max(
+            0,
+            int(row.get("configuration_count") or row.get("offer_count") or 0),
+        )
+        # An empty availability observation is useful evidence in the live card,
+        # but it is not a price somebody could have paid. Publication cards use
+        # the latest executable shelf instead of turning a valid prior preview
+        # into a misleading "pending" card.
+        if offers == 0:
+            continue
         rows.append(
             {
                 "date": observed_at,
                 "price": price,
-                "offers": max(
-                    0,
-                    int(row.get("configuration_count") or row.get("offer_count") or 0),
-                ),
+                "offers": offers,
                 "providers": max(0, int(row.get("provider_count") or 0)),
                 "benchmark": _finite_number(row.get("market_benchmark_usd_gpu_hr")),
             }
