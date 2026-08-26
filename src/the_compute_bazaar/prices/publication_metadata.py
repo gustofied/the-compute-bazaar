@@ -9,6 +9,7 @@ from typing import Any
 from ..publication_contract import PublicationRoute
 from .publication_chart_common import (
     GPU_RANGE_PRESENTATION,
+    SANDBOX_RANGE_PRESENTATION,
     _finite_number,
     _format_cents,
     _format_observed,
@@ -125,22 +126,41 @@ def sandbox_workload_publication_metadata(
     *,
     card: Mapping[str, Any],
     observed_at: datetime | None,
+    range_id: str = "latest",
 ) -> dict[str, Any]:
+    if range_id not in SANDBOX_RANGE_PRESENTATION:
+        raise ValueError(f"Unknown Sandbox publication range: {range_id}")
+    presentation = SANDBOX_RANGE_PRESENTATION[range_id]
     headline = card.get("headline") or {}
     value = _format_cents(_finite_number(headline.get("median_estimated_cost_usd")))
     observed_label = _format_observed_date(observed_at)
+    if range_id == "latest":
+        title = f"Sandbox cost | {value} per job"
+        description = (
+            f"The latest Sandbox cost is {value} per job. "
+            f"Observed {observed_label}."
+        )
+        image_alt = f"Sandbox cost of {value} per job across services"
+    else:
+        title = f"Sandbox cost | {presentation['label']} history"
+        description = (
+            "Sandbox cost history across services for the "
+            f"{presentation['description']}. Last observed {observed_label}."
+        )
+        image_alt = (
+            "Sandbox cost history across services for the "
+            f"{presentation['description']}"
+        )
     display_line = (
-        f"Sandbox cost / {value} per job / "
+        f"Sandbox cost / {presentation['label']} / "
         f"observed {observed_label.replace(' at ', ', ')}"
     )
     return {
-        "title": f"Sandbox cost | {value} per job",
-        "description": (
-            f"The latest Sandbox cost is {value} per job. Observed {observed_label}."
-        ),
-        "image_alt": f"Sandbox cost of {value} per job across services",
+        "title": title,
+        "description": description,
+        "image_alt": image_alt,
         "subject_label": "Sandbox cost",
-        "view_label": "Latest run",
+        "view_label": presentation["label"],
         "value": value,
         "observed_at": observed_at.isoformat() if observed_at else "",
         "observed_label": _format_observed(observed_at),

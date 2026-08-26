@@ -25,6 +25,24 @@ GPU_RANGE_PRESENTATION = {
         "short_label": "ALL",
     },
 }
+SANDBOX_RANGES = ("latest", "7d", "all")
+SANDBOX_RANGE_PRESENTATION = {
+    "latest": {
+        "path": "estimated-cost",
+        "label": "Today",
+        "description": "latest run",
+    },
+    "7d": {
+        "path": "7-day",
+        "label": "7D",
+        "description": "latest 7 days",
+    },
+    "all": {
+        "path": "full-history",
+        "label": "All",
+        "description": "full retained history",
+    },
+}
 IMAGE_WIDTH = 1200
 IMAGE_HEIGHT = 630
 

@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from .publication_chart_common import (
     IMAGE_HEIGHT,
     IMAGE_WIDTH,
+    SANDBOX_RANGE_PRESENTATION,
     _finite_number,
     _format_cents,
+    _parse_datetime,
     _publication_png,
 )
 
@@ -23,8 +26,15 @@ _OUTPUT_DPI = 100
 
 def render_sandbox_workload_publication(
     card: Mapping[str, Any],
+    *,
+    range_id: str = "latest",
 ) -> bytes:
-    """Render one workload's latest cost across sandbox services."""
+    """Render one workload's current cost or retained cost history."""
+    if range_id not in SANDBOX_RANGE_PRESENTATION:
+        raise ValueError(f"Unknown Sandbox publication range: {range_id}")
+    if range_id != "latest":
+        return _render_sandbox_history(card, range_id=range_id)
+
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
     from matplotlib.font_manager import FontProperties
@@ -181,6 +191,188 @@ def render_sandbox_workload_publication(
                 width=2.1,
             )
         )
+    return _publication_png(canvas)
+
+
+def _render_sandbox_history(
+    card: Mapping[str, Any],
+    *,
+    range_id: str,
+) -> bytes:
+    from matplotlib import dates as mdates
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+    from matplotlib.font_manager import FontProperties
+    from matplotlib.patches import FancyBboxPatch
+
+    workload = (card.get("data") or {}).get("workload") or {}
+    rows: list[dict[str, Any]] = []
+    for source in workload.get("measured_history") or []:
+        if not isinstance(source, Mapping):
+            continue
+        observed_at = _parse_datetime(
+            source.get("generated_at")
+            or (
+                f"{source.get('observed_date')}T12:00:00Z"
+                if source.get("observed_date")
+                else None
+            )
+        )
+        value = _finite_number(source.get("median_estimated_cost_usd"))
+        if observed_at is None or value is None:
+            continue
+        rows.append(
+            {
+                "date": observed_at,
+                "value": value * 100,
+                "id": str(source.get("series_id") or "service"),
+                "label": str(
+                    source.get("series_label")
+                    or source.get("service_label")
+                    or source.get("series_id")
+                    or "Service"
+                ),
+                "order": int(source.get("series_order") or 0),
+            }
+        )
+    rows.sort(key=lambda row: (row["date"], row["order"]))
+    if range_id == "7d" and rows:
+        cutoff = max(row["date"] for row in rows) - timedelta(days=6)
+        rows = [row for row in rows if row["date"] >= cutoff]
+
+    outside = "#e5ecd4"
+    paper = "#f8f5eb"
+    green = "#526c28"
+    rule = "#dfe6cf"
+    frame = "#889b64"
+    series_colors = (
+        "#405d22",
+        "#54722c",
+        "#688638",
+        "#7d9b45",
+        "#91af53",
+        "#a6c361",
+    )
+    figure = Figure(
+        figsize=(IMAGE_WIDTH / _OUTPUT_DPI, IMAGE_HEIGHT / _OUTPUT_DPI),
+        dpi=_RENDER_DPI,
+        facecolor=outside,
+    )
+    canvas = FigureCanvasAgg(figure)
+    title_font = FontProperties(
+        fname=_GEIST_SEMIBOLD,
+        size=24 * 72 / _OUTPUT_DPI,
+    )
+    value_font = FontProperties(
+        fname=_GEIST_MEDIUM,
+        size=48 * 72 / _OUTPUT_DPI,
+    )
+    label_font = FontProperties(
+        fname=_GEIST_MEDIUM,
+        size=13 * 72 / _OUTPUT_DPI,
+    )
+    figure.patches.extend(
+        (
+            FancyBboxPatch(
+                (0.008, 0.016),
+                0.984,
+                0.968,
+                boxstyle="round,pad=0,rounding_size=0.012",
+                transform=figure.transFigure,
+                facecolor=outside,
+                edgecolor=green,
+                linewidth=1.05,
+                zorder=-30,
+            ),
+            FancyBboxPatch(
+                (0.020, 0.038),
+                0.960,
+                0.924,
+                boxstyle="round,pad=0,rounding_size=0.006",
+                transform=figure.transFigure,
+                facecolor=paper,
+                edgecolor=frame,
+                linewidth=0.75,
+                zorder=-20,
+            ),
+        )
+    )
+
+    headline = card.get("headline") or {}
+    value = _format_cents(_finite_number(headline.get("median_estimated_cost_usd")))
+    presentation = SANDBOX_RANGE_PRESENTATION[range_id]
+    figure.text(
+        40 / IMAGE_WIDTH,
+        1 - (54 / IMAGE_HEIGHT),
+        "Sandbox cost",
+        color=green,
+        fontproperties=title_font,
+    )
+    figure.text(
+        40 / IMAGE_WIDTH,
+        1 - (122 / IMAGE_HEIGHT),
+        value,
+        color=green,
+        fontproperties=value_font,
+        parse_math=False,
+    )
+    figure.text(
+        0.965,
+        1 - (80 / IMAGE_HEIGHT),
+        f"{presentation['label']} history",
+        color=green,
+        fontproperties=title_font,
+        horizontalalignment="right",
+    )
+
+    axis = figure.add_axes((0.075, 0.14, 0.86, 0.61), facecolor=paper)
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(row["id"], []).append(row)
+    ordered = sorted(
+        grouped.values(),
+        key=lambda values: (
+            values[0]["order"],
+            values[0]["label"],
+        ),
+    )
+    for values in ordered:
+        color = series_colors[
+            max(0, min(len(series_colors) - 1, values[0]["order"] - 1))
+        ]
+        axis.plot(
+            [row["date"] for row in values],
+            [row["value"] for row in values],
+            color=color,
+            linewidth=2.2,
+            marker="o",
+            markersize=3.2,
+            label=values[0]["label"],
+        )
+
+    axis.spines[:].set_visible(False)
+    axis.grid(axis="y", color=rule, linewidth=0.8)
+    axis.tick_params(axis="both", colors=green, labelsize=10, length=0, pad=7)
+    axis.yaxis.set_major_formatter(lambda value, _position: f"{value:.0f}c")
+    axis.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=3, maxticks=7))
+    axis.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    if rows:
+        start = min(row["date"] for row in rows)
+        end = max(row["date"] for row in rows)
+        if start == end:
+            start -= timedelta(hours=12)
+            end += timedelta(hours=12)
+        axis.set_xlim(start, end)
+    axis.legend(
+        loc="upper left",
+        bbox_to_anchor=(0, 1.13),
+        ncol=3,
+        frameon=False,
+        prop=label_font,
+        labelcolor=green,
+        handlelength=1.6,
+        columnspacing=1.4,
+    )
     return _publication_png(canvas)
 
 
