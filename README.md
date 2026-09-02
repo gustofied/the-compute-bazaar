@@ -5,7 +5,7 @@
   <a href="https://www.adamsioud.com/exemplars/compute/feeling_the_compute">Article</a>
 </p>
 
-With The Compute Bazaar, you sit at the compute trading desk. Use live and
+The Compute Bazaar is market infrastructure for compute desks. Use live and
 historical market data to analyse the market and build your own models. Find and
 rent compute, then operate and monitor it through Fleet. Through ACP, agent
 harnesses such as Codex and OpenCode can work alongside you. In practice, an
@@ -13,6 +13,9 @@ agent can operate the same compute desk as you: run commands, open results, and
 move between Data, Fleet, and Eval. In Eval, create and run Harbor benchmarks
 for agents across compute deal work and compute market games. Finally, Trade
 explores financial instruments for hedging compute price and availability risk.
+
+[Desk](https://github.com/gustofied/desk) is the standalone browser workspace
+for exploring, composing, monitoring, and sharing compute market views.
 
 The Compute Bazaar is ongoing work, continuing ideas from my earlier work on
 [OUDAU](https://www.adamsioud.com/projects/oudau.html).
