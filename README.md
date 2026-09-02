@@ -14,8 +14,8 @@ move between Data, Fleet, and Eval. In Eval, create and run Harbor benchmarks
 for agents across compute deal work and compute market games. Finally, Trade
 explores financial instruments for hedging compute price and availability risk.
 
-[Desk](https://github.com/gustofied/desk) is the standalone browser workspace
-for exploring, composing, monitoring, and sharing compute market views.
+[Desk](https://github.com/gustofied/desk) is the standalone workspace for
+exploring compute market data and creating views to monitor and share.
 
 The Compute Bazaar is ongoing work, continuing ideas from my earlier work on
 [OUDAU](https://www.adamsioud.com/projects/oudau.html).
