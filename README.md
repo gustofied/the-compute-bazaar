@@ -16,6 +16,7 @@ explores financial instruments for hedging compute price and availability risk.
 
 [Desk](https://github.com/gustofied/desk) is the standalone workspace where you
 explore compute market data, create market views, monitor and share.
+Built for anyone building or running a compute desk.
 
 The Compute Bazaar is ongoing work, continuing ideas from my earlier work on
 [OUDAU](https://www.adamsioud.com/projects/oudau.html).
